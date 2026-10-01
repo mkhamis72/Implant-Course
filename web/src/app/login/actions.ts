@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { mapAuthError } from '@/lib/auth/errors';
+import { verifiedAal } from '@/lib/auth/redirects';
 
 export type LoginState = { error?: string; email?: string };
 
@@ -10,8 +11,9 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
   const password = String(formData.get('password') ?? '');
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: mapAuthError(error), email };
-  const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  redirect(data?.nextLevel === 'aal2' && data.currentLevel !== 'aal2' ? '/login/mfa' : '/');
+  // A password sign-in is always aal1; factors come from the Auth server's response.
+  const aal = verifiedAal(data.user.factors, 'aal1');
+  redirect(aal.next === 'aal2' ? '/login/mfa' : '/');
 }

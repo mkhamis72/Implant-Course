@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { publicEnv } from '@/lib/env';
-import { decideRedirect, type Aal } from '@/lib/auth/redirects';
+import { decideRedirect, verifiedAal, type Aal } from '@/lib/auth/redirects';
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -24,8 +24,10 @@ export async function updateSession(request: NextRequest) {
 
   let aal: Aal = null;
   if (user) {
-    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    aal = data ? { current: data.currentLevel, next: data.nextLevel } : null;
+    // Factors come from the Auth server (getUser); aal from the verified JWT. Never use
+    // mfa.getAuthenticatorAssuranceLevel() without a token here: it reads the editable cookie.
+    const { data } = await supabase.auth.getClaims();
+    aal = verifiedAal(user.factors, data?.claims?.aal);
   }
 
   const target = decideRedirect({ path: request.nextUrl.pathname, hasUser: !!user, aal });
