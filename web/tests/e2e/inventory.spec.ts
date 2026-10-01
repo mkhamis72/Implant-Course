@@ -46,3 +46,48 @@ test('stock overview shows on hand, low stock and expiring flags', async ({ page
   await expect(row).toContainText('Low stock');
   await expect(row).toContainText('Expiring');
 });
+
+test('receives stock, adjusts it and shows the ledger', async ({ page }) => {
+  const api = await apiAs(TEST_USERS.organizer.email);
+  const brand = uniqueName('Receive');
+  const product = await seedProduct(api, { type: 'ti_base', brand });
+  const lotNo = `E2E-L${Date.now()}`;
+
+  await page.goto(`/inventory/receive?product=${product}`);
+  await page.getByLabel('Quantity').fill('5');
+  await page.getByLabel('Lot number (optional)').fill(lotNo);
+  await page.getByLabel('Expiry (optional)').fill('2031-06-30');
+  await page.getByRole('button', { name: 'Receive' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Lot ${lotNo}`);
+  await expect(page.getByTestId('on-hand')).toHaveText('5');
+
+  await page.getByLabel('Reason').selectOption('waste');
+  await page.getByLabel('Quantity').fill('1');
+  await page.getByLabel('Note').fill('Dropped during surgery');
+  await page.getByRole('button', { name: 'Record change' }).click();
+  await expect(page.getByTestId('on-hand')).toHaveText('4');
+  await expect(page.getByTestId('ledger-row')).toHaveCount(2);
+  await expect(page.getByTestId('ledger-row').first()).toContainText('Wasted');
+  await expect(page.getByTestId('ledger-row').first()).toContainText('-1');
+
+  await page.getByLabel('Reason').selectOption('return');
+  await page.getByLabel('Quantity').fill('9');
+  await page.getByLabel('Note').fill('Back to supplier');
+  await page.getByRole('button', { name: 'Record change' }).click();
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText('Only 4 left in this batch.');
+
+  await page.getByRole('link', { name: 'Recall lookup' }).click();
+  await page.getByLabel('Lot number').fill(lotNo.toLowerCase());
+  await page.getByRole('button', { name: 'Find' }).click();
+  await expect(page.getByRole('link', { name: lotNo })).toBeVisible();
+});
+
+test('a batch can be received without a lot number', async ({ page }) => {
+  const api = await apiAs(TEST_USERS.organizer.email);
+  const product = await seedProduct(api, { type: 'cover_screw', brand: uniqueName('NoLot') });
+  await page.goto(`/inventory/receive?product=${product}`);
+  await page.getByLabel('Quantity').fill('2');
+  await page.getByRole('button', { name: 'Receive' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('No lot number');
+  await expect(page.getByTestId('on-hand')).toHaveText('2');
+});
