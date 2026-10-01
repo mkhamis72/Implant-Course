@@ -46,3 +46,38 @@ export async function seedDelegate(api: SupabaseClient, name: string): Promise<s
   if (error) throw error;
   return data.id;
 }
+
+export function randomFutureDate(): string {
+  const day = new Date(Date.UTC(2031, 0, 1) + Math.floor(Math.random() * 365 * 4) * 86400000);
+  return day.toISOString().slice(0, 10);
+}
+
+export async function seedChair(adminApi: SupabaseClient, name: string): Promise<string> {
+  const { data, error } = await adminApi.from('chairs').insert({ name }).select('id').single();
+  if (error) throw error;
+  return data.id;
+}
+
+export async function seedCourse(api: SupabaseClient, c: { name: string; start: string; end: string }): Promise<string> {
+  const { data, error } = await api.from('courses').insert({ name: c.name, start_date: c.start, end_date: c.end }).select('id').single();
+  if (error) throw error;
+  return data.id;
+}
+
+export async function seedSession(
+  api: SupabaseClient,
+  s: { courseId: string; type: string; title: string; date: string; start?: string; end?: string },
+): Promise<string> {
+  const { data, error } = await api
+    .from('sessions')
+    .insert({ course_id: s.courseId, type: s.type, title: s.title, date: s.date, start_time: s.start ?? '08:00', end_time: s.end ?? '17:00' })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data.id;
+}
+
+export async function enroll(api: SupabaseClient, courseId: string, delegateId: string): Promise<void> {
+  const { error } = await api.from('enrollments').insert({ course_id: courseId, delegate_id: delegateId });
+  if (error) throw error;
+}
