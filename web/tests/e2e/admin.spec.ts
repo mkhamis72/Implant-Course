@@ -54,3 +54,24 @@ test('organizer is redirected away from admin pages', async ({ page }) => {
   await page.goto('/admin/users');
   await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
 });
+
+test('admin edits settings with validation', async ({ page }) => {
+  await login(page, TEST_USERS.admin.email);
+  await page.goto('/admin/settings');
+  const timeout = page.getByLabel('Session timeout (minutes)');
+  const original = await timeout.inputValue();
+
+  await timeout.fill('2');
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText('Session timeout must be between 5 and 480 minutes.');
+
+  await timeout.fill('45');
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByText('Settings saved.')).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel('Session timeout (minutes)')).toHaveValue('45');
+
+  await page.getByLabel('Session timeout (minutes)').fill(original);
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByText('Settings saved.')).toBeVisible();
+});
