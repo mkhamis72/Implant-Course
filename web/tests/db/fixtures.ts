@@ -78,3 +78,24 @@ export async function makeChair(c: Client, name = `Chair ${Math.random().toStrin
   const { rows } = await c.query('insert into public.chairs (name) values ($1) returning id', [name]);
   return rows[0].id;
 }
+
+export async function book(
+  c: Client,
+  a: {
+    session: string; chair: string; patient: string; supervisor: string; placing: string[];
+    assisting?: string[]; implants?: { tooth: number; product_id?: string | null }[];
+    start?: string; end?: string; override?: string;
+  },
+): Promise<string> {
+  const { rows } = await c.query(
+    `select public.create_surgery_slot(
+       p_session => $1, p_chair => $2, p_start => $3::time, p_end => $4::time, p_patient => $5,
+       p_supervisor => $6, p_placing => $7::uuid[], p_assisting => $8::uuid[], p_implants => $9::jsonb,
+       p_override_reason => $10) as id`,
+    [
+      a.session, a.chair, a.start ?? '09:00', a.end ?? '10:00', a.patient, a.supervisor, a.placing,
+      a.assisting ?? [], JSON.stringify(a.implants ?? []), a.override ?? '',
+    ],
+  );
+  return rows[0].id;
+}
