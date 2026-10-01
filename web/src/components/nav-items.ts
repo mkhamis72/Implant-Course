@@ -5,6 +5,7 @@ export type NavItem = { href: string; label: string; adminOnly?: boolean };
 // Later plans add entries here (Patients, Schedule, Inventory, ...), keeping Admin last.
 export const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Dashboard' },
+  { href: '/patients', label: 'Patients' },
   { href: '/admin/users', label: 'Admin', adminOnly: true },
 ];
 
