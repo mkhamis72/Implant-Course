@@ -1,8 +1,10 @@
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
 import { adminClient, ensureUser, setProfile } from '../../scripts/users';
+import { assertSafeTestTarget } from '../../scripts/test-guard';
 
-export const TEST_PASSWORD = process.env.TEST_USER_PASSWORD ?? 'Test-password-123!';
+// No default: a password committed to the repo would be a known admin login. See assertSafeTestTarget.
+export const TEST_PASSWORD = process.env.TEST_USER_PASSWORD ?? '';
 
 export const TEST_USERS = {
   admin: { email: 'icm-test-admin@example.com' },
@@ -27,6 +29,7 @@ const PROFILES: Record<TestUserKey, { full_name: string; role: 'admin' | 'organi
 
 /** Idempotently creates the test users and resets their profiles, bans and 2FA factors. */
 export async function ensureTestUsers(): Promise<TestUserIds> {
+  assertSafeTestTarget();
   const admin = adminClient();
   const ids = {} as TestUserIds;
   for (const key of Object.keys(TEST_USERS) as TestUserKey[]) {
