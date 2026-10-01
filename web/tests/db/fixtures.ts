@@ -52,3 +52,29 @@ export async function place(
   );
   return rows[0].id;
 }
+
+export async function makeCourse(c: Client, start = '2030-03-01', end = '2030-03-05'): Promise<string> {
+  const { rows } = await c.query(
+    "insert into public.courses (name, start_date, end_date) values ('Test Course', $1, $2) returning id",
+    [start, end],
+  );
+  return rows[0].id;
+}
+
+export async function makeSession(c: Client, course: string, type = 'surgery', date = '2030-03-02'): Promise<string> {
+  const { rows } = await c.query(
+    `insert into public.sessions (course_id, type, title, date, start_time, end_time)
+     values ($1, $2, 'Test Session', $3, '08:00', '17:00') returning id`,
+    [course, type, date],
+  );
+  return rows[0].id;
+}
+
+export async function enroll(c: Client, course: string, delegate: string): Promise<void> {
+  await c.query('insert into public.enrollments (course_id, delegate_id) values ($1, $2)', [course, delegate]);
+}
+
+export async function makeChair(c: Client, name = `Chair ${Math.random().toString(36).slice(2, 8)}`): Promise<string> {
+  const { rows } = await c.query('insert into public.chairs (name) values ($1) returning id', [name]);
+  return rows[0].id;
+}
