@@ -23,12 +23,32 @@ export async function createPatientViaUi(
   return new URL(page.url()).pathname.split('/').pop()!;
 }
 
-/** E2E patients are real rows in the dev project; remove them (as postgres) after the run. */
+/**
+ * E2E rows live in the dev project. Patients with stock movements stay (the ledger is immutable);
+ * E2E catalog items and delegates are deactivated (they are referenced by the ledger).
+ */
 export async function deleteE2ePatients(): Promise<void> {
   const pg = new Client(pgConfig());
   await pg.connect();
   try {
-    await pg.query(`delete from public.patients where full_name like $1`, [`${E2E_PREFIX}%`]);
+    await pg.query(
+      `delete from public.patients p where p.full_name like $1
+       and not exists (select 1 from public.stock_movements m where m.patient_id = p.id)
+       and not exists (select 1 from public.implant_sites s
+                       join public.stock_movements m on m.implant_site_id = s.id where s.patient_id = p.id)`,
+      [`${E2E_PREFIX}%`],
+    );
+  } finally {
+    await pg.end();
+  }
+}
+
+export async function deactivateE2eCatalog(): Promise<void> {
+  const pg = new Client(pgConfig());
+  await pg.connect();
+  try {
+    await pg.query('update public.products set active = false where brand like $1 and active', [`${E2E_PREFIX}%`]);
+    await pg.query('update public.delegates set active = false where full_name like $1 and active', [`${E2E_PREFIX}%`]);
   } finally {
     await pg.end();
   }

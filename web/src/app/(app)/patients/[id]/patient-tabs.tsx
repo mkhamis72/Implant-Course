@@ -8,6 +8,7 @@ export function PatientTabs({ patientId }: { patientId: string }) {
   const base = `/patients/${patientId}`;
   const tabs = [
     { href: base, label: 'Chart' },
+    { href: `${base}/implants`, label: 'Implants' },
     { href: `${base}/overview`, label: 'Overview' },
     { href: `${base}/notes`, label: 'Notes' },
     { href: `${base}/history`, label: 'History' },

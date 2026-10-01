@@ -1,3 +1,4 @@
+import { SITE_STATE_LABELS, type SiteState } from '@/lib/inventory/types';
 import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
 
 const FIELD_LABELS: Record<string, string> = {
@@ -38,6 +39,13 @@ export function describeChange(e: HistoryEntry): string {
     case 'visit_notes': {
       const teeth = (e.after?.teeth as number[] | undefined) ?? [];
       return teeth.length ? `Note added (teeth ${teeth.join(', ')})` : 'Note added';
+    }
+    case 'implant_sites': {
+      const tooth = (e.after ?? e.before)?.tooth;
+      const label = (v: unknown) => SITE_STATE_LABELS[v as SiteState] ?? String(v);
+      if (e.action === 'INSERT' || !e.before) return `Implant on tooth ${tooth}: ${label(e.after?.state)}`;
+      if (e.before.state === e.after?.state) return `Implant on tooth ${tooth} updated`;
+      return `Implant on tooth ${tooth}: ${label(e.before.state)} → ${label(e.after?.state)}`;
     }
     default:
       return `${e.table_name} ${e.action.toLowerCase()}`;

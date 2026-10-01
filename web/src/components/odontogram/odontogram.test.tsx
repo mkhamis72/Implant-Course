@@ -53,3 +53,12 @@ describe('<Legend>', () => {
     }
   });
 });
+
+describe('<Odontogram> badges', () => {
+  it('shows the current component badge and announces it', () => {
+    render(<Odontogram statuses={{ 36: 'implant_placed' }} badges={{ 36: 'TB' }} selected={[]} onSelect={vi.fn()} />);
+    const tooth = screen.getByRole('button', { name: 'Tooth 36, Implant placed, TB' });
+    expect(tooth.querySelector('[data-badge]')?.textContent).toBe('TB');
+    expect(screen.getByRole('button', { name: 'Tooth 46, Present' }).querySelector('[data-badge]')).toBeNull();
+  });
+});
