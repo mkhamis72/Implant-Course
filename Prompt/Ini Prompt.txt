@@ -1,0 +1,82 @@
+IMPLANT COURSE MANAGER - PROJECT BRIEF
+======================================
+
+Build "Implant Course Manager", a cloud web app (English UI) used by implant-course
+organizers (all dentists) in Egypt to run courses where delegates place implants on real
+patients under supervision.
+
+USERS & ROLES
+- Only organizers log in. Roles: Admin (users, settings) and Organizer (everything else).
+- Delegates are records in the system, not users.
+- Invite-only accounts with email verification required.
+- Two-factor authentication is optional per user.
+- Every change is audit-logged (who, what, when, before/after).
+
+PATIENTS
+- Demographics (file no., name, DOB, sex, phone, address).
+- Implant-relevant medical history: allergies, medications, diabetes, smoking,
+  bisphosphonates, anticoagulants, radiotherapy, osteoporosis, notes.
+- Dated visit/treatment notes.
+- Patients persist across courses (e.g. surgery in one course, prosthetics in the next).
+- Opening a patient profile opens THAT patient's own odontogram as the default view,
+  with a header showing name, file no., age and medical-alert badges.
+
+INTERACTIVE ODONTOGRAM (FDI 11-48, permanent teeth)
+- Built from the supplied Odontogram.jpeg; 32 clickable teeth.
+- Tooth status: present / missing / extracted / implant planned / implant placed /
+  restored / failed.
+- Per implant site: product (brand, system, diameter, length), lot, date, torque, graft,
+  placing delegate, assisting delegate, supervising organizer, course, session, notes.
+- Component history per site: cover screw -> healing abutment -> Ti-base / multi-unit /
+  abutment -> final restoration; each with lot, date, fitted by. The chart shows the
+  current component on each implant (CS / HA / TB / MUA / AB / CR badge).
+- Follow-ups per site: date, outcome (integrated / failed / complication), notes.
+
+INVENTORY (PHASE 1)
+- Catalog in two categories:
+  * Surgical: implants, cover screws, healing abutments, grafts, membranes.
+  * Prosthetic: Ti-bases, multi-unit abutments, straight/angled abutments, scan bodies,
+    impression copings, analogs, prosthetic screws.
+- Stock received in batches; lot number and expiry date are OPTIONAL.
+- Append-only movement ledger (receive / use / adjust / waste / return).
+- Auto-deduction when an implant or component is recorded on the chart.
+- Low-stock and expiry alerts.
+- Recall lookup: lot -> patients, teeth, dates, delegates.
+
+INVENTORY (PHASE 2)
+- Suppliers, purchase orders, costs.
+
+COURSES & DELEGATES
+- Courses (name, dates, venue); delegates (name, phone, email, licence no.); enrollments.
+- Sessions: lecture / workshop / surgery, with date, time, lead organizer.
+- Delegate report: implants placed and assisted per course, with patient, tooth, product,
+  lot, date, outcome and totals (CSV export / print).
+
+SURGERY SCHEDULE
+- Each surgery slot: course/session, chair, start-end time, patient, supervising doctor,
+  placing + assisting delegates, implants needed (tooth + product).
+- Planned implants appear on the patient's chart as "implant planned".
+- Daily pull list: total stock needed vs on hand, flags shortages.
+- Double-booking warnings for chair, supervisor, delegate, patient.
+- Recording the placement pre-fills from the slot.
+
+CHECKLISTS
+- A dedicated "Checklists" section.
+- Paste checklist text: each line becomes a separate checkable box.
+- Templates per session type (lecture / workshop / surgery) auto-attach to sessions and
+  surgery slots; free-standing checklists also allowed.
+- Each item: optional assignee and due date. Any user can tick/untick; ticked items are
+  shown crossed off with who ticked them and when.
+
+DASHBOARD
+- Today's surgeries by chair, pull-list shortages, low-stock / expiring items,
+  my open checklist items.
+
+LATER SUB-PROJECTS (own spec each)
+- Patient files (X-ray, CBCT, photos).
+- General (non-surgery) appointments.
+- Phase 2 purchasing.
+
+COMPLIANCE
+- Egypt PDPL (Law 151/2020): health data is sensitive; confirm cross-border hosting with a
+  legal advisor before go-live. Hosting kept swappable.
