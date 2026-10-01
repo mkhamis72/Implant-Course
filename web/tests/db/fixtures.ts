@@ -41,14 +41,17 @@ export async function onHand(c: Client, lot: string): Promise<number> {
 
 export async function place(
   c: Client,
-  a: { patient: string; tooth: number; product: string; lot: string; delegate: string; supervisor: string; assistant?: string; placedOn?: string },
+  a: {
+    patient: string; tooth: number; product: string; lot: string; delegate: string; supervisor: string;
+    assistant?: string; placedOn?: string; slot?: string;
+  },
 ): Promise<string> {
   const { rows } = await c.query(
     `select public.place_implant(
        p_patient => $1, p_tooth => $2::smallint, p_product => $3, p_lot => $4,
        p_placed_on => coalesce($5::date, current_date), p_placing_delegate => $6, p_supervisor => $7,
-       p_assisting_delegate => $8) as id`,
-    [a.patient, a.tooth, a.product, a.lot, a.placedOn ?? null, a.delegate, a.supervisor, a.assistant ?? null],
+       p_assisting_delegate => $8, p_slot => $9) as id`,
+    [a.patient, a.tooth, a.product, a.lot, a.placedOn ?? null, a.delegate, a.supervisor, a.assistant ?? null, a.slot ?? null],
   );
   return rows[0].id;
 }
