@@ -9,8 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "db:migrate": "tsx scripts/migrate-cli.ts",
-    "test:db": "vitest run -c vitest.db.config.ts",
-    "test:e2e": "playwright test"
+    "test:db": "vitest run -c vitest.db.config.mts",
+    "test:e2e": "playwright test",
+    "create-admin": "tsx scripts/create-admin.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
