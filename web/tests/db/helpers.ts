@@ -15,7 +15,7 @@ export async function withTx<T>(fn: (c: Client) => Promise<T>): Promise<T> {
 }
 
 /** Impersonates a Supabase user (or anon when userId is null) for the rest of the transaction. */
-export async function actAs(c: Client, userId: string | null): Promise<void> {
+export async function actAs(c: Client, userId: string | null, extraClaims: Record<string, unknown> = {}): Promise<void> {
   await c.query('reset role');
   if (userId === null) {
     await c.query(`select set_config('request.jwt.claims', '{"role":"anon"}', true)`);
@@ -23,7 +23,7 @@ export async function actAs(c: Client, userId: string | null): Promise<void> {
     return;
   }
   await c.query(`select set_config('request.jwt.claims', $1, true)`, [
-    JSON.stringify({ sub: userId, role: 'authenticated' }),
+    JSON.stringify({ sub: userId, role: 'authenticated', ...extraClaims }),
   ]);
   await c.query('set local role authenticated');
 }
