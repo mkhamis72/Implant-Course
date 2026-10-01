@@ -1,18 +1,23 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { Odontogram } from '@/components/odontogram/odontogram';
 import { Legend } from '@/components/odontogram/legend';
 import { MANUAL_STATES, STATE_LABELS, isManualState, type ManualState, type ToothState } from '@/lib/patients/types';
+import { badgesFor } from '@/lib/inventory/components';
+import type { ChartData } from '@/lib/inventory/types';
 import { setToothStatus } from './chart-actions';
+import { ImplantSection } from './implant-section';
 
 type Props = {
   patientId: string;
-  statuses: Partial<Record<number, ToothState>>;
+  data: ChartData;
   initialTooth: number | null;
 };
 
-export function ChartPanel({ patientId, statuses, initialTooth }: Props) {
+export function ChartPanel({ patientId, data, initialTooth }: Props) {
+  const statuses = data.statuses;
+  const badges = useMemo(() => badgesFor(data.sites), [data.sites]);
   const [selected, setSelected] = useState<number[]>(initialTooth ? [initialTooth] : []);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -40,7 +45,7 @@ export function ChartPanel({ patientId, statuses, initialTooth }: Props) {
   return (
     <div className="flex flex-col gap-4 xl:flex-row">
       <div className="card flex-1 space-y-4">
-        <Odontogram statuses={statuses} selected={selected} onSelect={onSelect} />
+        <Odontogram statuses={statuses} badges={badges} selected={selected} onSelect={onSelect} />
         <Legend />
       </div>
       <aside className="card w-full space-y-4 xl:w-80" aria-label="Tooth details">
@@ -74,6 +79,9 @@ export function ChartPanel({ patientId, statuses, initialTooth }: Props) {
               </div>
             )}
             {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+            {selected.length === 1 && (
+              <ImplantSection key={selected[0]} patientId={patientId} tooth={selected[0]} status={statusOf(selected[0])} data={data} />
+            )}
           </>
         )}
       </aside>
