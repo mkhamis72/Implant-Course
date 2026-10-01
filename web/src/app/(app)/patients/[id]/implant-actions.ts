@@ -46,6 +46,7 @@ export async function placeImplant(input: Record<string, unknown>): Promise<Resu
     p_torque: p.torque,
     p_graft: p.graft,
     p_notes: p.notes,
+    p_slot: p.slotId,
   });
 }
 

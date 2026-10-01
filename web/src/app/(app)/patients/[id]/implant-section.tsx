@@ -5,7 +5,7 @@ import { activeSite, currentComponent } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, type ChartData, type ImplantSite } from '@/lib/inventory/types';
 import { isManualState, type ToothState } from '@/lib/patients/types';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatDateTime } from '@/lib/format';
 import { cancelPlan } from './implant-actions';
 import { ComponentForm, FollowupForm, PlaceForm, PlanForm } from './implant-forms';
 
@@ -92,6 +92,12 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
           Planned{site.product ? `: ${productLabel(site.product)}` : ' (implant not chosen yet)'}
         </p>
       )}
+      {site?.state === 'planned' && site.slot && (
+        <p className="text-sm text-gray-700">
+          Booked: {formatDateTime(site.slot.starts_at)}
+          {site.slot.chair ? ` · ${site.slot.chair.name}` : ''}
+        </p>
+      )}
       {site && site.state !== 'planned' && <SiteDetails site={site} />}
 
       {mode === 'none' && (
@@ -120,7 +126,7 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
 
       {mode === 'plan' && <PlanForm patientId={patientId} tooth={tooth} data={data} onDone={done} />}
       {mode === 'place' && (
-        <PlaceForm patientId={patientId} tooth={tooth} data={data} onDone={done} plannedProductId={site?.product?.id ?? null} />
+        <PlaceForm patientId={patientId} tooth={tooth} data={data} onDone={done} plannedProductId={site?.product?.id ?? null} slot={site?.slot ?? null} />
       )}
       {mode === 'component' && site && <ComponentForm patientId={patientId} site={site} data={data} onDone={done} />}
       {mode === 'followup' && site && <FollowupForm patientId={patientId} site={site} data={data} onDone={done} />}
