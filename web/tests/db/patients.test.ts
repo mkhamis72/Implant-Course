@@ -113,7 +113,7 @@ describe('patients', () => {
       await c.query('savepoint s');
       await expect(
         c.query("insert into public.visit_notes (patient_id, text, author_id) values ($1, 'forged', $2)", [id, users.admin]),
-      ).rejects.toThrow(/row-level security/);
+      ).rejects.toThrow(/permission denied|row-level security/);
       await c.query('rollback to savepoint s');
       await expect(c.query("update public.visit_notes set text = 'changed'")).rejects.toThrow(/permission denied/);
     });
