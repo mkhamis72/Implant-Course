@@ -9,11 +9,25 @@ type Props = {
   statuses: Partial<Record<number, ToothState>>;
   selected: readonly number[];
   onSelect: (fdi: number, additive: boolean) => void;
+  /** Current component per tooth (CS, HA, TB, MUA, AB, CR). */
+  badges?: Partial<Record<number, string>>;
 };
 
 const BOXES = toothLayout();
 
-function Tooth({ box, status, selected, onSelect }: { box: ToothBox; status: ToothState; selected: boolean; onSelect: Props['onSelect'] }) {
+function Tooth({
+  box,
+  status,
+  selected,
+  onSelect,
+  badge,
+}: {
+  box: ToothBox;
+  status: ToothState;
+  selected: boolean;
+  onSelect: Props['onSelect'];
+  badge: string | undefined;
+}) {
   const transform =
     box.jaw === 'upper' ? `translate(${box.x} ${box.y})` : `translate(${box.x} ${box.y + TOOTH_H}) scale(1 -1)`;
   const numberY = box.jaw === 'upper' ? TOOTH_H + 18 : box.y - 9;
@@ -23,7 +37,7 @@ function Tooth({ box, status, selected, onSelect }: { box: ToothBox; status: Too
     <g
       role="button"
       tabIndex={0}
-      aria-label={`Tooth ${box.fdi}, ${STATE_LABELS[status]}`}
+      aria-label={`Tooth ${box.fdi}, ${STATE_LABELS[status]}${badge ? `, ${badge}` : ''}`}
       aria-pressed={selected}
       data-tooth={box.fdi}
       data-status={status}
@@ -49,6 +63,21 @@ function Tooth({ box, status, selected, onSelect }: { box: ToothBox; status: Too
       <g transform={transform}>
         <ToothGraphic type={box.type} jaw={box.jaw} status={status} />
       </g>
+      {badge && (
+        <g data-badge>
+          <rect x={box.x + 4} y={box.y + (box.jaw === 'upper' ? 96 : 20)} width={TOOTH_W - 8} height={16} rx={3} fill="#1e3a8a" />
+          <text
+            x={box.x + TOOTH_W / 2}
+            y={box.y + (box.jaw === 'upper' ? 108 : 32)}
+            textAnchor="middle"
+            fontSize={10}
+            fontWeight={700}
+            fill="#ffffff"
+          >
+            {badge}
+          </text>
+        </g>
+      )}
       <text x={box.x + TOOTH_W / 2} y={numberY} textAnchor="middle" fontSize={13} fill="#334155">
         {box.fdi}
       </text>
@@ -56,7 +85,7 @@ function Tooth({ box, status, selected, onSelect }: { box: ToothBox; status: Too
   );
 }
 
-export function Odontogram({ statuses, selected, onSelect }: Props) {
+export function Odontogram({ statuses, selected, onSelect, badges }: Props) {
   return (
     <svg
       viewBox={`-6 -6 ${CHART_WIDTH + 12} ${CHART_HEIGHT + 12}`}
@@ -72,6 +101,7 @@ export function Odontogram({ statuses, selected, onSelect }: Props) {
           box={box}
           status={statuses[box.fdi] ?? 'present'}
           selected={selected.includes(box.fdi)}
+          badge={badges?.[box.fdi]}
           onSelect={onSelect}
         />
       ))}
