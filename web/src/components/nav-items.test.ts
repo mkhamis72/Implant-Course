@@ -3,9 +3,9 @@ import { visibleNavItems } from './nav-items';
 
 describe('visibleNavItems', () => {
   it('shows Admin to admins', () => {
-    expect(visibleNavItems('admin').map((i) => i.label)).toEqual(['Dashboard', 'Patients', 'Admin']);
+    expect(visibleNavItems('admin').map((i) => i.label)).toEqual(['Dashboard', 'Patients', 'Inventory', 'Delegates', 'Admin']);
   });
   it('hides Admin from organizers', () => {
-    expect(visibleNavItems('organizer').map((i) => i.label)).toEqual(['Dashboard', 'Patients']);
+    expect(visibleNavItems('organizer').map((i) => i.label)).toEqual(['Dashboard', 'Patients', 'Inventory', 'Delegates']);
   });
 });
