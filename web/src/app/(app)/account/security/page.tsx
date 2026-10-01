@@ -1,0 +1,38 @@
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/server';
+import { EnrollTotp } from './enroll-totp';
+import { removeFactor } from './actions';
+
+export default async function SecurityPage() {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.mfa.listFactors();
+  const verified = (data?.totp ?? []).filter((f) => f.status === 'verified');
+
+  return (
+    <div className="max-w-xl space-y-6">
+      <h1 className="text-2xl font-semibold">Account security</h1>
+      <section className="card space-y-4">
+        <h2 className="font-semibold">Two-factor authentication (optional)</h2>
+        {verified.length > 0 ? (
+          <div className="space-y-3">
+            <p className="text-green-800">Authenticator active</p>
+            {verified.map((factor) => (
+              <form key={factor.id} action={removeFactor}>
+                <input type="hidden" name="factor_id" value={factor.id} />
+                <button className="btn-secondary btn">Remove authenticator</button>
+              </form>
+            ))}
+          </div>
+        ) : (
+          <EnrollTotp />
+        )}
+      </section>
+      <section className="card space-y-2">
+        <h2 className="font-semibold">Password</h2>
+        <Link href="/account/set-password" className="text-blue-700 hover:underline">
+          Change password
+        </Link>
+      </section>
+    </div>
+  );
+}

@@ -1,0 +1,17 @@
+import { MfaForm } from './mfa-form';
+import { signOut } from '@/app/actions/auth';
+
+export default function MfaPage() {
+  return (
+    <main className="mx-auto mt-24 max-w-sm">
+      <div className="card space-y-4">
+        <h1 className="text-xl font-semibold">Two-factor authentication</h1>
+        <p className="text-sm text-gray-600">Enter the 6-digit code from your authenticator app.</p>
+        <MfaForm />
+        <form action={signOut}>
+          <button className="text-sm hover:underline">Sign out</button>
+        </form>
+      </div>
+    </main>
+  );
+}
