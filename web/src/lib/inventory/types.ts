@@ -84,9 +84,19 @@ export type SiteComponent = {
   lot: { lot_no: string | null } | null;
   fitted_by_delegate: Person;
   fitted_by_organizer: Organizer;
+  voided_at: string | null;
+  voided_reason: string;
 };
 
-export type Followup = { id: string; date: string; check_type: string; outcome: FollowupOutcome; notes: string };
+export type Followup = {
+  id: string;
+  date: string;
+  check_type: string;
+  outcome: FollowupOutcome;
+  notes: string;
+  voided_at: string | null;
+  voided_reason: string;
+};
 
 export type ImplantSite = {
   id: string;
@@ -103,6 +113,13 @@ export type ImplantSite = {
   supervisor: Organizer;
   components: SiteComponent[];
   followups: Followup[];
+  slot: {
+    id: string;
+    starts_at: string;
+    supervisor_id: string;
+    chair: { name: string } | null;
+    delegates: { delegate_id: string; role: 'placing' | 'assisting' }[];
+  } | null;
   created_at: string;
 };
 

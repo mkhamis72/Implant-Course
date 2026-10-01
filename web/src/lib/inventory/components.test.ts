@@ -4,12 +4,12 @@ import type { ImplantSite, SiteComponent } from './types';
 
 const comp = (type: SiteComponent['component_type'], removed_on: string | null): SiteComponent => ({
   id: type, component_type: type, fitted_on: '2026-01-01', removed_on, notes: '', product: null, lot: null,
-  fitted_by_delegate: null, fitted_by_organizer: null,
+  fitted_by_delegate: null, fitted_by_organizer: null, voided_at: null, voided_reason: '',
 });
 
 const site = (tooth: number, state: ImplantSite['state'], components: SiteComponent[] = []): ImplantSite => ({
   id: `${tooth}-${state}`, tooth, state, placed_on: '2026-01-01', torque_ncm: null, graft: '', notes: '', product: null,
-  lot: null, placing: null, assisting: null, supervisor: null, components, followups: [], created_at: '2026-01-01T00:00:00Z',
+  lot: null, placing: null, assisting: null, supervisor: null, components, followups: [], slot: null, created_at: '2026-01-01T00:00:00Z',
 });
 
 describe('component rules', () => {
