@@ -19,3 +19,22 @@ export async function makeProduct(c: Client, type = 'implant', brand = 'Test Bra
   );
   return rows[0].id;
 }
+
+export async function receive(
+  c: Client,
+  product: string,
+  qty: number,
+  lot: string | null = 'L1',
+  expiry: string | null = null,
+): Promise<string> {
+  const { rows } = await c.query(
+    'select public.receive_stock(p_product => $1, p_qty => $2, p_lot_no => $3, p_expiry => $4) as id',
+    [product, qty, lot, expiry],
+  );
+  return rows[0].id;
+}
+
+export async function onHand(c: Client, lot: string): Promise<number> {
+  const { rows } = await c.query('select on_hand from public.stock_on_hand where stock_lot_id = $1', [lot]);
+  return rows[0].on_hand;
+}
