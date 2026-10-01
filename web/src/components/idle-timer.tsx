@@ -9,6 +9,8 @@ const ACTIVITY_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'tou
 /** Shared across tabs so activity in any tab keeps the others alive. */
 export const LAST_ACTIVITY_KEY = 'icm-last-activity';
 const BROADCAST_EVERY_MS = 5_000;
+// Lets the server-side idle check (middleware) see activity that makes no requests, e.g. typing.
+const HEARTBEAT_EVERY_MS = 60_000;
 
 async function signOutForIdle() {
   // 'local' ends only this browser's session; 'global' would also sign out other devices.
@@ -20,10 +22,15 @@ export function IdleTimer({ timeoutMinutes, onIdle = signOutForIdle }: { timeout
   useEffect(() => {
     const timer = createIdleTimer(timeoutMinutes * 60_000, onIdle);
     let lastBroadcast = 0;
+    let lastHeartbeat = 0;
 
     function onLocalActivity() {
       timer.reset();
       const now = Date.now();
+      if (now - lastHeartbeat >= HEARTBEAT_EVERY_MS) {
+        lastHeartbeat = now;
+        fetch('/api/activity', { method: 'POST' }).catch(() => {});
+      }
       if (now - lastBroadcast < BROADCAST_EVERY_MS) return;
       lastBroadcast = now;
       try {

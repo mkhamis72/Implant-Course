@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createIdleTimer } from './idle';
+import { createIdleTimer, isIdleExpired } from './idle';
 
 describe('createIdleTimer', () => {
   beforeEach(() => vi.useFakeTimers());
@@ -33,5 +33,21 @@ describe('createIdleTimer', () => {
     timer.stop();
     vi.advanceTimersByTime(2000);
     expect(onIdle).not.toHaveBeenCalled();
+  });
+});
+
+describe('isIdleExpired (server-side idle check)', () => {
+  const now = 1_000_000_000;
+  it('is not expired without a previous timestamp', () => {
+    expect(isIdleExpired(null, now, 30)).toBe(false);
+  });
+  it('is not expired within the timeout', () => {
+    expect(isIdleExpired(now - 30 * 60_000, now, 30)).toBe(false);
+  });
+  it('is expired past the timeout', () => {
+    expect(isIdleExpired(now - 30 * 60_000 - 1, now, 30)).toBe(true);
+  });
+  it('treats a garbage timestamp as no timestamp', () => {
+    expect(isIdleExpired(Number.NaN, now, 30)).toBe(false);
   });
 });

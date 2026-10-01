@@ -48,4 +48,18 @@ describe('<IdleTimer>', () => {
     expect(assign).toHaveBeenCalledWith('/login?reason=idle');
     vi.unstubAllGlobals();
   });
+
+  it('tells the server about activity at most once a minute (server-side idle check)', () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<IdleTimer timeoutMinutes={5} onIdle={vi.fn()} />);
+    fireEvent.keyDown(window);
+    fireEvent.keyDown(window);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('/api/activity', { method: 'POST' });
+    vi.advanceTimersByTime(61_000);
+    fireEvent.keyDown(window);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    vi.unstubAllGlobals();
+  });
 });
