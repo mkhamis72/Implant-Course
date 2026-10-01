@@ -36,3 +36,14 @@ describe('describeChange', () => {
     expect(describeChange(entry({ table_name: 'visit_notes', action: 'INSERT', after: { teeth: [] } }))).toBe('Note added');
   });
 });
+
+describe('describeChange — implants', () => {
+  it('describes implant records', () => {
+    expect(describeChange(entry({ table_name: 'implant_sites', action: 'INSERT', after: { tooth: 36, state: 'planned' } }))).toBe(
+      'Implant on tooth 36: Planned',
+    );
+    expect(
+      describeChange(entry({ table_name: 'implant_sites', before: { tooth: 36, state: 'planned' }, after: { tooth: 36, state: 'placed' } })),
+    ).toBe('Implant on tooth 36: Planned → Placed');
+  });
+});
