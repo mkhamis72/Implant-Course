@@ -43,3 +43,11 @@ export const getSettings = cache(async (): Promise<Settings> => {
   if (error || !data) throw new Error('Could not load settings');
   return data as Settings;
 });
+
+/** For server actions: actions can be called directly, so don't rely on the layout's check. */
+export async function requireActiveUser(): Promise<Profile> {
+  const profile = await getCurrentProfile();
+  if (!profile) redirect('/login');
+  if (!profile.active) redirect('/deactivated');
+  return profile;
+}
