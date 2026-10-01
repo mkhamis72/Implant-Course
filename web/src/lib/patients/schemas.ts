@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isFdiTooth, parseTeeth } from './fdi';
 import { MANUAL_STATES } from './types';
+import { APP_TIME_ZONE } from '@/lib/format';
 
 const text = (max: number) => z.string().trim().max(max).default('');
 
@@ -10,8 +11,9 @@ function isRealDate(v: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
 }
 
+/** Today's date in the clinic's time zone (en-CA formats as YYYY-MM-DD). */
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIME_ZONE }).format(new Date());
 }
 
 export const patientSchema = z.object({

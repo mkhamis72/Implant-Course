@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { medicalHistorySchema, noteSchema, patientSchema, toPatientRow, toothStatusSchema } from './schemas';
 
 const firstError = (r: { success: boolean; error?: { issues: { message: string }[] } }) => r.error?.issues[0].message;
@@ -66,5 +66,19 @@ describe('toothStatusSchema', () => {
       'Select at least one tooth.',
     );
     expect(toothStatusSchema.safeParse({ patient_id, teeth: [19], status: 'missing' }).success).toBe(false);
+  });
+});
+
+describe('dates use Cairo "today" (I3)', () => {
+  it('accepts today’s Cairo date just after midnight Cairo, while UTC is still yesterday', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-01T22:30:00Z')); // 01:30 on 2 Oct in Cairo (UTC+3)
+    try {
+      expect(noteSchema.safeParse({ visit_date: '2026-10-02', text: 'x' }).success).toBe(true);
+      expect(noteSchema.safeParse({ visit_date: '2026-10-03', text: 'x' }).success).toBe(false);
+      expect(patientSchema.safeParse({ full_name: 'Newborn', dob: '2026-10-02' }).success).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
