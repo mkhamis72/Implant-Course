@@ -1,12 +1,16 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import { Odontogram } from '@/components/odontogram/odontogram';
 import { Legend } from '@/components/odontogram/legend';
 import { MANUAL_STATES, STATE_LABELS, canSetByHand, type ManualState, type ToothState } from '@/lib/patients/types';
 import { badgesFor } from '@/lib/inventory/components';
 import type { ChartData } from '@/lib/inventory/types';
 import { setToothStatus } from './chart-actions';
+import { statusTone, toothName, type Tone } from '@/lib/patients/tooth-panel';
+
+const TONE_BADGE: Record<Tone, string> = { ok: 'badge-ok', warn: 'badge-warn', bad: 'badge-bad', accent: 'badge-accent', off: '' };
+const TONE_RULE: Record<Tone, string> = { ok: 'border-l-ok-line', warn: 'border-l-warn-line', bad: 'border-l-bad-line', accent: 'border-l-accent', off: 'border-l-line' };
 import { ImplantSection } from './implant-section';
 
 type Props = {
@@ -22,8 +26,14 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const panelRef = useRef<HTMLElement>(null);
+
   function onSelect(fdi: number, additive: boolean) {
     setError(null);
+    // Below the side-by-side layout the panel sits under the chart: bring it into view after a tap.
+    if (!additive && window.matchMedia('(max-width: 1279.98px)').matches) {
+      requestAnimationFrame(() => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
     setSelected((current) => {
       if (additive) {
         return current.includes(fdi) ? current.filter((t) => t !== fdi) : [...current, fdi].sort((a, b) => a - b);
@@ -48,39 +58,75 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
         {/* On phones the chart keeps tappable teeth (about 36px each) and scrolls sideways inside its panel. */}
         <div className="-mx-2 overflow-x-auto px-2">
           <div className="min-w-[36rem] sm:min-w-0">
+            {/* Standard dental-chart orientation: the patient's right is on the viewer's left. */}
+            <div aria-hidden="true" className="mb-1 flex max-w-4xl justify-between text-xs font-medium text-subtle">
+              <span>Right</span>
+              <span>Left</span>
+            </div>
             <Odontogram statuses={statuses} badges={badges} selected={selected} onSelect={onSelect} />
           </div>
         </div>
         <Legend />
       </div>
-      <aside className="card w-full space-y-4 xl:w-80" aria-label="Tooth details">
+      <aside
+        ref={panelRef}
+        className={`card w-full scroll-mt-20 space-y-4 xl:w-80 ${selected.length === 1 ? `border-l-4 ${TONE_RULE[statusTone(statusOf(selected[0]))]}` : ''}`}
+        aria-label="Tooth details"
+      >
         {selected.length === 0 ? (
           <p className="text-sm text-muted">
             Click a tooth to see and change its status. Shift- or Ctrl-click to select several teeth.
           </p>
         ) : (
           <>
-            <h2 className="font-semibold">
-              {selected.length === 1 ? `Tooth ${selected[0]}` : `${selected.length} teeth: ${selected.join(', ')}`}
-            </h2>
-            <ul className="space-y-1 text-sm">
-              {selected.map((t) => (
-                <li key={t}>
-                  Tooth {t}: {STATE_LABELS[statusOf(t)]}
-                </li>
-              ))}
-            </ul>
+            {selected.length === 1 ? (
+              // The tooth number is how everyone at the chair refers to it: it leads the panel.
+              <header className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-4xl leading-none font-semibold tracking-tight text-ink">
+                    <span className="sr-only">Tooth </span>
+                    {selected[0]}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted">{toothName(selected[0])}</p>
+                </div>
+                <span data-testid="tooth-status" className={`badge ${TONE_BADGE[statusTone(statusOf(selected[0]))]} mt-1`}>
+                  {STATE_LABELS[statusOf(selected[0])]}
+                </span>
+              </header>
+            ) : (
+              <>
+                <h2 className="font-semibold">{`${selected.length} teeth: ${selected.join(', ')}`}</h2>
+                <ul className="space-y-1 text-sm">
+                  {selected.map((t) => (
+                    <li key={t}>
+                      Tooth {t}: {STATE_LABELS[statusOf(t)]}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
             {locked.length > 0 ? (
-              <p className="rounded bg-warn-soft p-3 text-sm text-warn">
+              // An explanation, not a warning: quiet for one implant tooth, amber when a multi-selection is blocked.
+              <p className={selected.length === 1 ? 'text-sm text-muted' : 'rounded-md bg-warn-soft p-3 text-sm text-warn'}>
                 Teeth with implant records ({locked.join(', ')}) are changed from the implant workflow, not here.
               </p>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {MANUAL_STATES.map((state) => (
-                  <button key={state} className="btn-secondary btn" disabled={pending} onClick={() => apply(state)}>
-                    Mark {STATE_LABELS[state].toLowerCase()}
-                  </button>
-                ))}
+              <div role="group" aria-label="Tooth status" className="inline-flex rounded-lg border border-line-strong p-0.5">
+                {MANUAL_STATES.map((state) => {
+                  const current = selected.every((t) => statusOf(t) === state);
+                  return (
+                    <button
+                      key={state}
+                      aria-label={`Mark ${STATE_LABELS[state].toLowerCase()}`}
+                      aria-pressed={current}
+                      disabled={pending}
+                      onClick={() => apply(state)}
+                      className={`min-h-9 rounded-md px-3 text-sm ${current ? 'bg-ink font-semibold text-white' : 'text-ink hover:bg-sunken'}`}
+                    >
+                      {STATE_LABELS[state]}
+                    </button>
+                  );
+                })}
               </div>
             )}
             {error && <p role="alert" className="text-sm text-bad">{error}</p>}

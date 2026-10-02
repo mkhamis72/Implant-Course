@@ -3,7 +3,8 @@
 import { useState, useTransition } from 'react';
 import { activeSite, currentComponent } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
-import { COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, type ChartData, type ImplantSite } from '@/lib/inventory/types';
+import { COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, type ChartData, type ComponentType, type ImplantSite } from '@/lib/inventory/types';
+import { nextActions, type PanelAction } from '@/lib/patients/tooth-panel';
 import { isManualState, type ToothState } from '@/lib/patients/types';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { cancelPlan } from './implant-actions';
@@ -12,34 +13,75 @@ import { ComponentForm, FollowupForm, PlaceForm, PlanForm } from './implant-form
 
 type Mode = 'none' | 'plan' | 'place' | 'component' | 'followup';
 
+const ACTION_LABELS: Record<Exclude<PanelAction, 'cancel'>, string> = {
+  plan: 'Plan implant', place: 'Place implant', component: 'Add component', followup: 'Add follow-up',
+};
+
+// The restorative sequence on an implant; the connection stage covers Ti-base, multi-unit or abutment.
+const STAGES: { label: string; types: ComponentType[] }[] = [
+  { label: 'Cover screw', types: ['cover_screw'] },
+  { label: 'Healing abutment', types: ['healing_abutment'] },
+  { label: 'Abutment', types: ['ti_base', 'multi_unit', 'abutment'] },
+  { label: 'Crown', types: ['final_restoration'] },
+];
+
+function ComponentTimeline({ site }: { site: ImplantSite }) {
+  const current = currentComponent(site)?.component_type;
+  const fitted = new Set(site.components.filter((c) => !c.voided_at).map((c) => c.component_type));
+  return (
+    <ol aria-label="Components so far" className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-xs">
+      {STAGES.map((stage, i) => {
+        const isCurrent = current !== undefined && stage.types.includes(current);
+        const reached = stage.types.some((t) => fitted.has(t));
+        return (
+          <li key={stage.label} className="flex items-center gap-1">
+            {i > 0 && <span aria-hidden="true" className={`h-px w-3 ${reached ? 'bg-accent' : 'bg-line-strong'}`} />}
+            <span
+              aria-current={isCurrent ? 'step' : undefined}
+              className={`whitespace-nowrap rounded-full px-2 py-0.5 ${
+                isCurrent ? 'bg-accent font-semibold text-white' : reached ? 'bg-accent-soft text-accent-strong' : 'border border-line text-subtle'
+              }`}
+            >
+              {isCurrent && current ? COMPONENT_LABELS[current] : stage.label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: string; data: ChartData }) {
-  const current = currentComponent(site);
-  const rows: [string, string][] = [
-    ['State', SITE_STATE_LABELS[site.state]],
-    ['Implant', site.product ? productLabel(site.product) : '—'],
-    ['Batch', site.lot ? (site.lot.lot_no ? `Lot ${site.lot.lot_no}` : 'No lot') : '—'],
-    ['Placed on', site.placed_on ? formatDate(site.placed_on) : '—'],
-    ['Torque', site.torque_ncm !== null ? `${site.torque_ncm} Ncm` : '—'],
-    ['Graft', site.graft || '—'],
-    ['Placed by', site.placing?.full_name ?? '—'],
-    ['Assisted by', site.assisting?.full_name ?? '—'],
-    ['Supervisor', site.supervisor?.full_name || site.supervisor?.email || '—'],
-    ['Current component', current ? COMPONENT_LABELS[current.component_type] : '—'],
-  ];
+  const facts = [
+    site.lot ? (site.lot.lot_no ? `Lot ${site.lot.lot_no}` : 'No lot') : null,
+    site.placed_on ? formatDate(site.placed_on) : null,
+    site.torque_ncm !== null ? `${site.torque_ncm} Ncm` : null,
+    site.graft ? `Graft: ${site.graft}` : null,
+  ].filter(Boolean) as string[];
+  const people = [
+    site.placing?.full_name ? `Placed by ${site.placing.full_name}` : null,
+    site.assisting?.full_name ? `assisted by ${site.assisting.full_name}` : null,
+    site.supervisor ? `supervised by ${site.supervisor.full_name || site.supervisor.email}` : null,
+  ].filter(Boolean) as string[];
   return (
     <div data-testid="site-details" className="space-y-3 text-sm">
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-        {rows.map(([k, v]) => (
-          <div key={k} className="contents">
-            <dt className="text-muted">{k}</dt>
-            <dd>{v}</dd>
-          </div>
-        ))}
-      </dl>
+      <div className="space-y-2 rounded-lg border border-line bg-sunken px-3 py-2.5">
+        <p className="font-semibold text-ink">
+          {site.product ? productLabel(site.product) : 'Implant'}
+          <span className="sr-only"> — {SITE_STATE_LABELS[site.state]}</span>
+        </p>
+        {facts.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5">
+            {facts.map((f) => <li key={f} className="badge">{f}</li>)}
+          </ul>
+        )}
+        {people.length > 0 && <p className="text-muted">{people.join(', ')}</p>}
+        {(site.state === 'placed' || site.state === 'restored') && <ComponentTimeline site={site} />}
+      </div>
       {site.components.length > 0 && (
         <div>
-          <h4 className="font-medium">Components</h4>
-          <ol className="list-decimal pl-5" data-testid="component-history">
+          <h4 className="font-medium">Component history</h4>
+          <ol className="list-decimal pl-5 text-muted" data-testid="component-history">
             {site.components.map((c) => (
               <li key={c.id} className={c.voided_at ? 'text-subtle line-through' : ''}>
                 {COMPONENT_LABELS[c.component_type]} — {formatDate(c.fitted_on)}
@@ -75,6 +117,7 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
   const site = activeSite(data.sites, tooth);
   const earlier = data.sites.filter((s) => s.tooth === tooth && s !== site && s.state !== 'removed');
   const canStart = !site && (isManualState(status) || status === 'failed');
+  const actions = nextActions({ canStart, siteState: site?.state ?? null });
   const done = () => setMode('none');
 
   function cancel() {
@@ -103,25 +146,17 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
       )}
       {site && site.state !== 'planned' && <SiteDetails site={site} patientId={patientId} data={data} />}
 
-      {mode === 'none' && (
+      {mode === 'none' && actions.primary && (
+        // One obvious next step per state; the alternatives stay quiet beside it.
         <div className="flex flex-wrap gap-2">
-          {canStart && (
-            <>
-              <button className="btn-secondary btn" onClick={() => setMode('plan')}>Plan implant</button>
-              <button className="btn" onClick={() => setMode('place')}>Place implant</button>
-            </>
-          )}
-          {site?.state === 'planned' && (
-            <>
-              <button className="btn" onClick={() => setMode('place')}>Place implant</button>
-              <button className="btn-secondary btn" disabled={pending} onClick={cancel}>Cancel plan</button>
-            </>
-          )}
-          {site && (site.state === 'placed' || site.state === 'restored') && (
-            <>
-              <button className="btn-secondary btn" onClick={() => setMode('component')}>Add component</button>
-              <button className="btn-secondary btn" onClick={() => setMode('followup')}>Add follow-up</button>
-            </>
+          {[actions.primary, ...actions.secondary].map((a, i) =>
+            a === 'cancel' ? (
+              <button key={a} className="btn-secondary btn" disabled={pending} onClick={cancel}>Cancel plan</button>
+            ) : (
+              <button key={a} className={i === 0 ? 'btn flex-1 sm:flex-none' : 'btn-secondary btn'} onClick={() => setMode(a)}>
+                {ACTION_LABELS[a]}
+              </button>
+            ),
           )}
         </div>
       )}
