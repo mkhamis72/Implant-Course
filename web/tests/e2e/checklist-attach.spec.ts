@@ -5,6 +5,7 @@ import { createPatientViaUi, uniqueName } from './patients';
 import { apiAs, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate, seedSession } from './api';
 
 test('default templates attach to new sessions and bookings', async ({ page }) => {
+  test.setTimeout(120_000); // many setup steps and page loads
   const api = await apiAs(TEST_USERS.organizer.email);
   const admin = await apiAs(TEST_USERS.admin.email);
   const dayItem = uniqueName('Room ready');

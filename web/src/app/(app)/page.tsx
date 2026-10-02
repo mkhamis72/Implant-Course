@@ -8,14 +8,20 @@ import { stockFlags } from '@/lib/inventory/lots';
 import type { Product } from '@/lib/inventory/types';
 import { SLOT_SELECT } from '@/lib/schedule/queries';
 import type { PullRow, SlotRow } from '@/lib/schedule/types';
+import { dashboardShortages } from '@/lib/dashboard/shortages';
 
 type StockRow = Product & { on_hand: number; nearest_expiry: string | null };
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+/** A failed query must never look like an empty (all-clear) card. */
+function Card({ title, failed, children }: { title: string; failed?: boolean; children: React.ReactNode }) {
   return (
     <section className="card space-y-2">
       <h2 className="font-semibold">{title}</h2>
-      {children}
+      {failed ? (
+        <p role="alert" className="text-sm text-red-700">Could not load this. Reload the page to try again.</p>
+      ) : (
+        children
+      )}
     </section>
   );
 }
@@ -42,12 +48,9 @@ export default async function DashboardPage() {
   ]);
 
   const surgeries = ((slots.data ?? []) as unknown as SlotRow[]).filter((s) => s.status !== 'cancelled');
-  const { data: chairs } = await supabase.from('chairs').select('id, name');
+  const { data: chairs, error: chairsError } = await supabase.from('chairs').select('id, name');
   const chairName = new Map((chairs ?? []).map((c) => [c.id as string, c.name as string]));
-  const shortages = [
-    ...((pullToday.data ?? []) as PullRow[]).map((r) => ({ ...r, day: 'Today' })),
-    ...((pullTomorrow.data ?? []) as PullRow[]).map((r) => ({ ...r, day: 'Tomorrow' })),
-  ].filter((r) => r.product_id && r.needed > r.available);
+  const shortages = dashboardShortages((pullToday.data ?? []) as PullRow[], (pullTomorrow.data ?? []) as PullRow[]);
   const stockRows = (stock.data ?? []) as StockRow[];
   const flagged = stockRows.map((r) => ({ r, f: stockFlags(r, today, settings.expiry_alert_days) }));
   const low = flagged.filter((x) => x.f.low).map((x) => x.r);
@@ -61,7 +64,7 @@ export default async function DashboardPage() {
         <p className="text-gray-600">Welcome, {profile.full_name || profile.email} · {formatDate(today)}</p>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Today's surgeries">
+        <Card title="Today's surgeries" failed={Boolean(slots.error || chairsError)}>
           {surgeries.length === 0 ? (
             <p className="text-sm text-gray-600">No surgeries booked today.</p>
           ) : (
@@ -82,7 +85,7 @@ export default async function DashboardPage() {
           <Link href={`/schedule?date=${today}`} className="text-sm text-blue-700 hover:underline">Open today’s schedule</Link>
         </Card>
 
-        <Card title="Stock shortages for surgeries">
+        <Card title="Stock shortages for surgeries" failed={Boolean(pullToday.error || pullTomorrow.error)}>
           {shortages.length === 0 ? (
             <p className="text-sm text-gray-600">Stock covers today’s and tomorrow’s planned implants.</p>
           ) : (
@@ -98,7 +101,7 @@ export default async function DashboardPage() {
           )}
         </Card>
 
-        <Card title="Low stock">
+        <Card title="Low stock" failed={Boolean(stock.error)}>
           {low.length === 0 ? (
             <p className="text-sm text-gray-600">Nothing is at or below its reorder level.</p>
           ) : (
@@ -113,7 +116,7 @@ export default async function DashboardPage() {
           )}
         </Card>
 
-        <Card title="Expiring soon">
+        <Card title="Expiring soon" failed={Boolean(stock.error)}>
           {expiring.length === 0 ? (
             <p className="text-sm text-gray-600">Nothing expires in the next {settings.expiry_alert_days} days.</p>
           ) : (
@@ -128,7 +131,7 @@ export default async function DashboardPage() {
           )}
         </Card>
 
-        <Card title="My open checklist items">
+        <Card title="My open checklist items" failed={Boolean(mine.error)}>
           {myItems.length === 0 ? (
             <p className="text-sm text-gray-600">Nothing assigned to you is open.</p>
           ) : (

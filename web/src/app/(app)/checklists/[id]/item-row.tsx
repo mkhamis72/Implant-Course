@@ -64,7 +64,20 @@ export function ItemRow({ item, checklistId, organizers, first, last }: {
           <button className="btn-secondary btn px-2 py-0.5" disabled={last || pending} onClick={() => run(() => moveItem({ id: item.id, checklistId, direction: 1 }))}>
             Move down
           </button>
-          <button className="btn-secondary btn px-2 py-0.5" onClick={() => setEditing((e) => !e)}>Edit</button>
+          <button
+            className="btn-secondary btn px-2 py-0.5"
+            onClick={() => {
+              // Start from the latest saved values: someone else may have changed them since this row first rendered.
+              if (!editing) {
+                setText(item.text);
+                setAssignee(item.assignee_id ?? '');
+                setDue(item.due_date ?? '');
+              }
+              setEditing((e) => !e);
+            }}
+          >
+            Edit
+          </button>
           <button className="btn-secondary btn px-2 py-0.5 text-red-700" disabled={pending} onClick={() => run(() => deleteItem({ id: item.id, checklistId }))}>
             Delete
           </button>

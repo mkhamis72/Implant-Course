@@ -70,7 +70,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                 <div
                   key={b.id}
                   data-testid={`booking-${b.patient?.file_no}`}
-                  className={`m-0.5 space-y-0.5 overflow-hidden rounded border p-1.5 ${b.status === 'cancelled' ? 'border-gray-300 bg-gray-50 text-gray-500 line-through' : b.status === 'done' ? 'border-green-300 bg-green-50' : 'border-blue-300 bg-blue-50'}`}
+                  className={`m-0.5 space-y-0.5 overflow-y-auto rounded border p-1.5 ${b.status === 'cancelled' ? 'border-gray-300 bg-gray-50 text-gray-500 line-through' : b.status === 'done' ? 'border-green-300 bg-green-50' : 'border-blue-300 bg-blue-50'}`}
                   style={{
                     gridColumn: col + 2,
                     gridRow: `${row + 1} / span ${span}`,
