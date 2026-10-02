@@ -40,8 +40,9 @@ function Footer({ error, pending, saveLabel, onCancel }: { error: string | null;
   return (
     <>
       {error && <p role="alert" className="text-sm text-bad">{error}</p>}
-      <div className="flex gap-2">
-        <button className="btn" disabled={pending}>
+      {/* On phones the save bar stays in reach at the bottom of the screen while the form scrolls. */}
+      <div className="sticky bottom-0 -mx-1 flex gap-2 bg-surface px-1 py-2 sm:static sm:mx-0 sm:px-0 sm:py-0">
+        <button className="btn flex-1 sm:flex-none" disabled={pending}>
           {saveLabel}
         </button>
         <button type="button" className="btn-secondary btn" onClick={onCancel}>
@@ -72,17 +73,86 @@ function BatchSelect({ data, productId, usedOn, value, onChange }: {
       </p>
     );
   }
+  if (!productId) return null;
+  // One tap per batch: usable batches as cards, soonest expiry first (availableLots' order).
   return (
-    <Field label="Stock batch">
-      <select className="input" value={value} onChange={(e) => onChange(e.target.value)} disabled={!productId}>
-        <option value="">Choose a batch…</option>
-        {lots.map((l) => (
-          <option key={l.stock_lot_id} value={l.stock_lot_id}>
-            {lotLabel(l)}
-          </option>
+    <fieldset>
+      <legend className="label">Stock batch</legend>
+      <div role="radiogroup" aria-label="Stock batch" className="grid gap-2 sm:grid-cols-2">
+        {lots.map((l) => {
+          const checked = value === l.stock_lot_id;
+          return (
+            <label
+              key={l.stock_lot_id}
+              className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
+                checked ? 'border-accent bg-accent-soft' : 'border-line-strong bg-surface hover:bg-sunken'
+              }`}
+            >
+              <input
+                type="radio"
+                name="stock-batch"
+                className="mt-1"
+                value={l.stock_lot_id}
+                checked={checked}
+                onChange={() => onChange(l.stock_lot_id)}
+                aria-label={lotLabel(l)}
+              />
+              <span>
+                <span className="block font-semibold">{l.lot_no ? `Lot ${l.lot_no}` : 'No lot'}</span>
+                <span className="block text-muted">
+                  {l.expiry ? `exp ${l.expiry}` : 'no expiry'} · {l.on_hand} left
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+const TORQUES = ['15', '25', '35', '45'];
+
+function TorqueField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="block">
+        <span className="label">Insertion torque (Ncm, optional)</span>
+        <input className="input" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} />
+      </label>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {TORQUES.map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={value === t}
+            onClick={() => onChange(t)}
+            className={`rounded-full border px-3 py-1 text-sm ${value === t ? 'border-accent bg-accent-soft text-accent-strong' : 'border-line-strong hover:bg-sunken'}`}
+          >
+            {t} Ncm
+          </button>
         ))}
-      </select>
-    </Field>
+      </div>
+    </div>
+  );
+}
+
+const nameOf = (options: { id: string; label: string }[], id: string) => options.find((o) => o.id === id)?.label ?? null;
+
+/**
+ * Who placed, assisted and supervised. For a booked implant these come from the booking, so they
+ * show as one line with the dropdowns folded away under "Change".
+ */
+function People({ booked, summary, children }: { booked: boolean; summary: (string | null)[]; children: React.ReactNode }) {
+  if (!booked) return <>{children}</>;
+  return (
+    <div className="rounded-lg border border-line bg-sunken px-3 py-2 text-sm">
+      <p data-testid="booked-people">{summary.filter(Boolean).join(', ')}</p>
+      <details className="mt-1">
+        <summary className="cursor-pointer text-accent">Change</summary>
+        <div className="mt-2 space-y-3">{children}</div>
+      </details>
+    </div>
   );
 }
 
@@ -144,27 +214,34 @@ export function PlaceForm({
       <Field label="Placement date">
         <input className="input" type="date" value={v.placedOn} onChange={(e) => set('placedOn')(e.target.value)} />
       </Field>
-      <Field label="Placed by (delegate)">
-        <select className="input" value={v.placingDelegateId} onChange={(e) => set('placingDelegateId')(e.target.value)}>
-          <option value="">Choose the delegate…</option>
-          {data.delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-        </select>
-      </Field>
-      <Field label="Assisted by (optional)">
-        <select className="input" value={v.assistingDelegateId} onChange={(e) => set('assistingDelegateId')(e.target.value)}>
-          <option value="">Nobody</option>
-          {data.delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-        </select>
-      </Field>
-      <Field label="Supervisor">
-        <select className="input" value={v.supervisorId} onChange={(e) => set('supervisorId')(e.target.value)}>
-          <option value="">Choose the supervisor…</option>
-          {data.organizers.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </select>
-      </Field>
-      <Field label="Insertion torque (Ncm, optional)">
-        <input className="input" inputMode="decimal" value={v.torque} onChange={(e) => set('torque')(e.target.value)} />
-      </Field>
+      <People
+        booked={Boolean(placingFromSlot)}
+        summary={[
+          `Placed by ${nameOf(data.delegates, v.placingDelegateId) ?? '—'}`,
+          v.assistingDelegateId ? `assisted by ${nameOf(data.delegates, v.assistingDelegateId)}` : null,
+          `supervised by ${nameOf(data.organizers, v.supervisorId) ?? '—'}`,
+        ]}
+      >
+        <Field label="Placed by (delegate)">
+          <select className="input" value={v.placingDelegateId} onChange={(e) => set('placingDelegateId')(e.target.value)}>
+            <option value="">Choose the delegate…</option>
+            {data.delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Assisted by (optional)">
+          <select className="input" value={v.assistingDelegateId} onChange={(e) => set('assistingDelegateId')(e.target.value)}>
+            <option value="">Nobody</option>
+            {data.delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Supervisor">
+          <select className="input" value={v.supervisorId} onChange={(e) => set('supervisorId')(e.target.value)}>
+            <option value="">Choose the supervisor…</option>
+            {data.organizers.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </Field>
+      </People>
+      <TorqueField value={v.torque} onChange={set('torque')} />
       <Field label="Graft (optional)">
         <input className="input" value={v.graft} onChange={(e) => set('graft')(e.target.value)} />
       </Field>

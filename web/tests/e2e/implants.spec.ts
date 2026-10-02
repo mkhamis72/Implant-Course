@@ -26,9 +26,9 @@ test('places an implant from the chart and deducts stock', async ({ page }) => {
   await page.getByRole('button', { name: 'Tooth 36, Present' }).click();
   await panel(page).getByRole('button', { name: 'Place implant' }).click();
   await page.getByRole('combobox', { name: 'Implant', exact: true }).selectOption({ label: `${s.brand} E2E Ø4.0 × 10 mm` });
-  const batch = page.getByLabel('Stock batch');
-  await expect(batch.locator('option')).toHaveText(['Choose a batch…', `Lot ${s.lotNo} · exp 2031-12-31 · 3 left`]);
-  await batch.selectOption({ index: 1 });
+  const batch = page.getByRole('radiogroup', { name: 'Stock batch' });
+  await expect(batch.getByRole('radio')).toHaveCount(1);
+  await batch.getByRole('radio', { name: `Lot ${s.lotNo} · exp 2031-12-31 · 3 left` }).check();
   await page.getByLabel('Placed by (delegate)').selectOption({ label: s.delegate });
   await page.getByLabel('Insertion torque (Ncm, optional)').fill('35');
   await page.getByRole('button', { name: 'Save placement' }).click();
@@ -76,7 +76,7 @@ async function placeOn(page: Page, s: Awaited<ReturnType<typeof setup>>, tooth: 
   await page.getByRole('button', { name: `Tooth ${tooth}, Present` }).click();
   await panel(page).getByRole('button', { name: 'Place implant' }).click();
   await page.getByRole('combobox', { name: 'Implant', exact: true }).selectOption({ label: `${s.brand} E2E Ø4.0 × 10 mm` });
-  await page.getByLabel('Stock batch').selectOption({ index: 1 });
+  await page.getByRole('radiogroup', { name: 'Stock batch' }).getByRole('radio').first().check();
   await page.getByLabel('Placed by (delegate)').selectOption({ label: s.delegate });
   await page.getByRole('button', { name: 'Save placement' }).click();
   await expect(page.getByRole('button', { name: `Tooth ${tooth}, Implant placed` })).toBeVisible();
@@ -90,14 +90,14 @@ test('fits a healing abutment then a Ti-base: badges change and stock is deducte
 
   await panel(page).getByRole('button', { name: 'Add component' }).click();
   await page.getByLabel('Product (optional)').selectOption({ label: `${s.brand} E2E · ${s.brand} HA` });
-  await page.getByLabel('Stock batch').selectOption({ index: 1 });
+  await page.getByRole('radiogroup', { name: 'Stock batch' }).getByRole('radio').first().check();
   await page.getByRole('button', { name: 'Save component' }).click();
   await expect(page.getByRole('button', { name: 'Tooth 36, Implant placed, HA' })).toBeVisible();
 
   await panel(page).getByRole('button', { name: 'Add component' }).click();
   await page.getByRole('combobox', { name: 'Component', exact: true }).selectOption('ti_base');
   await page.getByLabel('Product (optional)').selectOption({ label: `${s.brand} E2E · ${s.brand} TB` });
-  await page.getByLabel('Stock batch').selectOption({ index: 1 });
+  await page.getByRole('radiogroup', { name: 'Stock batch' }).getByRole('radio').first().check();
   await page.getByRole('button', { name: 'Save component' }).click();
   await expect(page.getByRole('button', { name: 'Tooth 36, Implant placed, TB' })).toBeVisible();
   await expect(panel(page).getByTestId('component-history')).toContainText('Healing abutment');
