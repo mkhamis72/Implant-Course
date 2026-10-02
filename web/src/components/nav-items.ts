@@ -8,6 +8,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/patients', label: 'Patients' },
   { href: '/schedule', label: 'Schedule' },
   { href: '/courses', label: 'Courses' },
+  { href: '/checklists', label: 'Checklists' },
   { href: '/inventory', label: 'Inventory' },
   { href: '/delegates', label: 'Delegates' },
   { href: '/admin/users', label: 'Admin', adminOnly: true },
