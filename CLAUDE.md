@@ -39,6 +39,8 @@ There is no local Supabase: DB and E2E tests hit the hosted **dev** project conf
 
 **Migrations** (`web/supabase/migrations/NNNN_*.sql`) are applied once, in order, by `scripts/migrate.ts`; never edit an applied one. To change a function, add a new migration with `create or replace` of the *latest* definition (search later migrations — functions are redefined several times). New public tables get no privileges by default (0019) and must grant what they need.
 
+Releases (`.github/workflows/release.yml`) migrate production *before* the new code deploys, so the previous app version runs against the new schema for a few minutes: migrations must be backward-compatible (add, don't rename or drop in the same release).
+
 **App layout:** `src/app/(app)/` is the signed-in area; its `layout.tsx` redirects to `/login` or `/deactivated`. Because pages render in parallel with layouts, pages and every server action must call `requireActiveUser()` / `requireAdmin()` (`src/lib/auth/session.ts`) themselves. `searchParams` are read with `readParams()` (`src/lib/search-params.ts`), which tolerates repeated params. Domain logic (parsing, labels, schemas, pure helpers) lives in `src/lib/<domain>/` with colocated tests; route folders hold pages, client forms and `actions.ts`.
 
 **Styling:** design tokens live in `src/app/globals.css` (`@theme`). Use the named colours (`text-muted`, `border-line`, `text-accent`, `bg-ok-soft`, `text-bad` …), not raw Tailwind palette colours, and the shared classes `.btn`/`.btn-secondary`/`.btn-danger`, `.input`, `.label`, `.card`, `.badge(-ok|-warn|-bad)`, `.rule(-ok|-warn|-bad|-accent)`, `.page-header`, `.tabs`/`.tab` (or `SectionNav`). Data tables use `className="table"` with `data-label` on every `<td>` so they stack on phones.
