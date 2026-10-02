@@ -20,12 +20,15 @@ export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('user_id, full_name, email, role, active')
     .eq('user_id', user.id)
-    .single();
-  return (data as Profile | null) ?? null;
+    .maybeSingle();
+  // A failed lookup is an error page, not "signed out": redirecting to /login would loop.
+  if (error) throw new Error('Could not load your account');
+  // Signed in but no profile row: treat as deactivated (an admin has to set the account up).
+  return (data as Profile | null) ?? { user_id: user.id, full_name: '', email: user.email ?? '', role: 'organizer', active: false };
 });
 
 export async function requireAdmin(): Promise<Profile> {

@@ -2,9 +2,10 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { ageOn } from '@/lib/patients/age';
 import type { Patient } from '@/lib/patients/types';
+import { readParams, type PageSearchParams } from '@/lib/search-params';
 
-export default async function PatientsPage({ searchParams }: { searchParams: Promise<{ q?: string; archived?: string }> }) {
-  const { q = '', archived } = await searchParams;
+export default async function PatientsPage({ searchParams }: { searchParams: PageSearchParams }) {
+  const { q, archived } = await readParams(searchParams, 'q', 'archived');
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('search_patients', { q, include_archived: archived === '1' });
   if (error) throw new Error('Could not load patients');

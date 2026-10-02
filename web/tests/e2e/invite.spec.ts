@@ -30,13 +30,17 @@ test('mismatched passwords are rejected', async ({ page }) => {
   const admin = adminClient();
   const email = `icm-invite-mm-${Date.now()}@example.com`;
   const { data } = await admin.auth.admin.generateLink({ type: 'invite', email });
+  const pg = new Client(pgConfig());
+  await pg.connect();
   try {
+    await setProfile(pg, data.user!.id, { full_name: 'Invited Mismatch', role: 'organizer', active: true });
     await page.goto(`/auth/confirm?token_hash=${data.properties!.hashed_token}&type=invite`);
     await page.getByLabel('New password').fill('Fresh-password-123');
     await page.getByLabel('Confirm password').fill('Different-password-1');
     await page.getByRole('button', { name: 'Save password' }).click();
     await expect(page.getByRole('main').getByRole('alert')).toHaveText('The passwords do not match.');
   } finally {
+    await pg.end();
     await admin.auth.admin.deleteUser(data.user!.id);
   }
 });

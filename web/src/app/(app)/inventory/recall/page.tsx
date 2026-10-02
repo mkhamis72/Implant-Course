@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { productLabel } from '@/lib/inventory/labels';
 import type { ProductType } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
+import { readParams, type PageSearchParams } from '@/lib/search-params';
 
 type Hit = {
   stock_lot_id: string;
@@ -19,8 +20,8 @@ type Hit = {
   description: string;
 };
 
-export default async function RecallPage({ searchParams }: { searchParams: Promise<{ lot?: string }> }) {
-  const { lot = '' } = await searchParams;
+export default async function RecallPage({ searchParams }: { searchParams: PageSearchParams }) {
+  const { lot } = await readParams(searchParams, 'lot');
   const q = String(lot).trim();
   let hits: Hit[] = [];
   if (q) {

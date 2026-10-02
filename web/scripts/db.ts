@@ -1,12 +1,17 @@
 import { readFileSync } from 'node:fs';
 import type { ClientConfig } from 'pg';
 
-export function pgConfig(): ClientConfig {
-  const connectionString = process.env.DATABASE_URL;
+type Env = Record<string, string | undefined>;
+
+/**
+ * The server certificate is verified against DATABASE_CA_CERT. Only the dev project
+ * (ALLOW_TEST_FIXTURES=1) may connect without one.
+ */
+export function pgConfig(env: Env = process.env): ClientConfig {
+  const connectionString = env.DATABASE_URL;
   if (!connectionString) throw new Error('DATABASE_URL is not set (see .env.example)');
-  const ca = process.env.DATABASE_CA_CERT;
-  return {
-    connectionString,
-    ssl: ca ? { ca: readFileSync(ca, 'utf8') } : { rejectUnauthorized: false },
-  };
+  const ca = env.DATABASE_CA_CERT;
+  if (ca) return { connectionString, ssl: { ca: readFileSync(ca, 'utf8') } };
+  if (env.ALLOW_TEST_FIXTURES === '1') return { connectionString, ssl: { rejectUnauthorized: false } };
+  throw new Error('DATABASE_CA_CERT is not set: download the CA certificate from the Supabase dashboard (see .env.example)');
 }

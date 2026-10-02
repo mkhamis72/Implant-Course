@@ -5,13 +5,14 @@ import { formatDate } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
 import type { Option, Product } from '@/lib/inventory/types';
 import { SlotForm, type SessionOption } from './slot-form';
+import { readParams, type PageSearchParams } from '@/lib/search-params';
 
 export default async function NewBookingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; chair?: string; time?: string; session?: string; patient?: string }>;
+  searchParams: PageSearchParams;
 }) {
-  const q = await searchParams;
+  const q = await readParams(searchParams, 'date', 'chair', 'time', 'session', 'patient');
   const supabase = await createClient();
   const me = await getCurrentProfile();
   const [{ data: sessions }, { data: chairs }, { data: patients }, { data: enrollments }, { data: implants }, { data: organizers }] =
@@ -36,7 +37,7 @@ export default async function NewBookingPage({
   }
   for (const list of Object.values(enrolled)) list.sort((a, b) => a.label.localeCompare(b.label));
 
-  const initialSession = q.session ?? sessionOptions.find((s) => s.label.startsWith(q.date ? formatDate(q.date) : '\u0000'))?.id ?? '';
+  const initialSession = q.session || (sessionOptions.find((s) => s.label.startsWith(q.date ? formatDate(q.date) : '\u0000'))?.id ?? '');
 
   return (
     <div className="space-y-6">
@@ -49,7 +50,7 @@ export default async function NewBookingPage({
         implants={((implants ?? []) as Product[]).sort((a, b) => productLabel(a).localeCompare(productLabel(b), undefined, { numeric: true }))}
         organizers={(organizers ?? []).map((o) => ({ id: o.user_id as string, label: (o.full_name || o.email) as string }))}
         me={me?.user_id ?? ''}
-        initial={{ sessionId: initialSession, chairId: q.chair ?? '', start: q.time ?? '09:00', fileNo: q.patient ?? '' }}
+        initial={{ sessionId: initialSession, chairId: q.chair, start: q.time || '09:00', fileNo: q.patient }}
       />
     </div>
   );

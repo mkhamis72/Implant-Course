@@ -5,9 +5,10 @@ import { formatDate } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
 import type { PullRow } from '@/lib/schedule/types';
 import { PrintButton } from './print-button';
+import { readParams, type PageSearchParams } from '@/lib/search-params';
 
-export default async function PullListPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
-  const { date: raw } = await searchParams;
+export default async function PullListPage({ searchParams }: { searchParams: PageSearchParams }) {
+  const raw = (await readParams(searchParams, 'date')).date || undefined;
   const date = raw && isRealDate(String(raw)) ? String(raw) : todayIso();
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('pull_list', { p_date: date });

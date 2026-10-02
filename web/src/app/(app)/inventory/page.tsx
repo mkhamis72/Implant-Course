@@ -6,15 +6,16 @@ import { productLabel } from '@/lib/inventory/labels';
 import { stockFlags } from '@/lib/inventory/lots';
 import { PRODUCT_TYPE_LABELS, type Product } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
+import { readParams, type PageSearchParams } from '@/lib/search-params';
 
 type Row = Product & { on_hand: number; nearest_expiry: string | null };
 
 export default async function StockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; category?: string; all?: string }>;
+  searchParams: PageSearchParams;
 }) {
-  const { q = '', category = '', all } = await searchParams;
+  const { q, category, all } = await readParams(searchParams, 'q', 'category', 'all');
   const supabase = await createClient();
   const [{ data, error }, settings] = await Promise.all([
     supabase.rpc('inventory_overview', { q: String(q), p_category: String(category), include_all: all === '1' }),

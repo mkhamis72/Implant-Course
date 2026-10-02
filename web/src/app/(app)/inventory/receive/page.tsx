@@ -3,9 +3,10 @@ import { todayIso } from '@/lib/dates';
 import { productLabel } from '@/lib/inventory/labels';
 import type { Product } from '@/lib/inventory/types';
 import { ReceiveForm } from './receive-form';
+import { readParams, type PageSearchParams } from '@/lib/search-params';
 
-export default async function ReceivePage({ searchParams }: { searchParams: Promise<{ product?: string }> }) {
-  const { product = '' } = await searchParams;
+export default async function ReceivePage({ searchParams }: { searchParams: PageSearchParams }) {
+  const { product } = await readParams(searchParams, 'product');
   const supabase = await createClient();
   const { data, error } = await supabase.from('products').select('*').eq('active', true);
   if (error) throw new Error('Could not load products');

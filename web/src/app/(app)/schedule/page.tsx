@@ -8,9 +8,10 @@ import type { Chair, SlotRow } from '@/lib/schedule/types';
 import { SLOT_SELECT } from '@/lib/schedule/queries';
 import { progressOf } from '@/lib/checklists/format';
 import { CancelBooking } from './cancel-booking';
+import { readParams, type PageSearchParams } from '@/lib/search-params';
 
-export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
-  const { date: raw } = await searchParams;
+export default async function SchedulePage({ searchParams }: { searchParams: PageSearchParams }) {
+  const raw = (await readParams(searchParams, 'date')).date || undefined;
   const date = raw && isRealDate(String(raw)) ? String(raw) : todayIso();
   const supabase = await createClient();
   const [{ data: chairs }, { data: slots, error }] = await Promise.all([
