@@ -11,7 +11,9 @@
     "db:migrate": "tsx scripts/migrate-cli.ts",
     "test:db": "vitest run -c vitest.db.config.mts",
     "test:e2e": "playwright test",
-    "create-admin": "tsx scripts/create-admin.ts"
+    "create-user": "tsx scripts/create-user.ts",
+    "create-admin": "tsx scripts/create-user.ts --role admin",
+    "catalog-export": "tsx scripts/catalog-export.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -43,6 +45,7 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "yaml": "^2.9.1"
   }
 }

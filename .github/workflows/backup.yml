@@ -1,0 +1,104 @@
+name: Backup
+on:
+  schedule:
+    - cron: '0 0 * * *' # 00:00 UTC = 02:00/03:00 Cairo
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'backup, or verify (decrypt the latest backup and list its contents)'
+        required: true
+        default: backup
+        type: choice
+        options: [backup, verify]
+
+permissions:
+  contents: read
+  actions: read
+
+# The backup is data only: the schema comes from the migrations in this repo, and the restore in
+# docs/operations.md loads this data onto a freshly migrated project. Sign-in accounts (auth schema)
+# are included so restored profiles and records keep matching user ids.
+
+jobs:
+  backup:
+    if: github.event_name == 'schedule' || inputs.mode == 'backup'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Install the newest PostgreSQL client (a newer pg_dump can read any older server)
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          echo "PG_BIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)" >> "$GITHUB_ENV"
+      - name: Dump and encrypt (the plain dump never touches disk)
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          CA: ${{ secrets.PROD_DATABASE_CA_CERT }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          test -n "$PASSPHRASE" || { echo "BACKUP_PASSPHRASE secret is missing: refusing to back up unencrypted"; exit 1; }
+          test -n "$DATABASE_URL" && test -n "$CA" || { echo "Database secrets are missing"; exit 1; }
+          printf '%s\n' "$CA" > "$RUNNER_TEMP/ca.crt"
+          export PGSSLMODE=verify-full PGSSLROOTCERT="$RUNNER_TEMP/ca.crt"
+          mkdir -p out
+          "$PG_BIN/pg_dump" --data-only --format=custom --no-owner \
+            --schema=public --schema=app_private --schema=auth \
+            --exclude-table=app_private.schema_migrations --exclude-table=auth.schema_migrations \
+            "$DATABASE_URL" \
+            | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 --passphrase-fd 3 3<<<"$PASSPHRASE" \
+                  --output "out/prod-$(date -u +%F).dump.gpg"
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prod-backup-${{ github.run_id }}
+          path: out/*.dump.gpg
+          retention-days: 14
+          if-no-files-found: error
+      - name: Keep the free project awake (auth health check)
+        env:
+          URL: ${{ secrets.PROD_SUPABASE_URL }}
+          ANON: ${{ secrets.PROD_SUPABASE_ANON_KEY }}
+        run: |
+          curl --fail --silent --show-error "$URL/auth/v1/health" -H "apikey: $ANON" -o /dev/null
+
+  verify:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Install the newest PostgreSQL client
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          echo "PG_BIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)" >> "$GITHUB_ENV"
+      - name: Download the latest backup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq '[.artifacts[] | select(.name | startswith("prod-backup-")) | select(.expired == false)] | sort_by(.created_at) | last | "\(.workflow_run.id) \(.name)"')
+          read -r run_id name <<<"$latest"
+          test -n "${name:-}" && test "$name" != "null" || { echo "No backup artifact found"; exit 1; }
+          echo "Verifying $name"
+          gh run download "$run_id" --repo "${{ github.repository }}" --name "$name" --dir in
+      - name: Decrypt and list (fails if unreadable or missing patients or accounts)
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          f=$(ls in/*.dump.gpg | head -1)
+          gpg --batch --pinentry-mode loopback --decrypt --passphrase-fd 3 3<<<"$PASSPHRASE" "$f" > "$RUNNER_TEMP/check.dump"
+          "$PG_BIN/pg_restore" --list "$RUNNER_TEMP/check.dump" > "$RUNNER_TEMP/list.txt"
+          rm -f "$RUNNER_TEMP/check.dump"
+          grep -c "TABLE DATA" "$RUNNER_TEMP/list.txt" | xargs echo "Tables with data:"
+          grep -q "TABLE DATA public patients" "$RUNNER_TEMP/list.txt" || { echo "patients missing from the backup"; exit 1; }
+          grep -q "TABLE DATA auth users" "$RUNNER_TEMP/list.txt" || { echo "sign-in accounts missing from the backup"; exit 1; }
+          echo "Backup is readable and complete."
