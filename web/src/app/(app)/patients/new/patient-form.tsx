@@ -52,8 +52,8 @@ export function PatientForm({ action, patient }: Props) {
         <span className="label">Address</span>
         <input className="input" name="address" defaultValue={v('address')} />
       </label>
-      {state.error && <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p>}
-      {state.ok && <p className="text-sm text-green-800 sm:col-span-2">{state.ok}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad sm:col-span-2">{state.error}</p>}
+      {state.ok && <p className="text-sm text-ok sm:col-span-2">{state.ok}</p>}
       <div className="sm:col-span-2">
         <button className="btn" disabled={pending}>
           Save patient

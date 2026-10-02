@@ -25,18 +25,18 @@ export default async function NotesPage({ params }: { params: Promise<{ id: stri
       <NoteForm patientId={id} today={cairoToday()} />
       <section className="space-y-3">
         <h2 className="font-semibold">Notes</h2>
-        {notes.length === 0 && <p className="text-sm text-gray-600">No notes yet.</p>}
+        {notes.length === 0 && <p className="text-sm text-muted">No notes yet.</p>}
         <ol className="space-y-3">
           {notes.map((note) => (
             <li key={note.id} data-testid="visit-note" className="card space-y-2 py-4">
-              <div className="flex flex-wrap items-center gap-x-4 text-sm text-gray-600">
-                <span className="font-medium text-gray-900">{formatDate(note.visit_date)}</span>
+              <div className="flex flex-wrap items-center gap-x-4 text-sm text-muted">
+                <span className="font-medium text-ink">{formatDate(note.visit_date)}</span>
                 <span>{note.author?.full_name || note.author?.email || 'Unknown'}</span>
                 <span>written {formatDateTime(note.created_at)}</span>
                 {note.teeth.length > 0 && (
                   <span className="flex gap-1">
                     {note.teeth.map((t) => (
-                      <Link key={t} href={`/patients/${id}?tooth=${t}`} className="rounded bg-blue-50 px-1.5 text-blue-800 hover:underline">
+                      <Link key={t} href={`/patients/${id}?tooth=${t}`} className="rounded bg-accent-soft px-1.5 text-accent-strong hover:underline">
                         {t}
                       </Link>
                     ))}

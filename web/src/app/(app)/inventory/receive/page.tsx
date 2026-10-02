@@ -22,7 +22,7 @@ export default async function ReceivePage({ searchParams }: { searchParams: Page
     .map(([brand, options]) => ({ brand, options: options.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })) }));
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Receive stock</h1>
+      <h1>Receive stock</h1>
       <ReceiveForm groups={groups} productId={String(product)} today={todayIso()} />
     </div>
   );

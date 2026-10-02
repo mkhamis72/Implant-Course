@@ -41,7 +41,7 @@ export default async function NewBookingPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Book a surgery</h1>
+      <h1>Book a surgery</h1>
       <SlotForm
         sessions={sessionOptions}
         chairs={(chairs ?? []).map((c) => ({ id: c.id as string, label: c.name as string }))}

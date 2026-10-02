@@ -14,12 +14,25 @@ import { dashboardShortages } from '@/lib/dashboard/shortages';
 type StockRow = Product & { on_hand: number; nearest_expiry: string | null };
 
 /** A failed query must never look like an empty (all-clear) card. */
-function Card({ title, failed, children }: { title: string; failed?: boolean; children: React.ReactNode }) {
+const TONE = { bad: 'border-l-4 border-l-bad-line', warn: 'border-l-4 border-l-warn-line', accent: 'border-l-4 border-l-accent' } as const;
+const COUNT = { bad: 'badge-bad', warn: 'badge-warn', accent: 'badge-accent' } as const;
+
+/**
+ * A card only takes a status colour (left rule + count) when it holds something to act on,
+ * so an all-clear dashboard stays calm and a problem stands out.
+ */
+function Card({ title, failed, count = 0, tone, className = '', children }: {
+  title: string; failed?: boolean; count?: number; tone?: keyof typeof TONE; className?: string; children: React.ReactNode;
+}) {
+  const flagged = !failed && count > 0 && tone;
   return (
-    <section className="card space-y-2">
-      <h2 className="font-semibold">{title}</h2>
+    <section className={`card space-y-3 ${flagged ? TONE[tone] : ''} ${failed ? 'border-l-4 border-l-bad-line' : ''} ${className}`}>
+      <h2 className="flex items-center gap-2 font-semibold">
+        {title}
+        {flagged && <span className={`badge ${COUNT[tone]}`}>{count}</span>}
+      </h2>
       {failed ? (
-        <p role="alert" className="text-sm text-red-700">Could not load this. Reload the page to try again.</p>
+        <p role="alert" className="text-sm text-bad">Could not load this. Reload the page to try again.</p>
       ) : (
         children
       )}
@@ -59,28 +72,34 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="text-gray-600">Welcome, {profile.full_name || profile.email} · {formatDate(today)}</p>
+      <div className="page-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p className="text-muted">Welcome, {profile.full_name || profile.email} · {formatDate(today)}</p>
+        </div>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Today's surgeries" failed={Boolean(slots.error)}>
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <Card title="Today's surgeries" failed={Boolean(slots.error)} count={surgeries.length} tone="accent" className="lg:col-span-2">
           {surgeries.length === 0 ? (
-            <p className="text-sm text-gray-600">No surgeries booked today.</p>
+            <p className="text-sm text-muted">No surgeries booked today.</p>
           ) : (
-            <ul className="space-y-3 text-sm">
+            <ul className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-3">
               {byChair.map((g) => (
-                <li key={g.chair} data-testid="dash-chair">
-                  <h3 className="font-medium text-gray-800">{g.chair}</h3>
-                  <ul className="divide-y divide-gray-100">
+                <li key={g.chair} data-testid="dash-chair" className="space-y-1.5">
+                  <h3 className="font-semibold text-ink">{g.chair}</h3>
+                  <ul className="space-y-1.5">
               {g.slots.map((s) => (
-                <li key={s.id} data-testid="dash-surgery" className="flex flex-wrap gap-x-4 py-1.5">
-                  <span className="font-medium">{formatTime(s.starts_at)}–{formatTime(s.ends_at)}</span>
+                <li
+                  key={s.id}
+                  data-testid="dash-surgery"
+                  className={`rule flex flex-wrap gap-x-3 py-0.5 ${s.status === 'done' ? 'rule-ok' : 'rule-accent'}`}
+                >
+                  <span className="font-semibold">{formatTime(s.starts_at)}–{formatTime(s.ends_at)}</span>
                   {s.patient && (
-                    <Link href={`/patients/${s.patient.id}`} className="text-blue-700 hover:underline">{s.patient.full_name}</Link>
+                    <Link href={`/patients/${s.patient.id}`} className="text-accent hover:underline">{s.patient.full_name}</Link>
                   )}
-                  {s.implants.length > 0 && <span className="text-gray-600">teeth {s.implants.map((i) => i.tooth).join(', ')}</span>}
-                  {s.status === 'done' && <span className="text-green-800">done</span>}
+                  {s.implants.length > 0 && <span className="text-muted">teeth {s.implants.map((i) => i.tooth).join(', ')}</span>}
+                  {s.status === 'done' && <span className="badge badge-ok">done</span>}
                 </li>
               ))}
                   </ul>
@@ -88,33 +107,33 @@ export default async function DashboardPage() {
               ))}
             </ul>
           )}
-          <Link href={`/schedule?date=${today}`} className="text-sm text-blue-700 hover:underline">Open today’s schedule</Link>
+          <Link href={`/schedule?date=${today}`} className="text-sm text-accent hover:underline">Open today’s schedule</Link>
         </Card>
 
-        <Card title="Stock shortages for surgeries" failed={Boolean(pullToday.error || pullTomorrow.error)}>
+        <Card title="Stock shortages for surgeries" failed={Boolean(pullToday.error || pullTomorrow.error)} count={shortages.length} tone="bad">
           {shortages.length === 0 ? (
-            <p className="text-sm text-gray-600">Stock covers today’s and tomorrow’s planned implants.</p>
+            <p className="text-sm text-muted">Stock covers today’s and tomorrow’s planned implants.</p>
           ) : (
-            <ul className="divide-y divide-gray-100 text-sm">
+            <ul className="divide-y divide-line text-sm">
               {shortages.map((r) => (
                 <li key={`${r.day}-${r.product_id}`} data-testid="dash-shortage" className="flex flex-wrap gap-x-4 py-1.5">
                   <span className="font-medium">{r.day}</span>
                   <span>{productLabel(r)}</span>
-                  <span className="text-red-800">need {r.needed}, have {r.available}</span>
+                  <span className="badge badge-bad">need {r.needed}, have {r.available}</span>
                 </li>
               ))}
             </ul>
           )}
         </Card>
 
-        <Card title="Low stock" failed={Boolean(stock.error)}>
+        <Card title="Low stock" failed={Boolean(stock.error)} count={low.length} tone="warn">
           {low.length === 0 ? (
-            <p className="text-sm text-gray-600">Nothing is at or below its reorder level.</p>
+            <p className="text-sm text-muted">Nothing is at or below its reorder level.</p>
           ) : (
-            <ul className="divide-y divide-gray-100 text-sm">
+            <ul className="divide-y divide-line text-sm">
               {low.map((r) => (
                 <li key={r.id} data-testid="dash-low" className="flex flex-wrap gap-x-4 py-1.5">
-                  <Link href={`/inventory/products/${r.id}`} className="text-blue-700 hover:underline">{productLabel(r)}</Link>
+                  <Link href={`/inventory/products/${r.id}`} className="text-accent hover:underline">{productLabel(r)}</Link>
                   <span>{r.on_hand} left (reorder at {r.reorder_level})</span>
                 </li>
               ))}
@@ -122,14 +141,14 @@ export default async function DashboardPage() {
           )}
         </Card>
 
-        <Card title="Expiring soon" failed={Boolean(stock.error)}>
+        <Card title="Expiring soon" failed={Boolean(stock.error)} count={expiring.length} tone="warn">
           {expiring.length === 0 ? (
-            <p className="text-sm text-gray-600">Nothing expires in the next {settings.expiry_alert_days} days.</p>
+            <p className="text-sm text-muted">Nothing expires in the next {settings.expiry_alert_days} days.</p>
           ) : (
-            <ul className="divide-y divide-gray-100 text-sm">
+            <ul className="divide-y divide-line text-sm">
               {expiring.map((r) => (
                 <li key={r.id} data-testid="dash-expiring" className="flex flex-wrap gap-x-4 py-1.5">
-                  <Link href={`/inventory/products/${r.id}`} className="text-blue-700 hover:underline">{productLabel(r)}</Link>
+                  <Link href={`/inventory/products/${r.id}`} className="text-accent hover:underline">{productLabel(r)}</Link>
                   <span>{r.nearest_expiry ? `expires ${formatDate(r.nearest_expiry)}` : ''}</span>
                 </li>
               ))}
@@ -137,16 +156,16 @@ export default async function DashboardPage() {
           )}
         </Card>
 
-        <Card title="My open checklist items" failed={Boolean(mine.error)}>
+        <Card title="My open checklist items" failed={Boolean(mine.error)} count={myItems.length} tone="accent">
           {myItems.length === 0 ? (
-            <p className="text-sm text-gray-600">Nothing assigned to you is open.</p>
+            <p className="text-sm text-muted">Nothing assigned to you is open.</p>
           ) : (
-            <ul className="divide-y divide-gray-100 text-sm">
+            <ul className="divide-y divide-line text-sm">
               {myItems.map((i) => (
                 <li key={i.id} data-testid="dash-my-item" className="flex flex-wrap gap-x-4 py-1.5">
                   <span className="font-medium">{i.text}</span>
-                  <Link href={`/checklists/${i.checklist.id}`} className="text-blue-700 hover:underline">{i.checklist.title}</Link>
-                  {i.due_date && <span className="text-gray-600">due {formatDate(i.due_date)}</span>}
+                  <Link href={`/checklists/${i.checklist.id}`} className="text-accent hover:underline">{i.checklist.title}</Link>
+                  {i.due_date && <span className="text-muted">due {formatDate(i.due_date)}</span>}
                 </li>
               ))}
             </ul>

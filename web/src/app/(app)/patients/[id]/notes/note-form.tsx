@@ -24,7 +24,7 @@ export function NoteForm({ patientId, today }: { patientId: string; today: strin
         <span className="label">Note</span>
         <textarea className="input" name="text" rows={4} defaultValue={valueOf(state, 'text', '')} />
       </label>
-      {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
       <button className="btn" disabled={pending}>
         Add note
       </button>

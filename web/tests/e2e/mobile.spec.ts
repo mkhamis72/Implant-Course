@@ -1,0 +1,46 @@
+// Runs in the "phone" project only (see playwright.config.ts).
+import { test, expect, type Page } from '@playwright/test';
+import { TEST_USERS } from '../support/test-users';
+import { login } from './helpers';
+import { uniqueName } from './patients';
+
+// The narrowest common phone width, stricter than the Pixel 7 default.
+test.use({ viewport: { width: 360, height: 780 } });
+
+async function expectNoSideways(page: Page) {
+  // Mobile browsers widen the layout viewport to fit oversized content, so compare with the device width.
+  const contentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(contentWidth, `${page.url()} scrolls sideways`).toBeLessThanOrEqual(page.viewportSize()!.width);
+}
+
+test('the menu opens, navigates and closes on a phone', async ({ page }) => {
+  await login(page, TEST_USERS.organizer.email);
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeHidden();
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Patients' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Patients' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeHidden();
+});
+
+test('main pages fit the phone screen without sideways scrolling', async ({ page }) => {
+  await login(page, TEST_USERS.organizer.email);
+  for (const path of ['/', '/patients', '/schedule', '/inventory', '/checklists', '/courses', '/delegates', '/account/security',
+    '/schedule/new', '/inventory/receive', '/inventory/recall', '/checklists/templates', '/patients/new']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expectNoSideways(page);
+  }
+});
+
+test('a checklist can be created and ticked on a phone', async ({ page }) => {
+  await login(page, TEST_USERS.organizer.email);
+  await page.goto('/checklists');
+  const title = uniqueName('Phone list');
+  await page.getByLabel('Title').fill(title);
+  await page.getByLabel('Items (one per line)').fill('Gloves\nGowns');
+  await page.getByRole('button', { name: 'Create checklist' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+  await expectNoSideways(page);
+  await page.getByRole('checkbox', { name: 'Gowns' }).check();
+  await expect(page.getByTestId('checklist-progress')).toHaveText('1/2 done');
+});

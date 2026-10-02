@@ -39,7 +39,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Footer({ error, pending, saveLabel, onCancel }: { error: string | null; pending: boolean; saveLabel: string; onCancel: () => void }) {
   return (
     <>
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="text-sm text-bad">{error}</p>}
       <div className="flex gap-2">
         <button className="btn" disabled={pending}>
           {saveLabel}
@@ -64,9 +64,9 @@ function BatchSelect({ data, productId, usedOn, value, onChange }: {
   const lots = productId ? availableLots(data.lots, productId, usedOn || data.today) : [];
   if (productId && lots.length === 0) {
     return (
-      <p className="text-sm text-amber-900">
+      <p className="text-sm text-warn">
         No usable stock for this product.{' '}
-        <Link href={`/inventory/receive?product=${productId}`} className="text-blue-700 underline">
+        <Link href={`/inventory/receive?product=${productId}`} className="text-accent underline">
           Receive stock
         </Link>
       </p>

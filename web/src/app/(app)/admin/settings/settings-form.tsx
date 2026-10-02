@@ -18,8 +18,8 @@ export function SettingsForm({ settings }: { settings: Settings }) {
         <span className="label">Session timeout (minutes)</span>
         <input className="input" name="session_timeout_minutes" type="number" defaultValue={settings.session_timeout_minutes} />
       </label>
-      {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
-      {state.ok && <p className="text-sm text-green-800">{state.ok}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
+      {state.ok && <p className="text-sm text-ok">{state.ok}</p>}
       <button className="btn" disabled={pending}>
         Save settings
       </button>

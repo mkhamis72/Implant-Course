@@ -17,3 +17,10 @@ export const NAV_ITEMS: NavItem[] = [
 export function visibleNavItems(role: Role): NavItem[] {
   return NAV_ITEMS.filter((item) => !item.adminOnly || role === 'admin');
 }
+
+/** True when `pathname` is inside the nav item's section (its first path segment). */
+export function isActive(pathname: string, href: string): boolean {
+  if (href === '/') return pathname === '/';
+  const section = href.split('/')[1];
+  return pathname.split('/')[1] === section;
+}

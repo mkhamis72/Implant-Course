@@ -14,18 +14,18 @@ export default async function TemplatesPage() {
   const templates = (data ?? []) as unknown as { id: string; name: string; applies_to: ChecklistScope; is_default: boolean; items: { count: number }[] }[];
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Checklist templates</h1>
+      <div className="page-header">
+        <h1>Checklist templates</h1>
         <Link href="/checklists/templates/new" className="btn">New template</Link>
       </div>
-      <ul className="card divide-y divide-gray-100">
-        {templates.length === 0 && <li className="text-gray-600">No templates yet.</li>}
+      <ul className="card divide-y divide-line">
+        {templates.length === 0 && <li className="text-muted">No templates yet.</li>}
         {templates.map((t) => (
           <li key={t.id} className="flex flex-wrap gap-x-6 py-2 text-sm">
-            <Link href={`/checklists/templates/${t.id}`} className="font-medium text-blue-700 hover:underline">{t.name}</Link>
+            <Link href={`/checklists/templates/${t.id}`} className="font-medium text-accent hover:underline">{t.name}</Link>
             <span>{SCOPE_LABELS[t.applies_to]}</span>
-            <span className="text-gray-600">{t.items[0]?.count ?? 0} items</span>
-            {t.is_default && <span className="rounded bg-blue-50 px-1.5 text-xs text-blue-800">Attaches automatically</span>}
+            <span className="text-muted">{t.items[0]?.count ?? 0} items</span>
+            {t.is_default && <span className="badge badge-accent">Attaches automatically</span>}
           </li>
         ))}
       </ul>

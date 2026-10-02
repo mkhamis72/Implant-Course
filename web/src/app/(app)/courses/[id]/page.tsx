@@ -29,24 +29,24 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">{c.name}</h1>
+      <h1>{c.name}</h1>
       <CourseForm action={updateCourse} course={c} />
       <section className="space-y-3">
         <h2 className="font-semibold">Sessions</h2>
-        <ul className="card divide-y divide-gray-100">
-          {(sessions ?? []).length === 0 && <li className="text-sm text-gray-600">No sessions yet.</li>}
+        <ul className="card divide-y divide-line">
+          {(sessions ?? []).length === 0 && <li className="text-sm text-muted">No sessions yet.</li>}
           {((sessions ?? []) as (Session & { checklists: { id: string; items: { done_at: string | null }[] }[] })[]).map((s) => (
             <li key={s.id} data-testid="session-row" className="flex flex-wrap gap-x-6 py-2 text-sm">
               <span className="font-medium">{s.title}</span>
               <span>{SESSION_TYPE_LABELS[s.type]}</span>
               <span>{formatDate(s.date)} {s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)}</span>
               {s.checklists.map((cl) => (
-                <Link key={cl.id} href={`/checklists/${cl.id}`} className="text-blue-700 hover:underline">
+                <Link key={cl.id} href={`/checklists/${cl.id}`} className="text-accent hover:underline">
                   Checklist {progressOf(cl.items).label}
                 </Link>
               ))}
               {s.type === 'surgery' && (
-                <Link href={`/schedule?date=${s.date}`} className="text-blue-700 hover:underline">Schedule</Link>
+                <Link href={`/schedule?date=${s.date}`} className="text-accent hover:underline">Schedule</Link>
               )}
             </li>
           ))}
@@ -60,14 +60,14 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
       <section className="card space-y-3">
         <h2 className="font-semibold">Enrolled delegates</h2>
         <ul className="space-y-1 text-sm">
-          {enrolled.length === 0 && <li className="text-gray-600">Nobody enrolled yet.</li>}
+          {enrolled.length === 0 && <li className="text-muted">Nobody enrolled yet.</li>}
           {enrolled.map((e) => (
             <li key={e.id} data-testid={`enrolled-${e.delegate.full_name}`} className="flex items-center gap-3">
-              <Link href={`/delegates/${e.delegate.id}`} className="text-blue-700 hover:underline">{e.delegate.full_name}</Link>
+              <Link href={`/delegates/${e.delegate.id}`} className="text-accent hover:underline">{e.delegate.full_name}</Link>
               <form action={unenrollDelegate}>
                 <input type="hidden" name="enrollment_id" value={e.id} />
                 <input type="hidden" name="course_id" value={c.id} />
-                <button className="text-sm text-red-700 hover:underline">Remove</button>
+                <button className="text-sm text-bad hover:underline">Remove</button>
               </form>
             </li>
           ))}

@@ -12,18 +12,18 @@ export default async function CoursesPage() {
   const courses = (data ?? []) as Course[];
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Courses</h1>
+      <h1>Courses</h1>
       <section className="space-y-2">
         <h2 className="font-semibold">New course</h2>
         <CourseForm action={createCourse} />
       </section>
-      <ul className="card divide-y divide-gray-100">
-        {courses.length === 0 && <li className="text-gray-600">No courses yet.</li>}
+      <ul className="card divide-y divide-line">
+        {courses.length === 0 && <li className="text-muted">No courses yet.</li>}
         {courses.map((c) => (
           <li key={c.id} className="flex flex-wrap gap-x-6 py-2 text-sm">
-            <Link href={`/courses/${c.id}`} className="font-medium text-blue-700 hover:underline">{c.name}</Link>
+            <Link href={`/courses/${c.id}`} className="font-medium text-accent hover:underline">{c.name}</Link>
             <span>{formatDate(c.start_date)} – {formatDate(c.end_date)}</span>
-            <span className="text-gray-600">{c.venue}</span>
+            <span className="text-muted">{c.venue}</span>
           </li>
         ))}
       </ul>

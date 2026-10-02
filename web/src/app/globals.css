@@ -1,25 +1,312 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens. Calm clinical: cool green-grey neutrals ("gauze"), one teal accent,
+ * and a single status language used everywhere (ok / warn / bad / off).
+ * Utilities are generated from these, e.g. text-muted, border-line, bg-ok-soft.
+ */
+@theme {
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --color-canvas: #f3f6f5;        /* page background */
+  --color-surface: #ffffff;       /* panels */
+  --color-sunken: #eaf0ee;        /* hover, table heads, quiet fills */
+  --color-line: #d9e2df;          /* borders, dividers */
+  --color-line-strong: #b7c4c0;   /* input borders */
+  --color-ink: #17262b;           /* text */
+  --color-muted: #55666b;         /* secondary text */
+  --color-subtle: #7b8b8f;        /* placeholders, hints */
+
+  --color-accent: #0f766e;        /* primary actions, links, focus */
+  --color-accent-strong: #115e59;
+  --color-accent-soft: #e3f3f0;
+
+  --color-ok: #1d6b3a;            /* done, placed, in stock */
+  --color-ok-soft: #e6f4ea;
+  --color-ok-line: #9fd0ae;
+  --color-warn: #8a4b06;          /* planned, low, expiring */
+  --color-warn-soft: #fdf2e0;
+  --color-warn-line: #edc483;
+  --color-bad: #b42318;           /* failed, expired, clash, errors */
+  --color-bad-strong: #912018;
+  --color-bad-soft: #fdeceb;
+  --color-bad-line: #f1aca6;
+  --color-off: #5b6770;           /* cancelled, inactive */
+  --color-off-soft: #eef1f3;
+
+  --radius-control: 0.5rem;
+  --radius-panel: 0.75rem;
+}
+
 :root {
   color-scheme: light;
 }
 
-body {
-  background: #f6f7f9;
-  color: #1f2937;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    /* Tooth numbers, times, quantities and dates line up in columns. */
+    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+  }
+  h1 {
+    font-size: 1.625rem;
+    line-height: 1.2;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+  }
+  h2 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  a {
+    text-underline-offset: 2px;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--color-accent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
 }
 
-.label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem; }
-.input {
-  width: 100%; border: 1px solid #cbd5e1; border-radius: 0.375rem;
-  padding: 0.5rem 0.75rem; background: #fff;
+@layer components {
+  .label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 550;
+    color: var(--color-ink);
+    margin-bottom: 0.3rem;
+  }
+  .input {
+    width: 100%;
+    min-height: 2.5rem;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-control);
+    padding: 0.5rem 0.75rem;
+    background: var(--color-surface);
+    color: var(--color-ink);
+  }
+  .input::placeholder {
+    color: var(--color-subtle);
+  }
+  .input:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 0;
+    border-color: var(--color-accent);
+  }
+  .input:disabled {
+    background: var(--color-sunken);
+    color: var(--color-muted);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.5rem;
+    border: 1px solid var(--color-accent);
+    border-radius: var(--radius-control);
+    padding: 0.5rem 1rem;
+    background: var(--color-accent);
+    color: #fff;
+    font-weight: 550;
+    white-space: nowrap;
+  }
+  .btn:hover {
+    background: var(--color-accent-strong);
+    border-color: var(--color-accent-strong);
+  }
+  .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .btn-secondary {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border-color: var(--color-line-strong);
+  }
+  .btn-secondary:hover {
+    background: var(--color-sunken);
+    border-color: var(--color-line-strong);
+  }
+  .btn-danger {
+    background: var(--color-bad);
+    border-color: var(--color-bad);
+    color: #fff;
+  }
+  .btn-danger:hover {
+    background: var(--color-bad-strong);
+    border-color: var(--color-bad-strong);
+  }
+
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-panel);
+    padding: 1.25rem;
+  }
+  @media (min-width: 640px) {
+    .card {
+      padding: 1.5rem;
+    }
+  }
+
+  /* Status pill. */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 999px;
+    padding: 0.05rem 0.55rem;
+    font-size: 0.75rem;
+    font-weight: 550;
+    background: var(--color-off-soft);
+    color: var(--color-off);
+  }
+  .badge-ok { background: var(--color-ok-soft); color: var(--color-ok); }
+  .badge-warn { background: var(--color-warn-soft); color: var(--color-warn); }
+  .badge-bad { background: var(--color-bad-soft); color: var(--color-bad); }
+  .badge-accent { background: var(--color-accent-soft); color: var(--color-accent-strong); }
+
+  /* The status rule: a coloured left edge on anything that carries a state. */
+  .rule {
+    border-left: 4px solid var(--color-line);
+    padding-left: 0.75rem;
+  }
+  .rule-ok { border-left-color: var(--color-ok-line); }
+  .rule-warn { border-left-color: var(--color-warn-line); }
+  .rule-bad { border-left-color: var(--color-bad-line); }
+  .rule-accent { border-left-color: var(--color-accent); }
+
+  /* Section tabs: scroll sideways on narrow screens instead of wrapping or clipping. */
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--color-line);
+    scrollbar-width: none;
+  }
+  .tab {
+    flex-shrink: 0;
+    margin-bottom: -1px;
+    border-bottom: 2px solid transparent;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-muted);
+    white-space: nowrap;
+  }
+  .tab:hover {
+    color: var(--color-ink);
+  }
+  .tab[aria-current="page"] {
+    border-bottom-color: var(--color-accent);
+    color: var(--color-accent-strong);
+    font-weight: 600;
+  }
+
+  /* Page title row: title (+ subtitle) on the left, primary action on the right. */
+  .page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+  }
+
+  /*
+   * Data tables. Below 640px each row becomes a stacked block; cells show their
+   * column name from data-label.
+   */
+  .table {
+    width: 100%;
+    text-align: left;
+    font-size: 0.875rem;
+    border-collapse: collapse;
+  }
+  .table th {
+    padding: 0 0.75rem 0.5rem 0;
+    font-weight: 550;
+    color: var(--color-muted);
+    border-bottom: 1px solid var(--color-line);
+  }
+  .table td {
+    padding: 0.6rem 0.75rem 0.6rem 0;
+    border-top: 1px solid var(--color-line);
+    vertical-align: top;
+  }
+  .table tbody tr:first-child td {
+    border-top: 0;
+  }
 }
-.input:focus { outline: 2px solid #2563eb; outline-offset: 1px; }
-.btn {
-  display: inline-flex; align-items: center; gap: 0.5rem; border-radius: 0.375rem;
-  padding: 0.5rem 1rem; background: #1d4ed8; color: #fff; font-weight: 500;
+
+/* Phones: data tables stack (unlayered so it wins over per-cell utilities). */
+@media (max-width: 639.98px) {
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .table tr {
+    display: block;
+    padding: 0.6rem 0;
+    border-top: 1px solid var(--color-line);
+  }
+  .table tbody tr:first-child {
+    border-top: 0;
+  }
+  .table td {
+    display: grid;
+    text-align: left;
+    grid-template-columns: 7.5rem 1fr;
+    gap: 0.75rem;
+    padding: 0.15rem 0;
+    border: 0;
+  }
+  .table td[data-label]::before {
+    content: attr(data-label);
+    color: var(--color-muted);
+  }
+  .table td:not([data-label]) {
+    grid-template-columns: 1fr;
+  }
 }
-.btn:disabled { opacity: 0.6; }
-.btn-secondary { background: #fff; color: #1f2937; border: 1px solid #cbd5e1; }
-.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1.5rem; }
+
+/* Touch screens: every control at least 44px tall. */
+@media (pointer: coarse) {
+  .btn, .input, select.input {
+    min-height: 2.75rem;
+  }
+  input[type="checkbox"] {
+    min-width: 1.25rem;
+    min-height: 1.25rem;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .card {
+    border: 0;
+    padding: 0;
+  }
+}

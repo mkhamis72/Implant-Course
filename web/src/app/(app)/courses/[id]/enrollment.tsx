@@ -18,7 +18,7 @@ export function EnrollForm({ courseId, available }: { courseId: string; availabl
         </select>
       </label>
       <button className="btn-secondary btn" disabled={pending}>Enrol</button>
-      {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
     </form>
   );
 }

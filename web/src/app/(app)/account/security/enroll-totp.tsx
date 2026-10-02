@@ -42,26 +42,26 @@ export function EnrollTotp() {
         <button className="btn" onClick={begin} disabled={pending}>
           Set up authenticator
         </button>
-        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+        {error && <p role="alert" className="text-sm text-bad">{error}</p>}
       </div>
     );
   }
 
   return (
     <form onSubmit={activate} className="space-y-4">
-      <p className="text-sm text-gray-700">
+      <p className="text-sm text-ink">
         Scan this QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…), or enter the key manually.
       </p>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={enrollment.qrCode} alt="Authenticator QR code" width={180} height={180} />
       <p className="text-sm">
-        Key: <code data-testid="totp-secret" className="rounded bg-gray-100 px-1">{enrollment.secret}</code>
+        Key: <code data-testid="totp-secret" className="rounded bg-sunken px-1">{enrollment.secret}</code>
       </p>
       <label className="block max-w-xs">
         <span className="label">Code from app</span>
         <input className="input" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} required />
       </label>
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="text-sm text-bad">{error}</p>}
       <button className="btn" disabled={pending}>
         Activate
       </button>

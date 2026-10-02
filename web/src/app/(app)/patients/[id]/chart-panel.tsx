@@ -45,12 +45,17 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
   return (
     <div className="flex flex-col gap-4 xl:flex-row">
       <div className="card flex-1 space-y-4">
-        <Odontogram statuses={statuses} badges={badges} selected={selected} onSelect={onSelect} />
+        {/* On phones the chart keeps tappable teeth (about 36px each) and scrolls sideways inside its panel. */}
+        <div className="-mx-2 overflow-x-auto px-2">
+          <div className="min-w-[36rem] sm:min-w-0">
+            <Odontogram statuses={statuses} badges={badges} selected={selected} onSelect={onSelect} />
+          </div>
+        </div>
         <Legend />
       </div>
       <aside className="card w-full space-y-4 xl:w-80" aria-label="Tooth details">
         {selected.length === 0 ? (
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-muted">
             Click a tooth to see and change its status. Shift- or Ctrl-click to select several teeth.
           </p>
         ) : (
@@ -66,7 +71,7 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
               ))}
             </ul>
             {locked.length > 0 ? (
-              <p className="rounded bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="rounded bg-warn-soft p-3 text-sm text-warn">
                 Teeth with implant records ({locked.join(', ')}) are changed from the implant workflow, not here.
               </p>
             ) : (
@@ -78,7 +83,7 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
                 ))}
               </div>
             )}
-            {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+            {error && <p role="alert" className="text-sm text-bad">{error}</p>}
             {selected.length === 1 && (
               <ImplantSection key={selected[0]} patientId={patientId} tooth={selected[0]} status={statusOf(selected[0])} data={data} />
             )}

@@ -42,9 +42,9 @@ export function TemplateForm({ template }: { template?: Template }) {
         <span className="label">Items (one per line)</span>
         <textarea className="input font-mono text-sm" name="items" rows={10} defaultValue={valueOf(state, 'items', itemsText)} />
       </label>
-      <p className="text-xs text-gray-500">Paste a list: bullets, numbers and [ ] boxes are removed automatically.</p>
-      {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
-      {state.ok && <p className="text-sm text-green-800">{state.ok}</p>}
+      <p className="text-xs text-muted">Paste a list: bullets, numbers and [ ] boxes are removed automatically.</p>
+      {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
+      {state.ok && <p className="text-sm text-ok">{state.ok}</p>}
       <button className="btn" disabled={pending}>Save template</button>
     </form>
   );

@@ -8,7 +8,7 @@ import { addChair, updateChair } from './actions';
 export function ChairRow({ chair }: { chair: Chair }) {
   const [state, action, pending] = useActionState<FormState, FormData>(updateChair, {});
   return (
-    <li data-testid={`chair-row-${chair.name}`} className="border-t border-gray-200 py-2">
+    <li data-testid={`chair-row-${chair.name}`} className="border-t border-line py-2">
       <form action={action} className="flex flex-wrap items-center gap-3">
         <input type="hidden" name="id" value={chair.id} readOnly />
         <input className="input max-w-xs" name="name" aria-label="Name" defaultValue={chair.name} />
@@ -16,11 +16,11 @@ export function ChairRow({ chair }: { chair: Chair }) {
           <input type="checkbox" name="active" defaultChecked={chair.active} />
           Active
         </label>
-        <span className="text-sm text-gray-600">{chair.active ? 'Active' : 'Inactive'}</span>
+        <span className="text-sm text-muted">{chair.active ? 'Active' : 'Inactive'}</span>
         <button className="btn-secondary btn py-1" disabled={pending}>
           Save
         </button>
-        {state.error && <span role="alert" className="text-sm text-red-700">{state.error}</span>}
+        {state.error && <span role="alert" className="text-sm text-bad">{state.error}</span>}
       </form>
     </li>
   );
@@ -37,7 +37,7 @@ export function AddChair() {
       <button className="btn" disabled={pending}>
         Add chair
       </button>
-      {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
     </form>
   );
 }

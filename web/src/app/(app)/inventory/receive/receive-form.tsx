@@ -45,7 +45,7 @@ export function ReceiveForm({ groups, productId, today }: { groups: Group[]; pro
         <span className="label">Notes (optional)</span>
         <input className="input" name="notes" defaultValue={valueOf(state, 'notes', '')} />
       </label>
-      {state.error && <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad sm:col-span-2">{state.error}</p>}
       <div className="sm:col-span-2">
         <button className="btn" disabled={pending}>
           Receive

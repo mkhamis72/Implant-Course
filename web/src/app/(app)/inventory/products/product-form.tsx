@@ -72,8 +72,8 @@ export function ProductForm({ action, product }: Props) {
           </label>
         </div>
       )}
-      {state.error && <p role="alert" className="text-sm text-red-700 sm:col-span-3">{state.error}</p>}
-      {state.ok && <p className="text-sm text-green-800 sm:col-span-3">{state.ok}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad sm:col-span-3">{state.error}</p>}
+      {state.ok && <p className="text-sm text-ok sm:col-span-3">{state.ok}</p>}
       <div className="sm:col-span-3">
         <button className="btn" disabled={pending}>
           Save product

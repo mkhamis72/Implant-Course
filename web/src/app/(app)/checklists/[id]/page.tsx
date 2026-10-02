@@ -9,6 +9,19 @@ import { ItemRow } from './item-row';
 import { AddItemsForm } from './add-items-form';
 import { TitleForm } from './title-form';
 
+/** Done / total as a bar the eye reads before the numbers. */
+function Progress({ done, total, label }: { done: number; total: number; label: string }) {
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  return (
+    <div className="flex items-center gap-3 pt-1">
+      <div className="h-2 w-40 overflow-hidden rounded-full bg-sunken" aria-hidden="true">
+        <div className={`h-full rounded-full ${done === total && total > 0 ? 'bg-ok' : 'bg-accent'}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span data-testid="checklist-progress" className="text-sm font-medium">{label}</span>
+    </div>
+  );
+}
+
 export default async function ChecklistPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
@@ -43,25 +56,25 @@ export default async function ChecklistPage({ params }: { params: Promise<{ id: 
   return (
     <div className="max-w-3xl space-y-4">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold">{c.title}</h1>
-        <p className="text-sm text-gray-600">
+        <h1>{c.title}</h1>
+        <p className="text-sm text-muted">
           {c.session && (
-            <Link href={`/courses/${c.session.course_id}`} className="text-blue-700 hover:underline">
+            <Link href={`/courses/${c.session.course_id}`} className="text-accent hover:underline">
               Session · {c.session.title} · {formatDate(c.session.date)}
             </Link>
           )}
           {c.slot && (
-            <Link href={`/schedule?date=${new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date(c.slot.starts_at))}`} className="text-blue-700 hover:underline">
+            <Link href={`/schedule?date=${new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date(c.slot.starts_at))}`} className="text-accent hover:underline">
               Surgery · {c.slot.patient?.full_name} · {formatDateTime(c.slot.starts_at)}
             </Link>
           )}
           {!c.session && !c.slot && 'Standalone checklist'}
-          <span data-testid="checklist-progress" className="ml-4 font-medium">{progressOf(items).label}</span>
         </p>
+        <Progress {...progressOf(items)} />
         <TitleForm id={c.id} title={c.title} />
       </div>
       <ul className="card">
-        {items.length === 0 && <li className="text-gray-600">No items yet.</li>}
+        {items.length === 0 && <li className="text-muted">No items yet.</li>}
         {items.map((item, i) => (
           <ItemRow key={item.id} item={item} checklistId={c.id} organizers={options} first={i === 0} last={i === items.length - 1} />
         ))}

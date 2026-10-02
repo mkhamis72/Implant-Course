@@ -21,20 +21,20 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
   return (
     <section className="card overflow-x-auto">
       {sites.length === 0 ? (
-        <p className="text-gray-600">No implants recorded for this patient.</p>
+        <p className="text-muted">No implants recorded for this patient.</p>
       ) : (
-        <table className="w-full text-left text-sm">
+        <table className="table">
           <thead>
-            <tr className="text-gray-500">
-              <th className="pb-2">Tooth</th>
-              <th className="pb-2">State</th>
-              <th className="pb-2">Implant</th>
-              <th className="pb-2">Batch</th>
-              <th className="pb-2">Placed</th>
-              <th className="pb-2">Placed by</th>
-              <th className="pb-2">Supervisor</th>
-              <th className="pb-2">Component</th>
-              <th className="pb-2">Last follow-up</th>
+            <tr>
+              <th>Tooth</th>
+              <th>State</th>
+              <th>Implant</th>
+              <th>Batch</th>
+              <th>Placed</th>
+              <th>Placed by</th>
+              <th>Supervisor</th>
+              <th>Component</th>
+              <th>Last follow-up</th>
             </tr>
           </thead>
           <tbody>
@@ -42,20 +42,20 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
               const current = currentComponent(s);
               const last = lastFollowup(s);
               return (
-                <tr key={s.id} data-testid="implant-row" className="border-t border-gray-200">
-                  <td className="py-2 pr-4">
-                    <Link href={`/patients/${id}?tooth=${s.tooth}`} className="text-blue-700 hover:underline">
+                <tr key={s.id} data-testid="implant-row">
+                  <td data-label="Tooth">
+                    <Link href={`/patients/${id}?tooth=${s.tooth}`} className="text-accent hover:underline">
                       {s.tooth}
                     </Link>
                   </td>
-                  <td className="py-2 pr-4">{SITE_STATE_LABELS[s.state]}</td>
-                  <td className="py-2 pr-4">{s.product ? productLabel(s.product) : '—'}</td>
-                  <td className="py-2 pr-4">{s.lot ? s.lot.lot_no ?? 'No lot' : '—'}</td>
-                  <td className="py-2 pr-4">{s.placed_on ? formatDate(s.placed_on) : '—'}</td>
-                  <td className="py-2 pr-4">{s.placing?.full_name ?? '—'}</td>
-                  <td className="py-2 pr-4">{s.supervisor?.full_name || s.supervisor?.email || '—'}</td>
-                  <td className="py-2 pr-4">{current ? COMPONENT_LABELS[current.component_type] : '—'}</td>
-                  <td className="py-2">{last ? `${OUTCOME_LABELS[last.outcome]} (${last.check_type})` : '—'}</td>
+                  <td data-label="State">{SITE_STATE_LABELS[s.state]}</td>
+                  <td data-label="Implant">{s.product ? productLabel(s.product) : '—'}</td>
+                  <td data-label="Batch">{s.lot ? s.lot.lot_no ?? 'No lot' : '—'}</td>
+                  <td data-label="Placed">{s.placed_on ? formatDate(s.placed_on) : '—'}</td>
+                  <td data-label="Placed by">{s.placing?.full_name ?? '—'}</td>
+                  <td data-label="Supervisor">{s.supervisor?.full_name || s.supervisor?.email || '—'}</td>
+                  <td data-label="Component">{current ? COMPONENT_LABELS[current.component_type] : '—'}</td>
+                  <td data-label="Last follow-up">{last ? `${OUTCOME_LABELS[last.outcome]} (${last.check_type})` : '—'}</td>
                 </tr>
               );
             })}

@@ -43,6 +43,19 @@ export async function deleteE2ePatients(): Promise<void> {
   }
 }
 
+/** E2E checklists and templates (items cascade), so test users' "my open items" don't pile up between runs. */
+export async function deleteE2eChecklists(): Promise<void> {
+  const pg = new Client(pgConfig());
+  await pg.connect();
+  try {
+    await pg.query('delete from public.checklists where title like $1', [`${E2E_PREFIX}%`]);
+    await pg.query('delete from public.checklist_items where text like $1', [`${E2E_PREFIX}%`]);
+    await pg.query('delete from public.checklist_templates where name like $1', [`${E2E_PREFIX}%`]);
+  } finally {
+    await pg.end();
+  }
+}
+
 export async function deactivateE2eCatalog(): Promise<void> {
   const pg = new Client(pgConfig());
   await pg.connect();

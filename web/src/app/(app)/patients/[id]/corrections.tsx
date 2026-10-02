@@ -67,7 +67,7 @@ export function Corrections({ patientId, site, data }: { patientId: string; site
   }
 
   return (
-    <details className="rounded border border-gray-200 p-2 text-sm">
+    <details className="rounded border border-line p-2 text-sm">
       <summary className="cursor-pointer font-medium">Corrections</summary>
       <div className="mt-3 space-y-4">
         {site.product && (
@@ -157,8 +157,8 @@ export function Corrections({ patientId, site, data }: { patientId: string; site
             </button>
           </div>
         )}
-        {error && <p role="alert" className="text-red-700">{error}</p>}
-        {ok && <p role="status" className="text-green-800">{ok}</p>}
+        {error && <p role="alert" className="text-bad">{error}</p>}
+        {ok && <p role="status" className="text-ok">{ok}</p>}
       </div>
     </details>
   );

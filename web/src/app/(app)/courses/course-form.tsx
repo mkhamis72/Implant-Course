@@ -32,8 +32,8 @@ export function CourseForm({ action, course }: Props) {
         <span className="label">Notes</span>
         <input className="input" name="notes" defaultValue={v('notes')} />
       </label>
-      {state.error && <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p>}
-      {state.ok && <p className="text-sm text-green-800 sm:col-span-2">{state.ok}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad sm:col-span-2">{state.error}</p>}
+      {state.ok && <p className="text-sm text-ok sm:col-span-2">{state.ok}</p>}
       <div className="sm:col-span-2">
         <button className="btn" disabled={pending}>
           {course ? 'Save course' : 'Create course'}

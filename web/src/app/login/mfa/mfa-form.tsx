@@ -12,7 +12,7 @@ export function MfaForm() {
         <input className="input" name="code" inputMode="numeric" autoComplete="one-time-code" required autoFocus />
       </label>
       {state.error && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-bad">
           {state.error}
         </p>
       )}

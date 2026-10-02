@@ -43,8 +43,8 @@ export function MedicalHistoryForm({ history }: { history: MedicalHistory }) {
           <textarea className="input" name={key} rows={2} defaultValue={valueOf(state, key, history[key] as string)} />
         </label>
       ))}
-      {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
-      {state.ok && <p className="text-sm text-green-800">{state.ok}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
+      {state.ok && <p className="text-sm text-ok">{state.ok}</p>}
       <button className="btn" disabled={pending}>
         Save medical history
       </button>

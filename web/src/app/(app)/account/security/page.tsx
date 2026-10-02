@@ -10,12 +10,12 @@ export default async function SecurityPage() {
 
   return (
     <div className="max-w-xl space-y-6">
-      <h1 className="text-2xl font-semibold">Account security</h1>
+      <h1>Account security</h1>
       <section className="card space-y-4">
         <h2 className="font-semibold">Two-factor authentication (optional)</h2>
         {verified.length > 0 ? (
           <div className="space-y-3">
-            <p className="text-green-800">Authenticator active</p>
+            <p className="text-ok">Authenticator active</p>
             {verified.map((factor) => (
               <form key={factor.id} action={removeFactor}>
                 <input type="hidden" name="factor_id" value={factor.id} />
@@ -29,7 +29,7 @@ export default async function SecurityPage() {
       </section>
       <section className="card space-y-2">
         <h2 className="font-semibold">Password</h2>
-        <Link href="/account/set-password" className="text-blue-700 hover:underline">
+        <Link href="/account/set-password" className="text-accent hover:underline">
           Change password
         </Link>
       </section>

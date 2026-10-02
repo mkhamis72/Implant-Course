@@ -4,12 +4,12 @@ import { toothShape } from './shapes';
 import { COLORS, toothVisual, type ToothVisual } from './visuals';
 
 function Fixture({ kind }: { kind: NonNullable<ToothVisual['fixture']> }) {
-  const stroke = kind === 'planned' ? COLORS.planned : kind === 'failed' ? COLORS.failed : '#475569';
+  const stroke = kind === 'planned' ? COLORS.planned : kind === 'failed' ? COLORS.failed : COLORS.placed;
   return (
     <g data-glyph="fixture">
       <path
         d="M14 84 L14 22 L20 10 L26 22 L26 84 Z"
-        fill={kind === 'planned' ? 'none' : '#cbd5e1'}
+        fill={kind === 'planned' ? 'none' : '#cfe7d6'}
         stroke={stroke}
         strokeWidth={1.5}
         strokeDasharray={kind === 'planned' ? '3 2' : undefined}
@@ -37,7 +37,7 @@ export function ToothGraphic({ type, jaw, status }: { type: ToothType; jaw: 'upp
         strokeWidth={1.5}
         strokeDasharray={visual.dashed ? '4 3' : undefined}
       />
-      {visual.glyph === 'cross' && <path d="M8 86 L32 124 M32 86 L8 124" stroke="#64748b" strokeWidth={2.5} />}
+      {visual.glyph === 'cross' && <path d="M8 86 L32 124 M32 86 L8 124" stroke="#7b8b8f" strokeWidth={2.5} />}
     </g>
   );
 }

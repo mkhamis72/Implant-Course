@@ -26,8 +26,8 @@ export function InviteForm() {
       <button className="btn justify-center" disabled={pending}>
         Send invite
       </button>
-      {state.error && <p role="alert" className="text-sm text-red-700 sm:col-span-4">{state.error}</p>}
-      {state.ok && <p className="text-sm text-green-800 sm:col-span-4">{state.ok}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad sm:col-span-4">{state.error}</p>}
+      {state.ok && <p className="text-sm text-ok sm:col-span-4">{state.ok}</p>}
     </form>
   );
 }
