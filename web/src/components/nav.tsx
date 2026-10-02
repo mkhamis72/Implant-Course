@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { isActive, visibleNavItems, type Role } from './nav-items';
@@ -23,11 +23,27 @@ export function Nav({ role, name }: { role: Role; name: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  const wasOpen = useRef(false);
+
+  // While the slide-over is open it owns focus: the page behind is inert, and closing hands focus back to Menu.
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const main = document.querySelector('main');
+    if (open) {
+      main?.setAttribute('inert', '');
+      panel.current?.querySelector<HTMLElement>('nav a')?.focus();
+      const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+      window.addEventListener('keydown', onKey);
+      wasOpen.current = true;
+      return () => window.removeEventListener('keydown', onKey);
+    }
+    main?.removeAttribute('inert');
+    if (wasOpen.current) {
+      wasOpen.current = false;
+      // After following a link the new page takes focus; only return it when the menu was simply closed.
+      if (document.activeElement === document.body || panel.current?.contains(document.activeElement)) menuButton.current?.focus();
+    }
   }, [open]);
 
   return (
@@ -35,6 +51,7 @@ export function Nav({ role, name }: { role: Role; name: string }) {
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-surface/95 px-4 py-2.5 backdrop-blur lg:hidden print:hidden">
         <Wordmark />
         <button
+          ref={menuButton}
           type="button"
           className="btn-secondary btn px-3"
           aria-expanded={open}
@@ -48,6 +65,7 @@ export function Nav({ role, name }: { role: Role; name: string }) {
       {open && <div className="fixed inset-0 z-40 bg-ink/30 lg:hidden" onClick={() => setOpen(false)} aria-hidden="true" />}
 
       <aside
+        ref={panel}
         id="main-nav"
         className={`${open ? 'fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] shadow-xl' : 'hidden'} flex-col border-r border-line bg-surface p-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:shadow-none print:hidden`}
       >
@@ -68,8 +86,8 @@ export function Nav({ role, name }: { role: Role; name: string }) {
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
                 onClick={() => setOpen(false)}
-                className={`rule flex min-h-11 items-center rounded-r-md py-2 pr-3 lg:min-h-0 ${
-                  active ? 'rule-accent bg-accent-soft font-semibold text-accent-strong' : 'border-l-transparent text-ink hover:bg-sunken'
+                className={`flex min-h-11 items-center rounded-md px-3 py-2 lg:min-h-0 ${
+                  active ? 'bg-accent-soft font-semibold text-accent-strong' : 'text-ink hover:bg-sunken'
                 }`}
               >
                 {item.label}

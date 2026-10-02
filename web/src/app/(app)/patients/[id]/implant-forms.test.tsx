@@ -18,15 +18,15 @@ describe('<PlaceForm> batch choice', () => {
     placeForm();
     expect(screen.getByText(/No usable stock/)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Placement date'), { target: { value: '2030-06-01' } });
+    fireEvent.change(screen.getByLabelText(/^Placement date/), { target: { value: '2030-06-01' } });
     const batches = screen.getByRole('radiogroup', { name: 'Stock batch' });
     const card = within(batches).getByRole('radio', { name: /Lot OLD/ });
     fireEvent.click(card);
     expect(card).toBeChecked();
 
-    fireEvent.change(screen.getByLabelText('Placement date'), { target: { value: '2030-06-10' } });
+    fireEvent.change(screen.getByLabelText(/^Placement date/), { target: { value: '2030-06-10' } });
     expect(screen.queryByRole('radiogroup', { name: 'Stock batch' })).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Placement date'), { target: { value: '2030-06-02' } });
+    fireEvent.change(screen.getByLabelText(/^Placement date/), { target: { value: '2030-06-02' } });
     expect(within(screen.getByRole('radiogroup', { name: 'Stock batch' })).getByRole('radio', { name: /Lot OLD/ })).not.toBeChecked();
   });
 });

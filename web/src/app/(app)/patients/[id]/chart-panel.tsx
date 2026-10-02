@@ -10,7 +10,6 @@ import { setToothStatus } from './chart-actions';
 import { statusTone, toothName, type Tone } from '@/lib/patients/tooth-panel';
 
 const TONE_BADGE: Record<Tone, string> = { ok: 'badge-ok', warn: 'badge-warn', bad: 'badge-bad', accent: 'badge-accent', off: '' };
-const TONE_RULE: Record<Tone, string> = { ok: 'border-l-ok-line', warn: 'border-l-warn-line', bad: 'border-l-bad-line', accent: 'border-l-accent', off: 'border-l-line' };
 import { ImplantSection } from './implant-section';
 
 type Props = {
@@ -32,7 +31,8 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
     setError(null);
     // Below the side-by-side layout the panel sits under the chart: bring it into view after a tap.
     if (!additive && window.matchMedia('(max-width: 1279.98px)').matches) {
-      requestAnimationFrame(() => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+      requestAnimationFrame(() => panelRef.current?.scrollIntoView({ behavior, block: 'start' }));
     }
     setSelected((current) => {
       if (additive) {
@@ -55,11 +55,11 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
   return (
     <div className="flex flex-col gap-4 xl:flex-row">
       <div className="card flex-1 space-y-4">
-        {/* On phones the chart keeps tappable teeth (about 36px each) and scrolls sideways inside its panel. */}
+        {/* Touch screens keep teeth at a fingertip size (about 44px each); the chart scrolls sideways inside its panel. */}
         <div className="-mx-2 overflow-x-auto px-2">
-          <div className="min-w-[36rem] sm:min-w-0">
+          <div className="min-w-[36rem] sm:min-w-0 pointer-coarse:min-w-[46rem]">
             {/* Standard dental-chart orientation: the patient's right is on the viewer's left. */}
-            <div aria-hidden="true" className="mb-1 flex max-w-4xl justify-between text-xs font-medium text-subtle">
+            <div aria-hidden="true" className="mb-1 flex max-w-4xl justify-between text-xs font-medium text-muted">
               <span>Right</span>
               <span>Left</span>
             </div>
@@ -70,7 +70,7 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
       </div>
       <aside
         ref={panelRef}
-        className={`card w-full scroll-mt-20 space-y-4 xl:w-80 ${selected.length === 1 ? `border-l-4 ${TONE_RULE[statusTone(statusOf(selected[0]))]}` : ''}`}
+        className="card w-full scroll-mt-20 space-y-4 xl:w-80"
         aria-label="Tooth details"
       >
         {selected.length === 0 ? (

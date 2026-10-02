@@ -14,19 +14,18 @@ import { dashboardShortages } from '@/lib/dashboard/shortages';
 type StockRow = Product & { on_hand: number; nearest_expiry: string | null };
 
 /** A failed query must never look like an empty (all-clear) card. */
-const TONE = { bad: 'border-l-4 border-l-bad-line', warn: 'border-l-4 border-l-warn-line', accent: 'border-l-4 border-l-accent' } as const;
 const COUNT = { bad: 'badge-bad', warn: 'badge-warn', accent: 'badge-accent' } as const;
 
 /**
- * A card only takes a status colour (left rule + count) when it holds something to act on,
+ * A card only shows a coloured count when it holds something to act on,
  * so an all-clear dashboard stays calm and a problem stands out.
  */
 function Card({ title, failed, count = 0, tone, className = '', children }: {
-  title: string; failed?: boolean; count?: number; tone?: keyof typeof TONE; className?: string; children: React.ReactNode;
+  title: string; failed?: boolean; count?: number; tone?: keyof typeof COUNT; className?: string; children: React.ReactNode;
 }) {
   const flagged = !failed && count > 0 && tone;
   return (
-    <section className={`card space-y-3 ${flagged ? TONE[tone] : ''} ${failed ? 'border-l-4 border-l-bad-line' : ''} ${className}`}>
+    <section className={`card space-y-3 ${className}`}>
       <h2 className="flex items-center gap-2 font-semibold">
         {title}
         {flagged && <span className={`badge ${COUNT[tone]}`}>{count}</span>}
@@ -92,7 +91,7 @@ export default async function DashboardPage() {
                 <li
                   key={s.id}
                   data-testid="dash-surgery"
-                  className={`rule flex flex-wrap gap-x-3 py-0.5 ${s.status === 'done' ? 'rule-ok' : 'rule-accent'}`}
+                  className="flex flex-wrap items-baseline gap-x-3 py-0.5"
                 >
                   <span className="font-semibold">{formatTime(s.starts_at)}–{formatTime(s.ends_at)}</span>
                   {s.patient && (

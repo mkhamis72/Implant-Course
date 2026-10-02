@@ -9,15 +9,14 @@ function Fixture({ kind }: { kind: NonNullable<ToothVisual['fixture']> }) {
     <g data-glyph="fixture">
       <path
         d="M14 84 L14 22 L20 10 L26 22 L26 84 Z"
-        fill={kind === 'planned' ? 'none' : '#cfe7d6'}
-        stroke={stroke}
+        style={{ fill: kind === 'planned' ? 'none' : 'var(--color-fixture)', stroke }}
         strokeWidth={1.5}
         strokeDasharray={kind === 'planned' ? '3 2' : undefined}
       />
       {[34, 46, 58, 70].map((y) => (
-        <path key={y} d={`M12 ${y} L28 ${y - 4}`} stroke={stroke} strokeWidth={1} />
+        <path key={y} d={`M12 ${y} L28 ${y - 4}`} style={{ stroke }} strokeWidth={1} />
       ))}
-      {kind === 'failed' && <path d="M4 20 L36 120 M36 20 L4 120" stroke={COLORS.failed} strokeWidth={3} />}
+      {kind === 'failed' && <path d="M4 20 L36 120 M36 20 L4 120" style={{ stroke: COLORS.failed }} strokeWidth={3} />}
     </g>
   );
 }
@@ -28,16 +27,15 @@ export function ToothGraphic({ type, jaw, status }: { type: ToothType; jaw: 'upp
   const shape = toothShape(type, jaw);
   return (
     <g>
-      {visual.showRoots && <path d={shape.roots} fill="#ffffff" stroke={visual.stroke} strokeWidth={1.5} />}
+      {visual.showRoots && <path d={shape.roots} style={{ fill: 'var(--color-surface)', stroke: visual.stroke }} strokeWidth={1.5} />}
       {visual.glyph === 'fixture' && visual.fixture && <Fixture kind={visual.fixture} />}
       <path
         d={shape.crown}
-        fill={visual.crownFill}
-        stroke={visual.stroke}
+        style={{ fill: visual.crownFill, stroke: visual.stroke }}
         strokeWidth={1.5}
         strokeDasharray={visual.dashed ? '4 3' : undefined}
       />
-      {visual.glyph === 'cross' && <path d="M8 86 L32 124 M32 86 L8 124" stroke="#7b8b8f" strokeWidth={2.5} />}
+      {visual.glyph === 'cross' && <path d="M8 86 L32 124 M32 86 L8 124" style={{ stroke: 'var(--color-subtle)' }} strokeWidth={2.5} />}
     </g>
   );
 }

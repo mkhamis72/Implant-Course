@@ -75,7 +75,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
                 <div
                   key={b.id}
                   data-testid={`booking-${b.patient?.file_no}`}
-                  className={`m-0.5 space-y-0.5 overflow-y-auto rounded-md border border-l-4 p-1.5 ${b.status === 'cancelled' ? 'border-line-strong bg-sunken text-muted line-through' : b.status === 'done' ? 'border-ok-line bg-ok-soft' : 'border-accent bg-accent-soft'}`}
+                  className={`m-0.5 space-y-0.5 overflow-y-auto rounded-md border p-1.5 ${b.status === 'cancelled' ? 'border-line-strong bg-sunken text-muted line-through' : b.status === 'done' ? 'border-ok-line bg-ok-soft' : 'border-accent bg-accent-soft'}`}
                   style={{
                     gridColumn: col + 2,
                     gridRow: `${row + 1} / span ${span}`,
