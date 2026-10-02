@@ -7,6 +7,7 @@ import { productLabel } from '@/lib/inventory/labels';
 import { stockFlags } from '@/lib/inventory/lots';
 import type { Product } from '@/lib/inventory/types';
 import { SLOT_SELECT } from '@/lib/schedule/queries';
+import { groupByChair } from '@/lib/dashboard/by-chair';
 import type { PullRow, SlotRow } from '@/lib/schedule/types';
 import { dashboardShortages } from '@/lib/dashboard/shortages';
 
@@ -48,8 +49,7 @@ export default async function DashboardPage() {
   ]);
 
   const surgeries = ((slots.data ?? []) as unknown as SlotRow[]).filter((s) => s.status !== 'cancelled');
-  const { data: chairs, error: chairsError } = await supabase.from('chairs').select('id, name');
-  const chairName = new Map((chairs ?? []).map((c) => [c.id as string, c.name as string]));
+  const byChair = groupByChair(surgeries);
   const shortages = dashboardShortages((pullToday.data ?? []) as PullRow[], (pullTomorrow.data ?? []) as PullRow[]);
   const stockRows = (stock.data ?? []) as StockRow[];
   const flagged = stockRows.map((r) => ({ r, f: stockFlags(r, today, settings.expiry_alert_days) }));
@@ -64,20 +64,26 @@ export default async function DashboardPage() {
         <p className="text-gray-600">Welcome, {profile.full_name || profile.email} · {formatDate(today)}</p>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Today's surgeries" failed={Boolean(slots.error || chairsError)}>
+        <Card title="Today's surgeries" failed={Boolean(slots.error)}>
           {surgeries.length === 0 ? (
             <p className="text-sm text-gray-600">No surgeries booked today.</p>
           ) : (
-            <ul className="divide-y divide-gray-100 text-sm">
-              {surgeries.map((s) => (
+            <ul className="space-y-3 text-sm">
+              {byChair.map((g) => (
+                <li key={g.chair} data-testid="dash-chair">
+                  <h3 className="font-medium text-gray-800">{g.chair}</h3>
+                  <ul className="divide-y divide-gray-100">
+              {g.slots.map((s) => (
                 <li key={s.id} data-testid="dash-surgery" className="flex flex-wrap gap-x-4 py-1.5">
                   <span className="font-medium">{formatTime(s.starts_at)}–{formatTime(s.ends_at)}</span>
-                  <span>{chairName.get(s.chair_id) ?? 'Chair'}</span>
                   {s.patient && (
                     <Link href={`/patients/${s.patient.id}`} className="text-blue-700 hover:underline">{s.patient.full_name}</Link>
                   )}
                   {s.implants.length > 0 && <span className="text-gray-600">teeth {s.implants.map((i) => i.tooth).join(', ')}</span>}
                   {s.status === 'done' && <span className="text-green-800">done</span>}
+                </li>
+              ))}
+                  </ul>
                 </li>
               ))}
             </ul>

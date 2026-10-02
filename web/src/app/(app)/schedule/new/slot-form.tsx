@@ -32,13 +32,17 @@ export function SlotForm(p: Props) {
   const [roles, setRoles] = useState<Record<string, Role>>({});
   const [implants, setImplants] = useState([{ tooth: '', productId: '' }]);
   const [notes, setNotes] = useState('');
-  const [warnings, setWarnings] = useState<string[] | null>(null);
+  const [checked, setChecked] = useState<{ key: string; warnings: string[] } | null>(null);
   const [override, setOverride] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, start_] = useTransition();
 
   const courseId = p.sessions.find((s) => s.id === sessionId)?.courseId ?? '';
   const delegates = useMemo(() => p.enrolled[courseId] ?? [], [p.enrolled, courseId]);
+
+  // Clash warnings belong to the inputs they were checked for; any change hides them.
+  const inputKey = JSON.stringify([sessionId, chairId, supervisorId, start, end, fileNo, roles]);
+  const warnings = checked?.key === inputKey ? checked.warnings : null;
 
   function submit(withOverride: boolean) {
     setError(null);
@@ -52,7 +56,7 @@ export function SlotForm(p: Props) {
         notes,
       });
       if (result.error) setError(result.error);
-      else if (result.warnings) setWarnings(result.warnings);
+      else if (result.warnings) setChecked({ key: inputKey, warnings: result.warnings });
       else router.push(`/schedule?date=${result.date}`);
     });
   }

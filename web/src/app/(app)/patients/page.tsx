@@ -9,7 +9,9 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('search_patients', { q, include_archived: archived === '1' });
   if (error) throw new Error('Could not load patients');
-  const patients = (data ?? []) as Patient[];
+  // The search returns one row more than it shows, to tell whether there are more.
+  const rows = (data ?? []) as Patient[];
+  const patients = rows.slice(0, 50);
   const today = new Date();
 
   return (
@@ -60,6 +62,9 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
               ))}
             </tbody>
           </table>
+        )}
+        {rows.length > patients.length && (
+          <p data-testid="search-capped" className="mt-3 text-sm text-gray-600">Showing the first 50 — refine your search.</p>
         )}
       </div>
     </div>

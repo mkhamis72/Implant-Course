@@ -19,10 +19,15 @@ export function toothType(fdi: number): ToothType {
   return 'molar';
 }
 
-/** Parses "36, 46" / "36 46" / "36;46" into sorted unique FDI teeth. */
+/** Arabic-Indic (٠–٩) and Eastern Arabic-Indic (۰–۹) digits to ASCII. */
+function asciiDigits(text: string): string {
+  return text.replace(/[٠-٩۰-۹]/g, (d) => String(d.charCodeAt(0) & 0xf));
+}
+
+/** Parses "36, 46" / "36 46" / "36;46" / "٣٦، ٤٦" into sorted unique FDI teeth. */
 export function parseTeeth(input: string): { teeth: number[] } | { error: string } {
   const teeth = new Set<number>();
-  for (const token of input.split(/[\s,;]+/).filter(Boolean)) {
+  for (const token of asciiDigits(input).split(/[\s,;،؛]+/).filter(Boolean)) {
     const n = Number(token);
     if (!/^\d+$/.test(token) || !isFdiTooth(n)) {
       return { error: `"${token}" is not a tooth number. Use FDI numbers 11–48 (e.g. 36, 46).` };
