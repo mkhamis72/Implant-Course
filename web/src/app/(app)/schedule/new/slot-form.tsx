@@ -91,10 +91,11 @@ export function SlotForm(p: Props) {
         <label className="block sm:col-span-2">
           <span className="label">Patient (file number)</span>
           <input className="input" list="patients" value={fileNo} onChange={(e) => setFileNo(e.target.value)} />
-          <datalist id="patients">
-            {p.patients.map((pt) => <option key={pt.file_no} value={pt.file_no}>{pt.full_name}</option>)}
-          </datalist>
         </label>
+        {/* Outside the <label> so its accessible name is just "Patient (file number)". */}
+        <datalist id="patients">
+          {p.patients.map((pt) => <option key={pt.file_no} value={pt.file_no}>{pt.full_name}</option>)}
+        </datalist>
       </div>
 
       <fieldset className="space-y-2">
