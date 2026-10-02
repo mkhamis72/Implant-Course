@@ -27,9 +27,13 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm test
+      # A build that would fail on Vercel must fail here, before the migration.
+      - run: npm run build
 
   migrate-and-deploy:
     needs: check
+    # Only master may change production (a manual run from another branch must not apply its migrations).
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     environment: production
     defaults: { run: { working-directory: web } }
@@ -54,5 +58,12 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$HOOK" || { echo "VERCEL_DEPLOY_HOOK_URL secret is missing"; exit 1; }
+          # The hook builds master's tip. If master has moved on, that newer commit's own release run
+          # migrates first and then deploys; deploying now would ship its code before its migration.
+          tip=$(git ls-remote origin refs/heads/master | cut -f1)
+          if [ "$tip" != "$GITHUB_SHA" ]; then
+            echo "master is now at $tip (this run migrated $GITHUB_SHA); leaving the deploy to that release."
+            exit 0
+          fi
           curl --fail --silent --show-error -X POST "$HOOK" > /dev/null
           echo "Vercel deployment triggered."
