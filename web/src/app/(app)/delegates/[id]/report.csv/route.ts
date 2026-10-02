@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentProfile } from '@/lib/auth/session';
-import { toCsv } from '@/lib/csv';
+import { contentDisposition, csvFilename, toCsv } from '@/lib/csv';
 import { productLabel } from '@/lib/inventory/labels';
 import { OUTCOME_LABELS, SITE_STATE_LABELS, type FollowupOutcome, type SiteState } from '@/lib/inventory/types';
 import type { ReportRow } from '@/lib/schedule/types';
@@ -34,11 +34,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       r.last_outcome ? OUTCOME_LABELS[r.last_outcome as FollowupOutcome] : '',
     ]),
   );
-  const filename = `implants-${delegate.full_name.replace(/[^\p{L}\p{N}]+/gu, '-')}.csv`;
+  const filename = csvFilename(delegate.full_name, id);
   return new NextResponse(csv, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${filename.replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'Content-Disposition': contentDisposition(filename),
     },
   });
 }

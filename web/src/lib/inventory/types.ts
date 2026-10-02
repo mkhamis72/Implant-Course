@@ -75,6 +75,7 @@ type Person = { full_name: string } | null;
 type Organizer = { full_name: string; email: string } | null;
 
 export type SiteComponent = {
+  stock_lot_id: string | null;
   id: string;
   component_type: ComponentType;
   fitted_on: string;
@@ -103,6 +104,7 @@ export type ImplantSite = {
   tooth: number;
   state: SiteState;
   placed_on: string | null;
+  stock_lot_id: string | null;
   torque_ncm: number | null;
   graft: string;
   notes: string;

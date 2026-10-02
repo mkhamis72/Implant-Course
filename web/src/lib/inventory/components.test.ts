@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { acceptsProduct, activeSite, badgesFor, currentComponent } from './components';
+import { acceptsProduct, activeSite, badgesFor, currentComponent, lastFollowup } from './components';
 import type { ImplantSite, SiteComponent } from './types';
 
 const comp = (type: SiteComponent['component_type'], removed_on: string | null): SiteComponent => ({
   id: type, component_type: type, fitted_on: '2026-01-01', removed_on, notes: '', product: null, lot: null,
-  fitted_by_delegate: null, fitted_by_organizer: null, voided_at: null, voided_reason: '',
+  fitted_by_delegate: null, fitted_by_organizer: null, voided_at: null, voided_reason: '', stock_lot_id: null,
 });
 
 const site = (tooth: number, state: ImplantSite['state'], components: SiteComponent[] = []): ImplantSite => ({
-  id: `${tooth}-${state}`, tooth, state, placed_on: '2026-01-01', torque_ncm: null, graft: '', notes: '', product: null,
+  id: `${tooth}-${state}`, tooth, state, placed_on: '2026-01-01', stock_lot_id: null, torque_ncm: null, graft: '', notes: '', product: null,
   lot: null, placing: null, assisting: null, supervisor: null, components, followups: [], slot: null, created_at: '2026-01-01T00:00:00Z',
 });
 
@@ -33,5 +33,16 @@ describe('component rules', () => {
         site(21, 'planned'),
       ]),
     ).toEqual({ 36: 'TB', 46: 'CR' });
+  });
+});
+
+describe('lastFollowup (I5)', () => {
+  it('ignores removed follow-ups', () => {
+    const s = site(36, 'placed');
+    s.followups = [
+      { id: 'a', date: '2026-01-10', check_type: '2-week', outcome: 'ok', notes: '', voided_at: null, voided_reason: '' },
+      { id: 'b', date: '2026-03-10', check_type: '3-month', outcome: 'failed', notes: '', voided_at: '2026-03-11T00:00:00Z', voided_reason: 'wrong patient' },
+    ];
+    expect(lastFollowup(s)?.id).toBe('a');
   });
 });
