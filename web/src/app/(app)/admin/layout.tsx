@@ -8,6 +8,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <nav className="flex gap-4 border-b border-gray-200 pb-2 text-sm">
         <Link href="/admin/users" className="hover:underline">Users</Link>
         <Link href="/admin/settings" className="hover:underline">Settings</Link>
+        <Link href="/admin/chairs" className="hover:underline">Chairs</Link>
       </nav>
       {children}
     </div>

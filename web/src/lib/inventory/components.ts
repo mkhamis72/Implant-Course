@@ -31,3 +31,8 @@ export function badgesFor(sites: readonly ImplantSite[]): Partial<Record<number,
   }
   return badges;
 }
+
+/** The latest follow-up that has not been removed. */
+export function lastFollowup(site: ImplantSite): ImplantSite['followups'][number] | null {
+  return site.followups.filter((f) => !f.voided_at).at(-1) ?? null;
+}

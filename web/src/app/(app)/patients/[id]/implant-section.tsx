@@ -5,13 +5,14 @@ import { activeSite, currentComponent } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, type ChartData, type ImplantSite } from '@/lib/inventory/types';
 import { isManualState, type ToothState } from '@/lib/patients/types';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatDateTime } from '@/lib/format';
 import { cancelPlan } from './implant-actions';
+import { Corrections } from './corrections';
 import { ComponentForm, FollowupForm, PlaceForm, PlanForm } from './implant-forms';
 
 type Mode = 'none' | 'plan' | 'place' | 'component' | 'followup';
 
-function SiteDetails({ site }: { site: ImplantSite }) {
+function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: string; data: ChartData }) {
   const current = currentComponent(site);
   const rows: [string, string][] = [
     ['State', SITE_STATE_LABELS[site.state]],
@@ -40,9 +41,9 @@ function SiteDetails({ site }: { site: ImplantSite }) {
           <h4 className="font-medium">Components</h4>
           <ol className="list-decimal pl-5" data-testid="component-history">
             {site.components.map((c) => (
-              <li key={c.id}>
+              <li key={c.id} className={c.voided_at ? 'text-gray-400 line-through' : ''}>
                 {COMPONENT_LABELS[c.component_type]} — {formatDate(c.fitted_on)}
-                {c.removed_on ? ` (until ${formatDate(c.removed_on)})` : ' (current)'}
+                {c.voided_at ? ` — undone: ${c.voided_reason}` : c.removed_on ? ` (until ${formatDate(c.removed_on)})` : ' (current)'}
               </li>
             ))}
           </ol>
@@ -53,14 +54,16 @@ function SiteDetails({ site }: { site: ImplantSite }) {
           <h4 className="font-medium">Follow-ups</h4>
           <ul data-testid="followups">
             {site.followups.map((f) => (
-              <li key={f.id}>
+              <li key={f.id} className={f.voided_at ? 'text-gray-400 line-through' : ''}>
                 {formatDate(f.date)} · {f.check_type} · {OUTCOME_LABELS[f.outcome]}
                 {f.notes ? ` — ${f.notes}` : ''}
+                {f.voided_at ? ` — removed: ${f.voided_reason}` : ''}
               </li>
             ))}
           </ul>
         </div>
       )}
+      {site.state !== 'planned' && site.state !== 'removed' && <Corrections patientId={patientId} site={site} data={data} />}
     </div>
   );
 }
@@ -92,7 +95,13 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
           Planned{site.product ? `: ${productLabel(site.product)}` : ' (implant not chosen yet)'}
         </p>
       )}
-      {site && site.state !== 'planned' && <SiteDetails site={site} />}
+      {site?.state === 'planned' && site.slot && (
+        <p className="text-sm text-gray-700">
+          Booked: {formatDateTime(site.slot.starts_at)}
+          {site.slot.chair ? ` · ${site.slot.chair.name}` : ''}
+        </p>
+      )}
+      {site && site.state !== 'planned' && <SiteDetails site={site} patientId={patientId} data={data} />}
 
       {mode === 'none' && (
         <div className="flex flex-wrap gap-2">
@@ -120,7 +129,7 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
 
       {mode === 'plan' && <PlanForm patientId={patientId} tooth={tooth} data={data} onDone={done} />}
       {mode === 'place' && (
-        <PlaceForm patientId={patientId} tooth={tooth} data={data} onDone={done} plannedProductId={site?.product?.id ?? null} />
+        <PlaceForm patientId={patientId} tooth={tooth} data={data} onDone={done} plannedProductId={site?.product?.id ?? null} slot={site?.slot ?? null} />
       )}
       {mode === 'component' && site && <ComponentForm patientId={patientId} site={site} data={data} onDone={done} />}
       {mode === 'followup' && site && <FollowupForm patientId={patientId} site={site} data={data} onDone={done} />}
@@ -129,7 +138,7 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
         <details className="text-sm">
           <summary className="cursor-pointer text-gray-700">Earlier implants on this tooth ({earlier.length})</summary>
           <div className="mt-2 space-y-4">
-            {earlier.map((s) => <SiteDetails key={s.id} site={s} />)}
+            {earlier.map((s) => <SiteDetails key={s.id} site={s} patientId={patientId} data={data} />)}
           </div>
         </details>
       )}

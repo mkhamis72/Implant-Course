@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { currentComponent } from '@/lib/inventory/components';
+import { currentComponent, lastFollowup } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, type ImplantSite } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
@@ -40,7 +40,7 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
           <tbody>
             {sites.map((s) => {
               const current = currentComponent(s);
-              const last = s.followups.at(-1);
+              const last = lastFollowup(s);
               return (
                 <tr key={s.id} data-testid="implant-row" className="border-t border-gray-200">
                   <td className="py-2 pr-4">

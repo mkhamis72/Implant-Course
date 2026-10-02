@@ -75,6 +75,7 @@ type Person = { full_name: string } | null;
 type Organizer = { full_name: string; email: string } | null;
 
 export type SiteComponent = {
+  stock_lot_id: string | null;
   id: string;
   component_type: ComponentType;
   fitted_on: string;
@@ -84,15 +85,26 @@ export type SiteComponent = {
   lot: { lot_no: string | null } | null;
   fitted_by_delegate: Person;
   fitted_by_organizer: Organizer;
+  voided_at: string | null;
+  voided_reason: string;
 };
 
-export type Followup = { id: string; date: string; check_type: string; outcome: FollowupOutcome; notes: string };
+export type Followup = {
+  id: string;
+  date: string;
+  check_type: string;
+  outcome: FollowupOutcome;
+  notes: string;
+  voided_at: string | null;
+  voided_reason: string;
+};
 
 export type ImplantSite = {
   id: string;
   tooth: number;
   state: SiteState;
   placed_on: string | null;
+  stock_lot_id: string | null;
   torque_ncm: number | null;
   graft: string;
   notes: string;
@@ -103,6 +115,13 @@ export type ImplantSite = {
   supervisor: Organizer;
   components: SiteComponent[];
   followups: Followup[];
+  slot: {
+    id: string;
+    starts_at: string;
+    supervisor_id: string;
+    chair: { name: string } | null;
+    delegates: { delegate_id: string; role: 'placing' | 'assisting' }[];
+  } | null;
   created_at: string;
 };
 

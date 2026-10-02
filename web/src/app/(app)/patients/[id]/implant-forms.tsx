@@ -100,15 +100,26 @@ export function PlanForm({ patientId, tooth, data, onDone }: Base) {
   );
 }
 
-export function PlaceForm({ patientId, tooth, data, onDone, plannedProductId }: Base & { plannedProductId: string | null }) {
+export function PlaceForm({
+  patientId,
+  tooth,
+  data,
+  onDone,
+  plannedProductId,
+  slot = null,
+}: Base & { plannedProductId: string | null; slot?: ImplantSite['slot'] }) {
+  // A booked implant starts with the booking's delegates and supervisor.
+  const placingFromSlot = slot?.delegates.find((d) => d.role === 'placing')?.delegate_id ?? '';
+  const assistingFromSlot = slot?.delegates.find((d) => d.role === 'assisting')?.delegate_id ?? '';
   const [v, setV] = useState({
-    productId: plannedProductId ?? '', lotId: '', placedOn: data.today, placingDelegateId: '', assistingDelegateId: '',
-    supervisorId: data.me, torque: '', graft: '', notes: '',
+    productId: plannedProductId ?? '', lotId: '', placedOn: data.today,
+    placingDelegateId: placingFromSlot, assistingDelegateId: assistingFromSlot,
+    supervisorId: slot?.supervisor_id ?? data.me, torque: '', graft: '', notes: '',
   });
   const set = (key: keyof typeof v) => (value: string) => setV((cur) => ({ ...cur, [key]: value, ...(key === 'productId' ? { lotId: '' } : {}) }));
   const { error, pending, submit } = useSubmit(placeImplant, onDone);
   return (
-    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, ...v }); }}>
+    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, slotId: slot?.id ?? '', ...v }); }}>
       <Field label="Implant">
         <select className="input" value={v.productId} onChange={(e) => set('productId')(e.target.value)}>
           <option value="">Choose the implant…</option>

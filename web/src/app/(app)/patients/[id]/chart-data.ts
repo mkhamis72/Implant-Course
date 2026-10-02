@@ -7,19 +7,20 @@ import type { ChartData, ImplantSite, LotOnHand, Product } from '@/lib/inventory
 import type { ToothState } from '@/lib/patients/types';
 
 export const SITE_SELECT = `
-  id, tooth, state, placed_on, torque_ncm, graft, notes, created_at,
+  id, tooth, state, placed_on, torque_ncm, graft, notes, created_at, stock_lot_id,
   product:products(*),
   lot:stock_lots(lot_no, expiry),
   placing:delegates!implant_sites_placing_delegate_id_fkey(full_name),
   assisting:delegates!implant_sites_assisting_delegate_id_fkey(full_name),
   supervisor:profiles!implant_sites_supervisor_id_fkey(full_name, email),
   components:site_components(
-    id, component_type, fitted_on, removed_on, notes,
+    id, component_type, fitted_on, removed_on, notes, voided_at, voided_reason, stock_lot_id,
     product:products(*), lot:stock_lots(lot_no),
     fitted_by_delegate:delegates(full_name),
     fitted_by_organizer:profiles!site_components_fitted_by_organizer_id_fkey(full_name, email)
   ),
-  followups:implant_followups(id, date, check_type, outcome, notes)
+  followups:implant_followups(id, date, check_type, outcome, notes, voided_at, voided_reason),
+  slot:surgery_slots(id, starts_at, supervisor_id, chair:chairs(name), delegates:slot_delegates(delegate_id, role))
 `;
 
 export function sortSite(site: ImplantSite): ImplantSite {

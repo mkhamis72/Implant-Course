@@ -95,7 +95,7 @@ test('fits a healing abutment then a Ti-base: badges change and stock is deducte
   await expect(page.getByRole('button', { name: 'Tooth 36, Implant placed, HA' })).toBeVisible();
 
   await panel(page).getByRole('button', { name: 'Add component' }).click();
-  await page.getByLabel('Component').selectOption('ti_base');
+  await page.getByRole('combobox', { name: 'Component', exact: true }).selectOption('ti_base');
   await page.getByLabel('Product (optional)').selectOption({ label: `${s.brand} E2E · ${s.brand} TB` });
   await page.getByLabel('Stock batch').selectOption({ index: 1 });
   await page.getByRole('button', { name: 'Save component' }).click();
@@ -126,7 +126,7 @@ test('a final restoration from the lab marks the tooth restored', async ({ page 
   const s = await setup(page);
   await placeOn(page, s, 14);
   await panel(page).getByRole('button', { name: 'Add component' }).click();
-  await page.getByLabel('Component').selectOption('final_restoration');
+  await page.getByRole('combobox', { name: 'Component', exact: true }).selectOption('final_restoration');
   await page.getByRole('button', { name: 'Save component' }).click();
   await expect(page.getByRole('button', { name: 'Tooth 14, Restored, CR' })).toBeVisible();
 });

@@ -78,6 +78,7 @@ export const placeSchema = z.object({
   lotId: requiredId('Choose a stock batch.'),
   placedOn: pastDate('Enter the placement date (today or earlier).'),
   placingDelegateId: requiredId('Choose the delegate who placed the implant.'),
+  slotId: optionalId,
   assistingDelegateId: optionalId,
   supervisorId: requiredId('Choose the supervising organizer.'),
   torque: optionalNumber(0, 150, 'Enter an insertion torque between 0 and 150 Ncm.'),
