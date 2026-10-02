@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { formatDate } from '@/lib/format';
 import { SESSION_TYPE_LABELS, type Course, type Session } from '@/lib/schedule/types';
+import { progressOf } from '@/lib/checklists/format';
 import { CourseForm } from '../course-form';
 import { unenrollDelegate, updateCourse } from '../actions';
 import { SessionForm } from './session-form';
@@ -15,7 +16,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
   const supabase = await createClient();
   const [{ data: course }, { data: sessions }, { data: enrollments }, { data: delegates }, { data: organizers }] = await Promise.all([
     supabase.from('courses').select('*').eq('id', id).maybeSingle(),
-    supabase.from('sessions').select('*').eq('course_id', id).order('date').order('start_time'),
+    supabase.from('sessions').select('*, checklists(id, items:checklist_items(done_at))').eq('course_id', id).order('date').order('start_time'),
     supabase.from('enrollments').select('id, delegate:delegates(id, full_name)').eq('course_id', id),
     supabase.from('delegates').select('id, full_name').eq('active', true).order('full_name'),
     supabase.from('profiles').select('user_id, full_name, email').eq('active', true).order('full_name'),
@@ -34,11 +35,16 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
         <h2 className="font-semibold">Sessions</h2>
         <ul className="card divide-y divide-gray-100">
           {(sessions ?? []).length === 0 && <li className="text-sm text-gray-600">No sessions yet.</li>}
-          {((sessions ?? []) as Session[]).map((s) => (
+          {((sessions ?? []) as (Session & { checklists: { id: string; items: { done_at: string | null }[] }[] })[]).map((s) => (
             <li key={s.id} data-testid="session-row" className="flex flex-wrap gap-x-6 py-2 text-sm">
               <span className="font-medium">{s.title}</span>
               <span>{SESSION_TYPE_LABELS[s.type]}</span>
               <span>{formatDate(s.date)} {s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)}</span>
+              {s.checklists.map((cl) => (
+                <Link key={cl.id} href={`/checklists/${cl.id}`} className="text-blue-700 hover:underline">
+                  Checklist {progressOf(cl.items).label}
+                </Link>
+              ))}
               {s.type === 'surgery' && (
                 <Link href={`/schedule?date=${s.date}`} className="text-blue-700 hover:underline">Schedule</Link>
               )}

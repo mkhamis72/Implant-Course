@@ -5,16 +5,9 @@ import { formatDate, formatTime } from '@/lib/format';
 import { gridPlacement, minutesOfDay, timeLabels } from '@/lib/schedule/time';
 import { assignLanes, dayColumns } from '@/lib/schedule/grid';
 import type { Chair, SlotRow } from '@/lib/schedule/types';
+import { SLOT_SELECT } from '@/lib/schedule/queries';
+import { progressOf } from '@/lib/checklists/format';
 import { CancelBooking } from './cancel-booking';
-
-const SLOT_SELECT = `
-  id, starts_at, ends_at, status, override_reason, cancel_reason, chair_id,
-  patient:patients(id, full_name, file_no),
-  supervisor:profiles!surgery_slots_supervisor_id_fkey(full_name, email),
-  session:sessions(title, course:courses(name)),
-  delegates:slot_delegates(role, delegate:delegates(full_name)),
-  implants:slot_planned_implants(tooth, product:products(*))
-`;
 
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const { date: raw } = await searchParams;
@@ -96,6 +89,11 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                   <div>Supervisor: {b.supervisor?.full_name || b.supervisor?.email}</div>
                   {placing && <div>Placing: {placing}</div>}
                   {assisting && <div>Assisting: {assisting}</div>}
+                  {b.checklists.map((cl) => (
+                    <Link key={cl.id} href={`/checklists/${cl.id}`} className="block text-blue-800 hover:underline">
+                      Checklist {progressOf(cl.items).label}
+                    </Link>
+                  ))}
                   {b.override_reason && <div className="text-amber-800 no-underline">Overridden: {b.override_reason}</div>}
                   {b.status === 'cancelled' && <div className="no-underline">Cancelled: {b.cancel_reason}</div>}
                   {b.status === 'scheduled' && <CancelBooking slotId={b.id} />}

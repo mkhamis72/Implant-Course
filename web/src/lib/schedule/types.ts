@@ -24,6 +24,7 @@ export type SlotRow = {
   session: { title: string; course: { name: string } | null } | null;
   delegates: { role: 'placing' | 'assisting'; delegate: { full_name: string } | null }[];
   implants: { tooth: number; product: Product | null }[];
+  checklists: { id: string; items: { done_at: string | null }[] }[];
 };
 
 export type PullRow = Pick<Product, 'type' | 'brand' | 'system' | 'platform' | 'diameter_mm' | 'length_mm' | 'description'> & {
