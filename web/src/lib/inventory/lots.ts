@@ -1,10 +1,10 @@
 import { addDays } from '@/lib/dates';
 import type { LotOnHand } from './types';
 
-/** Batches that can be used today for this product: in stock, not expired; soonest expiry first, no expiry last. */
-export function availableLots(lots: readonly LotOnHand[], productId: string, today: string): LotOnHand[] {
+/** Batches of this product usable on the given day: in stock, not expired; soonest expiry first, no expiry last. */
+export function availableLots(lots: readonly LotOnHand[], productId: string, usedOn: string): LotOnHand[] {
   return lots
-    .filter((l) => l.product_id === productId && l.on_hand > 0 && !(l.expiry && l.expiry < today))
+    .filter((l) => l.product_id === productId && l.on_hand > 0 && !(l.expiry && l.expiry < usedOn))
     .sort((a, b) => {
       if (a.expiry !== b.expiry) {
         if (!a.expiry) return 1;

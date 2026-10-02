@@ -52,8 +52,16 @@ function Footer({ error, pending, saveLabel, onCancel }: { error: string | null;
   );
 }
 
-function BatchSelect({ data, productId, value, onChange }: { data: ChartData; productId: string; value: string; onChange: (v: string) => void }) {
-  const lots = productId ? availableLots(data.lots, productId, data.today) : [];
+/** The chosen batch, or '' if it can't be used on that date (e.g. the date moved past its expiry). */
+function keepIfUsable(data: ChartData, productId: string, lotId: string, usedOn: string): string {
+  return availableLots(data.lots, productId, usedOn).some((l) => l.stock_lot_id === lotId) ? lotId : '';
+}
+
+/** Batches are offered by whether they were in date on the day of use, not on today's date. */
+function BatchSelect({ data, productId, usedOn, value, onChange }: {
+  data: ChartData; productId: string; usedOn: string; value: string; onChange: (v: string) => void;
+}) {
+  const lots = productId ? availableLots(data.lots, productId, usedOn || data.today) : [];
   if (productId && lots.length === 0) {
     return (
       <p className="text-sm text-amber-900">
@@ -116,7 +124,13 @@ export function PlaceForm({
     placingDelegateId: placingFromSlot, assistingDelegateId: assistingFromSlot,
     supervisorId: slot?.supervisor_id ?? data.me, torque: '', graft: '', notes: '',
   });
-  const set = (key: keyof typeof v) => (value: string) => setV((cur) => ({ ...cur, [key]: value, ...(key === 'productId' ? { lotId: '' } : {}) }));
+  const set = (key: keyof typeof v) => (value: string) =>
+    setV((cur) => ({
+      ...cur,
+      [key]: value,
+      ...(key === 'productId' ? { lotId: '' } : {}),
+      ...(key === 'placedOn' ? { lotId: keepIfUsable(data, cur.productId, cur.lotId, value) } : {}),
+    }));
   const { error, pending, submit } = useSubmit(placeImplant, onDone);
   return (
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, slotId: slot?.id ?? '', ...v }); }}>
@@ -126,7 +140,7 @@ export function PlaceForm({
           {data.implants.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
         </select>
       </Field>
-      <BatchSelect data={data} productId={v.productId} value={v.lotId} onChange={set('lotId')} />
+      <BatchSelect data={data} productId={v.productId} usedOn={v.placedOn} value={v.lotId} onChange={set('lotId')} />
       <Field label="Placement date">
         <input className="input" type="date" value={v.placedOn} onChange={(e) => set('placedOn')(e.target.value)} />
       </Field>
@@ -173,6 +187,7 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
       [key]: value,
       ...(key === 'componentType' ? { productId: '', lotId: '' } : {}),
       ...(key === 'productId' ? { lotId: '' } : {}),
+      ...(key === 'fittedOn' ? { lotId: keepIfUsable(data, cur.productId, cur.lotId, value) } : {}),
     }));
   const products = data.componentProducts.filter((p) => acceptsProduct(v.componentType, p.type));
   const { error, pending, submit } = useSubmit(fitComponent, onDone);
@@ -189,7 +204,7 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
           {products.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
         </select>
       </Field>
-      {v.productId && <BatchSelect data={data} productId={v.productId} value={v.lotId} onChange={set('lotId')} />}
+      {v.productId && <BatchSelect data={data} productId={v.productId} usedOn={v.fittedOn} value={v.lotId} onChange={set('lotId')} />}
       <Field label="Fitted on">
         <input className="input" type="date" value={v.fittedOn} onChange={(e) => set('fittedOn')(e.target.value)} />
       </Field>

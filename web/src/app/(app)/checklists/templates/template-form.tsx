@@ -21,7 +21,13 @@ export function TemplateForm({ template }: { template?: Template }) {
         </label>
         <label className="block">
           <span className="label">Used for</span>
-          <select className="input" name="applies_to" value={scope} onChange={(e) => setScope(e.target.value as ChecklistScope)}>
+          {/* Uncontrolled, so React's form reset after saving keeps the saved choice; state only drives the checkbox. */}
+          <select
+            className="input"
+            name="applies_to"
+            defaultValue={valueOf(state, 'applies_to', template?.applies_to ?? 'general')}
+            onChange={(e) => setScope(e.target.value as ChecklistScope)}
+          >
             {SCOPES.map((s) => <option key={s} value={s}>{SCOPE_LABELS[s]}</option>)}
           </select>
         </label>
