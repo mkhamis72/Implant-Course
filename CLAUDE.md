@@ -43,7 +43,16 @@ Releases (`.github/workflows/release.yml`) migrate production *before* the new c
 
 **App layout:** `src/app/(app)/` is the signed-in area; its `layout.tsx` redirects to `/login` or `/deactivated`. Because pages render in parallel with layouts, pages and every server action must call `requireActiveUser()` / `requireAdmin()` (`src/lib/auth/session.ts`) themselves. `searchParams` are read with `readParams()` (`src/lib/search-params.ts`), which tolerates repeated params. Domain logic (parsing, labels, schemas, pure helpers) lives in `src/lib/<domain>/` with colocated tests; route folders hold pages, client forms and `actions.ts`.
 
+**Security headers:** `next.config.ts` applies `securityHeaders()` (`src/lib/security-headers.ts`) to every route — a CSP allowing only this site and the Supabase project. Any new external origin (script, image, API) must be added there or the browser blocks it.
+
 **Styling:** design tokens live in `src/app/globals.css` (`@theme`). Use the named colours (`text-muted`, `border-line`, `text-accent`, `bg-ok-soft`, `text-bad` …), not raw Tailwind palette colours, and the shared classes `.btn`/`.btn-secondary`/`.btn-danger`, `.input`, `.label`, `.card`, `.badge(-ok|-warn|-bad)`, `.rule(-ok|-warn|-bad|-accent)`, `.page-header`, `.tabs`/`.tab` (or `SectionNav`). Data tables use `className="table"` with `data-label` on every `<td>` so they stack on phones.
+
+## Production
+
+Runbook: `docs/operations.md` (provisioning, accounts, releases, backup/restore); go-live checklist: `docs/go-live.md`.
+- Pilot on Supabase Free (Frankfurt) + Vercel Hobby (`fra1`, `web/vercel.json`). Merging to `master` runs `.github/workflows/release.yml`: checks + `next build` → migrate prod → Vercel deploy hook (Vercel's own git deploys are off). `backup.yml` takes a nightly encrypted data-only dump; `mode=verify` checks it. `web/scripts/workflows.test.ts` pins these workflows' safety properties — keep it green when editing them.
+- Pilot switches (Vercel env): `EMAIL_ENABLED=false` replaces invites with `create-user` (no SMTP yet); `NEXT_PUBLIC_PILOT=1` shows the pilot banner (`src/lib/flags.ts`).
+- Scripts target prod with `ENV_FILE=.env.prod` (`scripts/env-file.ts`); every script prints `Target project: <host>` first. Never name a prod env file `.env.production*` — Next.js would load it automatically. `npm run catalog-export` writes the product catalog to CSV.
 
 ## Tests
 
