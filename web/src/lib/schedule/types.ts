@@ -19,6 +19,7 @@ export type SlotRow = {
   override_reason: string;
   cancel_reason: string;
   chair_id: string;
+  chair: { name: string } | null;
   patient: { id: string; full_name: string; file_no: string } | null;
   supervisor: { full_name: string; email: string } | null;
   session: { title: string; course: { name: string } | null } | null;

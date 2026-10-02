@@ -61,9 +61,15 @@ test('warns about a clash and books only with a reason', async ({ page }) => {
 
   await createPatientViaUi(page, { full_name: uniqueName('Second'), file_no: `E2E-S${Date.now()}` });
   const second = (await page.getByTestId('patient-header').innerText()).match(/File (\S+)/)![1];
-  await fillBooking(page, w, second, '09:30', '10:30');
+  await fillBooking(page, w, second.toLowerCase(), '09:30', '10:30');
   await page.getByRole('button', { name: 'Book surgery' }).click();
   const warnings = page.getByTestId('clash-warnings');
+  await expect(warnings).toBeVisible();
+  // Warnings belong to the times they were checked for.
+  await page.getByLabel('Start').fill('09:45');
+  await expect(warnings).toBeHidden();
+  await page.getByLabel('Start').fill('09:30');
+  await page.getByRole('button', { name: 'Book surgery' }).click();
   await expect(warnings).toContainText(`${w.chair} is already booked 09:00–10:00`);
   await expect(warnings).toContainText(`${w.placing} is already booked 09:00–10:00`);
   await page.getByLabel('Reason to book anyway').fill('Two surgeons share the chair');

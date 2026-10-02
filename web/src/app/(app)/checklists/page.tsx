@@ -5,6 +5,7 @@ import { formatDate, formatDateTime } from '@/lib/format';
 import { progressOf } from '@/lib/checklists/format';
 import type { ChecklistSummary } from '@/lib/checklists/types';
 import { NewChecklistForm } from './new-checklist-form';
+import { readParams, type PageSearchParams } from '@/lib/search-params';
 
 const SUMMARY_SELECT = `
   id, title,
@@ -19,8 +20,8 @@ function attachedTo(c: ChecklistSummary): string {
   return 'Standalone';
 }
 
-export default async function ChecklistsPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
-  const { view = 'open' } = await searchParams;
+export default async function ChecklistsPage({ searchParams }: { searchParams: PageSearchParams }) {
+  const view = (await readParams(searchParams, 'view')).view || 'open';
   const supabase = await createClient();
   const me = await getCurrentProfile();
   const [{ data: lists, error }, { data: templates }, { data: mine }] = await Promise.all([

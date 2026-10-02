@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requireActiveUser } from '@/lib/auth/session';
 import { toothStatusSchema } from '@/lib/patients/schemas';
-import { isManualState } from '@/lib/patients/types';
+import { canSetByHand } from '@/lib/patients/types';
 
 export async function setToothStatus(input: { patientId: string; teeth: number[]; status: string }): Promise<{ error?: string }> {
   await requireActiveUser();
@@ -21,7 +21,7 @@ export async function setToothStatus(input: { patientId: string; teeth: number[]
   if (readError) return { error: 'The chart could not be loaded. Please try again.' };
 
   const currentByTooth = new Map((current ?? []).map((row) => [row.tooth as number, row.status as string]));
-  const locked = teeth.filter((t) => !isManualState(currentByTooth.get(t) ?? 'present'));
+  const locked = teeth.filter((t) => !canSetByHand(currentByTooth.get(t) ?? 'present'));
   if (locked.length) return { error: `Teeth ${locked.join(', ')} have implant records and can't be changed here.` };
 
   const rows = teeth

@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { mapAuthError } from '@/lib/auth/errors';
+import { readParams, type PageSearchParams } from '@/lib/search-params';
 
-export default async function AuthErrorPage({ searchParams }: { searchParams: Promise<{ code?: string }> }) {
-  const { code } = await searchParams;
+export default async function AuthErrorPage({ searchParams }: { searchParams: PageSearchParams }) {
+  const code = (await readParams(searchParams, 'code')).code || undefined;
   return (
     <main className="mx-auto mt-24 max-w-md">
       <div className="card space-y-4">

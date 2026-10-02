@@ -83,7 +83,7 @@ export default async function LotPage({ params }: { params: Promise<{ id: string
                 <th className="pb-2">Patient</th>
                 <th className="pb-2">Tooth</th>
                 <th className="pb-2">Item</th>
-                <th className="pb-2">Placed by</th>
+                <th className="pb-2">Placed / fitted by</th>
                 <th className="pb-2">Supervisor</th>
               </tr>
             </thead>

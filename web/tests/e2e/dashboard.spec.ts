@@ -39,7 +39,7 @@ test('dashboard shows today, shortages, stock alerts and my items', async ({ pag
   await api.from('checklist_items').update({ assignee_id: me }).eq('id', item!.id);
 
   await page.getByRole('link', { name: 'Dashboard' }).click();
-  await expect(page.getByTestId('dash-surgery').filter({ hasText: patientName })).toContainText(chairName);
+  await expect(page.getByTestId('dash-chair').filter({ hasText: chairName }).getByTestId('dash-surgery')).toContainText(patientName);
   await expect(page.getByTestId('dash-shortage').filter({ hasText: lowBrand })).toContainText('need 2, have 1');
   await expect(page.getByTestId('dash-low').filter({ hasText: lowBrand })).toBeVisible();
   await expect(page.getByTestId('dash-expiring').filter({ hasText: lowBrand })).toBeVisible();

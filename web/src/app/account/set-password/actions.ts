@@ -3,10 +3,12 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { mapAuthError } from '@/lib/auth/errors';
+import { requireActiveUser } from '@/lib/auth/session';
 
 export type SetPasswordState = { error?: string };
 
 export async function setPassword(_prev: SetPasswordState, formData: FormData): Promise<SetPasswordState> {
+  await requireActiveUser();
   const password = String(formData.get('password') ?? '');
   const confirm = String(formData.get('confirm') ?? '');
   if (password.length < 10) return { error: 'Use at least 10 characters.' };

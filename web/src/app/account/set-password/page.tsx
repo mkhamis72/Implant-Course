@@ -1,6 +1,8 @@
+import { requireActiveUser } from '@/lib/auth/session';
 import { SetPasswordForm } from './form';
 
-export default function SetPasswordPage() {
+export default async function SetPasswordPage() {
+  await requireActiveUser();
   return (
     <main className="mx-auto mt-24 max-w-sm">
       <div className="card space-y-4">

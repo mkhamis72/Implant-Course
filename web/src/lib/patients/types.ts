@@ -11,6 +11,11 @@ export function isManualState(state: string): state is ManualState {
   return (MANUAL_STATES as readonly string[]).includes(state);
 }
 
+/** A tooth whose implant failed can be set to a manual state (e.g. missing); active implant states cannot. */
+export function canSetByHand(state: string): boolean {
+  return isManualState(state) || state === 'failed';
+}
+
 export const STATE_LABELS: Record<ToothState, string> = {
   present: 'Present',
   missing: 'Missing',

@@ -93,3 +93,28 @@ test('pasting nothing is refused with a clear message', async ({ page }) => {
   await page.getByRole('button', { name: 'Create checklist' }).click();
   await expect(page.getByRole('main').getByRole('alert')).toHaveText('Add at least one item (one per line) or choose a template.');
 });
+
+test('General templates cannot attach automatically; deleting a template asks first', async ({ page }) => {
+  await login(page, TEST_USERS.organizer.email);
+  await page.goto('/checklists/templates/new');
+  const auto = page.getByLabel('Attach automatically to every new session / booking of this kind');
+  const usedFor = page.getByRole('combobox', { name: 'Used for', exact: true });
+  await usedFor.selectOption('general');
+  await expect(auto).toBeHidden();
+  await usedFor.selectOption('workshop');
+  await expect(auto).toBeVisible();
+
+  const name = uniqueName('Delete me');
+  await page.getByLabel('Template name').fill(name);
+  await page.getByLabel('Items (one per line)').fill('One thing');
+  await page.getByRole('button', { name: 'Save template' }).click();
+  await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Delete template' }).click();
+  await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Delete template' }).click();
+  await page.getByRole('button', { name: 'Yes, delete' }).click();
+  await expect(page).toHaveURL(/\/checklists\/templates$/);
+  await expect(page.getByText(name)).toHaveCount(0);
+});

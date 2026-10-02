@@ -47,3 +47,22 @@ describe('describeChange — implants', () => {
     ).toBe('Implant on tooth 36: Planned → Placed');
   });
 });
+
+describe('describeChange for implant follow-up records', () => {
+  it('describes fitted and voided components', () => {
+    expect(describeChange(entry({ table_name: 'site_components', action: 'INSERT', after: { component_type: 'healing_abutment', voided_at: null } })))
+      .toBe('Component fitted: Healing abutment');
+    expect(describeChange(entry({
+      table_name: 'site_components', before: { component_type: 'ti_base', voided_at: null },
+      after: { component_type: 'ti_base', voided_at: '2026-10-01', voided_reason: 'Wrong entry' },
+    }))).toBe('Component removed from the record: Ti-base (Wrong entry)');
+  });
+  it('describes recorded and voided follow-ups', () => {
+    expect(describeChange(entry({ table_name: 'implant_followups', action: 'INSERT', after: { check_type: 'Review', outcome: 'integrated', voided_at: null } })))
+      .toBe('Follow-up (Review): Integrated');
+    expect(describeChange(entry({
+      table_name: 'implant_followups', before: { check_type: 'Review', outcome: 'failed', voided_at: null },
+      after: { check_type: 'Review', outcome: 'failed', voided_at: '2026-10-01', voided_reason: 'Typo' },
+    }))).toBe('Follow-up removed from the record: Review (Typo)');
+  });
+});

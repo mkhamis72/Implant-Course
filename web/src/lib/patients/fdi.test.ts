@@ -30,3 +30,11 @@ describe('parseTeeth', () => {
     expect((result as { error: string }).error).toMatch(/is not a tooth number\. Use FDI numbers 11–48/);
   });
 });
+
+describe('parseTeeth with Arabic input', () => {
+  it('accepts the Arabic comma and Arabic-Indic or Eastern digits', () => {
+    expect(parseTeeth('36، 46')).toEqual({ teeth: [36, 46] });
+    expect(parseTeeth('٣٦ ٤٦')).toEqual({ teeth: [36, 46] });
+    expect(parseTeeth('۳۶')).toEqual({ teeth: [36] });
+  });
+});

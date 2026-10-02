@@ -97,6 +97,9 @@ export function ItemRow({ item, checklistId, organizers, first, last }: {
           </label>
           <select className="input py-1" aria-label="Assigned to" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
             <option value="">Nobody</option>
+            {item.assignee_id && item.assignee && !organizers.some((o) => o.id === item.assignee_id) && (
+              <option value={item.assignee_id}>{item.assignee.full_name || item.assignee.email} (inactive)</option>
+            )}
             {organizers.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>
           <input className="input py-1" type="date" aria-label="Due date" value={due} onChange={(e) => setDue(e.target.value)} />

@@ -6,6 +6,7 @@ import { requireActiveUser } from '@/lib/auth/session';
 import { cancelSlotSchema, slotSchema } from '@/lib/schedule/schemas';
 import type { FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
+import { escapeLike } from '@/lib/like';
 
 type BookResult = { error?: string; warnings?: string[]; slotId?: string; date?: string };
 
@@ -16,7 +17,9 @@ export async function bookSurgery(input: Record<string, unknown>): Promise<BookR
   const s = parsed.data;
   const supabase = await createClient();
 
-  const { data: patient } = await supabase.from('patients').select('id').eq('file_no', s.patientFileNo).maybeSingle();
+  // File numbers are matched without regard to case; an exact match wins if two differ only by case.
+  const { data: matches } = await supabase.from('patients').select('id, file_no').ilike('file_no', escapeLike(s.patientFileNo)).limit(2);
+  const patient = matches?.find((m) => m.file_no === s.patientFileNo) ?? (matches?.length === 1 ? matches[0] : null);
   if (!patient) return { error: `No patient has file number ${s.patientFileNo}. Choose a patient from the list.` };
   const { data: session } = await supabase.from('sessions').select('date').eq('id', s.sessionId).maybeSingle();
   if (!session) return { error: 'Choose a surgery session.' };
