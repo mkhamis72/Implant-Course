@@ -48,6 +48,9 @@ jobs:
           PROD_DATABASE_CA_CERT: ${{ secrets.PROD_DATABASE_CA_CERT }}
         run: |
           set -euo pipefail
+          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+          DATABASE_URL="$(clean "$DATABASE_URL")"
+          PROD_DATABASE_CA_CERT="$(clean "$PROD_DATABASE_CA_CERT")"
           test -n "$DATABASE_URL" || { echo "PROD_DATABASE_URL secret is missing"; exit 1; }
           test -n "$PROD_DATABASE_CA_CERT" || { echo "PROD_DATABASE_CA_CERT secret is missing"; exit 1; }
           printf '%s\n' "$PROD_DATABASE_CA_CERT" > "$RUNNER_TEMP/prod-ca.crt"
@@ -57,6 +60,8 @@ jobs:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
         run: |
           set -euo pipefail
+          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+          HOOK="$(clean "$HOOK")"
           test -n "$HOOK" || { echo "VERCEL_DEPLOY_HOOK_URL secret is missing"; exit 1; }
           # The hook builds master's tip. If master has moved on, that newer commit's own release run
           # migrates first and then deploys; deploying now would ship its code before its migration.
