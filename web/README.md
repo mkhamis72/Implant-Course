@@ -9,7 +9,7 @@ Spec: `../docs/superpowers/specs/2026-10-01-implant-course-manager-design.md`
    URI (the direct `db.<ref>.supabase.co` host is IPv6-only).
 3. `npm install`
 4. `npm run db:migrate`
-5. `npm run create-admin -- you@example.com "Your Name"` — prints a temporary password.
+5. `npm run create-user -- you@example.com "Your Name" --role admin` — prints a temporary password (re-run to reset it).
 6. `npm run dev` → http://localhost:3000
 
 ## Tests

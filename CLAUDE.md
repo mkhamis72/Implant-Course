@@ -19,7 +19,7 @@ npm run test:db -- friction # single DB test file
 npm run test:e2e            # Playwright, 1 worker, starts/reuses the dev server (~12 min full run)
 npx playwright test schedule -g "clash"   # single spec / test
 npm run db:migrate          # apply supabase/migrations/*.sql not yet in app_private.schema_migrations
-npm run create-admin -- you@example.com "Name"
+npm run create-user -- you@example.com "Name" [--role admin]   # prints a temporary password; ENV_FILE=.env.production.local targets prod
 ```
 
 There is no local Supabase: DB and E2E tests hit the hosted **dev** project configured in `web/.env.local` (never print its contents). Test fixtures refuse to run unless `ALLOW_TEST_FIXTURES=1` and the URLs match `TEST_SUPABASE_PROJECT_REF` (`scripts/test-guard.ts`). `scripts/db.ts` `pgConfig()` requires `DATABASE_CA_CERT` except on that dev project. `DATABASE_URL` must be the Session pooler URI.
