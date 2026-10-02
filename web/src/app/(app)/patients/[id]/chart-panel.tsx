@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import { Odontogram } from '@/components/odontogram/odontogram';
 import { Legend } from '@/components/odontogram/legend';
-import { MANUAL_STATES, STATE_LABELS, isManualState, type ManualState, type ToothState } from '@/lib/patients/types';
+import { MANUAL_STATES, STATE_LABELS, canSetByHand, type ManualState, type ToothState } from '@/lib/patients/types';
 import { badgesFor } from '@/lib/inventory/components';
 import type { ChartData } from '@/lib/inventory/types';
 import { setToothStatus } from './chart-actions';
@@ -40,7 +40,7 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
   }
 
   const statusOf = (t: number): ToothState => statuses[t] ?? 'present';
-  const locked = selected.filter((t) => !isManualState(statusOf(t)));
+  const locked = selected.filter((t) => !canSetByHand(statusOf(t)));
 
   return (
     <div className="flex flex-col gap-4 xl:flex-row">

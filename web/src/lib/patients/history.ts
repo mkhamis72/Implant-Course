@@ -1,4 +1,6 @@
-import { SITE_STATE_LABELS, type SiteState } from '@/lib/inventory/types';
+import {
+  COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, type ComponentType, type FollowupOutcome, type SiteState,
+} from '@/lib/inventory/types';
 import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
 
 const FIELD_LABELS: Record<string, string> = {
@@ -46,6 +48,18 @@ export function describeChange(e: HistoryEntry): string {
       if (e.action === 'INSERT' || !e.before) return `Implant on tooth ${tooth}: ${label(e.after?.state)}`;
       if (e.before.state === e.after?.state) return `Implant on tooth ${tooth} updated`;
       return `Implant on tooth ${tooth}: ${label(e.before.state)} → ${label(e.after?.state)}`;
+    }
+    case 'site_components': {
+      const row = e.after ?? e.before;
+      const label = COMPONENT_LABELS[row?.component_type as ComponentType] ?? String(row?.component_type);
+      if (e.after?.voided_at && !e.before?.voided_at) return `Component removed from the record: ${label} (${e.after.voided_reason})`;
+      return e.action === 'INSERT' ? `Component fitted: ${label}` : `Component updated: ${label}`;
+    }
+    case 'implant_followups': {
+      const row = e.after ?? e.before;
+      if (e.after?.voided_at && !e.before?.voided_at) return `Follow-up removed from the record: ${row?.check_type} (${e.after.voided_reason})`;
+      const outcome = OUTCOME_LABELS[row?.outcome as FollowupOutcome] ?? String(row?.outcome);
+      return e.action === 'INSERT' ? `Follow-up (${row?.check_type}): ${outcome}` : `Follow-up updated (${row?.check_type})`;
     }
     default:
       return `${e.table_name} ${e.action.toLowerCase()}`;
