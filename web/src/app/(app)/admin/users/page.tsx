@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getCurrentProfile, type Profile } from '@/lib/auth/session';
 import { InviteForm } from './invite-form';
 import { UserRow } from './user-row';
+import { EMAIL_OFF_MESSAGE, emailEnabled } from '@/lib/flags';
 
 export default async function UsersPage() {
   const me = await getCurrentProfile();
@@ -15,7 +16,11 @@ export default async function UsersPage() {
   return (
     <div className="space-y-6">
       <h1>Users</h1>
-      <InviteForm />
+      {emailEnabled() ? (
+        <InviteForm />
+      ) : (
+        <p data-testid="email-off" className="card rule rule-warn text-sm">{EMAIL_OFF_MESSAGE}</p>
+      )}
       <div className="card overflow-x-auto">
         <table className="table">
           <thead>

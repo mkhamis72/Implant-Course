@@ -8,9 +8,11 @@ import { mapAuthError } from '@/lib/auth/errors';
 import { serverEnv } from '@/lib/env';
 import { inviteSchema, setActiveSchema, setRoleSchema, type ActionState } from '@/lib/admin/schemas';
 import { updateProblem } from '@/lib/admin/results';
+import { EMAIL_OFF_MESSAGE, emailEnabled } from '@/lib/flags';
 
 export async function inviteUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireAdmin();
+  if (!emailEnabled()) return { error: EMAIL_OFF_MESSAGE };
   const parsed = inviteSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { email, full_name, role } = parsed.data;
