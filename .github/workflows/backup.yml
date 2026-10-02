@@ -40,6 +40,10 @@ jobs:
           PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           set -euo pipefail
+          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+          PASSPHRASE="$(clean "$PASSPHRASE")"
+          DATABASE_URL="$(clean "$DATABASE_URL")"
+          CA="$(clean "$CA")"
           test -n "$PASSPHRASE" || { echo "BACKUP_PASSPHRASE secret is missing: refusing to back up unencrypted"; exit 1; }
           test -n "$DATABASE_URL" && test -n "$CA" || { echo "Database secrets are missing"; exit 1; }
           printf '%s\n' "$CA" > "$RUNNER_TEMP/ca.crt"
@@ -63,6 +67,10 @@ jobs:
           URL: ${{ secrets.PROD_SUPABASE_URL }}
           ANON: ${{ secrets.PROD_SUPABASE_ANON_KEY }}
         run: |
+          set -euo pipefail
+          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+          URL="$(clean "$URL")"
+          ANON="$(clean "$ANON")"
           curl --fail --silent --show-error "$URL/auth/v1/health" -H "apikey: $ANON" -o /dev/null
 
   verify:
@@ -94,6 +102,8 @@ jobs:
           PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           set -euo pipefail
+          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+          PASSPHRASE="$(clean "$PASSPHRASE")"
           f=$(ls in/*.dump.gpg | head -1)
           gpg --batch --pinentry-mode loopback --decrypt --passphrase-fd 3 3<<<"$PASSPHRASE" "$f" > "$RUNNER_TEMP/check.dump"
           "$PG_BIN/pg_restore" --list "$RUNNER_TEMP/check.dump" > "$RUNNER_TEMP/list.txt"

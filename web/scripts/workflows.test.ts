@@ -30,6 +30,27 @@ describe('release.yml', () => {
   });
 });
 
+// Secrets pasted on Windows can carry a trailing CR/LF; every step strips it before use
+// (a CR in the hook URL breaks curl; in the passphrase it would silently change the key).
+const CLEAN = `clean() { printf '%s' "$1" | tr -d '\\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }`;
+const cleans = (run: string, name: string) => run.includes(CLEAN) && run.includes(`${name}="$(clean "$${name}")"`);
+
+describe('secrets are cleaned of stray line endings before use', () => {
+  const release = load('release.yml').jobs['migrate-and-deploy'];
+  const backup = load('backup.yml').jobs;
+  it('release: database URL, CA certificate and deploy hook', () => {
+    expect(cleans(runOf(release, 'Migrate'), 'DATABASE_URL')).toBe(true);
+    expect(cleans(runOf(release, 'Migrate'), 'PROD_DATABASE_CA_CERT')).toBe(true);
+    expect(cleans(runOf(release, 'Deploy'), 'HOOK')).toBe(true);
+  });
+  it('backup and verify: passphrase, database URL, CA certificate and REST keys', () => {
+    const dump = runOf(backup.backup, 'Dump');
+    for (const n of ['PASSPHRASE', 'DATABASE_URL', 'CA']) expect(cleans(dump, n)).toBe(true);
+    for (const n of ['URL', 'ANON']) expect(cleans(runOf(backup.backup, 'Keep'), n)).toBe(true);
+    expect(cleans(runOf(backup.verify, 'Decrypt'), 'PASSPHRASE')).toBe(true);
+  });
+});
+
 describe('backup.yml', () => {
   const { jobs } = load('backup.yml');
   const dump = runOf(jobs.backup, 'Dump');
