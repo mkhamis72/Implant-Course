@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import type { Template } from '@/lib/checklists/types';
 import { TemplateForm } from '../template-form';
-import { deleteTemplate } from '../../actions';
+import { DeleteTemplate } from './delete-template';
 
 export default async function TemplatePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,10 +24,7 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
         {t.items.map((i) => <li key={i.position} data-testid="template-item">{i.text}</li>)}
       </ol>
       <TemplateForm key={t.items.map((i) => i.text).join('|')} template={t} />
-      <form action={deleteTemplate}>
-        <input type="hidden" name="id" value={t.id} />
-        <button className="text-sm text-red-700 hover:underline">Delete template</button>
-      </form>
+      <DeleteTemplate id={t.id} />
     </div>
   );
 }

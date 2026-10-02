@@ -21,3 +21,12 @@ describe('parseChecklistText', () => {
     expect(parseChecklistText('-\n* \n[ ]\nReal')).toEqual(['Real']);
   });
 });
+
+describe('parseChecklistText edge cases', () => {
+  it('drops lines that are only a number marker', () => {
+    expect(parseChecklistText('1.\nSterile gloves\n2)')).toEqual(['Sterile gloves']);
+  });
+  it('ignores zero-width characters and splits on old Mac line breaks', () => {
+    expect(parseChecklistText('​\nGowns​\rMasks﻿')).toEqual(['Gowns', 'Masks']);
+  });
+});

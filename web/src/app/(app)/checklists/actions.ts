@@ -26,10 +26,14 @@ export async function saveTemplate(_prev: FormState, formData: FormData): Promis
   return { ok: 'Template saved.' };
 }
 
-export async function deleteTemplate(formData: FormData): Promise<void> {
+export async function deleteTemplate(_prev: Result, formData: FormData): Promise<Result> {
   await requireActiveUser();
   const supabase = await createClient();
-  await supabase.from('checklist_templates').delete().eq('id', String(formData.get('id') ?? ''));
+  const { data, error } = await supabase.from('checklist_templates').delete().eq('id', String(formData.get('id') ?? '')).select('id');
+  if (error || !data?.length) {
+    if (error) console.error('Template delete failed:', error.message);
+    return { error: 'The template could not be deleted. Reload the page and try again.' };
+  }
   revalidatePath('/checklists/templates');
   redirect('/checklists/templates');
 }

@@ -23,3 +23,13 @@ describe('<ItemRow> edit form (I3)', () => {
     expect(screen.getByLabelText('Due date')).toHaveValue('2031-01-15');
   });
 });
+
+describe('<ItemRow> inactive assignee', () => {
+  it('keeps an assignee who is no longer active, labelled "(inactive)"', () => {
+    const item = { ...base, assignee_id: 'gone', assignee: { full_name: 'Dr Gone', email: 'g@x' } };
+    render(<ul><ItemRow item={item} checklistId="c1" organizers={organizers} first last /></ul>);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('combobox', { name: 'Assigned to' })).toHaveValue('gone');
+    expect(screen.getByRole('option', { name: 'Dr Gone (inactive)' })).toBeInTheDocument();
+  });
+});
