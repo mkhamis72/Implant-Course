@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requireActiveUser } from '@/lib/auth/session';
 import { componentSchema, followupSchema, placeSchema, planSchema } from '@/lib/inventory/schemas';
 import { userMessage } from '@/lib/db-errors';
+import { correctionSchema, voidSchema } from '@/lib/schedule/schemas';
 
 type Result = { error?: string };
 
@@ -79,4 +80,28 @@ export async function recordFollowup(input: Record<string, unknown>): Promise<Re
     p_outcome: f.outcome,
     p_notes: f.notes,
   });
+}
+
+export async function correctBatch(input: Record<string, unknown>): Promise<Result> {
+  await requireActiveUser();
+  const parsed = correctionSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const c = parsed.data;
+  return run(c.patientId, 'correct_batch', {
+    p_site: c.siteId, p_new_lot: c.newLotId, p_reason: c.reason, p_component: c.componentId, p_new_product: c.newProductId,
+  });
+}
+
+export async function voidFollowup(input: Record<string, unknown>): Promise<Result> {
+  await requireActiveUser();
+  const parsed = voidSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  return run(parsed.data.patientId, 'void_followup', { p_followup: parsed.data.id, p_reason: parsed.data.reason });
+}
+
+export async function voidComponent(input: Record<string, unknown>): Promise<Result> {
+  await requireActiveUser();
+  const parsed = voidSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  return run(parsed.data.patientId, 'void_component', { p_component: parsed.data.id, p_reason: parsed.data.reason });
 }
