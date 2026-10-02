@@ -10,12 +10,13 @@ export type ToothVisual = {
 };
 
 export const COLORS = {
-  ink: '#334155',
-  muted: '#94a3b8',
-  faint: '#f1f5f9',
-  planned: '#2563eb',
-  restored: '#0369a1',
-  failed: '#dc2626',
+  ink: '#3d4f55',
+  muted: '#9aa9ad',
+  faint: '#eef3f1',
+  planned: '#b86b0a', // warn
+  restored: '#0f766e', // accent
+  placed: '#1d6b3a', // ok
+  failed: '#b42318', // bad
 } as const;
 
 export function toothVisual(status: ToothState): ToothVisual {
@@ -31,8 +32,8 @@ export function toothVisual(status: ToothState): ToothVisual {
     case 'implant_placed':
       return { crownFill: COLORS.faint, stroke: COLORS.muted, dashed: true, showRoots: false, glyph: 'fixture', fixture: 'placed' };
     case 'restored':
-      return { crownFill: '#e0f2fe', stroke: COLORS.restored, dashed: false, showRoots: false, glyph: 'fixture', fixture: 'placed' };
+      return { crownFill: '#e3f3f0', stroke: COLORS.restored, dashed: false, showRoots: false, glyph: 'fixture', fixture: 'placed' };
     case 'failed':
-      return { crownFill: '#fef2f2', stroke: COLORS.failed, dashed: true, showRoots: false, glyph: 'fixture', fixture: 'failed' };
+      return { crownFill: '#fdeceb', stroke: COLORS.failed, dashed: true, showRoots: false, glyph: 'fixture', fixture: 'failed' };
   }
 }

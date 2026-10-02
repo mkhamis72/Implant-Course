@@ -14,17 +14,17 @@ export default async function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Users</h1>
+      <h1>Users</h1>
       <InviteForm />
       <div className="card overflow-x-auto">
-        <table className="w-full text-left text-sm">
+        <table className="table">
           <thead>
-            <tr className="text-gray-500">
-              <th className="pb-2">Name</th>
-              <th className="pb-2">Email</th>
-              <th className="pb-2">Role</th>
-              <th className="pb-2">Status</th>
-              <th className="pb-2" />
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th />
             </tr>
           </thead>
           <tbody>

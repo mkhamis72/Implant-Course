@@ -19,7 +19,7 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
   t.items.sort((a, b) => a.position - b.position);
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">{t.name}</h1>
+      <h1>{t.name}</h1>
       <ol className="card list-decimal space-y-1 pl-8 text-sm">
         {t.items.map((i) => <li key={i.position} data-testid="template-item">{i.text}</li>)}
       </ol>

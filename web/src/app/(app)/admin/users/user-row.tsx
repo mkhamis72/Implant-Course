@@ -12,9 +12,9 @@ export function UserRow({ user, isSelf }: { user: Profile; isSelf: boolean }) {
   const isError = Boolean(roleState.error ?? activeState.error);
 
   return (
-    <tr data-testid={`user-row-${user.email}`} className="border-t border-gray-200 align-top">
+    <tr data-testid={`user-row-${user.email}`} className="border-t border-line align-top">
       <td className="py-2 pr-4">
-        {user.full_name || '—'} {isSelf && <span className="text-gray-500">(you)</span>}
+        {user.full_name || '—'} {isSelf && <span className="text-muted">(you)</span>}
       </td>
       <td className="py-2 pr-4">{user.email}</td>
       <td className="py-2 pr-4">
@@ -45,7 +45,7 @@ export function UserRow({ user, isSelf }: { user: Profile; isSelf: boolean }) {
           </form>
         )}
         {message && (
-          <p role={isError ? 'alert' : undefined} className={`mt-1 text-sm ${isError ? 'text-red-700' : 'text-green-800'}`}>
+          <p role={isError ? 'alert' : undefined} className={`mt-1 text-sm ${isError ? 'text-bad' : 'text-ok'}`}>
             {message}
           </p>
         )}

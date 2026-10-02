@@ -31,8 +31,8 @@ export function ItemRow({ item, checklistId, organizers, first, last }: {
   };
 
   return (
-    <li data-testid="checklist-item" className="space-y-1 border-t border-gray-100 py-3 first:border-t-0">
-      <div className="flex items-start gap-3">
+    <li data-testid="checklist-item" className={`rule space-y-1 border-t border-t-line py-3 first:border-t-0 ${done ? 'rule-ok' : 'border-l-transparent'}`}>
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
         <input
           type="checkbox"
           className="mt-0.5 h-6 w-6 shrink-0"
@@ -49,15 +49,15 @@ export function ItemRow({ item, checklistId, organizers, first, last }: {
             });
           }}
         />
-        <div className="flex-1">
-          <p className={done ? 'text-gray-500 line-through' : ''}>{item.text}</p>
-          <p className="text-xs text-gray-600">
-            {savedDone && done && item.done_at && <span className="mr-3 text-green-800">{doneLabel(who, item.done_at)}</span>}
+        <div className="min-w-0 flex-1">
+          <p className={done ? 'text-muted line-through' : ''}>{item.text}</p>
+          <p className="text-xs text-muted">
+            {savedDone && done && item.done_at && <span className="mr-3 text-ok">{doneLabel(who, item.done_at)}</span>}
             {item.assignee && <span className="mr-3">→ {item.assignee.full_name || item.assignee.email}</span>}
             {item.due_date && <span>due {formatDate(item.due_date)}</span>}
           </p>
         </div>
-        <div className="flex shrink-0 gap-1 text-xs">
+        <div className="flex w-full flex-wrap gap-1 pl-9 text-xs sm:w-auto sm:pl-0">
           <button className="btn-secondary btn px-2 py-0.5" disabled={first || pending} onClick={() => run(() => moveItem({ id: item.id, checklistId, direction: -1 }))}>
             Move up
           </button>
@@ -78,7 +78,7 @@ export function ItemRow({ item, checklistId, organizers, first, last }: {
           >
             Edit
           </button>
-          <button className="btn-secondary btn px-2 py-0.5 text-red-700" disabled={pending} onClick={() => run(() => deleteItem({ id: item.id, checklistId }))}>
+          <button className="btn-secondary btn px-2 py-0.5 text-bad" disabled={pending} onClick={() => run(() => deleteItem({ id: item.id, checklistId }))}>
             Delete
           </button>
         </div>
@@ -106,7 +106,7 @@ export function ItemRow({ item, checklistId, organizers, first, last }: {
           <button className="btn py-1 sm:col-span-4 sm:w-24" disabled={pending}>Save</button>
         </form>
       )}
-      {error && <p role="alert" className="ml-9 text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="ml-9 text-sm text-bad">{error}</p>}
     </li>
   );
 }

@@ -32,7 +32,7 @@ export default async function RecallPage({ searchParams }: { searchParams: PageS
   }
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Recall lookup</h1>
+      <h1>Recall lookup</h1>
       <form className="card flex flex-wrap items-end gap-4" role="search">
         <label className="block min-w-64 flex-1">
           <span className="label">Lot number</span>
@@ -43,17 +43,17 @@ export default async function RecallPage({ searchParams }: { searchParams: PageS
       {q && (
         <div className="card">
           {hits.length === 0 ? (
-            <p className="text-gray-600">No batch with a lot number containing “{q}”.</p>
+            <p className="text-muted">No batch with a lot number containing “{q}”.</p>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-line">
               {hits.map((h) => (
                 <li key={h.stock_lot_id} className="flex flex-wrap gap-x-6 py-2 text-sm">
-                  <Link href={`/inventory/lots/${h.stock_lot_id}`} className="font-medium text-blue-700 hover:underline">
+                  <Link href={`/inventory/lots/${h.stock_lot_id}`} className="font-medium text-accent hover:underline">
                     {h.lot_no}
                   </Link>
                   <span>{productLabel(h)}</span>
-                  <span className="text-gray-600">received {formatDate(h.received_on)}</span>
-                  <span className="text-gray-600">{h.on_hand} on hand</span>
+                  <span className="text-muted">received {formatDate(h.received_on)}</span>
+                  <span className="text-muted">{h.on_hand} on hand</span>
                 </li>
               ))}
             </ul>

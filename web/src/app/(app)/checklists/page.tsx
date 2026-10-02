@@ -42,7 +42,7 @@ export default async function ChecklistsPage({ searchParams }: { searchParams: P
     <Link
       href={`/checklists?view=${key}`}
       aria-current={view === key ? 'page' : undefined}
-      className={`border-b-2 px-3 py-2 text-sm ${view === key ? 'border-blue-700 font-medium text-blue-700' : 'border-transparent text-gray-600'}`}
+      className="tab"
     >
       {label}
     </Link>
@@ -50,31 +50,31 @@ export default async function ChecklistsPage({ searchParams }: { searchParams: P
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Checklists</h1>
-      <nav aria-label="Checklist views" className="flex gap-1 border-b border-gray-200">
+      <h1>Checklists</h1>
+      <nav aria-label="Checklist views" className="tabs">
         {tab('open', 'Open')}
         {tab('mine', 'Mine')}
         {tab('all', 'All')}
-        <Link href="/checklists/templates" className="border-b-2 border-transparent px-3 py-2 text-sm text-gray-600">Templates</Link>
+        <Link href="/checklists/templates" className="tab">Templates</Link>
       </nav>
       {view === 'mine' ? (
-        <ul className="card divide-y divide-gray-100">
-          {myItems.length === 0 && <li className="text-gray-600">Nothing assigned to you is open.</li>}
+        <ul className="card divide-y divide-line">
+          {myItems.length === 0 && <li className="text-muted">Nothing assigned to you is open.</li>}
           {myItems.map((i) => (
             <li key={i.id} data-testid="my-item" className="flex flex-wrap gap-x-6 py-2 text-sm">
               <span className="font-medium">{i.text}</span>
-              <Link href={`/checklists/${i.checklist.id}`} className="text-blue-700 hover:underline">{i.checklist.title}</Link>
-              {i.due_date && <span className="text-gray-600">due {formatDate(i.due_date)}</span>}
+              <Link href={`/checklists/${i.checklist.id}`} className="text-accent hover:underline">{i.checklist.title}</Link>
+              {i.due_date && <span className="text-muted">due {formatDate(i.due_date)}</span>}
             </li>
           ))}
         </ul>
       ) : (
-        <ul className="card divide-y divide-gray-100">
-          {shown.length === 0 && <li className="text-gray-600">No checklists here.</li>}
+        <ul className="card divide-y divide-line">
+          {shown.length === 0 && <li className="text-muted">No checklists here.</li>}
           {shown.map((c) => (
             <li key={c.id} className="flex flex-wrap gap-x-6 py-2 text-sm">
-              <Link href={`/checklists/${c.id}`} className="font-medium text-blue-700 hover:underline">{c.title}</Link>
-              <span className="text-gray-600">{attachedTo(c)}</span>
+              <Link href={`/checklists/${c.id}`} className="font-medium text-accent hover:underline">{c.title}</Link>
+              <span className="text-muted">{attachedTo(c)}</span>
               <span>{progressOf(c.items).label}</span>
             </li>
           ))}

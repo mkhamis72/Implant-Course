@@ -41,7 +41,7 @@ function Tooth({
       aria-pressed={selected}
       data-tooth={box.fdi}
       data-status={status}
-      className="cursor-pointer outline-none [&:focus-visible>rect]:stroke-blue-600"
+      className="cursor-pointer outline-none [&:focus-visible>rect]:stroke-accent"
       onClick={(e) => onSelect(box.fdi, additive(e))}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -56,8 +56,8 @@ function Tooth({
         width={TOOTH_W + 6}
         height={TOOTH_H + 6}
         rx={6}
-        fill={selected ? '#dbeafe' : 'transparent'}
-        stroke={selected ? '#2563eb' : 'transparent'}
+        fill={selected ? '#e3f3f0' : 'transparent'}
+        stroke={selected ? '#0f766e' : 'transparent'}
         strokeWidth={2}
       />
       <g transform={transform}>
@@ -65,7 +65,7 @@ function Tooth({
       </g>
       {badge && (
         <g data-badge>
-          <rect x={box.x + 4} y={box.y + (box.jaw === 'upper' ? 96 : 20)} width={TOOTH_W - 8} height={16} rx={3} fill="#1e3a8a" />
+          <rect x={box.x + 4} y={box.y + (box.jaw === 'upper' ? 96 : 20)} width={TOOTH_W - 8} height={16} rx={3} fill="#115e59" />
           <text
             x={box.x + TOOTH_W / 2}
             y={box.y + (box.jaw === 'upper' ? 108 : 32)}
@@ -78,7 +78,7 @@ function Tooth({
           </text>
         </g>
       )}
-      <text x={box.x + TOOTH_W / 2} y={numberY} textAnchor="middle" fontSize={13} fill="#334155">
+      <text x={box.x + TOOTH_W / 2} y={numberY} textAnchor="middle" fontSize={13} fill="#55666b">
         {box.fdi}
       </text>
     </g>
@@ -93,8 +93,8 @@ export function Odontogram({ statuses, selected, onSelect, badges }: Props) {
       role="group"
       aria-label="Odontogram"
     >
-      <line x1={-4} x2={CHART_WIDTH + 4} y1={TOOTH_H + JAW_GAP / 2} y2={TOOTH_H + JAW_GAP / 2} stroke="#0f172a" strokeWidth={2.5} />
-      <line x1={MIDLINE_X} x2={MIDLINE_X} y1={TOOTH_H - 30} y2={TOOTH_H + JAW_GAP + 30} stroke="#0f172a" strokeWidth={2.5} />
+      <line x1={-4} x2={CHART_WIDTH + 4} y1={TOOTH_H + JAW_GAP / 2} y2={TOOTH_H + JAW_GAP / 2} stroke="#17262b" strokeWidth={2.5} />
+      <line x1={MIDLINE_X} x2={MIDLINE_X} y1={TOOTH_H - 30} y2={TOOTH_H + JAW_GAP + 30} stroke="#17262b" strokeWidth={2.5} />
       {BOXES.map((box) => (
         <Tooth
           key={box.fdi}

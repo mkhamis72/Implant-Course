@@ -32,19 +32,23 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">Schedule · {formatDate(date)}</h1>
-        <Link href={`/schedule?date=${addDays(date, -1)}`} className="btn-secondary btn py-1">← Previous day</Link>
-        <Link href={`/schedule?date=${addDays(date, 1)}`} className="btn-secondary btn py-1">Next day →</Link>
+      <div className="page-header">
+        <h1>Schedule · {formatDate(date)}</h1>
+        <div className="flex items-center gap-3">
+          <Link href={`/schedule/pull-list?date=${date}`} className="text-accent hover:underline">Pull list</Link>
+          <Link href={`/schedule/new?date=${date}`} className="btn">New booking</Link>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href={`/schedule?date=${addDays(date, -1)}`} className="btn-secondary btn">← Previous day</Link>
+        <Link href={`/schedule?date=${addDays(date, 1)}`} className="btn-secondary btn">Next day →</Link>
         <form className="flex items-center gap-2">
-          <input className="input py-1" type="date" name="date" defaultValue={date} aria-label="Date" />
-          <button className="btn-secondary btn py-1">Go</button>
+          <input className="input w-auto" type="date" name="date" defaultValue={date} aria-label="Date" />
+          <button className="btn-secondary btn">Go</button>
         </form>
-        <Link href={`/schedule/new?date=${date}`} className="btn">New booking</Link>
-        <Link href={`/schedule/pull-list?date=${date}`} className="text-blue-700 hover:underline">Pull list</Link>
       </div>
       {chairList.length === 0 ? (
-        <p className="card text-gray-600">No chairs yet. An admin can add chairs under Admin → Chairs.</p>
+        <p className="card text-muted">No chairs yet. An admin can add chairs under Admin → Chairs.</p>
       ) : (
         <div className="card overflow-x-auto">
           <div
@@ -53,10 +57,10 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
           >
             <div />
             {chairList.map((c, i) => (
-              <div key={c.id} className="border-b border-gray-200 px-2 font-semibold" style={{ gridColumn: i + 2, gridRow: 1 }}>{c.name}</div>
+              <div key={c.id} className="border-b border-line px-2 font-semibold" style={{ gridColumn: i + 2, gridRow: 1 }}>{c.name}</div>
             ))}
             {labels.map((label, i) => (
-              <div key={i} className="border-t border-gray-100 pr-2 text-right text-gray-500" style={{ gridColumn: 1, gridRow: i + 2 }}>{label}</div>
+              <div key={i} className="sticky left-0 z-10 border-t border-line bg-surface pr-2 text-right text-muted" style={{ gridColumn: 1, gridRow: i + 2 }}>{label}</div>
             ))}
             {live.map((b) => {
               const col = chairList.findIndex((c) => c.id === b.chair_id);
@@ -71,7 +75,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
                 <div
                   key={b.id}
                   data-testid={`booking-${b.patient?.file_no}`}
-                  className={`m-0.5 space-y-0.5 overflow-y-auto rounded border p-1.5 ${b.status === 'cancelled' ? 'border-gray-300 bg-gray-50 text-gray-500 line-through' : b.status === 'done' ? 'border-green-300 bg-green-50' : 'border-blue-300 bg-blue-50'}`}
+                  className={`m-0.5 space-y-0.5 overflow-y-auto rounded-md border border-l-4 p-1.5 ${b.status === 'cancelled' ? 'border-line-strong bg-sunken text-muted line-through' : b.status === 'done' ? 'border-ok-line bg-ok-soft' : 'border-accent bg-accent-soft'}`}
                   style={{
                     gridColumn: col + 2,
                     gridRow: `${row + 1} / span ${span}`,
@@ -82,7 +86,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
                 >
                   <div className="font-semibold">{start}–{end}</div>
                   {b.patient && (
-                    <Link href={`/patients/${b.patient.id}`} className="block text-blue-800 hover:underline">
+                    <Link href={`/patients/${b.patient.id}`} className="block text-accent-strong hover:underline">
                       {b.patient.full_name} ({b.patient.file_no})
                     </Link>
                   )}
@@ -91,11 +95,11 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
                   {placing && <div>Placing: {placing}</div>}
                   {assisting && <div>Assisting: {assisting}</div>}
                   {b.checklists.map((cl) => (
-                    <Link key={cl.id} href={`/checklists/${cl.id}`} className="block text-blue-800 hover:underline">
+                    <Link key={cl.id} href={`/checklists/${cl.id}`} className="block text-accent-strong hover:underline">
                       Checklist {progressOf(cl.items).label}
                     </Link>
                   ))}
-                  {b.override_reason && <div className="text-amber-800 no-underline">Overridden: {b.override_reason}</div>}
+                  {b.override_reason && <div className="text-warn no-underline">Overridden: {b.override_reason}</div>}
                   {b.status === 'cancelled' && <div className="no-underline">Cancelled: {b.cancel_reason}</div>}
                   {b.status === 'scheduled' && <CancelBooking slotId={b.id} />}
                 </div>
@@ -107,9 +111,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
       {cancelled.length > 0 && (
         <section className="card space-y-1 text-sm">
           <h2 className="font-semibold">Cancelled bookings</h2>
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-line">
             {cancelled.map((b) => (
-              <li key={b.id} data-testid={`booking-${b.patient?.file_no}`} className="py-1 text-gray-600">
+              <li key={b.id} data-testid={`booking-${b.patient?.file_no}`} className="py-1 text-muted">
                 {formatTime(b.starts_at)}–{formatTime(b.ends_at)} · {b.patient?.full_name} ({b.patient?.file_no}) · Cancelled: {b.cancel_reason}
               </li>
             ))}

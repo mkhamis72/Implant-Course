@@ -31,7 +31,7 @@ function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
         {rows.map(([k, v]) => (
           <div key={k} className="contents">
-            <dt className="text-gray-500">{k}</dt>
+            <dt className="text-muted">{k}</dt>
             <dd>{v}</dd>
           </div>
         ))}
@@ -41,7 +41,7 @@ function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: 
           <h4 className="font-medium">Components</h4>
           <ol className="list-decimal pl-5" data-testid="component-history">
             {site.components.map((c) => (
-              <li key={c.id} className={c.voided_at ? 'text-gray-400 line-through' : ''}>
+              <li key={c.id} className={c.voided_at ? 'text-subtle line-through' : ''}>
                 {COMPONENT_LABELS[c.component_type]} — {formatDate(c.fitted_on)}
                 {c.voided_at ? ` — undone: ${c.voided_reason}` : c.removed_on ? ` (until ${formatDate(c.removed_on)})` : ' (current)'}
               </li>
@@ -54,7 +54,7 @@ function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: 
           <h4 className="font-medium">Follow-ups</h4>
           <ul data-testid="followups">
             {site.followups.map((f) => (
-              <li key={f.id} className={f.voided_at ? 'text-gray-400 line-through' : ''}>
+              <li key={f.id} className={f.voided_at ? 'text-subtle line-through' : ''}>
                 {formatDate(f.date)} · {f.check_type} · {OUTCOME_LABELS[f.outcome]}
                 {f.notes ? ` — ${f.notes}` : ''}
                 {f.voided_at ? ` — removed: ${f.voided_reason}` : ''}
@@ -87,16 +87,16 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
   }
 
   return (
-    <section aria-label="Implant record" className="space-y-3 border-t border-gray-200 pt-4">
+    <section aria-label="Implant record" className="space-y-3 border-t border-line pt-4">
       <h3 className="font-semibold">Implant</h3>
-      {!site && <p className="text-sm text-gray-600">No implant on this tooth.</p>}
+      {!site && <p className="text-sm text-muted">No implant on this tooth.</p>}
       {site?.state === 'planned' && (
         <p className="text-sm">
           Planned{site.product ? `: ${productLabel(site.product)}` : ' (implant not chosen yet)'}
         </p>
       )}
       {site?.state === 'planned' && site.slot && (
-        <p className="text-sm text-gray-700">
+        <p className="text-sm text-ink">
           Booked: {formatDateTime(site.slot.starts_at)}
           {site.slot.chair ? ` · ${site.slot.chair.name}` : ''}
         </p>
@@ -125,7 +125,7 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
           )}
         </div>
       )}
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="text-sm text-bad">{error}</p>}
 
       {mode === 'plan' && <PlanForm patientId={patientId} tooth={tooth} data={data} onDone={done} />}
       {mode === 'place' && (
@@ -136,7 +136,7 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
 
       {earlier.length > 0 && (
         <details className="text-sm">
-          <summary className="cursor-pointer text-gray-700">Earlier implants on this tooth ({earlier.length})</summary>
+          <summary className="cursor-pointer text-ink">Earlier implants on this tooth ({earlier.length})</summary>
           <div className="mt-2 space-y-4">
             {earlier.map((s) => <SiteDetails key={s.id} site={s} patientId={patientId} data={data} />)}
           </div>

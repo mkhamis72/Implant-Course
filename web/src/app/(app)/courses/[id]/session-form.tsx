@@ -40,7 +40,7 @@ export function SessionForm({ courseId, defaultDate, organizers }: { courseId: s
           {organizers.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
         </select>
       </label>
-      {state.error && <p role="alert" className="text-sm text-red-700 sm:col-span-3">{state.error}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad sm:col-span-3">{state.error}</p>}
       <div className="sm:col-span-3">
         <button className="btn" disabled={pending}>Add session</button>
       </div>

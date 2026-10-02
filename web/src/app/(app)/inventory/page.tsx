@@ -27,7 +27,7 @@ export default async function StockPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Stock</h1>
+      <h1>Stock</h1>
       <form className="card flex flex-wrap items-end gap-4" role="search">
         <label className="block min-w-64 flex-1">
           <span className="label">Search products</span>
@@ -49,40 +49,40 @@ export default async function StockPage({
       </form>
       <div className="card overflow-x-auto">
         {rows.length === 0 ? (
-          <p className="text-gray-600">
+          <p className="text-muted">
             No stocked products match. Tick “Show the whole catalog” to see every product, or receive stock.
           </p>
         ) : (
-          <table className="w-full text-left text-sm">
+          <table className="table">
             <thead>
-              <tr className="text-gray-500">
-                <th className="pb-2">Product</th>
-                <th className="pb-2">Type</th>
-                <th className="pb-2 text-right">On hand</th>
-                <th className="pb-2 text-right">Reorder at</th>
-                <th className="pb-2">Nearest expiry</th>
-                <th className="pb-2">Flags</th>
+              <tr>
+                <th>Product</th>
+                <th>Type</th>
+                <th className="text-right">On hand</th>
+                <th className="text-right">Reorder at</th>
+                <th>Nearest expiry</th>
+                <th>Flags</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => {
                 const flags = stockFlags(r, today, settings.expiry_alert_days);
                 return (
-                  <tr key={r.id} data-testid={`stock-row-${r.id}`} className="border-t border-gray-200">
-                    <td className="py-2 pr-4">
-                      <Link href={`/inventory/products/${r.id}`} className="text-blue-700 hover:underline">
+                  <tr key={r.id} data-testid={`stock-row-${r.id}`}>
+                    <td data-label="Product">
+                      <Link href={`/inventory/products/${r.id}`} className="text-accent hover:underline">
                         {productLabel(r)}
                       </Link>
-                      {!r.active && <span className="ml-2 text-xs text-gray-500">(inactive)</span>}
+                      {!r.active && <span className="ml-2 text-xs text-muted">(inactive)</span>}
                     </td>
-                    <td className="py-2 pr-4">{PRODUCT_TYPE_LABELS[r.type]}</td>
-                    <td className="py-2 pr-4 text-right font-medium">{r.on_hand}</td>
-                    <td className="py-2 pr-4 text-right">{r.reorder_level || '—'}</td>
-                    <td className="py-2 pr-4">{r.nearest_expiry ? formatDate(r.nearest_expiry) : '—'}</td>
-                    <td className="space-x-1 py-2">
-                      {flags.low && <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-900">Low stock</span>}
-                      {flags.expiring && <span className="rounded bg-red-100 px-1.5 text-xs text-red-800">Expiring</span>}
-                      {r.is_sample && <span className="rounded bg-gray-100 px-1.5 text-xs text-gray-700">Sample — verify</span>}
+                    <td data-label="Type">{PRODUCT_TYPE_LABELS[r.type]}</td>
+                    <td data-label="On hand" className="text-right font-medium">{r.on_hand}</td>
+                    <td data-label="Reorder at" className="text-right">{r.reorder_level || '—'}</td>
+                    <td data-label="Nearest expiry">{r.nearest_expiry ? formatDate(r.nearest_expiry) : '—'}</td>
+                    <td data-label="Flags" className="space-x-1">
+                      {flags.low && <span className="badge badge-warn">Low stock</span>}
+                      {flags.expiring && <span className="badge badge-bad">Expiring</span>}
+                      {r.is_sample && <span className="badge">Sample — verify</span>}
                     </td>
                   </tr>
                 );

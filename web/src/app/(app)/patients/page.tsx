@@ -16,8 +16,8 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Patients</h1>
+      <div className="page-header">
+        <h1>Patients</h1>
         <Link href="/patients/new" className="btn">
           New patient
         </Link>
@@ -35,36 +35,36 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
       </form>
       <div className="card overflow-x-auto">
         {patients.length === 0 ? (
-          <p className="text-gray-600">No patients found.</p>
+          <p className="text-muted">No patients found.</p>
         ) : (
-          <table className="w-full text-left text-sm">
+          <table className="table">
             <thead>
-              <tr className="text-gray-500">
-                <th className="pb-2">File</th>
-                <th className="pb-2">Name</th>
-                <th className="pb-2">Age</th>
-                <th className="pb-2">Phone</th>
+              <tr>
+                <th>File</th>
+                <th>Name</th>
+                <th>Age</th>
+                <th>Phone</th>
               </tr>
             </thead>
             <tbody>
               {patients.map((p) => (
-                <tr key={p.id} data-testid={`patient-row-${p.file_no}`} className="border-t border-gray-200">
-                  <td className="py-2 pr-4">{p.file_no}</td>
-                  <td className="py-2 pr-4">
-                    <Link href={`/patients/${p.id}`} className="text-blue-700 hover:underline">
+                <tr key={p.id} data-testid={`patient-row-${p.file_no}`}>
+                  <td data-label="File">{p.file_no}</td>
+                  <td data-label="Name">
+                    <Link href={`/patients/${p.id}`} className="text-accent hover:underline">
                       {p.full_name}
                     </Link>
-                    {p.archived && <span className="ml-2 rounded bg-gray-100 px-1.5 text-xs text-gray-600">Archived</span>}
+                    {p.archived && <span className="ml-2 badge">Archived</span>}
                   </td>
-                  <td className="py-2 pr-4">{ageOn(p.dob, today) ?? '—'}</td>
-                  <td className="py-2">{p.phone || '—'}</td>
+                  <td data-label="Age">{ageOn(p.dob, today) ?? '—'}</td>
+                  <td data-label="Phone">{p.phone || '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
         {rows.length > patients.length && (
-          <p data-testid="search-capped" className="mt-3 text-sm text-gray-600">Showing the first 50 — refine your search.</p>
+          <p data-testid="search-capped" className="mt-3 text-sm text-muted">Showing the first 50 — refine your search.</p>
         )}
       </div>
     </div>

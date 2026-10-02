@@ -16,7 +16,7 @@ export function SetPasswordForm() {
         <input className="input" name="confirm" type="password" autoComplete="new-password" required />
       </label>
       {state.error && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-bad">
           {state.error}
         </p>
       )}

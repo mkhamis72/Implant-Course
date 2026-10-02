@@ -9,9 +9,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!profile.active) redirect('/deactivated');
   const settings = await getSettings();
   return (
-    <div className="flex min-h-screen">
+    <div className="min-h-screen lg:flex">
       <Nav role={profile.role} name={profile.full_name || profile.email} />
-      <main className="flex-1 p-6">{children}</main>
+      <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-10 lg:py-8 print:p-0">
+        <div className="mx-auto max-w-6xl">{children}</div>
+      </main>
       <IdleTimer timeoutMinutes={settings.session_timeout_minutes} />
     </div>
   );

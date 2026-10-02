@@ -33,8 +33,8 @@ export function AdjustForm({ lotId }: { lotId: string }) {
         <span className="label">Note</span>
         <input className="input" name="note" defaultValue={valueOf(state, 'note', '')} />
       </label>
-      {state.error && <p role="alert" className="text-sm text-red-700 sm:col-span-4">{state.error}</p>}
-      {state.ok && <p className="text-sm text-green-800 sm:col-span-4">{state.ok}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad sm:col-span-4">{state.error}</p>}
+      {state.ok && <p className="text-sm text-ok sm:col-span-4">{state.ok}</p>}
       <div className="sm:col-span-4">
         <button className="btn-secondary btn" disabled={pending}>
           Record change

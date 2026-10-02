@@ -27,7 +27,7 @@ export function NewChecklistForm({ templates }: { templates: Option[] }) {
         <span className="label">Items (one per line)</span>
         <textarea className="input font-mono text-sm" name="items" rows={5} defaultValue={valueOf(state, 'items', '')} />
       </label>
-      {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
       <button className="btn" disabled={pending}>Create checklist</button>
     </form>
   );

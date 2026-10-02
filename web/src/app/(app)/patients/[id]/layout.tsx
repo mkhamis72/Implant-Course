@@ -22,15 +22,15 @@ export default async function PatientLayout({ children, params }: { children: Re
   return (
     <div className="space-y-4">
       <header data-testid="patient-header" className="card flex flex-wrap items-center gap-x-6 gap-y-2 py-4">
-        <h1 className="text-2xl font-semibold">{p.full_name}</h1>
-        <span className="text-sm text-gray-600">File {p.file_no}</span>
-        {age !== null && <span className="text-sm text-gray-600">Age {age}</span>}
-        {p.sex && <span className="text-sm capitalize text-gray-600">{p.sex}</span>}
-        {p.archived && <span className="rounded bg-gray-100 px-2 py-0.5 text-sm text-gray-700">Archived</span>}
+        <h1>{p.full_name}</h1>
+        <span className="text-sm text-muted">File {p.file_no}</span>
+        {age !== null && <span className="text-sm text-muted">Age {age}</span>}
+        {p.sex && <span className="text-sm capitalize text-muted">{p.sex}</span>}
+        {p.archived && <span className="rounded bg-sunken px-2 py-0.5 text-sm text-ink">Archived</span>}
         {alerts.length > 0 && (
           <ul className="flex flex-wrap gap-2" aria-label="Medical alerts">
             {alerts.map((alert) => (
-              <li key={alert} data-testid="medical-alert" className="rounded bg-red-100 px-2 py-0.5 text-sm font-medium text-red-800">
+              <li key={alert} data-testid="medical-alert" className="rounded bg-bad-soft px-2 py-0.5 text-sm font-medium text-bad">
                 {alert}
               </li>
             ))}

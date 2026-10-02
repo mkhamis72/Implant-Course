@@ -104,8 +104,8 @@ export function SlotForm(p: Props) {
 
       <fieldset className="space-y-2">
         <legend className="label">Delegates (enrolled in this course)</legend>
-        {!courseId && <p className="text-sm text-gray-600">Choose a session first.</p>}
-        {courseId && delegates.length === 0 && <p className="text-sm text-amber-900">No delegates are enrolled in this course yet.</p>}
+        {!courseId && <p className="text-sm text-muted">Choose a session first.</p>}
+        {courseId && delegates.length === 0 && <p className="text-sm text-warn">No delegates are enrolled in this course yet.</p>}
         {delegates.map((d) => (
           <label key={d.id} className="flex items-center gap-3 text-sm">
             <span className="w-56">{d.label}</span>
@@ -145,7 +145,7 @@ export function SlotForm(p: Props) {
             </select>
           </div>
         ))}
-        <button type="button" className="text-sm text-blue-700 hover:underline" onClick={() => setImplants((all) => [...all, { tooth: '', productId: '' }])}>
+        <button type="button" className="text-sm text-accent hover:underline" onClick={() => setImplants((all) => [...all, { tooth: '', productId: '' }])}>
           + Add another implant
         </button>
       </fieldset>
@@ -156,7 +156,7 @@ export function SlotForm(p: Props) {
       </label>
 
       {warnings && (
-        <div data-testid="clash-warnings" className="space-y-2 rounded bg-amber-50 p-3 text-sm text-amber-900">
+        <div data-testid="clash-warnings" className="space-y-2 rounded bg-warn-soft p-3 text-sm text-warn">
           <p className="font-medium">This booking clashes with:</p>
           <ul className="list-disc pl-5">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
           <label className="block">
@@ -166,7 +166,7 @@ export function SlotForm(p: Props) {
           <button type="button" className="btn" disabled={pending} onClick={() => submit(true)}>Book anyway</button>
         </div>
       )}
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="text-sm text-bad">{error}</p>}
       <button className="btn" disabled={pending}>Book surgery</button>
     </form>
   );

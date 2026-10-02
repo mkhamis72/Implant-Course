@@ -13,7 +13,7 @@ export function AddItemsForm({ checklistId }: { checklistId: string }) {
         <span className="label">Add items (one per line)</span>
         <textarea className="input font-mono text-sm" name="items" rows={3} defaultValue={valueOf(state, 'items', '')} />
       </label>
-      {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
       <button className="btn-secondary btn" disabled={pending}>Add items</button>
     </form>
   );
