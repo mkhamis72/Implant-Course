@@ -63,6 +63,7 @@ export async function deactivateE2eCatalog(): Promise<void> {
     await pg.query('update public.products set active = false where brand like $1 and active', [`${E2E_PREFIX}%`]);
     await pg.query('update public.delegates set active = false where full_name like $1 and active', [`${E2E_PREFIX}%`]);
     await pg.query('update public.chairs set active = false where name like $1 and active', [`${E2E_PREFIX}%`]);
+    await pg.query('update public.supervisors set active = false where full_name like $1 and active', [`${E2E_PREFIX}%`]);
   } finally {
     await pg.end();
   }

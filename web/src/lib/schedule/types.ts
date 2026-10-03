@@ -10,6 +10,7 @@ export type Session = {
   start_time: string; end_time: string; lead_organizer_id: string | null;
 };
 export type Chair = { id: string; name: string; active: boolean };
+export type Supervisor = { id: string; full_name: string; active: boolean };
 
 export type SlotRow = {
   id: string;
