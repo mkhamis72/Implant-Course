@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { productLabel } from '@/lib/inventory/labels';
 import type { Option, Product } from '@/lib/inventory/types';
 import { bookSurgery } from '../actions';
@@ -71,6 +72,12 @@ export function SlotForm(p: Props) {
             {p.sessions.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </label>
+        {p.sessions.length === 0 && (
+          <p className="-mt-2 text-sm text-warn sm:col-span-2">
+            No upcoming surgery sessions. Sessions dated before today aren’t listed — add or edit one under{' '}
+            <Link href="/courses" className="text-accent underline">Courses</Link>.
+          </p>
+        )}
         <label className="block">
           <span className="label">Chair</span>
           <select className="input" value={chairId} onChange={(e) => setChairId(e.target.value)}>

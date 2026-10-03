@@ -15,16 +15,18 @@ export default async function NewBookingPage({
   const q = await readParams(searchParams, 'date', 'chair', 'time', 'session', 'patient');
   const supabase = await createClient();
   const me = await getCurrentProfile();
-  const [{ data: sessions }, { data: chairs }, { data: patients }, { data: enrollments }, { data: implants }, { data: organizers }] =
-    await Promise.all([
-      supabase.from('sessions').select('id, title, date, start_time, course_id, course:courses(name)').eq('type', 'surgery')
-        .gte('date', todayIso()).order('date'),
-      supabase.from('chairs').select('id, name').eq('active', true).order('name'),
-      supabase.from('patients').select('file_no, full_name').eq('archived', false).order('full_name').limit(2000),
-      supabase.from('enrollments').select('course_id, delegate:delegates(id, full_name, active)'),
-      supabase.from('products').select('*').eq('type', 'implant').eq('active', true),
-      supabase.from('profiles').select('user_id, full_name, email').eq('active', true).order('full_name'),
-    ]);
+  const results = await Promise.all([
+    supabase.from('sessions').select('id, title, date, start_time, course_id, course:courses(name)').eq('type', 'surgery')
+      .gte('date', todayIso()).order('date'),
+    supabase.from('chairs').select('id, name').eq('active', true).order('name'),
+    supabase.from('patients').select('file_no, full_name').eq('archived', false).order('full_name').limit(2000),
+    supabase.from('enrollments').select('course_id, delegate:delegates(id, full_name, active)'),
+    supabase.from('products').select('*').eq('type', 'implant').eq('active', true),
+    supabase.from('profiles').select('user_id, full_name, email').eq('active', true).order('full_name'),
+  ]);
+  // A failed query must not look like an empty list (e.g. "no sessions").
+  if (results.some((r) => r.error)) throw new Error('Could not load the booking form');
+  const [{ data: sessions }, { data: chairs }, { data: patients }, { data: enrollments }, { data: implants }, { data: organizers }] = results;
 
   const sessionOptions: SessionOption[] = ((sessions ?? []) as unknown as {
     id: string; title: string; date: string; course_id: string; course: { name: string } | null;
