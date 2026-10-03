@@ -22,11 +22,11 @@ export default async function NewBookingPage({
     supabase.from('patients').select('file_no, full_name').eq('archived', false).order('full_name').limit(2000),
     supabase.from('enrollments').select('course_id, delegate:delegates(id, full_name, active)'),
     supabase.from('products').select('*').eq('type', 'implant').eq('active', true),
-    supabase.from('profiles').select('user_id, full_name, email').eq('active', true).order('full_name'),
+    supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name'),
   ]);
   // A failed query must not look like an empty list (e.g. "no sessions").
   if (results.some((r) => r.error)) throw new Error('Could not load the booking form');
-  const [{ data: sessions }, { data: chairs }, { data: patients }, { data: enrollments }, { data: implants }, { data: organizers }] = results;
+  const [{ data: sessions }, { data: chairs }, { data: patients }, { data: enrollments }, { data: implants }, { data: supervisors }] = results;
 
   const sessionOptions: SessionOption[] = ((sessions ?? []) as unknown as {
     id: string; title: string; date: string; course_id: string; course: { name: string } | null;
@@ -50,7 +50,7 @@ export default async function NewBookingPage({
         patients={(patients ?? []) as { file_no: string; full_name: string }[]}
         enrolled={enrolled}
         implants={((implants ?? []) as Product[]).sort((a, b) => productLabel(a).localeCompare(productLabel(b), undefined, { numeric: true }))}
-        organizers={(organizers ?? []).map((o) => ({ id: o.user_id as string, label: (o.full_name || o.email) as string }))}
+        supervisors={(supervisors ?? []).map((s) => ({ id: s.id as string, label: s.full_name as string }))}
         me={me?.user_id ?? ''}
         initial={{ sessionId: initialSession, chairId: q.chair, start: q.time || '09:00', fileNo: q.patient }}
       />

@@ -45,7 +45,7 @@ export const slotSchema = z
     start: time('Enter the start time (HH:MM).'),
     end: time('Enter the end time (HH:MM).'),
     patientFileNo: z.string().trim().min(1, { message: 'Choose the patient.' }),
-    supervisorId: requiredId('Choose the supervising organizer.'),
+    supervisorId: requiredId('Choose a supervisor.'),
     placing: z.array(z.string().uuid()).min(1, { message: 'Choose at least one placing delegate.' }),
     assisting: z.array(z.string().uuid()).default([]),
     implants: z

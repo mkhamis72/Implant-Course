@@ -80,7 +80,7 @@ export const placeSchema = z.object({
   placingDelegateId: requiredId('Choose the delegate who placed the implant.'),
   slotId: optionalId,
   assistingDelegateId: optionalId,
-  supervisorId: requiredId('Choose the supervising organizer.'),
+  supervisorId: requiredId('Choose a supervisor.'),
   torque: optionalNumber(0, 150, 'Enter an insertion torque between 0 and 150 Ncm.'),
   graft: text(200),
   notes: text(1000),

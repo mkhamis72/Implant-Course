@@ -15,7 +15,7 @@ type Props = {
   patients: { file_no: string; full_name: string }[];
   enrolled: Record<string, Option[]>;
   implants: Product[];
-  organizers: Option[];
+  supervisors: Option[];
   me: string;
   initial: { sessionId: string; chairId: string; start: string; fileNo: string };
 };
@@ -29,7 +29,7 @@ export function SlotForm(p: Props) {
   const [start, setStart] = useState(p.initial.start);
   const [end, setEnd] = useState('');
   const [fileNo, setFileNo] = useState(p.initial.fileNo);
-  const [supervisorId, setSupervisorId] = useState(p.me);
+  const [supervisorId, setSupervisorId] = useState(p.supervisors.some((s) => s.id === p.me) ? p.me : '');
   const [roles, setRoles] = useState<Record<string, Role>>({});
   const [implants, setImplants] = useState([{ tooth: '', productId: '' }]);
   const [notes, setNotes] = useState('');
@@ -85,12 +85,18 @@ export function SlotForm(p: Props) {
             {p.chairs.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </label>
-        <label className="block">
-          <span className="label">Supervisor</span>
-          <select className="input" value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)}>
-            {p.organizers.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-        </label>
+        <div>
+          <label className="block">
+            <span className="label">Supervisor</span>
+            <select className="input" value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)}>
+              <option value="">Choose a supervisor…</option>
+              {p.supervisors.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          </label>
+          {p.supervisors.length === 0 && (
+            <p className="mt-1 text-sm text-warn">No supervisors yet — an admin can add them under Admin → Supervisors.</p>
+          )}
+        </div>
         <label className="block">
           <span className="label">Start</span>
           <input className="input" type="time" step={900} value={start} onChange={(e) => setStart(e.target.value)} />
