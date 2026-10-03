@@ -2,16 +2,26 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { ageOn } from '@/lib/patients/age';
 import type { Patient } from '@/lib/patients/types';
-import { readParams, type PageSearchParams } from '@/lib/search-params';
+import { IMPLANT_STAGES, IMPLANT_STAGE_LABELS, parseStages, teethByPatient, type StageSite } from '@/lib/patients/stages';
+import { firstParam, type PageSearchParams } from '@/lib/search-params';
 
 export default async function PatientsPage({ searchParams }: { searchParams: PageSearchParams }) {
-  const { q, archived } = await readParams(searchParams, 'q', 'archived');
+  const sp = await searchParams;
+  const q = firstParam(sp.q);
+  const archived = firstParam(sp.archived);
+  const stages = parseStages(sp.stage);
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('search_patients', { q, include_archived: archived === '1' });
+  const { data, error } = await supabase.rpc('search_patients', { q, include_archived: archived === '1', stages });
   if (error) throw new Error('Could not load patients');
   // The search returns one row more than it shows, to tell whether there are more.
   const rows = (data ?? []) as Patient[];
   const patients = rows.slice(0, 50);
+  let teeth: Record<string, string> = {};
+  if (stages.length && patients.length) {
+    const { data: sites, error: sitesError } = await supabase.rpc('implant_stage_sites', { p_patients: patients.map((p) => p.id) });
+    if (sitesError) throw new Error('Could not load implant stages');
+    teeth = teethByPatient((sites ?? []) as StageSite[], stages);
+  }
   const today = new Date();
 
   return (
@@ -31,6 +41,20 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
           <input type="checkbox" name="archived" value="1" defaultChecked={archived === '1'} />
           Include archived
         </label>
+        <fieldset className="basis-full">
+          <legend className="label">Implant stage</legend>
+          <div className="flex flex-wrap gap-2">
+            {IMPLANT_STAGES.map((s) => (
+              <label
+                key={s}
+                className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-line-strong bg-surface px-3 text-sm hover:bg-sunken has-[:checked]:border-accent has-[:checked]:bg-accent-soft"
+              >
+                <input type="checkbox" name="stage" value={s} defaultChecked={stages.includes(s)} />
+                {IMPLANT_STAGE_LABELS[s]}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <button className="btn-secondary btn">Search</button>
       </form>
       <div className="card overflow-x-auto">
@@ -44,6 +68,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
                 <th>Name</th>
                 <th>Age</th>
                 <th>Phone</th>
+                {stages.length > 0 && <th>Teeth</th>}
               </tr>
             </thead>
             <tbody>
@@ -58,6 +83,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
                   </td>
                   <td data-label="Age">{ageOn(p.dob, today) ?? '—'}</td>
                   <td data-label="Phone">{p.phone || '—'}</td>
+                  {stages.length > 0 && <td data-label="Teeth">{teeth[p.id] ?? '—'}</td>}
                 </tr>
               ))}
             </tbody>
