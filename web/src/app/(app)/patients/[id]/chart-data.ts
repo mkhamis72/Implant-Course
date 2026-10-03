@@ -12,7 +12,7 @@ export const SITE_SELECT = `
   lot:stock_lots(lot_no, expiry),
   placing:delegates!implant_sites_placing_delegate_id_fkey(full_name),
   assisting:delegates!implant_sites_assisting_delegate_id_fkey(full_name),
-  supervisor:profiles!implant_sites_supervisor_id_fkey(full_name, email),
+  supervisor:supervisors!implant_sites_supervisor_ref_fkey(full_name),
   components:site_components(
     id, component_type, fitted_on, removed_on, notes, voided_at, voided_reason, stock_lot_id,
     product:products(*), lot:stock_lots(lot_no),
@@ -34,15 +34,16 @@ export function sortSite(site: ImplantSite): ImplantSite {
 export async function loadChartData(patientId: string): Promise<ChartData> {
   const supabase = await createClient();
   const me = await getCurrentProfile();
-  const [statuses, sites, products, lots, delegates, organizers] = await Promise.all([
+  const [statuses, sites, products, lots, delegates, organizers, supervisors] = await Promise.all([
     supabase.from('tooth_status').select('tooth, status').eq('patient_id', patientId),
     supabase.from('implant_sites').select(SITE_SELECT).eq('patient_id', patientId).order('created_at'),
     supabase.from('products').select('*').eq('active', true),
     supabase.from('stock_on_hand').select('*').gt('on_hand', 0),
     supabase.from('delegates').select('id, full_name').eq('active', true).order('full_name'),
     supabase.from('profiles').select('user_id, full_name, email').eq('active', true).order('full_name'),
+    supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name'),
   ]);
-  for (const r of [statuses, sites, products, lots, delegates, organizers]) {
+  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors]) {
     if (r.error) throw new Error('Could not load the chart');
   }
   const statusMap: Partial<Record<number, ToothState>> = {};
@@ -57,6 +58,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     lots: (lots.data ?? []) as LotOnHand[],
     delegates: (delegates.data ?? []).map((d) => ({ id: d.id as string, label: d.full_name as string })),
     organizers: (organizers.data ?? []).map((o) => ({ id: o.user_id as string, label: (o.full_name || o.email) as string })),
+    supervisors: (supervisors.data ?? []).map((s) => ({ id: s.id as string, label: s.full_name as string })),
     today: todayIso(),
     me: me?.user_id ?? '',
   };

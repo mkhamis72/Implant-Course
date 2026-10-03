@@ -112,7 +112,7 @@ export type ImplantSite = {
   lot: { lot_no: string | null; expiry: string | null } | null;
   placing: Person;
   assisting: Person;
-  supervisor: Organizer;
+  supervisor: { full_name: string } | null;
   components: SiteComponent[];
   followups: Followup[];
   slot: {
@@ -133,6 +133,7 @@ export type ChartData = {
   lots: LotOnHand[];
   delegates: Option[];
   organizers: Option[];
+  supervisors: Option[];
   today: string;
   me: string;
 };

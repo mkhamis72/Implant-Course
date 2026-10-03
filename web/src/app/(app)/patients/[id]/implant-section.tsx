@@ -61,7 +61,7 @@ function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: 
   const people = [
     site.placing?.full_name ? `Placed by ${site.placing.full_name}` : null,
     site.assisting?.full_name ? `assisted by ${site.assisting.full_name}` : null,
-    site.supervisor ? `supervised by ${site.supervisor.full_name || site.supervisor.email}` : null,
+    site.supervisor ? `supervised by ${site.supervisor.full_name}` : null,
   ].filter(Boolean) as string[];
   return (
     <div data-testid="site-details" className="space-y-3 text-sm">
