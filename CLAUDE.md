@@ -36,10 +36,12 @@ There is no local Supabase: DB and E2E tests hit the hosted **dev** project conf
 - `stock_movements` is an append-only ledger; corrections are reversing movements. Lock order: site → batch.
 - Dates are Cairo dates: use `public.cairo_today()` in SQL, `todayIso()` (`src/lib/dates.ts`) and `formatDate/formatTime` (`src/lib/format.ts`) in TS — never `current_date` / `new Date()` formatting.
 - Patients and medical history use optimistic concurrency on `updated_at`.
+- Supervisors on bookings and implants (`surgery_slots.supervisor_id`, `implant_sites.supervisor_id`) reference `public.supervisors`, an admin-maintained list of names (Admin → Supervisors), not user accounts. Accounts copied in by 0024 kept their profile id as supervisor id. Embed names via `supervisors!*_supervisor_ref_fkey`. "Fitted by organizer" on components still references `profiles`.
+- The catalogue is Oxy Implant PSK-MDK + MD EXT, generated from `docs/catalog/oxy-catalog.csv` (0026). The 0008 sample brands are deactivated (`is_sample`), not deleted. Any component can be fitted without a product (Oxy cover screws come in the implant box).
 
 **Migrations** (`web/supabase/migrations/NNNN_*.sql`) are applied once, in order, by `scripts/migrate.ts`; never edit an applied one. To change a function, add a new migration with `create or replace` of the *latest* definition (search later migrations — functions are redefined several times). New public tables get no privileges by default (0019) and must grant what they need.
 
-Releases (`.github/workflows/release.yml`) migrate production *before* the new code deploys, so the previous app version runs against the new schema for a few minutes: migrations must be backward-compatible (add, don't rename or drop in the same release).
+Releases (`.github/workflows/release.yml`) migrate production *before* the new code deploys, so the previous app version runs against the new schema for a few minutes: migrations must be backward-compatible (add, don't rename or drop in the same release). When something the previous version still uses must go (e.g. an FK it embeds through), ship two PRs: the additive one first, the removal after it has deployed (see 0024 → 0025).
 
 **App layout:** `src/app/(app)/` is the signed-in area; its `layout.tsx` redirects to `/login` or `/deactivated`. Because pages render in parallel with layouts, pages and every server action must call `requireActiveUser()` / `requireAdmin()` (`src/lib/auth/session.ts`) themselves. `searchParams` are read with `readParams()` (`src/lib/search-params.ts`), which tolerates repeated params. Domain logic (parsing, labels, schemas, pure helpers) lives in `src/lib/<domain>/` with colocated tests; route folders hold pages, client forms and `actions.ts`.
 
@@ -63,4 +65,8 @@ Runbook: `docs/operations.md` (provisioning, accounts, releases, backup/restore)
 ## Gotchas
 
 - Windows + Git Bash: heredocs and `node -e` mangle backslashes/quotes — write files containing `\` with the Write/Edit tools. Files are CRLF in git; multi-line string matches may need CRLF normalisation.
+- `gh` is not on Git Bash's PATH: call `"/c/Program Files/GitHub CLI/gh.exe"`. The user's `!` prompt runs Bash, not PowerShell. There is no Python; script with Node.
+- E2E reuses whatever listens on :3000. A leftover `next dev` (find it with `Get-NetTCPConnection -LocalPort 3000`) can hold several GB and make unrelated specs time out — check memory before debugging timeouts.
+- E2E patients with stock movements survive teardown, so DB tests that search by name must use names unique to the test (e.g. `Zz …`). `slot-placement` E2E occasionally clashes with a leftover booking on its random future date; rerun before investigating.
+- The booking form only lists surgery sessions dated today or later.
 - React 19 resets `<form action={…}>` after the action: keep inputs uncontrolled with `defaultValue={valueOf(state, …)}` (`src/lib/patients/form-state.ts`) so values survive.
