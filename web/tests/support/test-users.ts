@@ -53,6 +53,17 @@ export async function ensureTestUsers(): Promise<TestUserIds> {
       for (const key of Object.keys(PROFILES) as TestUserKey[]) {
         await setProfile(pg, ids[key], PROFILES[key]);
       }
+      // Supervisors exist only after migration 0024; each test user supervises under its own id.
+      const sup = await pg.query("select to_regclass('public.supervisors') as t");
+      if (sup.rows[0].t) {
+        for (const key of Object.keys(PROFILES) as TestUserKey[]) {
+          await pg.query(
+            `insert into public.supervisors (id, full_name, active) values ($1, $2, $3)
+             on conflict (id) do update set full_name = excluded.full_name, active = excluded.active`,
+            [ids[key], PROFILES[key].full_name, PROFILES[key].active],
+          );
+        }
+      }
     }
   } finally {
     await pg.end();
