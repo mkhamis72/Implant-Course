@@ -8,6 +8,13 @@ import { isIdleExpired } from '@/lib/idle';
 export const LAST_SEEN_COOKIE = 'icm_last_seen';
 const DEFAULT_TIMEOUT_MINUTES = 30;
 
+export const lastSeenCookieOptions = {
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: process.env.NODE_ENV === 'production',
+  path: '/',
+} as const;
+
 function redirectTo(request: NextRequest, response: NextResponse, pathname: string, search = '') {
   const url = request.nextUrl.clone();
   url.pathname = pathname;
@@ -55,12 +62,7 @@ export async function updateSession(request: NextRequest) {
       redirect.cookies.delete(LAST_SEEN_COOKIE);
       return redirect;
     }
-    response.cookies.set(LAST_SEEN_COOKIE, String(Date.now()), {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-    });
+    response.cookies.set(LAST_SEEN_COOKIE, String(Date.now()), lastSeenCookieOptions);
   }
 
   const target = decideRedirect({ path, hasUser: !!user, aal });
