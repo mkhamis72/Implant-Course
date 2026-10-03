@@ -31,7 +31,7 @@ export function ItemRow({ item, checklistId, organizers, first, last }: {
   };
 
   return (
-    <li data-testid="checklist-item" className={`rule space-y-1 border-t border-t-line py-3 first:border-t-0 ${done ? 'rule-ok' : 'border-l-transparent'}`}>
+    <li data-testid="checklist-item" className="space-y-1 border-t border-line py-3 first:border-t-0">
       <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
         <input
           type="checkbox"

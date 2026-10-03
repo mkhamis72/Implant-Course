@@ -44,3 +44,14 @@ test('a checklist can be created and ticked on a phone', async ({ page }) => {
   await page.getByRole('checkbox', { name: 'Gowns' }).check();
   await expect(page.getByTestId('checklist-progress')).toHaveText('1/2 done');
 });
+
+test('the menu takes keyboard focus while open and gives it back on close', async ({ page }) => {
+  await login(page, TEST_USERS.organizer.email);
+  const menu = page.getByRole('button', { name: 'Menu' });
+  await menu.click();
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link').first()).toBeFocused();
+  await expect(page.locator('main')).toHaveAttribute('inert', '');
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeFocused();
+  await expect(page.locator('main')).not.toHaveAttribute('inert', '');
+});

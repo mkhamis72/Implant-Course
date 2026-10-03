@@ -19,7 +19,7 @@ export default async function UsersPage() {
       {emailEnabled() ? (
         <InviteForm />
       ) : (
-        <p data-testid="email-off" className="card rule rule-warn text-sm">{EMAIL_OFF_MESSAGE}</p>
+        <p data-testid="email-off" className="rounded-md bg-warn-soft p-3 text-sm text-warn">{EMAIL_OFF_MESSAGE}</p>
       )}
       <div className="card overflow-x-auto">
         <table className="table">

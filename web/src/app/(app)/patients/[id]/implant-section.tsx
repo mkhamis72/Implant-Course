@@ -39,7 +39,7 @@ function ComponentTimeline({ site }: { site: ImplantSite }) {
             <span
               aria-current={isCurrent ? 'step' : undefined}
               className={`whitespace-nowrap rounded-full px-2 py-0.5 ${
-                isCurrent ? 'bg-accent font-semibold text-white' : reached ? 'bg-accent-soft text-accent-strong' : 'border border-line text-subtle'
+                isCurrent ? 'bg-accent font-semibold text-white' : reached ? 'bg-accent-soft text-accent-strong' : 'border border-line text-muted'
               }`}
             >
               {isCurrent && current ? COMPONENT_LABELS[current] : stage.label}
@@ -83,7 +83,7 @@ function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: 
           <h4 className="font-medium">Component history</h4>
           <ol className="list-decimal pl-5 text-muted" data-testid="component-history">
             {site.components.map((c) => (
-              <li key={c.id} className={c.voided_at ? 'text-subtle line-through' : ''}>
+              <li key={c.id} className={c.voided_at ? 'text-muted line-through' : ''}>
                 {COMPONENT_LABELS[c.component_type]} — {formatDate(c.fitted_on)}
                 {c.voided_at ? ` — undone: ${c.voided_reason}` : c.removed_on ? ` (until ${formatDate(c.removed_on)})` : ' (current)'}
               </li>
@@ -96,7 +96,7 @@ function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: 
           <h4 className="font-medium">Follow-ups</h4>
           <ul data-testid="followups">
             {site.followups.map((f) => (
-              <li key={f.id} className={f.voided_at ? 'text-subtle line-through' : ''}>
+              <li key={f.id} className={f.voided_at ? 'text-muted line-through' : ''}>
                 {formatDate(f.date)} · {f.check_type} · {OUTCOME_LABELS[f.outcome]}
                 {f.notes ? ` — ${f.notes}` : ''}
                 {f.voided_at ? ` — removed: ${f.voided_reason}` : ''}

@@ -56,8 +56,7 @@ function Tooth({
         width={TOOTH_W + 6}
         height={TOOTH_H + 6}
         rx={6}
-        fill={selected ? '#e3f3f0' : 'transparent'}
-        stroke={selected ? '#0f766e' : 'transparent'}
+        style={{ fill: selected ? 'var(--color-accent-soft)' : 'transparent', stroke: selected ? 'var(--color-accent)' : 'transparent' }}
         strokeWidth={2}
       />
       <g transform={transform}>
@@ -65,20 +64,20 @@ function Tooth({
       </g>
       {badge && (
         <g data-badge>
-          <rect x={box.x + 4} y={box.y + (box.jaw === 'upper' ? 96 : 20)} width={TOOTH_W - 8} height={16} rx={3} fill="#115e59" />
+          <rect x={box.x + 4} y={box.y + (box.jaw === 'upper' ? 96 : 20)} width={TOOTH_W - 8} height={16} rx={3} style={{ fill: 'var(--color-accent-strong)' }} />
           <text
             x={box.x + TOOTH_W / 2}
             y={box.y + (box.jaw === 'upper' ? 108 : 32)}
             textAnchor="middle"
             fontSize={10}
             fontWeight={700}
-            fill="#ffffff"
+            style={{ fill: 'var(--color-surface)' }}
           >
             {badge}
           </text>
         </g>
       )}
-      <text x={box.x + TOOTH_W / 2} y={numberY} textAnchor="middle" fontSize={13} fill="#55666b">
+      <text x={box.x + TOOTH_W / 2} y={numberY} textAnchor="middle" fontSize={13} style={{ fill: 'var(--color-muted)' }}>
         {box.fdi}
       </text>
     </g>
@@ -93,8 +92,8 @@ export function Odontogram({ statuses, selected, onSelect, badges }: Props) {
       role="group"
       aria-label="Odontogram"
     >
-      <line x1={-4} x2={CHART_WIDTH + 4} y1={TOOTH_H + JAW_GAP / 2} y2={TOOTH_H + JAW_GAP / 2} stroke="#17262b" strokeWidth={2.5} />
-      <line x1={MIDLINE_X} x2={MIDLINE_X} y1={TOOTH_H - 30} y2={TOOTH_H + JAW_GAP + 30} stroke="#17262b" strokeWidth={2.5} />
+      <line x1={-4} x2={CHART_WIDTH + 4} y1={TOOTH_H + JAW_GAP / 2} y2={TOOTH_H + JAW_GAP / 2} style={{ stroke: 'var(--color-ink)' }} strokeWidth={2.5} />
+      <line x1={MIDLINE_X} x2={MIDLINE_X} y1={TOOTH_H - 30} y2={TOOTH_H + JAW_GAP + 30} style={{ stroke: 'var(--color-ink)' }} strokeWidth={2.5} />
       {BOXES.map((box) => (
         <Tooth
           key={box.fdi}

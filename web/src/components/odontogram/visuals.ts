@@ -10,30 +10,30 @@ export type ToothVisual = {
 };
 
 export const COLORS = {
-  ink: '#3d4f55',
-  muted: '#9aa9ad',
-  faint: '#eef3f1',
-  planned: '#b86b0a', // warn
-  restored: '#0f766e', // accent
-  placed: '#1d6b3a', // ok
-  failed: '#b42318', // bad
+  ink: 'var(--color-tooth)',
+  muted: 'var(--color-line-strong)',
+  faint: 'var(--color-tooth-faint)',
+  planned: 'var(--color-planned)',
+  restored: 'var(--color-accent)',
+  placed: 'var(--color-ok)',
+  failed: 'var(--color-bad)',
 } as const;
 
 export function toothVisual(status: ToothState): ToothVisual {
   switch (status) {
     case 'present':
-      return { crownFill: '#ffffff', stroke: COLORS.ink, dashed: false, showRoots: true, glyph: 'none' };
+      return { crownFill: 'var(--color-surface)', stroke: COLORS.ink, dashed: false, showRoots: true, glyph: 'none' };
     case 'missing':
       return { crownFill: COLORS.faint, stroke: COLORS.muted, dashed: true, showRoots: false, glyph: 'none' };
     case 'extracted':
       return { crownFill: COLORS.faint, stroke: COLORS.muted, dashed: true, showRoots: false, glyph: 'cross' };
     case 'implant_planned':
-      return { crownFill: '#ffffff', stroke: COLORS.planned, dashed: true, showRoots: false, glyph: 'fixture', fixture: 'planned' };
+      return { crownFill: 'var(--color-surface)', stroke: COLORS.planned, dashed: true, showRoots: false, glyph: 'fixture', fixture: 'planned' };
     case 'implant_placed':
       return { crownFill: COLORS.faint, stroke: COLORS.muted, dashed: true, showRoots: false, glyph: 'fixture', fixture: 'placed' };
     case 'restored':
-      return { crownFill: '#e3f3f0', stroke: COLORS.restored, dashed: false, showRoots: false, glyph: 'fixture', fixture: 'placed' };
+      return { crownFill: 'var(--color-accent-soft)', stroke: COLORS.restored, dashed: false, showRoots: false, glyph: 'fixture', fixture: 'placed' };
     case 'failed':
-      return { crownFill: '#fdeceb', stroke: COLORS.failed, dashed: true, showRoots: false, glyph: 'fixture', fixture: 'failed' };
+      return { crownFill: 'var(--color-bad-soft)', stroke: COLORS.failed, dashed: true, showRoots: false, glyph: 'fixture', fixture: 'failed' };
   }
 }

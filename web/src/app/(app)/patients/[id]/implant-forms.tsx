@@ -27,10 +27,14 @@ function useSubmit(action: (input: Record<string, unknown>) => Promise<Result>, 
   return { error, pending, submit };
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/** A labelled field; required fields carry a visual mark (screen readers get aria-required on the control). */
+function Field({ label, required = false, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="label">{label}</span>
+      <span className="label">
+        {label}
+        {required && <span aria-hidden="true" className="text-bad"> *</span>}
+      </span>
       {children}
     </label>
   );
@@ -77,8 +81,10 @@ function BatchSelect({ data, productId, usedOn, value, onChange }: {
   // One tap per batch: usable batches as cards, soonest expiry first (availableLots' order).
   return (
     <fieldset>
-      <legend className="label">Stock batch</legend>
-      <div role="radiogroup" aria-label="Stock batch" className="grid gap-2 sm:grid-cols-2">
+      <legend className="label">
+        Stock batch<span aria-hidden="true" className="text-bad"> *</span>
+      </legend>
+      <div role="radiogroup" aria-label="Stock batch" aria-required="true" className="grid gap-2 sm:grid-cols-2">
         {lots.map((l) => {
           const checked = value === l.stock_lot_id;
           return (
@@ -204,15 +210,16 @@ export function PlaceForm({
   const { error, pending, submit } = useSubmit(placeImplant, onDone);
   return (
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, slotId: slot?.id ?? '', ...v }); }}>
-      <Field label="Implant">
-        <select className="input" value={v.productId} onChange={(e) => set('productId')(e.target.value)}>
+      <p className="text-xs text-muted"><span aria-hidden="true" className="text-bad">*</span> Required</p>
+      <Field label="Implant" required>
+        <select className="input" aria-required="true" value={v.productId} onChange={(e) => set('productId')(e.target.value)}>
           <option value="">Choose the implant…</option>
           {data.implants.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
         </select>
       </Field>
       <BatchSelect data={data} productId={v.productId} usedOn={v.placedOn} value={v.lotId} onChange={set('lotId')} />
-      <Field label="Placement date">
-        <input className="input" type="date" value={v.placedOn} onChange={(e) => set('placedOn')(e.target.value)} />
+      <Field label="Placement date" required>
+        <input className="input" type="date" aria-required="true" value={v.placedOn} onChange={(e) => set('placedOn')(e.target.value)} />
       </Field>
       <People
         booked={Boolean(placingFromSlot)}
@@ -222,8 +229,8 @@ export function PlaceForm({
           `supervised by ${nameOf(data.organizers, v.supervisorId) ?? '—'}`,
         ]}
       >
-        <Field label="Placed by (delegate)">
-          <select className="input" value={v.placingDelegateId} onChange={(e) => set('placingDelegateId')(e.target.value)}>
+        <Field label="Placed by (delegate)" required>
+          <select className="input" aria-required="true" value={v.placingDelegateId} onChange={(e) => set('placingDelegateId')(e.target.value)}>
             <option value="">Choose the delegate…</option>
             {data.delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
           </select>
@@ -234,8 +241,8 @@ export function PlaceForm({
             {data.delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
           </select>
         </Field>
-        <Field label="Supervisor">
-          <select className="input" value={v.supervisorId} onChange={(e) => set('supervisorId')(e.target.value)}>
+        <Field label="Supervisor" required>
+          <select className="input" aria-required="true" value={v.supervisorId} onChange={(e) => set('supervisorId')(e.target.value)}>
             <option value="">Choose the supervisor…</option>
             {data.organizers.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>

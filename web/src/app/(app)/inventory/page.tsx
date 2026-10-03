@@ -6,6 +6,7 @@ import { productLabel } from '@/lib/inventory/labels';
 import { stockFlags } from '@/lib/inventory/lots';
 import { PRODUCT_TYPE_LABELS, type Product } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
+import { firstPage, showAllHref } from '@/lib/paging';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
 
 type Row = Product & { on_hand: number; nearest_expiry: string | null };
@@ -15,7 +16,7 @@ export default async function StockPage({
 }: {
   searchParams: PageSearchParams;
 }) {
-  const { q, category, all } = await readParams(searchParams, 'q', 'category', 'all');
+  const { q, category, all, rows: rowsParam } = await readParams(searchParams, 'q', 'category', 'all', 'rows');
   const supabase = await createClient();
   const [{ data, error }, settings] = await Promise.all([
     supabase.rpc('inventory_overview', { q: String(q), p_category: String(category), include_all: all === '1' }),
@@ -23,6 +24,8 @@ export default async function StockPage({
   ]);
   if (error) throw new Error('Could not load stock');
   const rows = (data ?? []) as Row[];
+  // A first page keeps the list quick on phones as the catalog grows; search narrows it, or show all.
+  const { shown, hidden } = firstPage(rows, rowsParam === 'all', 50);
   const today = todayIso();
 
   return (
@@ -65,7 +68,7 @@ export default async function StockPage({
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {shown.map((r) => {
                 const flags = stockFlags(r, today, settings.expiry_alert_days);
                 return (
                   <tr key={r.id} data-testid={`stock-row-${r.id}`}>
@@ -89,6 +92,14 @@ export default async function StockPage({
               })}
             </tbody>
           </table>
+        )}
+        {hidden > 0 && (
+          <p data-testid="stock-more" className="mt-3 text-sm text-muted">
+            Showing the first 50 of {rows.length}.{' '}
+            <Link href={showAllHref('/inventory', { q, category, all })} className="text-accent hover:underline">
+              Show all {rows.length}
+            </Link>
+          </p>
         )}
       </div>
     </div>
