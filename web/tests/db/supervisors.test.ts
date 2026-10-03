@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
-import { makeDelegate, makePatient, makeProduct, place, receive } from './fixtures';
+import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, place, receive } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -51,6 +51,25 @@ describe('supervisors', () => {
       await actAs(c, users.organizer);
       const { rows } = await c.query('select supervisor from public.lot_usage($1)', [lot]);
       expect(rows).toEqual([{ supervisor: 'Zz Renamed Sup' }]);
+    });
+  });
+
+  it('a supervisor without an account can supervise a booking', async () => {
+    await withTx(async (c) => {
+      await actAs(c, users.admin);
+      const sup = (await c.query(`insert into public.supervisors (full_name) values ('Zz Visiting Prof') returning id`)).rows[0].id;
+      await actAs(c, users.organizer);
+      const course = await makeCourse(c);
+      const session = await makeSession(c, course);
+      const delegate = await makeDelegate(c);
+      await enroll(c, course, delegate);
+      await asPostgres(c);
+      const chair = await makeChair(c);
+      await actAs(c, users.organizer);
+      const patient = await makePatient(c);
+      const slot = await book(c, { session, chair, patient, supervisor: sup, placing: [delegate] });
+      const { rows } = await c.query('select supervisor_id from public.surgery_slots where id = $1', [slot]);
+      expect(rows).toEqual([{ supervisor_id: sup }]);
     });
   });
 });
