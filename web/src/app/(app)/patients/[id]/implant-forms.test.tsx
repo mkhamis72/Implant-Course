@@ -46,3 +46,11 @@ describe('<PlaceForm> supervisor', () => {
     expect(screen.getByRole('option', { name: 'Prof. Laila Samir' })).toBeInTheDocument();
   });
 });
+
+describe('<PlaceForm> booked supervisor', () => {
+  it('does not pre-fill a booking supervisor who is no longer on the list', () => {
+    const slot = { id: 's1', starts_at: '2030-06-10T08:00:00Z', supervisor_id: 'gone', chair: null, delegates: [] };
+    render(<PlaceForm patientId="pt" tooth={36} data={{ ...data, supervisors: [{ id: 'sup1', label: 'Prof. Laila Samir' }] }} onDone={() => {}} plannedProductId="p1" slot={slot} />);
+    expect(screen.getByRole('combobox', { name: /Supervisor/ })).toHaveValue('');
+  });
+});
