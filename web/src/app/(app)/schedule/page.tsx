@@ -91,7 +91,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
                     </Link>
                   )}
                   {b.implants.length > 0 && <div>Teeth: {b.implants.map((i) => i.tooth).join(', ')}</div>}
-                  <div>Supervisor: {b.supervisor?.full_name || b.supervisor?.email}</div>
+                  <div>Supervisor: {b.supervisor?.full_name}</div>
                   {placing && <div>Placing: {placing}</div>}
                   {assisting && <div>Assisting: {assisting}</div>}
                   {b.checklists.map((cl) => (

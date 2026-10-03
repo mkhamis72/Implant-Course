@@ -10,6 +10,7 @@ export type Session = {
   start_time: string; end_time: string; lead_organizer_id: string | null;
 };
 export type Chair = { id: string; name: string; active: boolean };
+export type Supervisor = { id: string; full_name: string; active: boolean };
 
 export type SlotRow = {
   id: string;
@@ -21,7 +22,7 @@ export type SlotRow = {
   chair_id: string;
   chair: { name: string } | null;
   patient: { id: string; full_name: string; file_no: string } | null;
-  supervisor: { full_name: string; email: string } | null;
+  supervisor: { full_name: string } | null;
   session: { title: string; course: { name: string } | null } | null;
   delegates: { role: 'placing' | 'assisting'; delegate: { full_name: string } | null }[];
   implants: { tooth: number; product: Product | null }[];

@@ -34,6 +34,9 @@ export const sessionSchema = z
   .refine((s) => s.end_time > s.start_time, { message: 'The session must end after it starts.' });
 
 export const chairSchema = z.object({ name: z.string().trim().min(1, { message: 'Enter the chair name.' }).max(40) });
+export const supervisorSchema = z.object({
+  full_name: z.string().trim().min(2, { message: 'Enter the supervisor’s name.' }).max(120, { message: 'Keep the name under 120 characters.' }),
+});
 
 export const slotSchema = z
   .object({
@@ -42,7 +45,7 @@ export const slotSchema = z
     start: time('Enter the start time (HH:MM).'),
     end: time('Enter the end time (HH:MM).'),
     patientFileNo: z.string().trim().min(1, { message: 'Choose the patient.' }),
-    supervisorId: requiredId('Choose the supervising organizer.'),
+    supervisorId: requiredId('Choose a supervisor.'),
     placing: z.array(z.string().uuid()).min(1, { message: 'Choose at least one placing delegate.' }),
     assisting: z.array(z.string().uuid()).default([]),
     implants: z

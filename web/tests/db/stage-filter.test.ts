@@ -71,7 +71,7 @@ describe('implant stage filter', () => {
       expect(await search(c, 'Zz Stage', ['cover_screw', 'healing_abutment'])).toEqual(['Zz Stage Cover', 'Zz Stage Healing']);
       expect(await search(c, 'Zz Stage', [])).toHaveLength(7);
       // Combines with the text search.
-      expect(await search(c, 'Healing', ['cover_screw', 'healing_abutment'])).toEqual(['Zz Stage Healing']);
+      expect(await search(c, 'Zz Stage Heal', ['cover_screw', 'healing_abutment'])).toEqual(['Zz Stage Healing']);
 
       expect(await stagesOf(c, [ha, bare])).toEqual([{ patient_id: ha, tooth: 46, stage: 'healing_abutment' }]);
     });

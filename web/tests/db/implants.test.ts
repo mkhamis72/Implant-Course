@@ -73,7 +73,7 @@ describe('placing an implant', () => {
     await withTx(async (c) => {
       const s = await setup(c);
       await refused(c, () => place(c, { ...s, tooth: 36, assistant: s.delegate }), /someone other than the placing delegate/);
-      await refused(c, () => place(c, { ...s, tooth: 36, supervisor: users.inactive }), /Choose the supervising organizer/);
+      await refused(c, () => place(c, { ...s, tooth: 36, supervisor: users.inactive }), /Choose an active supervisor/);
       await c.query('update public.delegates set active = false where id = $1', [s.delegate]);
       await refused(c, () => place(c, { ...s, tooth: 36 }), /Choose the delegate who placed the implant/);
     });

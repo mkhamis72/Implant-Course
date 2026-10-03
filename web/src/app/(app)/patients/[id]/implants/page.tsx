@@ -53,7 +53,7 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
                   <td data-label="Batch">{s.lot ? s.lot.lot_no ?? 'No lot' : '—'}</td>
                   <td data-label="Placed">{s.placed_on ? formatDate(s.placed_on) : '—'}</td>
                   <td data-label="Placed by">{s.placing?.full_name ?? '—'}</td>
-                  <td data-label="Supervisor">{s.supervisor?.full_name || s.supervisor?.email || '—'}</td>
+                  <td data-label="Supervisor">{s.supervisor?.full_name || '—'}</td>
                   <td data-label="Component">{current ? COMPONENT_LABELS[current.component_type] : '—'}</td>
                   <td data-label="Last follow-up">{last ? `${OUTCOME_LABELS[last.outcome]} (${last.check_type})` : '—'}</td>
                 </tr>

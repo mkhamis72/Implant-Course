@@ -8,7 +8,7 @@ import { PlaceForm } from './implant-forms';
 const implant = { id: 'p1', type: 'implant', brand: 'Brand', system: 'S', platform: null, diameter_mm: 4, length_mm: 10, description: '' };
 const lot = { stock_lot_id: 'l1', product_id: 'p1', lot_no: 'OLD', expiry: '2030-06-09', received_on: '2030-01-01', qty_received: 1, on_hand: 1 };
 const data = {
-  today: '2030-06-10', me: 'u1', implants: [implant], lots: [lot], delegates: [], organizers: [], componentProducts: [],
+  today: '2030-06-10', me: 'u1', implants: [implant], lots: [lot], delegates: [], organizers: [], supervisors: [], componentProducts: [],
 } as unknown as ChartData;
 
 const placeForm = () => render(<PlaceForm patientId="pt" tooth={36} data={data} onDone={() => {}} plannedProductId="p1" />);
@@ -36,5 +36,21 @@ describe('<PlaceForm> torque', () => {
     placeForm();
     fireEvent.click(screen.getByRole('button', { name: '35 Ncm' }));
     expect(screen.getByLabelText('Insertion torque (Ncm, optional)')).toHaveValue('35');
+  });
+});
+
+describe('<PlaceForm> supervisor', () => {
+  it('offers the supervisors list and starts empty when the current user is not on it', () => {
+    render(<PlaceForm patientId="pt" tooth={36} data={{ ...data, me: 'u1', supervisors: [{ id: 'sup1', label: 'Prof. Laila Samir' }] }} onDone={() => {}} plannedProductId="p1" />);
+    expect(screen.getByRole('combobox', { name: /Supervisor/ })).toHaveValue('');
+    expect(screen.getByRole('option', { name: 'Prof. Laila Samir' })).toBeInTheDocument();
+  });
+});
+
+describe('<PlaceForm> booked supervisor', () => {
+  it('does not pre-fill a booking supervisor who is no longer on the list', () => {
+    const slot = { id: 's1', starts_at: '2030-06-10T08:00:00Z', supervisor_id: 'gone', chair: null, delegates: [] };
+    render(<PlaceForm patientId="pt" tooth={36} data={{ ...data, supervisors: [{ id: 'sup1', label: 'Prof. Laila Samir' }] }} onDone={() => {}} plannedProductId="p1" slot={slot} />);
+    expect(screen.getByRole('combobox', { name: /Supervisor/ })).toHaveValue('');
   });
 });

@@ -198,7 +198,7 @@ export function PlaceForm({
   const [v, setV] = useState({
     productId: plannedProductId ?? '', lotId: '', placedOn: data.today,
     placingDelegateId: placingFromSlot, assistingDelegateId: assistingFromSlot,
-    supervisorId: slot?.supervisor_id ?? data.me, torque: '', graft: '', notes: '',
+    supervisorId: slot?.supervisor_id ?? (data.supervisors.some((s) => s.id === data.me) ? data.me : ''), torque: '', graft: '', notes: '',
   });
   const set = (key: keyof typeof v) => (value: string) =>
     setV((cur) => ({
@@ -226,7 +226,7 @@ export function PlaceForm({
         summary={[
           `Placed by ${nameOf(data.delegates, v.placingDelegateId) ?? '—'}`,
           v.assistingDelegateId ? `assisted by ${nameOf(data.delegates, v.assistingDelegateId)}` : null,
-          `supervised by ${nameOf(data.organizers, v.supervisorId) ?? '—'}`,
+          `supervised by ${nameOf(data.supervisors, v.supervisorId) ?? '—'}`,
         ]}
       >
         <Field label="Placed by (delegate)" required>
@@ -244,7 +244,7 @@ export function PlaceForm({
         <Field label="Supervisor" required>
           <select className="input" aria-required="true" value={v.supervisorId} onChange={(e) => set('supervisorId')(e.target.value)}>
             <option value="">Choose the supervisor…</option>
-            {data.organizers.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            {data.supervisors.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>
         </Field>
       </People>

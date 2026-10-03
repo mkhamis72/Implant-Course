@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cancelSlotSchema, correctionSchema, courseSchema, sessionSchema, slotSchema } from './schemas';
+import { cancelSlotSchema, correctionSchema, courseSchema, sessionSchema, slotSchema, supervisorSchema } from './schemas';
 
 const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
 const err = (r: { error?: { issues: { message: string }[] } }) => r.error?.issues[0].message;
@@ -42,5 +42,13 @@ describe('reasons', () => {
     expect(err(correctionSchema.safeParse({ siteId: id, patientId: id, newLotId: id, reason: ' ' }))).toBe(
       'Explain the correction (at least 3 characters).',
     );
+  });
+});
+
+describe('supervisorSchema', () => {
+  it('trims the name and requires 2–120 characters', () => {
+    expect(supervisorSchema.parse({ full_name: '  Prof. Laila Samir ' })).toEqual({ full_name: 'Prof. Laila Samir' });
+    expect(supervisorSchema.safeParse({ full_name: '   ' }).success).toBe(false);
+    expect(supervisorSchema.safeParse({ full_name: 'x'.repeat(121) }).success).toBe(false);
   });
 });
