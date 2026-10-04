@@ -8,6 +8,7 @@ import { patientSchema, toPatientRow } from '@/lib/patients/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { staleMessage } from '@/lib/patients/conflict-server';
 import { patientSaveError } from '@/lib/patients/save-errors';
+import { userMessage } from '@/lib/db-errors';
 
 
 export async function createPatient(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -37,6 +38,17 @@ export async function updatePatient(_prev: FormState, formData: FormData): Promi
   if (!data?.length) return failed(await staleMessage(supabase, 'patients', id), formData);
   revalidatePath(`/patients/${id}`, 'layout');
   return { ok: 'Patient details saved.' };
+}
+
+export async function deletePatient(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requireActiveUser();
+  const id = String(formData.get('id') ?? '');
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('delete_patient', { p_patient: id });
+  if (error) return { error: userMessage(error)! };
+  revalidatePath('/patients');
+  revalidatePath('/schedule');
+  redirect('/patients');
 }
 
 export async function setArchived(_prev: FormState, formData: FormData): Promise<FormState> {

@@ -3,11 +3,14 @@
 import { useState, useTransition } from 'react';
 import { activeSite, currentComponent } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
-import { COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, type ChartData, type ComponentType, type ImplantSite } from '@/lib/inventory/types';
+import {
+  COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUES, TECHNIQUE_LABELS,
+  type ChartData, type ComponentType, type ImplantSite,
+} from '@/lib/inventory/types';
 import { nextActions, type PanelAction } from '@/lib/patients/tooth-panel';
 import { isManualState, type ToothState } from '@/lib/patients/types';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { cancelPlan } from './implant-actions';
+import { cancelPlan, setTechnique } from './implant-actions';
 import { Corrections } from './corrections';
 import { ComponentForm, FollowupForm, PlaceForm, PlanForm } from './implant-forms';
 
@@ -51,6 +54,48 @@ function ComponentTimeline({ site }: { site: ImplantSite }) {
   );
 }
 
+/** Shows the technique and lets it be set or corrected in place. */
+function TechniqueControl({ site, patientId }: { site: ImplantSite; patientId: string }) {
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  function choose(technique: string) {
+    setError(null);
+    start(async () => {
+      const result = await setTechnique({ patientId, siteId: site.id, technique });
+      if (result.error) setError(result.error);
+      else setEditing(false);
+    });
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="technique">
+      <span className="text-muted">Technique:</span>
+      {editing ? (
+        <select
+          className="input w-auto py-1"
+          aria-label="Technique"
+          defaultValue={site.technique ?? ''}
+          disabled={pending}
+          onChange={(e) => e.target.value && choose(e.target.value)}
+        >
+          <option value="">Choose…</option>
+          {TECHNIQUES.map((t) => <option key={t} value={t}>{TECHNIQUE_LABELS[t]}</option>)}
+        </select>
+      ) : (
+        <>
+          <span className={`badge ${site.technique === 'guided' ? 'badge-guided' : site.technique ? 'badge-accent' : ''}`}>
+            {site.technique ? TECHNIQUE_LABELS[site.technique] : 'Not set'}
+          </span>
+          <button type="button" className="text-accent hover:underline" onClick={() => setEditing(true)}>
+            {site.technique ? 'Change' : 'Set'}
+          </button>
+        </>
+      )}
+      {error && <p role="alert" className="w-full text-bad">{error}</p>}
+    </div>
+  );
+}
+
 function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: string; data: ChartData }) {
   const facts = [
     site.lot ? (site.lot.lot_no ? `Lot ${site.lot.lot_no}` : 'No lot') : null,
@@ -76,6 +121,7 @@ function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: 
           </ul>
         )}
         {people.length > 0 && <p className="text-muted">{people.join(', ')}</p>}
+        {site.state !== 'removed' && <TechniqueControl site={site} patientId={patientId} />}
         {(site.state === 'placed' || site.state === 'restored') && <ComponentTimeline site={site} />}
       </div>
       {site.components.length > 0 && (
@@ -138,6 +184,7 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
           Planned{site.product ? `: ${productLabel(site.product)}` : ' (implant not chosen yet)'}
         </p>
       )}
+      {site?.state === 'planned' && <TechniqueControl site={site} patientId={patientId} />}
       {site?.state === 'planned' && site.slot && (
         <p className="text-sm text-ink">
           Booked: {formatDateTime(site.slot.starts_at)}
@@ -164,7 +211,8 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
 
       {mode === 'plan' && <PlanForm patientId={patientId} tooth={tooth} data={data} onDone={done} />}
       {mode === 'place' && (
-        <PlaceForm patientId={patientId} tooth={tooth} data={data} onDone={done} plannedProductId={site?.product?.id ?? null} slot={site?.slot ?? null} />
+        <PlaceForm patientId={patientId} tooth={tooth} data={data} onDone={done} plannedProductId={site?.product?.id ?? null}
+          plannedTechnique={site?.technique ?? null} slot={site?.slot ?? null} />
       )}
       {mode === 'component' && site && <ComponentForm patientId={patientId} site={site} data={data} onDone={done} />}
       {mode === 'followup' && site && <FollowupForm patientId={patientId} site={site} data={data} onDone={done} />}

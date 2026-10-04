@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requireActiveUser } from '@/lib/auth/session';
 import { componentSchema, followupSchema, placeSchema, planSchema } from '@/lib/inventory/schemas';
+import { TECHNIQUES, type Technique } from '@/lib/inventory/types';
 import { userMessage } from '@/lib/db-errors';
 import { correctionSchema, voidSchema } from '@/lib/schedule/schemas';
 
@@ -22,7 +23,7 @@ export async function planImplant(input: Record<string, unknown>): Promise<Resul
   const parsed = planSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const p = parsed.data;
-  return run(p.patientId, 'plan_implant', { p_patient: p.patientId, p_tooth: p.tooth, p_product: p.productId, p_notes: p.notes });
+  return run(p.patientId, 'plan_implant', { p_patient: p.patientId, p_tooth: p.tooth, p_product: p.productId, p_notes: p.notes, p_technique: p.technique });
 }
 
 export async function cancelPlan(input: { patientId: string; siteId: string }): Promise<Result> {
@@ -48,7 +49,14 @@ export async function placeImplant(input: Record<string, unknown>): Promise<Resu
     p_graft: p.graft,
     p_notes: p.notes,
     p_slot: p.slotId,
+    p_technique: p.technique,
   });
+}
+
+export async function setTechnique(input: { patientId: string; siteId: string; technique: string }): Promise<Result> {
+  await requireActiveUser();
+  if (!(TECHNIQUES as readonly string[]).includes(input.technique)) return { error: 'Choose Guided or Free hand.' };
+  return run(input.patientId, 'set_implant_technique', { p_site: input.siteId, p_technique: input.technique as Technique });
 }
 
 export async function fitComponent(input: Record<string, unknown>): Promise<Result> {

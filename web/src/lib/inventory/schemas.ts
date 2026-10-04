@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { isRealDate, todayIso } from '@/lib/dates';
 import { isFdiTooth } from '@/lib/patients/fdi';
-import { COMPONENT_TYPES, FOLLOWUP_OUTCOMES, PRODUCT_TYPES } from './types';
+import { COMPONENT_TYPES, FOLLOWUP_OUTCOMES, PRODUCT_TYPES, TECHNIQUES } from './types';
 
 const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
 const optionalId = z.preprocess(blankToNull, z.string().uuid().nullable());
@@ -62,12 +62,15 @@ export const delegateSchema = z.object({
   active: checkbox,
 });
 
+const technique = z.enum(TECHNIQUES, { message: 'Choose Guided or Free hand.' });
+
 const tooth = z.coerce.number().refine(isFdiTooth, { message: 'Unknown tooth number.' });
 
 export const planSchema = z.object({
   patientId: requiredId('Patient not found.'),
   tooth,
   productId: optionalId,
+  technique,
   notes: text(1000),
 });
 
@@ -81,6 +84,7 @@ export const placeSchema = z.object({
   slotId: optionalId,
   assistingDelegateId: optionalId,
   supervisorId: requiredId('Choose a supervisor.'),
+  technique,
   torque: optionalNumber(0, 150, 'Enter an insertion torque between 0 and 150 Ncm.'),
   graft: text(200),
   notes: text(1000),

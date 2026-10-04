@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isRealDate } from '@/lib/dates';
 import { isFdiTooth } from '@/lib/patients/fdi';
+import { TECHNIQUES } from '@/lib/inventory/types';
 import { SESSION_TYPES } from './types';
 
 const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
@@ -10,6 +11,7 @@ const text = (max: number) => z.string().trim().max(max).default('');
 const date = (message: string) => z.string().refine(isRealDate, { message });
 const time = (message: string) => z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, { message });
 const reason = (message: string) => z.string().trim().min(3, { message }).max(300);
+const technique = z.enum(TECHNIQUES, { message: 'Choose Guided or Free hand for each implant.' });
 
 export const courseSchema = z
   .object({
@@ -53,6 +55,7 @@ export const slotSchema = z
         z.object({
           tooth: z.coerce.number().refine(isFdiTooth, { message: 'Unknown tooth number.' }),
           productId: optionalId,
+          technique,
         }),
       )
       .default([]),
@@ -60,6 +63,26 @@ export const slotSchema = z
     notes: text(1000),
   })
   .refine((s) => s.end > s.start, { message: 'The end time must be after the start time.' });
+
+export const updateSlotSchema = z
+  .object({
+    slotId: requiredId('Booking not found.'),
+    chairId: requiredId('Choose a chair.'),
+    start: time('Enter the start time (HH:MM).'),
+    end: time('Enter the end time (HH:MM).'),
+    supervisorId: requiredId('Choose a supervisor.'),
+    placing: z.array(z.string().uuid()).min(1, { message: 'Choose at least one placing delegate.' }),
+    assisting: z.array(z.string().uuid()).default([]),
+    implants: z.array(z.object({ siteId: requiredId('Implant not found.'), technique })).default([]),
+    overrideReason: text(300),
+    notes: text(1000),
+  })
+  .refine((s) => s.end > s.start, { message: 'The end time must be after the start time.' });
+
+export const slotStatusSchema = z.object({
+  slotId: requiredId('Booking not found.'),
+  status: z.enum(['scheduled', 'done'], { message: 'Unknown status.' }),
+});
 
 export const cancelSlotSchema = z.object({
   slotId: requiredId('Booking not found.'),

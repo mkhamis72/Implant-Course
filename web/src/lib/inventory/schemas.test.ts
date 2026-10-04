@@ -50,7 +50,7 @@ describe('delegateSchema', () => {
 });
 
 describe('placeSchema / componentSchema', () => {
-  const place = { patientId: id, tooth: 36, productId: id, lotId: id, placedOn: '2026-01-10', placingDelegateId: id, supervisorId: id };
+  const place = { patientId: id, tooth: 36, productId: id, lotId: id, placedOn: '2026-01-10', placingDelegateId: id, supervisorId: id, technique: 'guided' };
   it('accepts a complete placement and optional fields as null', () => {
     expect(placeSchema.parse({ ...place, assistingDelegateId: '', torque: '' })).toMatchObject({ assistingDelegateId: null, torque: null });
   });
@@ -58,6 +58,7 @@ describe('placeSchema / componentSchema', () => {
     expect(err(placeSchema.safeParse({ ...place, lotId: '' }))).toBe('Choose a stock batch.');
     expect(err(placeSchema.safeParse({ ...place, placingDelegateId: '' }))).toBe('Choose the delegate who placed the implant.');
     expect(err(placeSchema.safeParse({ ...place, torque: '200' }))).toBe('Enter an insertion torque between 0 and 150 Ncm.');
+    expect(err(placeSchema.safeParse({ ...place, technique: '' }))).toBe('Choose Guided or Free hand.');
   });
   it('components need a batch when a product is chosen, and someone who fitted them', () => {
     const c = { siteId: id, patientId: id, componentType: 'ti_base', fittedOn: '2026-01-10', byDelegateId: id };

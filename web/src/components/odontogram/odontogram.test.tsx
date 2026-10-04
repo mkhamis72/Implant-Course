@@ -48,7 +48,7 @@ describe('<Odontogram>', () => {
 describe('<Legend>', () => {
   it('explains every status', () => {
     render(<Legend />);
-    for (const label of ['Present', 'Missing', 'Extracted', 'Implant planned', 'Implant placed', 'Restored', 'Failed implant']) {
+    for (const label of ['Present', 'Missing', 'To be extracted', 'Implant planned', 'Implant placed', 'Restored', 'Failed implant']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });

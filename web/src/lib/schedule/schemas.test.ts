@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { cancelSlotSchema, correctionSchema, courseSchema, sessionSchema, slotSchema, supervisorSchema } from './schemas';
+import {
+  cancelSlotSchema, correctionSchema, courseSchema, sessionSchema, slotSchema, slotStatusSchema, supervisorSchema, updateSlotSchema,
+} from './schemas';
 
 const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
 const err = (r: { error?: { issues: { message: string }[] } }) => r.error?.issues[0].message;
@@ -23,16 +25,40 @@ describe('course and session schemas', () => {
 describe('slotSchema', () => {
   const slot = {
     sessionId: id, chairId: id, start: '09:00', end: '10:30', patientFileNo: ' P00012 ', supervisorId: id,
-    placing: [id], assisting: [], implants: [{ tooth: '36', productId: '' }], overrideReason: '', notes: '',
+    placing: [id], assisting: [], implants: [{ tooth: '36', productId: '', technique: 'guided' }], overrideReason: '', notes: '',
   };
   it('normalizes the booking', () => {
-    expect(slotSchema.parse(slot)).toMatchObject({ patientFileNo: 'P00012', implants: [{ tooth: 36, productId: null }] });
+    expect(slotSchema.parse(slot)).toMatchObject({ patientFileNo: 'P00012', implants: [{ tooth: 36, productId: null, technique: 'guided' }] });
   });
   it('explains what is missing', () => {
     expect(err(slotSchema.safeParse({ ...slot, end: '08:00' }))).toBe('The end time must be after the start time.');
     expect(err(slotSchema.safeParse({ ...slot, placing: [] }))).toBe('Choose at least one placing delegate.');
     expect(err(slotSchema.safeParse({ ...slot, patientFileNo: '' }))).toBe('Choose the patient.');
-    expect(err(slotSchema.safeParse({ ...slot, implants: [{ tooth: '19', productId: '' }] }))).toBe('Unknown tooth number.');
+    expect(err(slotSchema.safeParse({ ...slot, implants: [{ tooth: '19', productId: '', technique: 'guided' }] }))).toBe('Unknown tooth number.');
+    expect(err(slotSchema.safeParse({ ...slot, implants: [{ tooth: '36', productId: '' }] }))).toBe(
+      'Choose Guided or Free hand for each implant.',
+    );
+  });
+});
+
+describe('updateSlotSchema', () => {
+  const edit = {
+    slotId: id, chairId: id, start: '11:00', end: '12:00', supervisorId: id, placing: [id], assisting: [],
+    implants: [{ siteId: id, technique: 'free_hand' }], overrideReason: '', notes: ' moved ',
+  };
+  it('normalizes the edit', () => {
+    expect(updateSlotSchema.parse(edit)).toMatchObject({ notes: 'moved', implants: [{ siteId: id, technique: 'free_hand' }] });
+  });
+  it('explains what is wrong', () => {
+    expect(err(updateSlotSchema.safeParse({ ...edit, end: '10:00' }))).toBe('The end time must be after the start time.');
+    expect(err(updateSlotSchema.safeParse({ ...edit, placing: [] }))).toBe('Choose at least one placing delegate.');
+  });
+});
+
+describe('slotStatusSchema', () => {
+  it('only allows scheduled and done', () => {
+    expect(slotStatusSchema.parse({ slotId: id, status: 'done' })).toEqual({ slotId: id, status: 'done' });
+    expect(err(slotStatusSchema.safeParse({ slotId: id, status: 'cancelled' }))).toBe('Unknown status.');
   });
 });
 

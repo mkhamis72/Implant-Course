@@ -34,9 +34,13 @@
   --color-off: #5b6770;           /* cancelled, inactive */
   --color-off-soft: #eef1f3;
 
+  /* Surgical technique: free hand uses the accent; guided is violet so the two read apart on the schedule. */
+  --color-guided: #5b3fb0;
+  --color-guided-soft: #efebfa;
+
   /* Odontogram drawing colours (status colours come from the tokens above). */
   --color-tooth: #3d4f55;         /* tooth outline */
-  --color-tooth-faint: #eef3f1;   /* missing / extracted crown */
+  --color-tooth-faint: #eef3f1;   /* missing crown */
   --color-planned: #b86b0a;       /* planned fixture outline (amber, 4:1 as a graphic) */
   --color-fixture: #cfe7d6;       /* placed fixture body */
 
@@ -200,6 +204,7 @@
   .badge-warn { background: var(--color-warn-soft); color: var(--color-warn); }
   .badge-bad { background: var(--color-bad-soft); color: var(--color-bad); }
   .badge-accent { background: var(--color-accent-soft); color: var(--color-accent-strong); }
+  .badge-guided { background: var(--color-guided-soft); color: var(--color-guided); }
 
   /* Section tabs: scroll sideways on narrow screens instead of wrapping or clipping. */
   .tabs {

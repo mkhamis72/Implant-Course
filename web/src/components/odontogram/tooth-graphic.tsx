@@ -35,7 +35,7 @@ export function ToothGraphic({ type, jaw, status }: { type: ToothType; jaw: 'upp
         strokeWidth={1.5}
         strokeDasharray={visual.dashed ? '4 3' : undefined}
       />
-      {visual.glyph === 'cross' && <path d="M8 86 L32 124 M32 86 L8 124" style={{ stroke: 'var(--color-subtle)' }} strokeWidth={2.5} />}
+      {visual.glyph === 'cross' && <path d="M8 86 L32 124 M32 86 L8 124" style={{ stroke: 'var(--color-bad)' }} strokeWidth={3} />}
     </g>
   );
 }

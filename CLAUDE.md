@@ -38,6 +38,9 @@ There is no local Supabase: DB and E2E tests hit the hosted **dev** project conf
 - Patients and medical history use optimistic concurrency on `updated_at`.
 - Supervisors on bookings and implants (`surgery_slots.supervisor_id`, `implant_sites.supervisor_id`) reference `public.supervisors`, an admin-maintained list of names (Admin → Supervisors), not user accounts. Accounts copied in by 0024 kept their profile id as supervisor id. Embed names via `supervisors!*_supervisor_ref_fkey`. "Fitted by organizer" on components still references `profiles`.
 - The catalogue is Oxy Implant PSK-MDK + MD EXT, generated from `docs/catalog/oxy-catalog.csv` (0026). The 0008 sample brands are deactivated (`is_sample`), not deleted. Any component can be fitted without a product (Oxy cover screws come in the implant box).
+- `implant_sites.technique` is `guided` / `free_hand`, nullable in the DB (older rows and the previous app version) but required by the app's Zod schemas; the schedule colours bookings by it (`bookingTechnique`). Bookings are edited in place with `update_surgery_slot` (same day only) and completed/reopened with `set_slot_status` (0027).
+- Courses and patients are hard-deleted only through `delete_course` / `delete_patient`, which refuse anything with stock traceability or placed implants (the ledger is permanent); otherwise patients are archived.
+- Tooth state `extracted` is labelled "To be extracted" (the tooth is still present); the enum value is unchanged.
 
 **Migrations** (`web/supabase/migrations/NNNN_*.sql`) are applied once, in order, by `scripts/migrate.ts`; never edit an applied one. To change a function, add a new migration with `create or replace` of the *latest* definition (search later migrations — functions are redefined several times). New public tables get no privileges by default (0019) and must grant what they need.
 

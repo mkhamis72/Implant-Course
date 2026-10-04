@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { currentComponent, lastFollowup } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
-import { COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, type ImplantSite } from '@/lib/inventory/types';
+import { COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type ImplantSite } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
 import { SITE_SELECT, sortSite } from '../chart-data';
 
@@ -29,6 +29,7 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
               <th>Tooth</th>
               <th>State</th>
               <th>Implant</th>
+              <th>Technique</th>
               <th>Batch</th>
               <th>Placed</th>
               <th>Placed by</th>
@@ -50,6 +51,7 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
                   </td>
                   <td data-label="State">{SITE_STATE_LABELS[s.state]}</td>
                   <td data-label="Implant">{s.product ? productLabel(s.product) : '—'}</td>
+                  <td data-label="Technique">{s.technique ? TECHNIQUE_LABELS[s.technique] : '—'}</td>
                   <td data-label="Batch">{s.lot ? s.lot.lot_no ?? 'No lot' : '—'}</td>
                   <td data-label="Placed">{s.placed_on ? formatDate(s.placed_on) : '—'}</td>
                   <td data-label="Placed by">{s.placing?.full_name ?? '—'}</td>

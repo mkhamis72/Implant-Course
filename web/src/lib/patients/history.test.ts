@@ -27,7 +27,7 @@ describe('describeChange', () => {
     );
     expect(
       describeChange(entry({ table_name: 'tooth_status', before: { tooth: 36, status: 'missing' }, after: { tooth: 36, status: 'extracted' } })),
-    ).toBe('Tooth 36: Missing → Extracted');
+    ).toBe('Tooth 36: Missing → To be extracted');
   });
   it('describes notes', () => {
     expect(describeChange(entry({ table_name: 'visit_notes', action: 'INSERT', after: { teeth: [36, 46] } }))).toBe(

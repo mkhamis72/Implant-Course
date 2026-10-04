@@ -60,6 +60,10 @@ export const SITE_STATE_LABELS: Record<SiteState, string> = {
   planned: 'Planned', placed: 'Placed', restored: 'Restored', failed: 'Failed', removed: 'Cancelled',
 };
 
+export const TECHNIQUES = ['guided', 'free_hand'] as const;
+export type Technique = (typeof TECHNIQUES)[number];
+export const TECHNIQUE_LABELS: Record<Technique, string> = { guided: 'Guided', free_hand: 'Free hand' };
+
 export const FOLLOWUP_OUTCOMES = ['ok', 'integrated', 'failed', 'complication'] as const;
 export type FollowupOutcome = (typeof FOLLOWUP_OUTCOMES)[number];
 export const OUTCOME_LABELS: Record<FollowupOutcome, string> = {
@@ -103,6 +107,7 @@ export type ImplantSite = {
   id: string;
   tooth: number;
   state: SiteState;
+  technique: Technique | null;
   placed_on: string | null;
   stock_lot_id: string | null;
   torque_ncm: number | null;

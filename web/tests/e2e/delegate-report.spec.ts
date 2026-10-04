@@ -16,17 +16,17 @@ test('shows placed and assisted implants with totals, and exports CSV', async ({
   const patientId = await createPatientViaUi(page, { full_name: patientName });
   const me = (await api.auth.getUser()).data.user!.id;
   const today = new Date().toISOString().slice(0, 10);
-  for (const [tooth, placing, assisting] of [[36, delegate, helper], [46, helper, delegate]] as const) {
+  for (const [tooth, placing, assisting, technique] of [[36, delegate, helper, 'guided'], [46, helper, delegate, 'free_hand']] as const) {
     const { error } = await api.rpc('place_implant', {
       p_patient: patientId, p_tooth: tooth, p_product: stock.productId, p_lot: stock.lotId, p_placed_on: today,
-      p_placing_delegate: placing, p_assisting_delegate: assisting, p_supervisor: me,
+      p_placing_delegate: placing, p_assisting_delegate: assisting, p_supervisor: me, p_technique: technique,
     });
     expect(error).toBeNull();
   }
 
   await page.goto(`/delegates/${delegate}`);
   await expect(page.getByTestId('report-row')).toHaveCount(2);
-  await expect(page.getByTestId('report-totals')).toHaveText('Placed 1 · Assisted 1 · Failed 0');
+  await expect(page.getByTestId('report-totals')).toHaveText('Placed 1 · Assisted 1 · Failed 0 · Guided 1 · Free hand 1');
 
   const download = page.waitForEvent('download');
   await page.getByRole('link', { name: 'Download CSV' }).click();
@@ -34,5 +34,7 @@ test('shows placed and assisted implants with totals, and exports CSV', async ({
   const csv = readFileSync(file!, 'utf8');
   expect(csv.startsWith('﻿Course,Patient,File,Tooth,Role')).toBe(true);
   expect(csv).toContain(patientName);
+  expect(csv.split('\r\n')[0]).toContain('Technique');
+  expect(csv).toContain('Guided');
   expect(csv.split('\r\n').filter(Boolean)).toHaveLength(3);
 });

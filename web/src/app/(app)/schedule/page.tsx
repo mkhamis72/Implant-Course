@@ -7,8 +7,48 @@ import { assignLanes, dayColumns } from '@/lib/schedule/grid';
 import type { Chair, SlotRow } from '@/lib/schedule/types';
 import { SLOT_SELECT } from '@/lib/schedule/queries';
 import { progressOf } from '@/lib/checklists/format';
+import { TECHNIQUE_LABELS } from '@/lib/inventory/types';
+import { bookingTechnique, TECHNIQUE_SHORT, type BookingTechnique } from '@/lib/schedule/technique';
 import { CancelBooking } from './cancel-booking';
+import { BookingStatus } from './booking-status';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
+
+// Card colours by surgical technique; a booking whose implants differ gets a two-colour stripe.
+const CARD: Record<BookingTechnique | 'none', string> = {
+  guided: 'border-guided bg-guided-soft',
+  free_hand: 'border-accent bg-accent-soft',
+  mixed: 'border-guided bg-surface',
+  none: 'border-line-strong bg-surface',
+};
+const MIXED_STRIPE = {
+  borderLeftWidth: '6px',
+  borderImage: 'linear-gradient(var(--color-guided) 50%, var(--color-accent) 50%) 1',
+};
+
+function Legend() {
+  const items: [string, string][] = [
+    ['border-guided bg-guided-soft', 'Guided'],
+    ['border-accent bg-accent-soft', 'Free hand'],
+    ['border-line-strong bg-surface', 'Technique not set'],
+  ];
+  return (
+    <ul className="flex flex-wrap items-center gap-4 text-xs text-muted" aria-label="Legend">
+      {items.map(([cls, label]) => (
+        <li key={label} className="flex items-center gap-1.5">
+          <span className={`inline-block h-3 w-4 rounded-sm border ${cls}`} aria-hidden />
+          {label}
+        </li>
+      ))}
+      <li className="flex items-center gap-1.5">
+        <span className="inline-block h-3 w-4 rounded-sm border bg-surface" style={MIXED_STRIPE} aria-hidden />
+        Mixed
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span className="badge badge-ok">Completed</span>
+      </li>
+    </ul>
+  );
+}
 
 export default async function SchedulePage({ searchParams }: { searchParams: PageSearchParams }) {
   const raw = (await readParams(searchParams, 'date')).date || undefined;
@@ -47,6 +87,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
           <button className="btn-secondary btn">Go</button>
         </form>
       </div>
+      {live.length > 0 && <Legend />}
       {chairList.length === 0 ? (
         <p className="card text-muted">No chairs yet. An admin can add chairs under Admin → Chairs.</p>
       ) : (
@@ -71,12 +112,15 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
               const { lane, lanes: laneCount } = lanes[b.id];
               const placing = b.delegates.filter((d) => d.role === 'placing').map((d) => d.delegate?.full_name).join(', ');
               const assisting = b.delegates.filter((d) => d.role === 'assisting').map((d) => d.delegate?.full_name).join(', ');
+              const technique = bookingTechnique(b.implants);
               return (
                 <div
                   key={b.id}
                   data-testid={`booking-${b.patient?.file_no}`}
-                  className={`m-0.5 space-y-0.5 overflow-y-auto rounded-md border p-1.5 ${b.status === 'cancelled' ? 'border-line-strong bg-sunken text-muted line-through' : b.status === 'done' ? 'border-ok-line bg-ok-soft' : 'border-accent bg-accent-soft'}`}
+                  data-technique={technique ?? 'none'}
+                  className={`m-0.5 space-y-0.5 overflow-y-auto rounded-md border p-1.5 ${CARD[technique ?? 'none']} ${b.status === 'done' ? 'opacity-80' : ''}`}
                   style={{
+                    ...(technique === 'mixed' ? MIXED_STRIPE : {}),
                     gridColumn: col + 2,
                     gridRow: `${row + 1} / span ${span}`,
                     justifySelf: 'start',
@@ -84,13 +128,34 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
                     marginLeft: `calc(${(100 * lane) / laneCount}% + 2px)`,
                   }}
                 >
-                  <div className="font-semibold">{start}–{end}</div>
+                  <div className="flex flex-wrap items-center justify-between gap-1">
+                    <span className="font-semibold">{start}–{end}</span>
+                    {b.status === 'done' && <span className="badge badge-ok">Completed</span>}
+                  </div>
                   {b.patient && (
                     <Link href={`/patients/${b.patient.id}`} className="block text-accent-strong hover:underline">
                       {b.patient.full_name} ({b.patient.file_no})
                     </Link>
                   )}
-                  {b.implants.length > 0 && <div>Teeth: {b.implants.map((i) => i.tooth).join(', ')}</div>}
+                  {b.implants.length > 0 && (
+                    <div>
+                      Teeth:{' '}
+                      {b.implants.map((i, n) => {
+                        const t = i.site?.technique;
+                        return (
+                          <span key={i.tooth}>
+                            {n > 0 && ', '}
+                            {i.tooth}
+                            {t && (
+                              <abbr title={TECHNIQUE_LABELS[t]} className={`ml-0.5 no-underline ${t === 'guided' ? 'text-guided' : 'text-accent-strong'}`}>
+                                {TECHNIQUE_SHORT[t]}
+                              </abbr>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div>Supervisor: {b.supervisor?.full_name}</div>
                   {placing && <div>Placing: {placing}</div>}
                   {assisting && <div>Assisting: {assisting}</div>}
@@ -100,7 +165,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
                     </Link>
                   ))}
                   {b.override_reason && <div className="text-warn no-underline">Overridden: {b.override_reason}</div>}
-                  {b.status === 'cancelled' && <div className="no-underline">Cancelled: {b.cancel_reason}</div>}
+                  <div className="flex flex-wrap gap-x-3">
+                    {b.status === 'scheduled' && (
+                      <Link href={`/schedule/${b.id}/edit`} className="text-xs text-accent-strong hover:underline" aria-label="Edit booking">Edit</Link>
+                    )}
+                    {b.status !== 'cancelled' && <BookingStatus slotId={b.id} status={b.status} />}
+                  </div>
                   {b.status === 'scheduled' && <CancelBooking slotId={b.id} />}
                 </div>
               );
