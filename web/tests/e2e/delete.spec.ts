@@ -12,11 +12,11 @@ async function confirmDelete(page: Page, noun: string, name: string) {
   await confirm.click();
 }
 
-test('deletes a patient after typing their name', async ({ page }) => {
+test('deletes a patient from the header after typing their name', async ({ page }) => {
   await login(page, TEST_USERS.organizer.email);
   const name = uniqueName('Delete me');
   const patientId = await createPatientViaUi(page, { full_name: name });
-  await page.goto(`/patients/${patientId}/overview`);
+  await page.goto(`/patients/${patientId}`);
   await confirmDelete(page, 'patient', name);
   await expect(page).toHaveURL(/\/patients$/);
   await page.goto(`/patients/${patientId}`);
@@ -36,10 +36,25 @@ test('refuses to delete a patient with a placed implant', async ({ page }) => {
     p_placed_on: new Date().toISOString().slice(0, 10), p_placing_delegate: delegate, p_supervisor: me,
   });
   expect(error).toBeNull();
-  await page.goto(`/patients/${patientId}/overview`);
+  await page.goto(`/patients/${patientId}/implants`);
   await confirmDelete(page, 'patient', name);
   await expect(page.getByRole('alert').filter({ hasText: 'Archive them instead' })).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`/patients/${patientId}/overview`));
+  await expect(page).toHaveURL(new RegExp(`/patients/${patientId}/implants`));
+});
+
+test('deletes a patient from the Patients list', async ({ page }) => {
+  await login(page, TEST_USERS.organizer.email);
+  const name = uniqueName('List delete');
+  const fileNo = `E2E-L${Date.now()}`;
+  await createPatientViaUi(page, { full_name: name, file_no: fileNo });
+  await page.goto(`/patients?q=${encodeURIComponent(name)}`);
+  const row = page.getByTestId(`patient-row-${fileNo}`);
+  await row.getByRole('button', { name: `Delete ${name}` }).click();
+  await row.getByLabel(/to confirm/).fill(name);
+  await row.getByRole('button', { name: 'Delete patient' }).click();
+  await expect(page).toHaveURL(/\/patients$/);
+  await page.goto(`/patients?q=${encodeURIComponent(name)}`);
+  await expect(page.getByText('No patients found.')).toBeVisible();
 });
 
 test('deletes a course after typing its name', async ({ page }) => {

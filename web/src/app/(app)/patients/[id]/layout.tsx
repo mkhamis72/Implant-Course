@@ -5,6 +5,7 @@ import { ageOn } from '@/lib/patients/age';
 import { medicalAlerts } from '@/lib/patients/alerts';
 import type { MedicalHistory, Patient } from '@/lib/patients/types';
 import { PatientTabs } from './patient-tabs';
+import { DeletePatient } from '../delete-patient';
 
 export default async function PatientLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -36,6 +37,7 @@ export default async function PatientLayout({ children, params }: { children: Re
             ))}
           </ul>
         )}
+        <DeletePatient id={p.id} name={p.full_name} triggerClassName="ml-auto" panelClassName="basis-full" />
       </header>
       <PatientTabs patientId={p.id} />
       {children}

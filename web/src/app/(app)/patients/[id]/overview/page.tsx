@@ -2,8 +2,7 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import type { MedicalHistory, Patient } from '@/lib/patients/types';
 import { PatientForm } from '../../new/patient-form';
-import { deletePatient, updatePatient } from '../../actions';
-import { ConfirmDelete } from '@/components/confirm-delete';
+import { updatePatient } from '../../actions';
 import { MedicalHistoryForm } from './medical-history-form';
 import { ArchiveButton } from './archive-button';
 
@@ -24,13 +23,6 @@ export default async function OverviewPage({ params }: { params: Promise<{ id: s
       </section>
       <MedicalHistoryForm history={history as MedicalHistory} />
       <ArchiveButton patientId={p.id} archived={p.archived} />
-      <ConfirmDelete
-        id={p.id}
-        noun="patient"
-        name={p.full_name}
-        consequences="Their chart, plans, notes and surgery bookings are deleted too. A patient with a placed implant or fitted component can't be deleted — archive them instead."
-        action={deletePatient}
-      />
     </div>
   );
 }
