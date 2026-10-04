@@ -17,4 +17,11 @@ describe('ConfirmDelete', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByLabelText(/to confirm/)).not.toBeInTheDocument();
   });
+
+  it('names the opening button after the record when asked, e.g. one per list row', () => {
+    render(
+      <ConfirmDelete id="p1" noun="patient" name="Amal Hassan" consequences="" triggerLabel="Delete Amal Hassan" action={vi.fn(async () => ({}))} />,
+    );
+    expect(screen.getByRole('button', { name: 'Delete Amal Hassan' })).toHaveTextContent('Delete patient');
+  });
 });

@@ -4,6 +4,7 @@ import { ageOn } from '@/lib/patients/age';
 import type { Patient } from '@/lib/patients/types';
 import { IMPLANT_STAGES, IMPLANT_STAGE_LABELS, parseStages, teethByPatient, type StageSite } from '@/lib/patients/stages';
 import { firstParam, type PageSearchParams } from '@/lib/search-params';
+import { DeletePatient } from './delete-patient';
 
 export default async function PatientsPage({ searchParams }: { searchParams: PageSearchParams }) {
   const sp = await searchParams;
@@ -69,6 +70,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
                 <th>Age</th>
                 <th>Phone</th>
                 {stages.length > 0 && <th>Teeth</th>}
+                <th><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -84,6 +86,9 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
                   <td data-label="Age">{ageOn(p.dob, today) ?? '—'}</td>
                   <td data-label="Phone">{p.phone || '—'}</td>
                   {stages.length > 0 && <td data-label="Teeth">{teeth[p.id] ?? '—'}</td>}
+                  <td data-label="Actions">
+                    <DeletePatient id={p.id} name={p.full_name} triggerLabel={`Delete ${p.full_name}`} />
+                  </td>
                 </tr>
               ))}
             </tbody>
