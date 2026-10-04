@@ -6,8 +6,8 @@ import { availableLots } from '@/lib/inventory/lots';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { acceptsProduct } from '@/lib/inventory/components';
 import {
-  COMPONENT_LABELS, COMPONENT_TYPES, FOLLOWUP_OUTCOMES, OUTCOME_LABELS,
-  type ChartData, type ComponentType, type ImplantSite,
+  COMPONENT_LABELS, COMPONENT_TYPES, FOLLOWUP_OUTCOMES, OUTCOME_LABELS, TECHNIQUES, TECHNIQUE_LABELS,
+  type ChartData, type ComponentType, type ImplantSite, type Technique,
 } from '@/lib/inventory/types';
 import { fitComponent, placeImplant, planImplant, recordFollowup } from './implant-actions';
 
@@ -37,6 +37,18 @@ function Field({ label, required = false, children }: { label: string; required?
       </span>
       {children}
     </label>
+  );
+}
+
+/** Guided or free-hand surgery; required when planning or placing. */
+export function TechniqueField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <Field label="Technique" required>
+      <select className="input" aria-required="true" value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Choose Guided or Free hand…</option>
+        {TECHNIQUES.map((t) => <option key={t} value={t}>{TECHNIQUE_LABELS[t]}</option>)}
+      </select>
+    </Field>
   );
 }
 
@@ -166,16 +178,18 @@ type Base = { patientId: string; tooth: number; data: ChartData; onDone: () => v
 
 export function PlanForm({ patientId, tooth, data, onDone }: Base) {
   const [productId, setProductId] = useState('');
+  const [technique, setTechnique] = useState('');
   const [notes, setNotes] = useState('');
   const { error, pending, submit } = useSubmit(planImplant, onDone);
   return (
-    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, productId, notes }); }}>
+    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, productId, technique, notes }); }}>
       <Field label="Implant (optional)">
         <select className="input" value={productId} onChange={(e) => setProductId(e.target.value)}>
           <option value="">Not chosen yet</option>
           {data.implants.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
         </select>
       </Field>
+      <TechniqueField value={technique} onChange={setTechnique} />
       <Field label="Notes (optional)">
         <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>
@@ -190,13 +204,14 @@ export function PlaceForm({
   data,
   onDone,
   plannedProductId,
+  plannedTechnique = null,
   slot = null,
-}: Base & { plannedProductId: string | null; slot?: ImplantSite['slot'] }) {
+}: Base & { plannedProductId: string | null; plannedTechnique?: Technique | null; slot?: ImplantSite['slot'] }) {
   // A booked implant starts with the booking's delegates and supervisor.
   const placingFromSlot = slot?.delegates.find((d) => d.role === 'placing')?.delegate_id ?? '';
   const assistingFromSlot = slot?.delegates.find((d) => d.role === 'assisting')?.delegate_id ?? '';
   const [v, setV] = useState({
-    productId: plannedProductId ?? '', lotId: '', placedOn: data.today,
+    productId: plannedProductId ?? '', technique: plannedTechnique ?? '', lotId: '', placedOn: data.today,
     placingDelegateId: placingFromSlot, assistingDelegateId: assistingFromSlot,
     supervisorId: slot?.supervisor_id ?? (data.supervisors.some((s) => s.id === data.me) ? data.me : ''), torque: '', graft: '', notes: '',
   });
@@ -218,6 +233,7 @@ export function PlaceForm({
         </select>
       </Field>
       <BatchSelect data={data} productId={v.productId} usedOn={v.placedOn} value={v.lotId} onChange={set('lotId')} />
+      <TechniqueField value={v.technique} onChange={set('technique')} />
       <Field label="Placement date" required>
         <input className="input" type="date" aria-required="true" value={v.placedOn} onChange={(e) => set('placedOn')(e.target.value)} />
       </Field>

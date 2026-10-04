@@ -8,6 +8,16 @@ import { courseSchema, sessionSchema } from '@/lib/schedule/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
 
+export async function deleteCourse(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requireActiveUser();
+  const id = String(formData.get('id') ?? '');
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('delete_course', { p_course: id });
+  if (error) return { error: userMessage(error)! };
+  revalidatePath('/courses');
+  redirect('/courses');
+}
+
 export async function createCourse(_prev: FormState, formData: FormData): Promise<FormState> {
   await requireActiveUser();
   const parsed = courseSchema.safeParse(Object.fromEntries(formData));

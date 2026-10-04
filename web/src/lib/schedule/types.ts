@@ -1,4 +1,4 @@
-import type { Product } from '@/lib/inventory/types';
+import type { Product, Technique } from '@/lib/inventory/types';
 
 export const SESSION_TYPES = ['lecture', 'workshop', 'surgery'] as const;
 export type SessionType = (typeof SESSION_TYPES)[number];
@@ -25,7 +25,10 @@ export type SlotRow = {
   supervisor: { full_name: string } | null;
   session: { title: string; course: { name: string } | null } | null;
   delegates: { role: 'placing' | 'assisting'; delegate: { full_name: string } | null }[];
-  implants: { tooth: number; product: Product | null }[];
+  notes: string;
+  supervisor_id: string;
+  session_id: string;
+  implants: { tooth: number; product: Product | null; site: { id: string; technique: Technique | null } | null }[];
   checklists: { id: string; items: { done_at: string | null }[] }[];
 };
 
@@ -40,5 +43,5 @@ export type ReportRow = {
   patient_id: string; patient_name: string; file_no: string; tooth: number; state: string; placed_on: string | null;
   product_id: string | null; type: Product['type'] | null; brand: string | null; system: string | null; platform: string | null;
   diameter_mm: number | null; length_mm: number | null; description: string | null; lot_no: string | null;
-  last_outcome: string | null;
+  last_outcome: string | null; technique: Technique | null;
 };

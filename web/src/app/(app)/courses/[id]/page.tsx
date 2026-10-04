@@ -6,7 +6,8 @@ import { formatDate } from '@/lib/format';
 import { SESSION_TYPE_LABELS, type Course, type Session } from '@/lib/schedule/types';
 import { progressOf } from '@/lib/checklists/format';
 import { CourseForm } from '../course-form';
-import { unenrollDelegate, updateCourse } from '../actions';
+import { deleteCourse, unenrollDelegate, updateCourse } from '../actions';
+import { ConfirmDelete } from '@/components/confirm-delete';
 import { SessionForm } from './session-form';
 import { EnrollForm } from './enrollment';
 
@@ -31,6 +32,13 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
     <div className="space-y-6">
       <h1>{c.name}</h1>
       <CourseForm action={updateCourse} course={c} />
+      <ConfirmDelete
+        id={c.id}
+        noun="course"
+        name={c.name}
+        consequences="Its sessions, enrolments and session checklists are deleted too. A course with surgery bookings or placed implants can't be deleted."
+        action={deleteCourse}
+      />
       <section className="space-y-3">
         <h2 className="font-semibold">Sessions</h2>
         <ul className="card divide-y divide-line">

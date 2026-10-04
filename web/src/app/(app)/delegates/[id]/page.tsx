@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { formatDate } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
-import { OUTCOME_LABELS, SITE_STATE_LABELS, type FollowupOutcome, type SiteState } from '@/lib/inventory/types';
+import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutcome, type SiteState } from '@/lib/inventory/types';
 import type { ReportRow } from '@/lib/schedule/types';
 import { DelegateForm, type DelegateRow } from '../delegate-form';
 import { updateDelegate } from '../actions';
@@ -46,7 +46,8 @@ export default async function DelegatePage({ params }: { params: Promise<{ id: s
         </div>
         <p data-testid="report-totals" className="text-sm text-ink">
           Placed {report.filter((r) => r.role === 'placing').length} · Assisted{' '}
-          {report.filter((r) => r.role === 'assisting').length} · Failed {report.filter((r) => r.state === 'failed').length}
+          {report.filter((r) => r.role === 'assisting').length} · Failed {report.filter((r) => r.state === 'failed').length} · Guided{' '}
+          {report.filter((r) => r.technique === 'guided').length} · Free hand {report.filter((r) => r.technique === 'free_hand').length}
         </p>
         {report.length === 0 ? (
           <p className="text-sm text-muted">No implants recorded for this delegate yet.</p>
@@ -59,6 +60,7 @@ export default async function DelegatePage({ params }: { params: Promise<{ id: s
                 <th>Tooth</th>
                 <th>Role</th>
                 <th>Implant</th>
+                <th>Technique</th>
                 <th>Placed</th>
                 <th>State</th>
                 <th>Last follow-up</th>
@@ -76,6 +78,7 @@ export default async function DelegatePage({ params }: { params: Promise<{ id: s
                   <td data-label="Tooth">{r.tooth}</td>
                   <td data-label="Role">{r.role === 'placing' ? 'Placed' : 'Assisted'}</td>
                   <td data-label="Implant">{implantLabel(r)}</td>
+                  <td data-label="Technique">{r.technique ? TECHNIQUE_LABELS[r.technique] : '—'}</td>
                   <td data-label="Placed">{r.placed_on ? formatDate(r.placed_on) : '—'}</td>
                   <td data-label="State">{SITE_STATE_LABELS[r.state as SiteState] ?? r.state}</td>
                   <td data-label="Last follow-up">{r.last_outcome ? OUTCOME_LABELS[r.last_outcome as FollowupOutcome] : '—'}</td>

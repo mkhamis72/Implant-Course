@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getCurrentProfile } from '@/lib/auth/session';
 import { contentDisposition, csvFilename, toCsv } from '@/lib/csv';
 import { productLabel } from '@/lib/inventory/labels';
-import { OUTCOME_LABELS, SITE_STATE_LABELS, type FollowupOutcome, type SiteState } from '@/lib/inventory/types';
+import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutcome, type SiteState } from '@/lib/inventory/types';
 import type { ReportRow } from '@/lib/schedule/types';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!delegate || error) return new NextResponse('Not found', { status: 404 });
   const rows = (data ?? []) as ReportRow[];
   const csv = toCsv(
-    ['Course', 'Patient', 'File', 'Tooth', 'Role', 'Implant', 'Lot', 'Placed on', 'State', 'Last follow-up'],
+    ['Course', 'Patient', 'File', 'Tooth', 'Role', 'Implant', 'Technique', 'Lot', 'Placed on', 'State', 'Last follow-up'],
     rows.map((r) => [
       r.course_name ?? '',
       r.patient_name,
@@ -28,6 +28,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       r.tooth,
       r.role === 'placing' ? 'Placed' : 'Assisted',
       r.product_id && r.type ? productLabel({ ...r, type: r.type, brand: r.brand ?? '', system: r.system ?? '', platform: r.platform ?? '', description: r.description ?? '' }) : '',
+      r.technique ? TECHNIQUE_LABELS[r.technique] : '',
       r.lot_no ?? '',
       r.placed_on ?? '',
       SITE_STATE_LABELS[r.state as SiteState] ?? r.state,

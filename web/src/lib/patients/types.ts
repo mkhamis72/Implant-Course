@@ -19,7 +19,7 @@ export function canSetByHand(state: string): boolean {
 export const STATE_LABELS: Record<ToothState, string> = {
   present: 'Present',
   missing: 'Missing',
-  extracted: 'Extracted',
+  extracted: 'To be extracted',
   implant_planned: 'Implant planned',
   implant_placed: 'Implant placed',
   restored: 'Restored',

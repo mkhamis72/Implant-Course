@@ -7,7 +7,7 @@ import type { ChartData, ImplantSite, LotOnHand, Product } from '@/lib/inventory
 import type { ToothState } from '@/lib/patients/types';
 
 export const SITE_SELECT = `
-  id, tooth, state, placed_on, torque_ncm, graft, notes, created_at, stock_lot_id,
+  id, tooth, state, technique, placed_on, torque_ncm, graft, notes, created_at, stock_lot_id,
   product:products(*),
   lot:stock_lots(lot_no, expiry),
   placing:delegates!implant_sites_placing_delegate_id_fkey(full_name),

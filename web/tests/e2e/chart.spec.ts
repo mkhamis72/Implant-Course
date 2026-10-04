@@ -27,9 +27,9 @@ test('bulk-marks several teeth with shift-click', async ({ page }) => {
   await page.getByRole('button', { name: 'Tooth 18, Present' }).click({ modifiers: ['Control'] });
   const panel = page.getByRole('complementary', { name: 'Tooth details' });
   await expect(panel.getByRole('heading', { name: '3 teeth: 18, 36, 46' })).toBeVisible();
-  await panel.getByRole('button', { name: 'Mark extracted' }).click();
+  await panel.getByRole('button', { name: 'Mark to be extracted' }).click();
   for (const tooth of [18, 36, 46]) {
-    await expect(page.getByRole('button', { name: `Tooth ${tooth}, Extracted` })).toBeVisible();
+    await expect(page.getByRole('button', { name: `Tooth ${tooth}, To be extracted` })).toBeVisible();
   }
 });
 

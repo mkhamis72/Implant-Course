@@ -23,7 +23,7 @@ test('placing a booked implant is pre-filled and closes the booking', async ({ p
   const me = (await api.auth.getUser()).data.user!.id;
   const { data: slotId, error } = await api.rpc('create_surgery_slot', {
     p_session: sessionId, p_chair: chairId, p_start: '10:00', p_end: '11:00', p_patient: patientId, p_supervisor: me,
-    p_placing: [placing], p_implants: [{ tooth: 36, product_id: stock.productId }],
+    p_placing: [placing], p_implants: [{ tooth: 36, product_id: stock.productId, technique: 'guided' }],
   });
   expect(error).toBeNull();
 
@@ -34,6 +34,7 @@ test('placing a booked implant is pre-filled and closes the booking', async ({ p
   await panel.getByRole('button', { name: 'Place implant' }).click();
   await expect(page.getByLabel('Placed by (delegate)')).toHaveValue(placing);
   await expect(page.getByRole('combobox', { name: 'Implant', exact: true })).toHaveValue(stock.productId);
+  await expect(page.getByRole('combobox', { name: 'Technique' })).toHaveValue('guided');
   await page.getByRole('radiogroup', { name: 'Stock batch' }).getByRole('radio').first().check();
   await page.getByRole('button', { name: 'Save placement' }).click();
   await expect(page.getByRole('button', { name: 'Tooth 36, Implant placed' })).toBeVisible();

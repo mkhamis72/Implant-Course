@@ -43,15 +43,15 @@ export async function place(
   c: Client,
   a: {
     patient: string; tooth: number; product: string; lot: string; delegate: string; supervisor: string;
-    assistant?: string; placedOn?: string; slot?: string;
+    assistant?: string; placedOn?: string; slot?: string; technique?: string;
   },
 ): Promise<string> {
   const { rows } = await c.query(
     `select public.place_implant(
        p_patient => $1, p_tooth => $2::smallint, p_product => $3, p_lot => $4,
        p_placed_on => coalesce($5::date, current_date), p_placing_delegate => $6, p_supervisor => $7,
-       p_assisting_delegate => $8, p_slot => $9) as id`,
-    [a.patient, a.tooth, a.product, a.lot, a.placedOn ?? null, a.delegate, a.supervisor, a.assistant ?? null, a.slot ?? null],
+       p_assisting_delegate => $8, p_slot => $9, p_technique => $10) as id`,
+    [a.patient, a.tooth, a.product, a.lot, a.placedOn ?? null, a.delegate, a.supervisor, a.assistant ?? null, a.slot ?? null, a.technique ?? null],
   );
   return rows[0].id;
 }
@@ -86,7 +86,7 @@ export async function book(
   c: Client,
   a: {
     session: string; chair: string; patient: string; supervisor: string; placing: string[];
-    assisting?: string[]; implants?: { tooth: number; product_id?: string | null }[];
+    assisting?: string[]; implants?: { tooth: number; product_id?: string | null; technique?: string }[];
     start?: string; end?: string; override?: string;
   },
 ): Promise<string> {

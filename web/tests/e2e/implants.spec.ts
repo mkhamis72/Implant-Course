@@ -31,6 +31,7 @@ test('places an implant from the chart and deducts stock', async ({ page }) => {
   await batch.getByRole('radio', { name: `Lot ${s.lotNo} · exp 2031-12-31 · 3 left` }).check();
   await page.getByLabel('Placed by (delegate)').selectOption({ label: s.delegate });
   await page.getByLabel('Insertion torque (Ncm, optional)').fill('35');
+  await page.getByRole('combobox', { name: 'Technique' }).selectOption({ label: 'Free hand' });
   await page.getByRole('button', { name: 'Save placement' }).click();
 
   await expect(page.getByRole('button', { name: 'Tooth 36, Implant placed' })).toBeVisible();
@@ -39,6 +40,7 @@ test('places an implant from the chart and deducts stock', async ({ page }) => {
   await expect(details).toContainText('Test Organizer');
   await expect(details).toContainText(`Lot ${s.lotNo}`);
   await expect(details).toContainText('35 Ncm');
+  await expect(details.getByTestId('technique')).toContainText('Free hand');
 
   await page.goto(`/inventory/lots/${s.lotId}`);
   await expect(page.getByTestId('on-hand')).toHaveText('2');
@@ -49,6 +51,7 @@ test('plans an implant and cancels the plan', async ({ page }) => {
   await setup(page);
   await page.getByRole('button', { name: 'Tooth 46, Present' }).click();
   await panel(page).getByRole('button', { name: 'Plan implant' }).click();
+  await page.getByRole('combobox', { name: 'Technique' }).selectOption({ label: 'Free hand' });
   await page.getByRole('button', { name: 'Save plan' }).click();
   await expect(page.getByRole('button', { name: 'Tooth 46, Implant planned' })).toBeVisible();
   await panel(page).getByRole('button', { name: 'Cancel plan' }).click();
@@ -60,6 +63,7 @@ test('missing fields are explained and nothing is saved', async ({ page }) => {
   await page.getByRole('button', { name: 'Tooth 11, Present' }).click();
   await panel(page).getByRole('button', { name: 'Place implant' }).click();
   await page.getByRole('combobox', { name: 'Implant', exact: true }).selectOption({ label: `${s.brand} E2E Ø4.0 × 10 mm` });
+  await page.getByRole('combobox', { name: 'Technique' }).selectOption({ label: 'Free hand' });
   await page.getByRole('button', { name: 'Save placement' }).click();
   await expect(panel(page).getByRole('alert')).toHaveText('Choose a stock batch.');
   await expect(page.getByRole('button', { name: 'Tooth 11, Present' })).toBeVisible();
@@ -78,6 +82,7 @@ async function placeOn(page: Page, s: Awaited<ReturnType<typeof setup>>, tooth: 
   await page.getByRole('combobox', { name: 'Implant', exact: true }).selectOption({ label: `${s.brand} E2E Ø4.0 × 10 mm` });
   await page.getByRole('radiogroup', { name: 'Stock batch' }).getByRole('radio').first().check();
   await page.getByLabel('Placed by (delegate)').selectOption({ label: s.delegate });
+  await page.getByRole('combobox', { name: 'Technique' }).selectOption({ label: 'Free hand' });
   await page.getByRole('button', { name: 'Save placement' }).click();
   await expect(page.getByRole('button', { name: `Tooth ${tooth}, Implant placed` })).toBeVisible();
 }

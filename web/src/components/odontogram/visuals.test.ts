@@ -7,10 +7,11 @@ describe('toothVisual', () => {
     const looks = TOOTH_STATES.map((s) => JSON.stringify(toothVisual(s)));
     expect(new Set(looks).size).toBe(TOOTH_STATES.length);
   });
-  it('shows a natural tooth only when present', () => {
+  it('shows a natural tooth when present or to be extracted', () => {
     expect(toothVisual('present')).toMatchObject({ showRoots: true, glyph: 'none', dashed: false });
     expect(toothVisual('missing')).toMatchObject({ showRoots: false, glyph: 'none', dashed: true });
-    expect(toothVisual('extracted')).toMatchObject({ showRoots: false, glyph: 'cross' });
+    // To be extracted: still present, crossed out.
+    expect(toothVisual('extracted')).toMatchObject({ showRoots: true, glyph: 'cross', dashed: false });
   });
   it('draws a fixture for every implant state', () => {
     expect(toothVisual('implant_planned')).toMatchObject({ glyph: 'fixture', fixture: 'planned' });

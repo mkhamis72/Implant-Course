@@ -26,7 +26,8 @@ export function toothVisual(status: ToothState): ToothVisual {
     case 'missing':
       return { crownFill: COLORS.faint, stroke: COLORS.muted, dashed: true, showRoots: false, glyph: 'none' };
     case 'extracted':
-      return { crownFill: COLORS.faint, stroke: COLORS.muted, dashed: true, showRoots: false, glyph: 'cross' };
+      // To be extracted: the tooth is still there, crossed out in red.
+      return { crownFill: 'var(--color-surface)', stroke: COLORS.ink, dashed: false, showRoots: true, glyph: 'cross' };
     case 'implant_planned':
       return { crownFill: 'var(--color-surface)', stroke: COLORS.planned, dashed: true, showRoots: false, glyph: 'fixture', fixture: 'planned' };
     case 'implant_placed':
