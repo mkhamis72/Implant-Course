@@ -75,3 +75,11 @@ test('the delegate page shows an existing login', async ({ page }) => {
   await expect(page.getByText('Login: active')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create login' })).toHaveCount(0);
 });
+
+test('a delegate can reach Account security and the set-password page', async ({ page }) => {
+  await login(page, TEST_USERS.delegate.email);
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Account security' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Account security' })).toBeVisible();
+  await page.goto('/account/set-password');
+  await expect(page.getByRole('heading', { level: 1, name: 'Set your password' })).toBeVisible();
+});

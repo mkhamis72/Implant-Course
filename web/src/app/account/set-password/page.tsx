@@ -1,8 +1,8 @@
-import { requireActiveUser } from '@/lib/auth/session';
+import { requireSignedIn } from '@/lib/auth/session';
 import { SetPasswordForm } from './form';
 
 export default async function SetPasswordPage() {
-  await requireActiveUser();
+  await requireSignedIn(); // staff and delegate logins (invite, temporary password, recovery)
   return (
     <main className="mx-auto mt-10 max-w-sm px-4 sm:mt-24">
       <div className="card space-y-4">
