@@ -19,7 +19,7 @@ export async function createLogin(a: { email: string; full_name: string; role: R
   const supabase = await createClient();
   // An invite to an existing, unconfirmed address returns that account instead of failing: never repurpose it.
   const { data: taken } = await supabase.from('profiles').select('user_id').eq('email', email).limit(1);
-  if (taken?.length) return { error: 'An account with this email already exists. Manage it in Admin → Users.' };
+  if (taken?.length) return { error: 'A user with this email already exists.' };
 
   const admin = createAdminClient();
   const password = emailEnabled() ? undefined : temporaryPassword();

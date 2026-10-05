@@ -51,7 +51,7 @@ describe('createLogin', () => {
     existing.mockReturnValue({ data: [{ user_id: 'old' }], error: null });
     const r = await createLogin({ email: ' Taken@Example.com ', full_name: 'T', role: 'delegate', delegate_id: 'd1' });
     expect(existing).toHaveBeenCalledWith('taken@example.com');
-    expect(r).toEqual({ error: 'An account with this email already exists. Manage it in Admin → Users.' });
+    expect(r).toEqual({ error: 'A user with this email already exists.' });
     expect(auth.inviteUserByEmail).not.toHaveBeenCalled();
     expect(auth.createUser).not.toHaveBeenCalled();
   });
