@@ -44,14 +44,16 @@ export async function place(
   a: {
     patient: string; tooth: number; product: string; lot: string; delegate: string; supervisor: string;
     assistant?: string; placedOn?: string; slot?: string; technique?: string;
+    torque?: number; isq?: number; boneType?: string;
   },
 ): Promise<string> {
   const { rows } = await c.query(
-    `select public.place_implant(
+    `select public.place_implant_v2(
        p_patient => $1, p_tooth => $2::smallint, p_product => $3, p_lot => $4,
        p_placed_on => coalesce($5::date, current_date), p_placing_delegate => $6, p_supervisor => $7,
-       p_assisting_delegate => $8, p_slot => $9, p_technique => $10) as id`,
-    [a.patient, a.tooth, a.product, a.lot, a.placedOn ?? null, a.delegate, a.supervisor, a.assistant ?? null, a.slot ?? null, a.technique ?? null],
+       p_assisting_delegate => $8, p_slot => $9, p_technique => $10, p_torque => $11, p_isq => $12, p_bone_type => $13) as id`,
+    [a.patient, a.tooth, a.product, a.lot, a.placedOn ?? null, a.delegate, a.supervisor, a.assistant ?? null, a.slot ?? null,
+     a.technique ?? null, a.torque ?? null, a.isq ?? null, a.boneType ?? null],
   );
   return rows[0].id;
 }
