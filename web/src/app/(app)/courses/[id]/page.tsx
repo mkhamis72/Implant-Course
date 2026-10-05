@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { formatDate } from '@/lib/format';
 import { SESSION_TYPE_LABELS, type Course, type Session } from '@/lib/schedule/types';
 import { progressOf } from '@/lib/checklists/format';
+import { talkKindOf } from '@/lib/schedule/talks';
 import { CourseForm } from '../course-form';
 import { deleteCourse, unenrollDelegate, updateCourse } from '../actions';
 import { ConfirmDelete } from '@/components/confirm-delete';
@@ -48,6 +49,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
               <span className="font-medium">{s.title}</span>
               <span>{SESSION_TYPE_LABELS[s.type]}</span>
               <span>{formatDate(s.date)} {s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)}</span>
+              {s.room && <span className="text-muted">{s.room}</span>}
               {s.checklists.map((cl) => (
                 <Link key={cl.id} href={`/checklists/${cl.id}`} className="text-accent hover:underline">
                   Checklist {progressOf(cl.items).label}
@@ -55,6 +57,9 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
               ))}
               {s.type === 'surgery' && (
                 <Link href={`/schedule?date=${s.date}`} className="text-accent hover:underline">Schedule</Link>
+              )}
+              {talkKindOf(s.type) && (
+                <Link href={`/schedule/${talkKindOf(s.type)}?date=${s.date}`} className="text-accent hover:underline">Talks</Link>
               )}
             </li>
           ))}
