@@ -9,6 +9,8 @@ import { productLabel } from '@/lib/inventory/labels';
 import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutcome, type SiteState } from '@/lib/inventory/types';
 import type { ReportRow } from '@/lib/schedule/types';
 import { DelegateForm, type DelegateRow } from '../delegate-form';
+import { CreateLogin } from './create-login';
+import { emailEnabled } from '@/lib/flags';
 import { updateDelegate } from '../actions';
 
 function implantLabel(r: ReportRow): string {
@@ -34,6 +36,10 @@ export default async function DelegatePage({ params }: { params: Promise<{ id: s
   ]);
   if (!data) notFound();
   const delegate = data as DelegateRow;
+  const isAdmin = profile.role === 'admin';
+  const { data: login } = isAdmin
+    ? await supabase.from('profiles').select('active').eq('delegate_id', id).maybeSingle()
+    : { data: null };
   const report = (reportData ?? []) as ReportRow[];
 
   return (
@@ -42,6 +48,19 @@ export default async function DelegatePage({ params }: { params: Promise<{ id: s
       <fieldset disabled={!canEdit(profile, 'delegates')} className="min-w-0">
         <DelegateForm action={updateDelegate} delegate={delegate} />
       </fieldset>
+      {isAdmin && (
+        <section className="card space-y-2">
+          <h2 className="font-semibold">Login</h2>
+          {login ? (
+            <p className="text-sm">
+              Login: {login.active ? 'active' : 'inactive'} ·{' '}
+              <Link href="/admin/users" className="text-accent hover:underline">Manage in Admin → Users</Link>
+            </p>
+          ) : (
+            <CreateLogin delegateId={delegate.id} emailOn={emailEnabled()} />
+          )}
+        </section>
+      )}
       <section className="card space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold">Implant record</h2>
