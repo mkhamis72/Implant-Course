@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AREAS, canEdit, canView, permissionMessage, toPermissions } from './permissions';
+import { AREAS, canEdit, canView, permissionMessage, reportAccessNote, toPermissions } from './permissions';
 
 const org = (permissions = {}) => ({ role: 'organizer' as const, permissions });
 
@@ -31,5 +31,18 @@ describe('permissions', () => {
       ]),
     ).toEqual({ patients: 'edit', schedule: 'view' });
     expect(toPermissions(null)).toEqual({});
+  });
+});
+
+describe('reportAccessNote', () => {
+  it('explains an implant report that the viewer cannot fully see', () => {
+    expect(reportAccessNote({ role: 'organizer', permissions: { delegates: 'view' } })).toBe(
+      'Implant records are only shown to users with access to Patients.',
+    );
+    expect(reportAccessNote({ role: 'organizer', permissions: { delegates: 'view', schedule: 'view' } })).toBe(
+      'Follow-up results are only shown to users with access to Patients.',
+    );
+    expect(reportAccessNote({ role: 'organizer', permissions: { delegates: 'view', patients: 'view' } })).toBeNull();
+    expect(reportAccessNote({ role: 'admin', permissions: {} })).toBeNull();
   });
 });

@@ -40,3 +40,14 @@ export function toPermissions(rows: { area: string; level: string }[] | null | u
   }
   return out;
 }
+
+/**
+ * Implant reports read implant records (Patients, or Schedule) and follow-ups (Patients only).
+ * Without them the report looks empty rather than hidden, so say why.
+ */
+export function reportAccessNote(p: Who): string | null {
+  if (canView(p, 'patients')) return null;
+  return canView(p, 'schedule')
+    ? 'Follow-up results are only shown to users with access to Patients.'
+    : 'Implant records are only shown to users with access to Patients.';
+}

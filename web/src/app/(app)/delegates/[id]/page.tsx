@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
-import { canEdit } from '@/lib/auth/permissions';
+import { canEdit, reportAccessNote } from '@/lib/auth/permissions';
 import { formatDate } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
 import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutcome, type SiteState } from '@/lib/inventory/types';
@@ -64,6 +64,7 @@ export default async function DelegatePage({ params }: { params: Promise<{ id: s
       <section className="card space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold">Implant record</h2>
+          {reportAccessNote(profile) && <p className="basis-full text-sm text-warn">{reportAccessNote(profile)}</p>}
           <a href={`/delegates/${delegate.id}/report.csv`} className="btn-secondary btn" download>
             Download CSV
           </a>
