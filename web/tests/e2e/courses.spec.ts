@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { uniqueName } from './patients';
-import { apiAs, randomFutureDate, seedDelegate } from './api';
+import { apiAs, randomFutureDate, seedCourse, seedDelegate } from './api';
 
 test('creates a course, adds a surgery session and enrolls a delegate', async ({ page }) => {
   const api = await apiAs(TEST_USERS.organizer.email);
@@ -51,4 +51,24 @@ test('a session outside the course dates is refused', async ({ page }) => {
   await page.getByLabel('Ends').fill('09:00');
   await page.getByRole('button', { name: 'Add session' }).click();
   await expect(page.getByRole('main').getByRole('alert')).toHaveText('The session date must fall within the course dates.');
+});
+
+test('a lecture session shows its room and links to the lectures schedule', async ({ page }) => {
+  const api = await apiAs(TEST_USERS.organizer.email);
+  const date = randomFutureDate();
+  const courseId = await seedCourse(api, { name: uniqueName('Course'), start: date, end: date });
+  await login(page, TEST_USERS.organizer.email);
+  await page.goto(`/courses/${courseId}`);
+  await page.getByLabel('Session title').fill('Morning lectures');
+  await page.getByRole('combobox', { name: 'Session type' }).selectOption('lecture');
+  await page.getByLabel('Session date').fill(date);
+  await page.getByLabel('Room (optional)').fill('Hall A');
+  await page.getByRole('button', { name: 'Add session' }).click();
+  const row = page.getByTestId('session-row').filter({ hasText: 'Morning lectures' });
+  await expect(row).toContainText('Hall A');
+  await page.getByRole('button', { name: 'Delete course' }).click();
+  await expect(page.getByText(/sessions, talks, enrolments and session checklists are deleted too/)).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await row.getByRole('link', { name: 'Talks' }).click();
+  await expect(page).toHaveURL(new RegExp(`/schedule/lectures\\?date=${date}`));
 });

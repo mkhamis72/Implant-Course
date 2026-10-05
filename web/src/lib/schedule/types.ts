@@ -7,10 +7,11 @@ export const SESSION_TYPE_LABELS: Record<SessionType, string> = { lecture: 'Lect
 export type Course = { id: string; name: string; start_date: string; end_date: string; venue: string; notes: string };
 export type Session = {
   id: string; course_id: string; type: SessionType; title: string; date: string;
-  start_time: string; end_time: string; lead_organizer_id: string | null;
+  start_time: string; end_time: string; lead_organizer_id: string | null; room: string | null;
 };
 export type Chair = { id: string; name: string; active: boolean };
 export type Supervisor = { id: string; full_name: string; active: boolean };
+export type Lecturer = { id: string; full_name: string; active: boolean };
 
 export type SlotRow = {
   id: string;

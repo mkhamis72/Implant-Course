@@ -33,6 +33,10 @@ export function SessionForm({ courseId, defaultDate, organizers }: { courseId: s
         <span className="label">Ends</span>
         <input className="input" type="time" name="end_time" defaultValue={valueOf(state, 'end_time', '17:00')} />
       </label>
+      <label className="block">
+        <span className="label">Room (optional)</span>
+        <input className="input" name="room" defaultValue={valueOf(state, 'room', '')} placeholder="e.g. Hall A" />
+      </label>
       <label className="block sm:col-span-2">
         <span className="label">Lead organizer (optional)</span>
         <select className="input" name="lead_organizer_id" defaultValue={valueOf(state, 'lead_organizer_id', '')}>

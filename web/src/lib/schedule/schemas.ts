@@ -32,6 +32,10 @@ export const sessionSchema = z
     start_time: time('Enter the start time (HH:MM).'),
     end_time: time('Enter the end time (HH:MM).'),
     lead_organizer_id: optionalId,
+    room: z.preprocess(
+      (v) => (typeof v === 'string' && v.trim() === '' ? null : v ?? null),
+      z.string().trim().max(120, { message: 'Keep the room under 120 characters.' }).nullable(),
+    ),
   })
   .refine((s) => s.end_time > s.start_time, { message: 'The session must end after it starts.' });
 
@@ -39,6 +43,26 @@ export const chairSchema = z.object({ name: z.string().trim().min(1, { message: 
 export const supervisorSchema = z.object({
   full_name: z.string().trim().min(2, { message: 'Enter the supervisor’s name.' }).max(120, { message: 'Keep the name under 120 characters.' }),
 });
+export const lecturerSchema = z.object({
+  full_name: z.string().trim().min(2, { message: 'Enter the lecturer’s name.' }).max(120, { message: 'Keep the name under 120 characters.' }),
+});
+
+const talkFields = {
+  start: time('Enter the start time (HH:MM).'),
+  end: time('Enter the end time (HH:MM).'),
+  lecturer_id: requiredId('Choose a lecturer.'),
+  topic: z.string().trim().min(2, { message: 'Enter a topic.' }).max(200, { message: 'Keep the topic under 200 characters.' }),
+  notes: text(1000),
+};
+const endsAfterStart = { message: 'The end time must be after the start time.' };
+
+export const talkSchema = z
+  .object({ session_id: requiredId('Choose a session.'), ...talkFields })
+  .refine((t) => t.end > t.start, endsAfterStart);
+
+export const updateTalkSchema = z
+  .object({ talk_id: requiredId('Talk not found.'), ...talkFields })
+  .refine((t) => t.end > t.start, endsAfterStart);
 
 export const slotSchema = z
   .object({
