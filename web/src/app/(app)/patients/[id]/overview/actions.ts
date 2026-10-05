@@ -2,13 +2,13 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { medicalHistorySchema } from '@/lib/patients/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { staleMessage } from '@/lib/patients/conflict-server';
 
 export async function saveMedicalHistory(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('patients', 'edit');
   const patientId = String(formData.get('patient_id') ?? '');
   const expected = String(formData.get('expected_updated_at') ?? '');
   const parsed = medicalHistorySchema.safeParse(Object.fromEntries(formData));

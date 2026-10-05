@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { componentSchema, followupSchema, placeSchema, planSchema } from '@/lib/inventory/schemas';
 import { TECHNIQUES, type Technique } from '@/lib/inventory/types';
 import { userMessage } from '@/lib/db-errors';
@@ -19,7 +19,7 @@ async function run(patientId: string, fn: string, args: Record<string, unknown>)
 }
 
 export async function planImplant(input: Record<string, unknown>): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('patients', 'edit');
   const parsed = planSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const p = parsed.data;
@@ -27,12 +27,12 @@ export async function planImplant(input: Record<string, unknown>): Promise<Resul
 }
 
 export async function cancelPlan(input: { patientId: string; siteId: string }): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('patients', 'edit');
   return run(input.patientId, 'cancel_planned_implant', { p_site: input.siteId });
 }
 
 export async function placeImplant(input: Record<string, unknown>): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('patients', 'edit');
   const parsed = placeSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const p = parsed.data;
@@ -54,13 +54,13 @@ export async function placeImplant(input: Record<string, unknown>): Promise<Resu
 }
 
 export async function setTechnique(input: { patientId: string; siteId: string; technique: string }): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('patients', 'edit');
   if (!(TECHNIQUES as readonly string[]).includes(input.technique)) return { error: 'Choose Guided or Free hand.' };
   return run(input.patientId, 'set_implant_technique', { p_site: input.siteId, p_technique: input.technique as Technique });
 }
 
 export async function fitComponent(input: Record<string, unknown>): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('patients', 'edit');
   const parsed = componentSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const c = parsed.data;
@@ -77,7 +77,7 @@ export async function fitComponent(input: Record<string, unknown>): Promise<Resu
 }
 
 export async function recordFollowup(input: Record<string, unknown>): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('patients', 'edit');
   const parsed = followupSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const f = parsed.data;
@@ -91,7 +91,7 @@ export async function recordFollowup(input: Record<string, unknown>): Promise<Re
 }
 
 export async function correctBatch(input: Record<string, unknown>): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('patients', 'edit');
   const parsed = correctionSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const c = parsed.data;
@@ -101,14 +101,14 @@ export async function correctBatch(input: Record<string, unknown>): Promise<Resu
 }
 
 export async function voidFollowup(input: Record<string, unknown>): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('patients', 'edit');
   const parsed = voidSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   return run(parsed.data.patientId, 'void_followup', { p_followup: parsed.data.id, p_reason: parsed.data.reason });
 }
 
 export async function voidComponent(input: Record<string, unknown>): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('patients', 'edit');
   const parsed = voidSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   return run(parsed.data.patientId, 'void_component', { p_component: parsed.data.id, p_reason: parsed.data.reason });

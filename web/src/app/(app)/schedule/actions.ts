@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { cancelSlotSchema, slotSchema, slotStatusSchema, updateSlotSchema } from '@/lib/schedule/schemas';
 import type { FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
@@ -11,7 +11,7 @@ import { escapeLike } from '@/lib/like';
 type BookResult = { error?: string; warnings?: string[]; slotId?: string; date?: string };
 
 export async function bookSurgery(input: Record<string, unknown>): Promise<BookResult> {
-  await requireActiveUser();
+  await requirePermission('schedule', 'edit');
   const parsed = slotSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const s = parsed.data;
@@ -46,7 +46,7 @@ export async function bookSurgery(input: Record<string, unknown>): Promise<BookR
 }
 
 export async function updateBooking(input: Record<string, unknown>): Promise<BookResult> {
-  await requireActiveUser();
+  await requirePermission('schedule', 'edit');
   const parsed = updateSlotSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const s = parsed.data;
@@ -80,7 +80,7 @@ export async function updateBooking(input: Record<string, unknown>): Promise<Boo
 }
 
 export async function setBookingStatus(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('schedule', 'edit');
   const parsed = slotStatusSchema.safeParse({ slotId: formData.get('slot_id'), status: formData.get('status') });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const supabase = await createClient();
@@ -91,7 +91,7 @@ export async function setBookingStatus(_prev: FormState, formData: FormData): Pr
 }
 
 export async function cancelBooking(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('schedule', 'edit');
   const parsed = cancelSlotSchema.safeParse({ slotId: formData.get('slot_id'), reason: formData.get('reason') });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const supabase = await createClient();

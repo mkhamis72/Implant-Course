@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
 import { isRealDate, todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
@@ -8,6 +9,7 @@ import { PrintButton } from './print-button';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
 
 export default async function PullListPage({ searchParams }: { searchParams: PageSearchParams }) {
+  await requirePermission('schedule');
   const raw = (await readParams(searchParams, 'date')).date || undefined;
   const date = raw && isRealDate(String(raw)) ? String(raw) : todayIso();
   const supabase = await createClient();

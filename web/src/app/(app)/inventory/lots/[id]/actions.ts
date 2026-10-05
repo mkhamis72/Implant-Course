@@ -2,13 +2,13 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { adjustSchema } from '@/lib/inventory/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
 
 export async function adjustStock(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('inventory', 'edit');
   const parsed = adjustSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const a = parsed.data;

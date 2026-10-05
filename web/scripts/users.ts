@@ -39,14 +39,38 @@ export async function ensureUser(
 export async function setProfile(
   pg: Client,
   userId: string,
-  p: { full_name: string; role: 'admin' | 'organizer'; active: boolean },
+  p: { full_name: string; role: 'admin' | 'organizer' | 'delegate'; active: boolean; delegate_id?: string | null },
 ): Promise<void> {
   // Upsert: users created before migration 0001 existed have no profile row yet.
+  if (p.role === 'delegate') {
+    // profiles.delegate_id exists from migration 0030; a delegate login must name its delegate.
+    await pg.query(
+      `insert into public.profiles (user_id, email, full_name, role, active, delegate_id)
+       select u.id, lower(u.email), $2, 'delegate', $3, $4 from auth.users u where u.id = $1
+       on conflict (user_id) do update
+         set full_name = excluded.full_name, role = excluded.role, active = excluded.active, delegate_id = excluded.delegate_id`,
+      [userId, p.full_name, p.active, p.delegate_id ?? null],
+    );
+    return;
+  }
+  // Staff never keep a delegate link (the column exists from 0030; older databases don't have it).
+  const { rows } = await pg.query(
+    `select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'delegate_id'`,
+  );
+  const unlink = rows.length ? ', delegate_id = null' : '';
   await pg.query(
     `insert into public.profiles (user_id, email, full_name, role, active)
      select u.id, lower(u.email), $2, $3, $4 from auth.users u where u.id = $1
      on conflict (user_id) do update
-       set full_name = excluded.full_name, role = excluded.role, active = excluded.active`,
+       set full_name = excluded.full_name, role = excluded.role, active = excluded.active${unlink}`,
     [userId, p.full_name, p.role, p.active],
   );
+}
+
+/** Replaces a user's area permissions (migration 0030 on). Unlisted areas become None. */
+export async function setPermissions(pg: Client, userId: string, perms: Record<string, 'view' | 'edit'>): Promise<void> {
+  await pg.query('delete from public.user_permissions where user_id = $1', [userId]);
+  for (const [area, level] of Object.entries(perms)) {
+    await pg.query('insert into public.user_permissions (user_id, area, level) values ($1, $2, $3)', [userId, area, level]);
+  }
 }

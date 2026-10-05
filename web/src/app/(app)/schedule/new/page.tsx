@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { getCurrentProfile } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
@@ -14,7 +14,7 @@ export default async function NewBookingPage({
 }) {
   const q = await readParams(searchParams, 'date', 'chair', 'time', 'session', 'patient');
   const supabase = await createClient();
-  const me = await getCurrentProfile();
+  const me = await requirePermission('schedule', 'edit');
   const results = await Promise.all([
     supabase.from('sessions').select('id, title, date, start_time, course_id, course:courses(name)').eq('type', 'surgery')
       .gte('date', todayIso()).order('date'),

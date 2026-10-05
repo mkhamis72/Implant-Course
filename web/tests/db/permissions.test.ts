@@ -149,6 +149,35 @@ describe('permissions: area matrix', () => {
     });
   });
 
+  it('schedule view reads what the schedule shows; patients view reads the patient’s bookings', async () => {
+    await withTx(async (c) => {
+      await actAs(c, users.organizer);
+      const course = await makeCourse(c);
+      await c.query(`insert into public.sessions (course_id, type, title, date, start_time, end_time)
+                     values ($1, 'surgery', 'Zz Perm Session', '2030-03-02', '08:00', '17:00')`, [course]);
+      const count = async (table: string, where = 'true') =>
+        (await c.query(`select count(*)::int as n from public.${table} where ${where}`)).rows[0].n as number;
+
+      await setPerms(c, users.target, { schedule: 'view' });
+      await actAs(c, users.target);
+      expect(await count('courses', `id = '${course}'`)).toBe(1);
+      expect(await count('sessions', `course_id = '${course}'`)).toBe(1);
+      const sitesWithSchedule = await count('implant_sites');
+
+      await setPerms(c, users.target, { courses: 'view' });
+      await actAs(c, users.target);
+      expect(await count('surgery_slots')).toBe(0);
+
+      await setPerms(c, users.target, { patients: 'view' });
+      await actAs(c, users.target);
+      const slotsWithPatients = await count('surgery_slots');
+      await asPostgres(c);
+      const all = await c.query('select (select count(*)::int from public.surgery_slots) as slots, (select count(*)::int from public.implant_sites) as sites');
+      expect(slotsWithPatients).toBe(all.rows[0].slots);
+      expect(sitesWithSchedule).toBe(all.rows[0].sites);
+    });
+  });
+
   it('the refusal names the area', async () => {
     await withTx(async (c) => {
       await setPerms(c, users.target, { inventory: 'view' });

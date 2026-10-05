@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit, canView } from '@/lib/auth/permissions';
 import { addDays, isRealDate, todayIso } from '@/lib/dates';
 import { formatDate, formatTime } from '@/lib/format';
 import { gridPlacement, minutesOfDay, timeLabels } from '@/lib/schedule/time';
@@ -51,6 +53,10 @@ function Legend() {
 }
 
 export default async function SchedulePage({ searchParams }: { searchParams: PageSearchParams }) {
+  const profile = await requirePermission('schedule');
+  const editable = canEdit(profile, 'schedule');
+  const patientsVisible = canView(profile, 'patients');
+  const checklistsVisible = canView(profile, 'checklists');
   const raw = (await readParams(searchParams, 'date')).date || undefined;
   const date = raw && isRealDate(String(raw)) ? String(raw) : todayIso();
   const supabase = await createClient();
@@ -76,7 +82,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
         <h1>Schedule · {formatDate(date)}</h1>
         <div className="flex items-center gap-3">
           <Link href={`/schedule/pull-list?date=${date}`} className="text-accent hover:underline">Pull list</Link>
-          <Link href={`/schedule/new?date=${date}`} className="btn">New booking</Link>
+          {editable && <Link href={`/schedule/new?date=${date}`} className="btn">New booking</Link>}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -132,10 +138,13 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
                     <span className="font-semibold">{start}–{end}</span>
                     {b.status === 'done' && <span className="badge badge-ok">Completed</span>}
                   </div>
-                  {b.patient && (
+                  {b.patient && patientsVisible && (
                     <Link href={`/patients/${b.patient.id}`} className="block text-accent-strong hover:underline">
                       {b.patient.full_name} ({b.patient.file_no})
                     </Link>
+                  )}
+                  {b.patient && !patientsVisible && (
+                    <div className="font-medium">{b.patient.full_name} ({b.patient.file_no})</div>
                   )}
                   {b.implants.length > 0 && (
                     <div>
@@ -159,19 +168,21 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
                   <div>Supervisor: {b.supervisor?.full_name}</div>
                   {placing && <div>Placing: {placing}</div>}
                   {assisting && <div>Assisting: {assisting}</div>}
-                  {b.checklists.map((cl) => (
+                  {checklistsVisible && b.checklists.map((cl) => (
                     <Link key={cl.id} href={`/checklists/${cl.id}`} className="block text-accent-strong hover:underline">
                       Checklist {progressOf(cl.items).label}
                     </Link>
                   ))}
                   {b.override_reason && <div className="text-warn no-underline">Overridden: {b.override_reason}</div>}
+                  {editable && (
                   <div className="flex flex-wrap gap-x-3">
                     {b.status === 'scheduled' && (
                       <Link href={`/schedule/${b.id}/edit`} className="text-xs text-accent-strong hover:underline" aria-label="Edit booking">Edit</Link>
                     )}
                     {b.status !== 'cancelled' && <BookingStatus slotId={b.id} status={b.status} />}
                   </div>
-                  {b.status === 'scheduled' && <CancelBooking slotId={b.id} />}
+                  )}
+                  {editable && b.status === 'scheduled' && <CancelBooking slotId={b.id} />}
                 </div>
               );
             })}

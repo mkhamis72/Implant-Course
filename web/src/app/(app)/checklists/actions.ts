@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { addItemsSchema, itemEditSchema, newChecklistSchema, templateSchema } from '@/lib/checklists/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
@@ -11,7 +11,7 @@ import { userMessage } from '@/lib/db-errors';
 type Result = { error?: string };
 
 export async function saveTemplate(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('checklists', 'edit');
   const parsed = templateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const t = parsed.data;
@@ -27,7 +27,7 @@ export async function saveTemplate(_prev: FormState, formData: FormData): Promis
 }
 
 export async function deleteTemplate(_prev: Result, formData: FormData): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('checklists', 'edit');
   const supabase = await createClient();
   const { data, error } = await supabase.from('checklist_templates').delete().eq('id', String(formData.get('id') ?? '')).select('id');
   if (error || !data?.length) {
@@ -39,7 +39,7 @@ export async function deleteTemplate(_prev: Result, formData: FormData): Promise
 }
 
 export async function createChecklist(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('checklists', 'edit');
   const parsed = newChecklistSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const c = parsed.data;
@@ -50,7 +50,7 @@ export async function createChecklist(_prev: FormState, formData: FormData): Pro
 }
 
 export async function addItems(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('checklists', 'edit');
   const parsed = addItemsSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const supabase = await createClient();
@@ -61,7 +61,7 @@ export async function addItems(_prev: FormState, formData: FormData): Promise<Fo
 }
 
 export async function renameChecklist(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('checklists', 'edit');
   const id = String(formData.get('id') ?? '');
   const title = String(formData.get('title') ?? '').trim();
   if (title.length < 2) return failed('Enter the checklist title (at least 2 characters).', formData);
@@ -73,7 +73,7 @@ export async function renameChecklist(_prev: FormState, formData: FormData): Pro
 }
 
 export async function toggleItem(input: { id: string; checklistId: string; done: boolean }): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('checklists', 'edit');
   const supabase = await createClient();
   const { error } = await supabase.rpc('toggle_checklist_item', { p_item: input.id, p_done: input.done });
   if (error) return { error: userMessage(error)! };
@@ -82,7 +82,7 @@ export async function toggleItem(input: { id: string; checklistId: string; done:
 }
 
 export async function moveItem(input: { id: string; checklistId: string; direction: -1 | 1 }): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('checklists', 'edit');
   const supabase = await createClient();
   const { error } = await supabase.rpc('move_checklist_item', { p_item: input.id, p_direction: input.direction });
   if (error) return { error: userMessage(error)! };
@@ -91,7 +91,7 @@ export async function moveItem(input: { id: string; checklistId: string; directi
 }
 
 export async function editItem(input: Record<string, unknown> & { checklistId: string }): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('checklists', 'edit');
   const parsed = itemEditSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { id, ...fields } = parsed.data;
@@ -103,7 +103,7 @@ export async function editItem(input: Record<string, unknown> & { checklistId: s
 }
 
 export async function deleteItem(input: { id: string; checklistId: string }): Promise<Result> {
-  await requireActiveUser();
+  await requirePermission('checklists', 'edit');
   const supabase = await createClient();
   const { error } = await supabase.from('checklist_items').delete().eq('id', input.id);
   if (error) return { error: userMessage(error)! };

@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit, canView } from '@/lib/auth/permissions';
 import { formatDate } from '@/lib/format';
 import { SESSION_TYPE_LABELS, type Course, type Session } from '@/lib/schedule/types';
 import { progressOf } from '@/lib/checklists/format';
@@ -14,6 +16,9 @@ import { EnrollForm } from './enrollment';
 
 export default async function CoursePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const profile = await requirePermission('courses');
+  const editable = canEdit(profile, 'courses');
+  const schedule = canView(profile, 'schedule');
   if (!z.string().uuid().safeParse(id).success) notFound();
   const supabase = await createClient();
   const [{ data: course }, { data: sessions }, { data: enrollments }, { data: delegates }, { data: organizers }] = await Promise.all([
@@ -32,14 +37,23 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
   return (
     <div className="space-y-6">
       <h1>{c.name}</h1>
-      <CourseForm action={updateCourse} course={c} />
-      <ConfirmDelete
-        id={c.id}
-        noun="course"
-        name={c.name}
+      {editable ? (
+        <CourseForm action={updateCourse} course={c} />
+      ) : (
+        <p className="text-muted">
+          {formatDate(c.start_date)} – {formatDate(c.end_date)}
+          {c.venue && <> · {c.venue}</>}
+        </p>
+      )}
+      {editable && (
+        <ConfirmDelete
+          id={c.id}
+          noun="course"
+          name={c.name}
         consequences="Its sessions, talks, enrolments and session checklists are deleted too. A course with surgery bookings or placed implants can't be deleted."
-        action={deleteCourse}
-      />
+          action={deleteCourse}
+        />
+      )}
       <section className="space-y-3">
         <h2 className="font-semibold">Sessions</h2>
         <ul className="card divide-y divide-line">
@@ -55,20 +69,22 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
                   Checklist {progressOf(cl.items).label}
                 </Link>
               ))}
-              {s.type === 'surgery' && (
+              {schedule && s.type === 'surgery' && (
                 <Link href={`/schedule?date=${s.date}`} className="text-accent hover:underline">Schedule</Link>
               )}
-              {talkKindOf(s.type) && (
+              {schedule && talkKindOf(s.type) && (
                 <Link href={`/schedule/${talkKindOf(s.type)}?date=${s.date}`} className="text-accent hover:underline">Talks</Link>
               )}
             </li>
           ))}
         </ul>
-        <SessionForm
-          courseId={c.id}
-          defaultDate={c.start_date}
-          organizers={(organizers ?? []).map((o) => ({ id: o.user_id as string, label: (o.full_name || o.email) as string }))}
-        />
+        {editable && (
+          <SessionForm
+            courseId={c.id}
+            defaultDate={c.start_date}
+            organizers={(organizers ?? []).map((o) => ({ id: o.user_id as string, label: (o.full_name || o.email) as string }))}
+          />
+        )}
       </section>
       <section className="card space-y-3">
         <h2 className="font-semibold">Enrolled delegates</h2>
@@ -77,15 +93,17 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
           {enrolled.map((e) => (
             <li key={e.id} data-testid={`enrolled-${e.delegate.full_name}`} className="flex items-center gap-3">
               <Link href={`/delegates/${e.delegate.id}`} className="text-accent hover:underline">{e.delegate.full_name}</Link>
-              <form action={unenrollDelegate}>
-                <input type="hidden" name="enrollment_id" value={e.id} />
-                <input type="hidden" name="course_id" value={c.id} />
-                <button className="text-sm text-bad hover:underline">Remove</button>
-              </form>
+              {editable && (
+                <form action={unenrollDelegate}>
+                  <input type="hidden" name="enrollment_id" value={e.id} />
+                  <input type="hidden" name="course_id" value={c.id} />
+                  <button className="text-sm text-bad hover:underline">Remove</button>
+                </form>
+              )}
             </li>
           ))}
         </ul>
-        <EnrollForm courseId={c.id} available={available} />
+        {editable && <EnrollForm courseId={c.id} available={available} />}
       </section>
     </div>
   );

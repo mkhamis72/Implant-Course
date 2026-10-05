@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { formatDate, formatTime } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
 import type { Option } from '@/lib/inventory/types';
@@ -10,7 +10,7 @@ import type { SlotRow } from '@/lib/schedule/types';
 import { SlotForm } from '../../new/slot-form';
 
 export default async function EditBookingPage({ params }: { params: Promise<{ id: string }> }) {
-  const me = await requireActiveUser();
+  const me = await requirePermission('schedule', 'edit');
   const { id } = await params;
   const supabase = await createClient();
   const { data, error } = await supabase.from('surgery_slots').select(SLOT_SELECT).eq('id', id).maybeSingle();

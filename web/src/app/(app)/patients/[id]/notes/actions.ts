@@ -2,12 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { noteSchema } from '@/lib/patients/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
 
 export async function addNote(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('patients', 'edit');
   const patientId = String(formData.get('patient_id') ?? '');
   const parsed = noteSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
