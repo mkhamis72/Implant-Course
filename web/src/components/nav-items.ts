@@ -1,21 +1,31 @@
-export type Role = 'admin' | 'organizer';
+import { canView, type Area, type Permissions, type Role } from '@/lib/auth/permissions';
 
-export type NavItem = { href: string; label: string; adminOnly?: boolean };
+export type { Role };
 
-// Later plans add entries here (Patients, Schedule, Inventory, ...), keeping Admin last.
+export type NavItem = { href: string; label: string; adminOnly?: boolean; area?: Area };
+
+// Keep Admin last.
 export const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Dashboard' },
-  { href: '/patients', label: 'Patients' },
-  { href: '/schedule', label: 'Schedule' },
-  { href: '/courses', label: 'Courses' },
-  { href: '/checklists', label: 'Checklists' },
-  { href: '/inventory', label: 'Inventory' },
-  { href: '/delegates', label: 'Delegates' },
+  { href: '/patients', label: 'Patients', area: 'patients' },
+  { href: '/schedule', label: 'Schedule', area: 'schedule' },
+  { href: '/courses', label: 'Courses', area: 'courses' },
+  { href: '/checklists', label: 'Checklists', area: 'checklists' },
+  { href: '/inventory', label: 'Inventory', area: 'inventory' },
+  { href: '/delegates', label: 'Delegates', area: 'delegates' },
   { href: '/admin/users', label: 'Admin', adminOnly: true },
 ];
 
-export function visibleNavItems(role: Role): NavItem[] {
-  return NAV_ITEMS.filter((item) => !item.adminOnly || role === 'admin');
+/** A delegate login sees only its own pages. */
+export const DELEGATE_NAV: NavItem[] = [
+  { href: '/my', label: 'My schedule' },
+  { href: '/my/report', label: 'My report' },
+  { href: '/account/security', label: 'Account security' },
+];
+
+export function visibleNavItems(p: { role: Role; permissions: Permissions }): NavItem[] {
+  if (p.role === 'delegate') return DELEGATE_NAV;
+  return NAV_ITEMS.filter((item) => (item.adminOnly ? p.role === 'admin' : !item.area || canView(p, item.area)));
 }
 
 /** True when `pathname` is inside the nav item's section (its first path segment). */

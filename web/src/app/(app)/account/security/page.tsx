@@ -2,8 +2,10 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { EnrollTotp } from './enroll-totp';
 import { removeFactor } from './actions';
+import { requireSignedIn } from '@/lib/auth/session';
 
 export default async function SecurityPage() {
+  await requireSignedIn(); // staff and delegate logins alike
   const supabase = await createClient();
   const { data } = await supabase.auth.mfa.listFactors();
   const verified = (data?.totp ?? []).filter((f) => f.status === 'verified');

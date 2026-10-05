@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { isActive, visibleNavItems, type Role } from './nav-items';
+import type { Permissions } from '@/lib/auth/permissions';
 import { signOut } from '@/app/actions/auth';
 import { Mark } from './mark';
 
@@ -19,7 +20,7 @@ function Wordmark() {
 /**
  * One set of links: a fixed sidebar from 1024px, a slide-over panel opened from the top bar below that.
  */
-export function Nav({ role, name }: { role: Role; name: string }) {
+export function Nav({ role, permissions, name }: { role: Role; permissions: Permissions; name: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -78,7 +79,7 @@ export function Nav({ role, name }: { role: Role; name: string }) {
           )}
         </div>
         <nav className="flex flex-1 flex-col gap-0.5" aria-label="Main">
-          {visibleNavItems(role).map((item) => {
+          {visibleNavItems({ role, permissions }).map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <Link
