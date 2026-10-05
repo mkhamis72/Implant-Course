@@ -83,6 +83,26 @@ describe('permissions: helpers and defaults', () => {
     });
   });
 
+  it('re-saving an unchanged role keeps an organizer at None everywhere', async () => {
+    await withTx(async (c) => {
+      await setPerms(c, users.target, {});
+      await c.query(`update public.profiles set role = 'organizer' where user_id = $1`, [users.target]);
+      const { rows } = await c.query('select count(*)::int as n from public.user_permissions where user_id = $1', [users.target]);
+      expect(rows[0].n).toBe(0);
+    });
+  });
+
+  it('area policies evaluate the permission once per query, not per row', async () => {
+    await withTx(async (c) => {
+      const { rows } = await c.query(`
+        select tablename, policyname, coalesce(qual, '') || ' ' || coalesce(with_check, '') as expr
+        from pg_policies where schemaname = 'public' and permissive = 'RESTRICTIVE'`);
+      expect(rows.length).toBeGreaterThan(80);
+      const perRow = rows.filter((r) => /can\(/.test(r.expr) && !/SELECT/i.test(r.expr)).map((r) => r.policyname);
+      expect(perRow).toEqual([]);
+    });
+  });
+
   it('a delegate profile is not an active (staff) user', async () => {
     await withTx(async (c) => {
       await asPostgres(c);
