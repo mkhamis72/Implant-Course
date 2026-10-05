@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  cancelSlotSchema, correctionSchema, courseSchema, sessionSchema, slotSchema, slotStatusSchema, supervisorSchema, updateSlotSchema,
+  cancelSlotSchema, correctionSchema, courseSchema, lecturerSchema, sessionSchema, slotSchema, slotStatusSchema, supervisorSchema,
+  talkSchema, updateSlotSchema, updateTalkSchema,
 } from './schemas';
 
 const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
@@ -19,6 +20,13 @@ describe('course and session schemas', () => {
     const s = { course_id: id, type: 'surgery', title: 'Day 1 surgery', date: '2030-03-02', start_time: '08:00', end_time: '17:00' };
     expect(sessionSchema.parse(s)).toMatchObject({ lead_organizer_id: null });
     expect(err(sessionSchema.safeParse({ ...s, end_time: '07:00' }))).toBe('The session must end after it starts.');
+  });
+  it('stores a blank room as null and trims a given one', () => {
+    const s = { course_id: id, type: 'lecture', title: 'Day 1 lectures', date: '2030-03-02', start_time: '09:00', end_time: '13:00' };
+    expect(sessionSchema.parse({ ...s, room: '  ' })).toMatchObject({ room: null });
+    expect(sessionSchema.parse(s)).toMatchObject({ room: null });
+    expect(sessionSchema.parse({ ...s, room: ' Hall A ' })).toMatchObject({ room: 'Hall A' });
+    expect(err(sessionSchema.safeParse({ ...s, room: 'x'.repeat(121) }))).toBe('Keep the room under 120 characters.');
   });
 });
 
@@ -76,5 +84,28 @@ describe('supervisorSchema', () => {
     expect(supervisorSchema.parse({ full_name: '  Prof. Laila Samir ' })).toEqual({ full_name: 'Prof. Laila Samir' });
     expect(supervisorSchema.safeParse({ full_name: '   ' }).success).toBe(false);
     expect(supervisorSchema.safeParse({ full_name: 'x'.repeat(121) }).success).toBe(false);
+  });
+});
+
+describe('talk schemas', () => {
+  const talk = { session_id: id, start: '09:00', end: '10:00', lecturer_id: id, topic: '  Sinus lift  ', notes: '' };
+  it('normalizes a talk', () => {
+    expect(talkSchema.parse(talk)).toEqual({ ...talk, topic: 'Sinus lift' });
+  });
+  it('explains what is missing', () => {
+    expect(err(talkSchema.safeParse({ ...talk, session_id: '' }))).toBe('Choose a session.');
+    expect(err(talkSchema.safeParse({ ...talk, lecturer_id: '' }))).toBe('Choose a lecturer.');
+    expect(err(talkSchema.safeParse({ ...talk, topic: 'x' }))).toBe('Enter a topic.');
+    expect(err(talkSchema.safeParse({ ...talk, start: '9am' }))).toBe('Enter the start time (HH:MM).');
+    expect(err(talkSchema.safeParse({ ...talk, end: '09:00' }))).toBe('The end time must be after the start time.');
+  });
+  it('updates by talk id', () => {
+    const { session_id: _s, ...rest } = talk;
+    expect(updateTalkSchema.parse({ ...rest, talk_id: id })).toMatchObject({ talk_id: id, topic: 'Sinus lift' });
+    expect(err(updateTalkSchema.safeParse({ ...rest, talk_id: 'x' }))).toBe('Talk not found.');
+  });
+  it('requires a lecturer name', () => {
+    expect(err(lecturerSchema.safeParse({ full_name: ' A ' }))).toBe('Enter the lecturer’s name.');
+    expect(lecturerSchema.parse({ full_name: ' Prof. Laila Samir ' })).toEqual({ full_name: 'Prof. Laila Samir' });
   });
 });
