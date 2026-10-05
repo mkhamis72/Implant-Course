@@ -15,15 +15,20 @@ export type LoginResult = { ok: string; password?: string } | { error: string };
  * Email off (pilot without SMTP): a confirmed account with a one-time password for the admin to hand over.
  */
 export async function createLogin(a: { email: string; full_name: string; role: Role; delegate_id?: string | null }): Promise<LoginResult> {
+  const email = a.email.trim().toLowerCase();
+  const supabase = await createClient();
+  // An invite to an existing, unconfirmed address returns that account instead of failing: never repurpose it.
+  const { data: taken } = await supabase.from('profiles').select('user_id').eq('email', email).limit(1);
+  if (taken?.length) return { error: 'An account with this email already exists. Manage it in Admin → Users.' };
+
   const admin = createAdminClient();
   const password = emailEnabled() ? undefined : temporaryPassword();
   const { data, error } = password
-    ? await admin.auth.admin.createUser({ email: a.email, password, email_confirm: true })
-    : await admin.auth.admin.inviteUserByEmail(a.email, { redirectTo: `${serverEnv().siteUrl}/auth/confirm` });
+    ? await admin.auth.admin.createUser({ email, password, email_confirm: true })
+    : await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${serverEnv().siteUrl}/auth/confirm` });
   if (error || !data?.user) return { error: error ? mapAuthError(error) : 'Could not create the login.' };
 
   // Through the admin's own session so RLS and the audit log record who did it.
-  const supabase = await createClient();
   const problem = updateProblem(
     await supabase
       .from('profiles')
@@ -37,6 +42,6 @@ export async function createLogin(a: { email: string; full_name: string; role: R
     return { error: `The login was not created: ${problem}` };
   }
   return password
-    ? { ok: `Login created for ${a.email}.`, password }
-    : { ok: `Invitation sent to ${a.email}. The link verifies their email address.` };
+    ? { ok: `Login created for ${email}.`, password }
+    : { ok: `Invitation sent to ${email}. The link verifies their email address.` };
 }

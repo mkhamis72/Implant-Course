@@ -1,14 +1,18 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
-const { auth, profileUpdate } = vi.hoisted(() => ({
+const { auth, profileUpdate, existing } = vi.hoisted(() => ({
   auth: { createUser: vi.fn(), inviteUserByEmail: vi.fn(), deleteUser: vi.fn() },
   profileUpdate: vi.fn(),
+  existing: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ auth: { admin: auth } }) }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
-    from: () => ({ update: (values: unknown) => ({ eq: () => ({ select: async () => profileUpdate(values) }) }) }),
+    from: () => ({
+      update: (values: unknown) => ({ eq: () => ({ select: async () => profileUpdate(values) }) }),
+      select: () => ({ eq: (_col: string, email: string) => ({ limit: async () => existing(email) }) }),
+    }),
   }),
 }));
 vi.mock('@/lib/env', () => ({ serverEnv: () => ({ siteUrl: 'http://localhost:3000' }) }));
@@ -17,6 +21,7 @@ import { createLogin } from './create-login';
 beforeEach(() => {
   vi.clearAllMocks();
   profileUpdate.mockReturnValue({ data: [{ user_id: 'u1' }], error: null });
+  existing.mockReturnValue({ data: [], error: null });
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -39,6 +44,16 @@ describe('createLogin', () => {
     expect(auth.inviteUserByEmail).toHaveBeenCalledWith('o@example.com', { redirectTo: 'http://localhost:3000/auth/confirm' });
     expect(auth.createUser).not.toHaveBeenCalled();
     expect(r).toEqual({ ok: 'Invitation sent to o@example.com. The link verifies their email address.' });
+  });
+
+  it('refuses an email that already has an account, without touching Auth', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    existing.mockReturnValue({ data: [{ user_id: 'old' }], error: null });
+    const r = await createLogin({ email: ' Taken@Example.com ', full_name: 'T', role: 'delegate', delegate_id: 'd1' });
+    expect(existing).toHaveBeenCalledWith('taken@example.com');
+    expect(r).toEqual({ error: 'An account with this email already exists. Manage it in Admin → Users.' });
+    expect(auth.inviteUserByEmail).not.toHaveBeenCalled();
+    expect(auth.createUser).not.toHaveBeenCalled();
   });
 
   it('removes the account again when the profile cannot be set', async () => {
