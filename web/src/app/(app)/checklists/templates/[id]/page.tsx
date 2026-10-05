@@ -1,11 +1,14 @@
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit } from '@/lib/auth/permissions';
 import type { Template } from '@/lib/checklists/types';
 import { TemplateForm } from '../template-form';
 import { DeleteTemplate } from './delete-template';
 
 export default async function TemplatePage({ params }: { params: Promise<{ id: string }> }) {
+  const profile = await requirePermission('checklists');
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
   const supabase = await createClient();
@@ -23,8 +26,12 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
       <ol className="card list-decimal space-y-1 pl-8 text-sm">
         {t.items.map((i) => <li key={i.position} data-testid="template-item">{i.text}</li>)}
       </ol>
-      <TemplateForm key={t.items.map((i) => i.text).join('|')} template={t} />
-      <DeleteTemplate id={t.id} />
+      {canEdit(profile, 'checklists') && (
+        <>
+          <TemplateForm key={t.items.map((i) => i.text).join('|')} template={t} />
+          <DeleteTemplate id={t.id} />
+        </>
+      )}
     </div>
   );
 }

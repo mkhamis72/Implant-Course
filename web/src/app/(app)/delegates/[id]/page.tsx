@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit } from '@/lib/auth/permissions';
 import { formatDate } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
 import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutcome, type SiteState } from '@/lib/inventory/types';
@@ -22,6 +24,7 @@ function implantLabel(r: ReportRow): string {
 }
 
 export default async function DelegatePage({ params }: { params: Promise<{ id: string }> }) {
+  const profile = await requirePermission('delegates');
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
   const supabase = await createClient();
@@ -36,7 +39,9 @@ export default async function DelegatePage({ params }: { params: Promise<{ id: s
   return (
     <div className="space-y-6">
       <h1>{delegate.full_name}</h1>
-      <DelegateForm action={updateDelegate} delegate={delegate} />
+      <fieldset disabled={!canEdit(profile, 'delegates')} className="min-w-0">
+        <DelegateForm action={updateDelegate} delegate={delegate} />
+      </fieldset>
       <section className="card space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold">Implant record</h2>

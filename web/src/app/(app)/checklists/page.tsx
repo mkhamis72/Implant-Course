@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { getCurrentProfile } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit } from '@/lib/auth/permissions';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { progressOf } from '@/lib/checklists/format';
 import type { ChecklistSummary } from '@/lib/checklists/types';
@@ -23,7 +24,7 @@ function attachedTo(c: ChecklistSummary): string {
 export default async function ChecklistsPage({ searchParams }: { searchParams: PageSearchParams }) {
   const view = (await readParams(searchParams, 'view')).view || 'open';
   const supabase = await createClient();
-  const me = await getCurrentProfile();
+  const me = await requirePermission('checklists');
   const [{ data: lists, error }, { data: templates }, { data: mine }] = await Promise.all([
     supabase.from('checklists').select(SUMMARY_SELECT).order('created_at', { ascending: false }).limit(300),
     supabase.from('checklist_templates').select('id, name').order('name'),
@@ -80,7 +81,9 @@ export default async function ChecklistsPage({ searchParams }: { searchParams: P
           ))}
         </ul>
       )}
-      <NewChecklistForm templates={(templates ?? []).map((t) => ({ id: t.id as string, label: t.name as string }))} />
+      {canEdit(me, 'checklists') && (
+        <NewChecklistForm templates={(templates ?? []).map((t) => ({ id: t.id as string, label: t.name as string }))} />
+      )}
     </div>
   );
 }

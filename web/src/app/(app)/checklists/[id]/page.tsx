@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit } from '@/lib/auth/permissions';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { progressOf } from '@/lib/checklists/format';
 import type { ChecklistItem } from '@/lib/checklists/types';
@@ -23,6 +25,8 @@ function Progress({ done, total, label }: { done: number; total: number; label: 
 }
 
 export default async function ChecklistPage({ params }: { params: Promise<{ id: string }> }) {
+  const profile = await requirePermission('checklists');
+  const editable = canEdit(profile, 'checklists');
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
   const supabase = await createClient();
@@ -71,15 +75,18 @@ export default async function ChecklistPage({ params }: { params: Promise<{ id: 
           {!c.session && !c.slot && 'Standalone checklist'}
         </p>
         <Progress {...progressOf(items)} />
-        <TitleForm id={c.id} title={c.title} />
+        {editable && <TitleForm id={c.id} title={c.title} />}
       </div>
-      <ul className="card">
-        {items.length === 0 && <li className="text-muted">No items yet.</li>}
-        {items.map((item, i) => (
-          <ItemRow key={item.id} item={item} checklistId={c.id} organizers={options} first={i === 0} last={i === items.length - 1} />
-        ))}
-      </ul>
-      <AddItemsForm checklistId={c.id} />
+      {/* Viewers see the same rows with every control disabled. */}
+      <fieldset disabled={!editable} className="min-w-0">
+        <ul className="card">
+          {items.length === 0 && <li className="text-muted">No items yet.</li>}
+          {items.map((item, i) => (
+            <ItemRow key={item.id} item={item} checklistId={c.id} organizers={options} first={i === 0} last={i === items.length - 1} />
+          ))}
+        </ul>
+      </fieldset>
+      {editable && <AddItemsForm checklistId={c.id} />}
     </div>
   );
 }

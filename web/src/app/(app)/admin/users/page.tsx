@@ -1,11 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
-import { getCurrentProfile, type Profile } from '@/lib/auth/session';
+import { requireAdmin, type Profile } from '@/lib/auth/session';
 import { InviteForm } from './invite-form';
 import { UserRow } from './user-row';
 import { EMAIL_OFF_MESSAGE, emailEnabled } from '@/lib/flags';
 
 export default async function UsersPage() {
-  const me = await getCurrentProfile();
+  const me = await requireAdmin();
   const supabase = await createClient();
   const { data: users, error } = await supabase
     .from('profiles')
