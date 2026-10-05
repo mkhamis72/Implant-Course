@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit } from '@/lib/auth/permissions';
 import { addDays, isRealDate, todayIso } from '@/lib/dates';
 import { formatDate, formatTime } from '@/lib/format';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
@@ -8,7 +9,8 @@ import { DAY_SESSION_SELECT, TALK_KINDS, type DaySessionRow, type TalkKind } fro
 import { DeleteTalk } from './delete-talk';
 
 export async function TalkDayView({ kind, searchParams }: { kind: TalkKind; searchParams: PageSearchParams }) {
-  await requireActiveUser();
+  const profile = await requirePermission('schedule');
+  const editable = canEdit(profile, 'schedule');
   const raw = (await readParams(searchParams, 'date')).date;
   const date = raw && isRealDate(raw) ? raw : todayIso();
   const k = TALK_KINDS[kind];
@@ -27,7 +29,7 @@ export async function TalkDayView({ kind, searchParams }: { kind: TalkKind; sear
     <div className="space-y-4">
       <div className="page-header">
         <h1>{k.title} · {formatDate(date)}</h1>
-        <Link href={`/schedule/${kind}/new?date=${date}`} className="btn">New talk</Link>
+        {editable && <Link href={`/schedule/${kind}/new?date=${date}`} className="btn">New talk</Link>}
       </div>
       <nav className="flex gap-4 text-sm" aria-label="Day">
         <Link href={`/schedule/${kind}?date=${addDays(date, -1)}`} className="text-accent hover:underline">← Previous day</Link>
@@ -48,7 +50,7 @@ export async function TalkDayView({ kind, searchParams }: { kind: TalkKind; sear
               </p>
             </div>
             {/* New talks go on sessions from today on (the form offers no others); past talks can still be edited. */}
-            {s.date < todayIso() ? (
+            {!editable ? null : s.date < todayIso() ? (
               <span className="text-sm text-muted">Past session</span>
             ) : (
               <Link href={`/schedule/${kind}/new?session=${s.id}`} className="btn-secondary btn">Add talk</Link>
@@ -66,10 +68,12 @@ export async function TalkDayView({ kind, searchParams }: { kind: TalkKind; sear
                     <span className="block text-muted">{t.lecturer?.full_name}</span>
                     {t.notes && <span className="block text-muted">{t.notes}</span>}
                   </span>
-                  <span className="flex items-start gap-3">
-                    <Link href={`/schedule/${kind}/${t.id}/edit`} aria-label={`Edit ${t.topic}`} className="text-accent hover:underline">Edit</Link>
-                    <DeleteTalk talkId={t.id} kind={kind} />
-                  </span>
+                  {editable && (
+                    <span className="flex items-start gap-3">
+                      <Link href={`/schedule/${kind}/${t.id}/edit`} aria-label={`Edit ${t.topic}`} className="text-accent hover:underline">Edit</Link>
+                      <DeleteTalk talkId={t.id} kind={kind} />
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

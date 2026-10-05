@@ -1,9 +1,12 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit } from '@/lib/auth/permissions';
 import { DelegateForm, type DelegateRow } from './delegate-form';
 import { createDelegate } from './actions';
 
 export default async function DelegatesPage() {
+  const profile = await requirePermission('delegates');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('delegates')
@@ -15,10 +18,12 @@ export default async function DelegatesPage() {
   return (
     <div className="space-y-6">
       <h1>Delegates</h1>
-      <section className="space-y-2">
-        <h2 className="font-semibold">Add a delegate</h2>
-        <DelegateForm action={createDelegate} />
-      </section>
+      {canEdit(profile, 'delegates') && (
+        <section className="space-y-2">
+          <h2 className="font-semibold">Add a delegate</h2>
+          <DelegateForm action={createDelegate} />
+        </section>
+      )}
       <div className="card overflow-x-auto">
         {delegates.length === 0 ? (
           <p className="text-muted">No delegates yet.</p>

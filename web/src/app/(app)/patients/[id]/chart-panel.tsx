@@ -105,7 +105,7 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
                 </ul>
               </>
             )}
-            {locked.length > 0 ? (
+            {!data.editable ? null : locked.length > 0 ? (
               // An explanation, not a warning: quiet for one implant tooth, amber when a multi-selection is blocked.
               <p className={selected.length === 1 ? 'text-sm text-muted' : 'rounded-md bg-warn-soft p-3 text-sm text-warn'}>
                 Teeth with implant records ({locked.join(', ')}) are changed from the implant workflow, not here.

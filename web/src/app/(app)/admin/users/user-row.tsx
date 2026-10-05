@@ -4,6 +4,9 @@ import { useActionState } from 'react';
 import { setUserActive, setUserRole } from './actions';
 import type { ActionState } from '@/lib/admin/schemas';
 import type { Profile } from '@/lib/auth/session';
+import { PermissionGrid } from './permission-grid';
+
+const ROLE_LABELS = { admin: 'Admin', organizer: 'Organizer', delegate: 'Delegate' } as const;
 
 export function UserRow({ user, isSelf }: { user: Profile; isSelf: boolean }) {
   const [roleState, roleAction, rolePending] = useActionState<ActionState, FormData>(setUserRole, {});
@@ -18,8 +21,8 @@ export function UserRow({ user, isSelf }: { user: Profile; isSelf: boolean }) {
       </td>
       <td className="py-2 pr-4">{user.email}</td>
       <td className="py-2 pr-4">
-        {isSelf ? (
-          <span className="capitalize">{user.role}</span>
+        {isSelf || user.role === 'delegate' ? (
+          <span>{ROLE_LABELS[user.role]}</span>
         ) : (
           <form action={roleAction} className="flex gap-2">
             <input type="hidden" name="user_id" value={user.user_id} />
@@ -43,6 +46,12 @@ export function UserRow({ user, isSelf }: { user: Profile; isSelf: boolean }) {
               {user.active ? 'Deactivate' : 'Reactivate'}
             </button>
           </form>
+        )}
+        {user.role === 'organizer' && !isSelf && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-sm text-accent">Permissions</summary>
+            <PermissionGrid userId={user.user_id} permissions={user.permissions} />
+          </details>
         )}
         {message && (
           <p role={isError ? 'alert' : undefined} className={`mt-1 text-sm ${isError ? 'text-bad' : 'text-ok'}`}>

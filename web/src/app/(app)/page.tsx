@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { getSettings, requireActiveUser } from '@/lib/auth/session';
+import { canView } from '@/lib/auth/permissions';
 import { addDays, todayIso } from '@/lib/dates';
 import { formatDate, formatTime } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
@@ -43,6 +44,13 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   // Pages render alongside the layout, so check the account here too before reading settings.
   const profile = await requireActiveUser();
+  // Each card shows only for a panel the user can view.
+  const show = {
+    schedule: canView(profile, 'schedule'),
+    inventory: canView(profile, 'inventory'),
+    checklists: canView(profile, 'checklists'),
+    patients: canView(profile, 'patients'),
+  };
   const settings = await getSettings();
   const today = todayIso();
   const tomorrow = addDays(today, 1);
@@ -78,6 +86,7 @@ export default async function DashboardPage() {
         </div>
       </div>
       <div className="grid items-start gap-4 lg:grid-cols-2">
+        {show.schedule && (
         <Card title="Today's surgeries" failed={Boolean(slots.error)} count={surgeries.length} tone="accent" className="lg:col-span-2">
           {surgeries.length === 0 ? (
             <p className="text-sm text-muted">No surgeries booked today.</p>
@@ -94,9 +103,10 @@ export default async function DashboardPage() {
                   className="flex flex-wrap items-baseline gap-x-3 py-0.5"
                 >
                   <span className="font-semibold">{formatTime(s.starts_at)}–{formatTime(s.ends_at)}</span>
-                  {s.patient && (
+                  {s.patient && show.patients && (
                     <Link href={`/patients/${s.patient.id}`} className="text-accent hover:underline">{s.patient.full_name}</Link>
                   )}
+                  {s.patient && !show.patients && <span>{s.patient.full_name}</span>}
                   {s.implants.length > 0 && <span className="text-muted">teeth {s.implants.map((i) => i.tooth).join(', ')}</span>}
                   {s.status === 'done' && <span className="badge badge-ok">done</span>}
                 </li>
@@ -108,7 +118,9 @@ export default async function DashboardPage() {
           )}
           <Link href={`/schedule?date=${today}`} className="text-sm text-accent hover:underline">Open today’s schedule</Link>
         </Card>
+        )}
 
+        {show.schedule && (
         <Card title="Stock shortages for surgeries" failed={Boolean(pullToday.error || pullTomorrow.error)} count={shortages.length} tone="bad">
           {shortages.length === 0 ? (
             <p className="text-sm text-muted">Stock covers today’s and tomorrow’s planned implants.</p>
@@ -124,7 +136,9 @@ export default async function DashboardPage() {
             </ul>
           )}
         </Card>
+        )}
 
+        {show.inventory && (
         <Card title="Low stock" failed={Boolean(stock.error)} count={low.length} tone="warn">
           {low.length === 0 ? (
             <p className="text-sm text-muted">Nothing is at or below its reorder level.</p>
@@ -139,7 +153,9 @@ export default async function DashboardPage() {
             </ul>
           )}
         </Card>
+        )}
 
+        {show.inventory && (
         <Card title="Expiring soon" failed={Boolean(stock.error)} count={expiring.length} tone="warn">
           {expiring.length === 0 ? (
             <p className="text-sm text-muted">Nothing expires in the next {settings.expiry_alert_days} days.</p>
@@ -154,7 +170,9 @@ export default async function DashboardPage() {
             </ul>
           )}
         </Card>
+        )}
 
+        {show.checklists && (
         <Card title="My open checklist items" failed={Boolean(mine.error)} count={myItems.length} tone="accent">
           {myItems.length === 0 ? (
             <p className="text-sm text-muted">Nothing assigned to you is open.</p>
@@ -170,6 +188,7 @@ export default async function DashboardPage() {
             </ul>
           )}
         </Card>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
 import { getSettings } from '@/lib/auth/session';
 import { todayIso } from '@/lib/dates';
 import { productLabel } from '@/lib/inventory/labels';
@@ -16,6 +17,7 @@ export default async function StockPage({
 }: {
   searchParams: PageSearchParams;
 }) {
+  await requirePermission('inventory');
   const { q, category, all, rows: rowsParam } = await readParams(searchParams, 'q', 'category', 'all', 'rows');
   const supabase = await createClient();
   const [{ data, error }, settings] = await Promise.all([

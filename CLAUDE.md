@@ -32,6 +32,14 @@ There is no local Supabase: DB and E2E tests hit the hosted **dev** project conf
 - `security definer set search_path = ''`, first line `perform app_private.require_active();`, explicit `revoke … from public, anon` / `grant … to authenticated`.
 - Business errors are raised with `app_private.fail('message')` (hint `'user'`). In TS, `userMessage(error)` (`src/lib/db-errors.ts`) shows those verbatim and hides everything else.
 - `public.is_active_user()` / `is_admin()` gate RLS (active profile, plus aal2 when the user has verified 2FA). Writes are further restricted by column-level grants.
+- **Roles & permissions** (0029–0033):
+  - Roles are `admin`, `organizer` and `delegate`. `is_active_user()` means active **staff** only (admin or organizer).
+  - **Organizers:** `user_permissions` holds None/View/Edit per area (`patients`, `schedule`, `courses`, `checklists`, `inventory`, `delegates`).
+    - In SQL, `public.can(area, level)` decides access. **Restrictive** `<table>_area_*` policies AND it with the existing policies.
+    - Every security-definer write function starts with `app_private.require_perm(area, 'edit')`. `tests/db/permissions.test.ts` fails if a new public definer function or table skips this.
+    - Some reads cross areas, for example schedule → patients/courses and patients → bookings; see 0032 and 0033.
+    - In TS, pages call `requirePermission(area)`, actions call `requirePermission(area, 'edit')`, and controls hide unless `canEdit(profile, area)`.
+  - **Delegates** (`profiles.delegate_id`) get no table access. They read only through `my_schedule()` and `my_report()`, on the `/my` pages.
 - `app_private.audit_row()` trigger on every table → `audit_log` (patient History tab reads it via `patient_history`).
 - `stock_movements` is an append-only ledger; corrections are reversing movements. Lock order: site → batch.
 - Dates are Cairo dates: use `public.cairo_today()` in SQL, `todayIso()` (`src/lib/dates.ts`) and `formatDate/formatTime` (`src/lib/format.ts`) in TS — never `current_date` / `new Date()` formatting.

@@ -2,11 +2,15 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit, reportAccessNote } from '@/lib/auth/permissions';
 import { formatDate } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
 import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutcome, type SiteState } from '@/lib/inventory/types';
 import type { ReportRow } from '@/lib/schedule/types';
 import { DelegateForm, type DelegateRow } from '../delegate-form';
+import { CreateLogin } from './create-login';
+import { emailEnabled } from '@/lib/flags';
 import { updateDelegate } from '../actions';
 
 function implantLabel(r: ReportRow): string {
@@ -22,6 +26,7 @@ function implantLabel(r: ReportRow): string {
 }
 
 export default async function DelegatePage({ params }: { params: Promise<{ id: string }> }) {
+  const profile = await requirePermission('delegates');
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
   const supabase = await createClient();
@@ -31,15 +36,35 @@ export default async function DelegatePage({ params }: { params: Promise<{ id: s
   ]);
   if (!data) notFound();
   const delegate = data as DelegateRow;
+  const isAdmin = profile.role === 'admin';
+  const { data: login } = isAdmin
+    ? await supabase.from('profiles').select('active').eq('delegate_id', id).maybeSingle()
+    : { data: null };
   const report = (reportData ?? []) as ReportRow[];
 
   return (
     <div className="space-y-6">
       <h1>{delegate.full_name}</h1>
-      <DelegateForm action={updateDelegate} delegate={delegate} />
+      <fieldset disabled={!canEdit(profile, 'delegates')} className="min-w-0">
+        <DelegateForm action={updateDelegate} delegate={delegate} />
+      </fieldset>
+      {isAdmin && (
+        <section className="card space-y-2">
+          <h2 className="font-semibold">Login</h2>
+          {login ? (
+            <p className="text-sm">
+              Login: {login.active ? 'active' : 'inactive'} ·{' '}
+              <Link href="/admin/users" className="text-accent hover:underline">Manage in Admin → Users</Link>
+            </p>
+          ) : (
+            <CreateLogin delegateId={delegate.id} emailOn={emailEnabled()} />
+          )}
+        </section>
+      )}
       <section className="card space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold">Implant record</h2>
+          {reportAccessNote(profile) && <p className="basis-full text-sm text-warn">{reportAccessNote(profile)}</p>}
           <a href={`/delegates/${delegate.id}/report.csv`} className="btn-secondary btn" download>
             Download CSV
           </a>

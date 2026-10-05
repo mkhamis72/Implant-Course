@@ -1,9 +1,12 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit } from '@/lib/auth/permissions';
 import { SCOPE_LABELS } from '@/lib/checklists/format';
 import type { ChecklistScope } from '@/lib/checklists/types';
 
 export default async function TemplatesPage() {
+  const profile = await requirePermission('checklists');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('checklist_templates')
@@ -16,7 +19,7 @@ export default async function TemplatesPage() {
     <div className="space-y-6">
       <div className="page-header">
         <h1>Checklist templates</h1>
-        <Link href="/checklists/templates/new" className="btn">New template</Link>
+        {canEdit(profile, 'checklists') && <Link href="/checklists/templates/new" className="btn">New template</Link>}
       </div>
       <ul className="card divide-y divide-line">
         {templates.length === 0 && <li className="text-muted">No templates yet.</li>}

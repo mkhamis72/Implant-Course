@@ -1,7 +1,8 @@
-import { getSettings } from '@/lib/auth/session';
+import { getSettings, requireAdmin } from '@/lib/auth/session';
 import { SettingsForm } from './settings-form';
 
 export default async function SettingsPage() {
+  await requireAdmin();
   const settings = await getSettings();
   return (
     <div className="space-y-6">

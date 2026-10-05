@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit } from '@/lib/auth/permissions';
 import { ageOn } from '@/lib/patients/age';
 import { medicalAlerts } from '@/lib/patients/alerts';
 import type { MedicalHistory, Patient } from '@/lib/patients/types';
@@ -9,6 +11,7 @@ import { DeletePatient } from '../delete-patient';
 
 export default async function PatientLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const profile = await requirePermission('patients');
   if (!z.string().uuid().safeParse(id).success) notFound();
   const supabase = await createClient();
   const [{ data: patient }, { data: history }] = await Promise.all([
@@ -37,7 +40,7 @@ export default async function PatientLayout({ children, params }: { children: Re
             ))}
           </ul>
         )}
-        <DeletePatient id={p.id} name={p.full_name} triggerClassName="ml-auto" panelClassName="basis-full" />
+        {canEdit(profile, 'patients') && <DeletePatient id={p.id} name={p.full_name} triggerClassName="ml-auto" panelClassName="basis-full" />}
       </header>
       <PatientTabs patientId={p.id} />
       {children}

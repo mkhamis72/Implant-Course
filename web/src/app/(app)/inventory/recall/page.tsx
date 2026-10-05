@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
 import { productLabel } from '@/lib/inventory/labels';
 import type { ProductType } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
@@ -21,6 +22,7 @@ type Hit = {
 };
 
 export default async function RecallPage({ searchParams }: { searchParams: PageSearchParams }) {
+  await requirePermission('inventory');
   const { lot } = await readParams(searchParams, 'lot');
   const q = String(lot).trim();
   let hits: Hit[] = [];

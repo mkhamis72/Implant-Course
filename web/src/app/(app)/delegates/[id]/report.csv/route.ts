@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentProfile } from '@/lib/auth/session';
+import { canView } from '@/lib/auth/permissions';
 import { contentDisposition, csvFilename, toCsv } from '@/lib/csv';
 import { productLabel } from '@/lib/inventory/labels';
 import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutcome, type SiteState } from '@/lib/inventory/types';
@@ -9,7 +10,7 @@ import type { ReportRow } from '@/lib/schedule/types';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
-  if (!profile?.active) return new NextResponse('Not allowed', { status: 403 });
+  if (!profile?.active || !canView(profile, 'delegates')) return new NextResponse('Not allowed', { status: 403 });
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) return new NextResponse('Not found', { status: 404 });
   const supabase = await createClient();

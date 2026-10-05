@@ -1,12 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { visibleNavItems, isActive } from './nav-items';
+import { DELEGATE_NAV, visibleNavItems, isActive } from './nav-items';
+
+const labels = (p: Parameters<typeof visibleNavItems>[0]) => visibleNavItems(p).map((i) => i.label);
 
 describe('visibleNavItems', () => {
-  it('shows Admin to admins', () => {
-    expect(visibleNavItems('admin').map((i) => i.label)).toEqual(['Dashboard', 'Patients', 'Schedule', 'Courses', 'Checklists', 'Inventory', 'Delegates', 'Admin']);
+  it('shows everything and Admin to admins', () => {
+    expect(labels({ role: 'admin', permissions: {} })).toEqual([
+      'Dashboard', 'Patients', 'Schedule', 'Courses', 'Checklists', 'Inventory', 'Delegates', 'Admin',
+    ]);
   });
-  it('hides Admin from organizers', () => {
-    expect(visibleNavItems('organizer').map((i) => i.label)).toEqual(['Dashboard', 'Patients', 'Schedule', 'Courses', 'Checklists', 'Inventory', 'Delegates']);
+  it('shows organizers the panels they can view, never Admin', () => {
+    expect(labels({ role: 'organizer', permissions: { inventory: 'view', courses: 'edit' } })).toEqual(['Dashboard', 'Courses', 'Inventory']);
+  });
+  it('gives delegates their own menu', () => {
+    expect(labels({ role: 'delegate', permissions: {} })).toEqual(DELEGATE_NAV.map((i) => i.label));
+    expect(DELEGATE_NAV.map((i) => i.href)).toEqual(['/my', '/my/report', '/account/security']);
   });
 });
 

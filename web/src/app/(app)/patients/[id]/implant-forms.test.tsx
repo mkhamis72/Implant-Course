@@ -8,7 +8,7 @@ import { PlaceForm } from './implant-forms';
 const implant = { id: 'p1', type: 'implant', brand: 'Brand', system: 'S', platform: null, diameter_mm: 4, length_mm: 10, description: '' };
 const lot = { stock_lot_id: 'l1', product_id: 'p1', lot_no: 'OLD', expiry: '2030-06-09', received_on: '2030-01-01', qty_received: 1, on_hand: 1 };
 const data = {
-  today: '2030-06-10', me: 'u1', implants: [implant], lots: [lot], delegates: [], organizers: [], supervisors: [], componentProducts: [],
+  today: '2030-06-10', me: 'u1', editable: true, implants: [implant], lots: [lot], delegates: [], organizers: [], supervisors: [], componentProducts: [],
 } as unknown as ChartData;
 
 const placeForm = () => render(<PlaceForm patientId="pt" tooth={36} data={data} onDone={() => {}} plannedProductId="p1" />);

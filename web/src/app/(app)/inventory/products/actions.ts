@@ -3,13 +3,13 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { productSchema } from '@/lib/inventory/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
 
 export async function createProduct(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('inventory', 'edit');
   const parsed = productSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const supabase = await createClient();
@@ -19,7 +19,7 @@ export async function createProduct(_prev: FormState, formData: FormData): Promi
 }
 
 export async function updateProduct(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('inventory', 'edit');
   const id = String(formData.get('id') ?? '');
   const parsed = productSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);

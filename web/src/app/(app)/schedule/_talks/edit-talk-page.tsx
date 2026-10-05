@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { formatDate, formatTime } from '@/lib/format';
 import { TALK_KINDS, TALK_SELECT, type TalkKind, type TalkRow } from '@/lib/schedule/talks';
 import { TalkForm } from './talk-form';
@@ -9,7 +9,7 @@ import { TalkForm } from './talk-form';
 type EditRow = TalkRow & { session: { type: string; title: string; date: string; course: { name: string } | null } | null };
 
 export async function EditTalkPage({ kind, params }: { kind: TalkKind; params: Promise<{ id: string }> }) {
-  await requireActiveUser();
+  await requirePermission('schedule', 'edit');
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
   const k = TALK_KINDS[kind];

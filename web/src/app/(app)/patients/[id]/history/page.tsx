@@ -1,9 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
 import { formatDateTime } from '@/lib/format';
 import { describeChange } from '@/lib/patients/history';
 import type { HistoryEntry } from '@/lib/patients/types';
 
 export default async function HistoryPage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePermission('patients');
   const { id } = await params;
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('patient_history', { p_patient: id });

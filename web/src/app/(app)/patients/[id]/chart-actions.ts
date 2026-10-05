@@ -2,12 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { toothStatusSchema } from '@/lib/patients/schemas';
 import { canSetByHand } from '@/lib/patients/types';
 
 export async function setToothStatus(input: { patientId: string; teeth: number[]; status: string }): Promise<{ error?: string }> {
-  await requireActiveUser();
+  await requirePermission('patients', 'edit');
   const parsed = toothStatusSchema.safeParse({ patient_id: input.patientId, teeth: input.teeth, status: input.status });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { patient_id, teeth, status } = parsed.data;

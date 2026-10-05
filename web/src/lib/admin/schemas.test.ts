@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { inviteSchema, settingsSchema, setActiveSchema } from './schemas';
+import { inviteSchema, permissionsSchema, settingsSchema, setActiveSchema } from './schemas';
 
 describe('inviteSchema', () => {
   it('normalizes email and name', () => {
@@ -33,5 +33,23 @@ describe('setActiveSchema', () => {
     expect(
       setActiveSchema.parse({ user_id: '1b4e28ba-2fa1-41d2-883f-0016d3cca427', active: 'false' }),
     ).toEqual({ user_id: '1b4e28ba-2fa1-41d2-883f-0016d3cca427', active: false });
+  });
+});
+
+describe('permissionsSchema', () => {
+  const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
+  const grid = {
+    user_id: id, perm_patients: 'edit', perm_schedule: 'view', perm_courses: 'none',
+    perm_checklists: 'none', perm_inventory: 'view', perm_delegates: 'none',
+  };
+  it('maps the radio grid to area levels, None as null', () => {
+    expect(permissionsSchema.parse(grid)).toEqual({
+      user_id: id,
+      perms: { patients: 'edit', schedule: 'view', courses: null, checklists: null, inventory: 'view', delegates: null },
+    });
+  });
+  it('rejects unknown levels and missing panels', () => {
+    expect(permissionsSchema.safeParse({ ...grid, perm_patients: 'all' }).success).toBe(false);
+    expect(permissionsSchema.safeParse({ ...grid, perm_delegates: undefined }).success).toBe(false);
   });
 });

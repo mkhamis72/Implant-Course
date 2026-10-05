@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { talkSchema, updateTalkSchema } from '@/lib/schedule/schemas';
 import { isTalkKind, type TalkKind } from '@/lib/schedule/talks';
 import { failed, type FormState } from '@/lib/patients/form-state';
@@ -15,7 +15,7 @@ const kindOf = (formData: FormData): TalkKind => {
 };
 
 export async function createTalk(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('schedule', 'edit');
   const parsed = talkSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const t = parsed.data;
@@ -32,7 +32,7 @@ export async function createTalk(_prev: FormState, formData: FormData): Promise<
 }
 
 export async function updateTalk(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('schedule', 'edit');
   const parsed = updateTalkSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const t = parsed.data;
@@ -50,7 +50,7 @@ export async function updateTalk(_prev: FormState, formData: FormData): Promise<
 }
 
 export async function deleteTalk(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireActiveUser();
+  await requirePermission('schedule', 'edit');
   const supabase = await createClient();
   const { error } = await supabase.rpc('delete_talk', { p_talk: String(formData.get('talk_id') ?? '') });
   if (error) return { error: userMessage(error)! };

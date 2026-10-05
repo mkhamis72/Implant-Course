@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       >
         Skip to content
       </a>
-      <Nav role={profile.role} name={profile.full_name || profile.email} />
+      <Nav role={profile.role} permissions={profile.permissions} name={profile.full_name || profile.email} />
       <main id="main" tabIndex={-1} className="min-w-0 flex-1 px-4 py-5 outline-none sm:px-6 lg:px-10 lg:py-8 print:p-0">
         <div className="mx-auto max-w-6xl">
           <PilotBanner show={pilotMode()} />

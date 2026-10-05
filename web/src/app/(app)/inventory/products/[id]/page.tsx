@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit } from '@/lib/auth/permissions';
 import { productLabel } from '@/lib/inventory/labels';
 import type { LotOnHand, Product } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
@@ -9,6 +11,8 @@ import { ProductForm } from '../product-form';
 import { updateProduct } from '../actions';
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
+  const profile = await requirePermission('inventory');
+  const editable = canEdit(profile, 'inventory');
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
   const supabase = await createClient();
@@ -22,11 +26,15 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     <div className="space-y-6">
       <div className="page-header">
         <h1>{productLabel(p)}</h1>
-        <Link href={`/inventory/receive?product=${p.id}`} className="btn">
-          Receive stock
-        </Link>
+        {editable && (
+          <Link href={`/inventory/receive?product=${p.id}`} className="btn">
+            Receive stock
+          </Link>
+        )}
       </div>
-      <ProductForm action={updateProduct} product={p} />
+      <fieldset disabled={!editable} className="min-w-0">
+        <ProductForm action={updateProduct} product={p} />
+      </fieldset>
       <section className="card space-y-3">
         <h2 className="font-semibold">Batches</h2>
         {(lots ?? []).length === 0 ? (

@@ -141,4 +141,6 @@ export type ChartData = {
   supervisors: Option[];
   today: string;
   me: string;
+  /** Patients/edit: false shows the chart read-only. */
+  editable: boolean;
 };

@@ -53,10 +53,29 @@ Always end with `Remove-Item Env:ENV_FILE`: a leftover `ENV_FILE` would point ev
 
 All commands are run with `ENV_FILE=.env.prod` (see the top of this page).
 
-- **New organizer:** `npm run create-user -- dr@example.com "Dr Name"`. Hand over the temporary password in person; they change it under Account security.
+- **New staff login (admin or organizer):**
+  - Use Admin → Users → **Create login**.
+  - While `EMAIL_ENABLED=false`, the app shows a one-time temporary password. Hand it over in person; they change it under Account security.
+  - With email on, the same form sends an invitation. Its link verifies the address and lets them set a password.
+- **New delegate login:**
+  - On the delegate's page (admin only), click **Create login**. The delegate needs an email address first.
+  - A delegate login sees only **My schedule** and **My report**: their own surgery bookings, the talks of the courses they are enrolled in, and their own implants.
+- **Organizer permissions:**
+  - In Admin → Users → **Permissions** on an organizer's row, set **None / View / Edit** for each panel: Patients, Schedule, Courses, Checklists, Inventory, Delegates.
+  - New organizers start with View everywhere.
+  - The database enforces these permissions, not just the menus.
+- **From the command line:**
+  - Staff: `npm run create-user -- dr@example.com "Dr Name" [--role admin]`.
+  - Delegate: `npm run create-user -- d@example.com "Dr Name" --role delegate --delegate <delegate id>`.
 - **Reset a password:** run the same command again for that email.
-- **Deactivate, or change role:** Admin → Users in the app.
-- The app shows "Email isn't set up yet…" instead of the invite form while `EMAIL_ENABLED=false`.
+- **Deactivate, or change role:** Admin → Users in the app. Delegate logins are deactivated there too.
+
+### Turning on email verification
+
+1. In Supabase → Authentication → SMTP Settings, enter the SMTP provider's host, port, user and password, and a sender address on your domain.
+2. In Authentication → URL Configuration, set the Site URL to the production URL and add `https://<site>/auth/confirm` to the redirect URLs.
+3. In Vercel → Settings → Environment Variables (Production), set `EMAIL_ENABLED=true` and redeploy.
+4. Check it: create a login for a test address you own. The email should arrive, its link should open "Set a password", and the new user should reach the app.
 
 ## C. Releases
 

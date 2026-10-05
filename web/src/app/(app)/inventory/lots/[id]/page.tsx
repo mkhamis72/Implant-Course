@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit, canView } from '@/lib/auth/permissions';
 import { productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, MOVEMENT_REASON_LABELS, type ComponentType, type LotOnHand, type Product } from '@/lib/inventory/types';
 import { formatDate, formatDateTime } from '@/lib/format';
@@ -30,6 +32,7 @@ type Usage = {
 };
 
 export default async function LotPage({ params }: { params: Promise<{ id: string }> }) {
+  const profile = await requirePermission('inventory');
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
   const supabase = await createClient();
@@ -70,9 +73,12 @@ export default async function LotPage({ params }: { params: Promise<{ id: string
           <dd>{l.expiry ? formatDate(l.expiry) : '—'}</dd>
         </div>
       </dl>
-      <AdjustForm lotId={id} />
+      {canEdit(profile, 'inventory') && <AdjustForm lotId={id} />}
       <section className="card space-y-3">
         <h2 className="font-semibold">Used in (recall)</h2>
+        {!canView(profile, 'patients') && (
+          <p className="text-sm text-warn">Patients who received this batch are only listed for users with access to Patients.</p>
+        )}
         {(usage ?? []).length === 0 ? (
           <p className="text-sm text-muted">Not used for any patient yet.</p>
         ) : (

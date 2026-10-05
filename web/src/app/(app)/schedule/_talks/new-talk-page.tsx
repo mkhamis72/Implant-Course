@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { requireActiveUser } from '@/lib/auth/session';
+import { requirePermission } from '@/lib/auth/session';
 import { todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
@@ -9,7 +9,7 @@ import { TalkForm } from './talk-form';
 type SessionOptionRow = { id: string; title: string; date: string; start_time: string; end_time: string; course: { name: string } | null };
 
 export async function NewTalkPage({ kind, searchParams }: { kind: TalkKind; searchParams: PageSearchParams }) {
-  await requireActiveUser();
+  await requirePermission('schedule', 'edit');
   const q = await readParams(searchParams, 'session', 'date');
   const k = TALK_KINDS[kind];
   const supabase = await createClient();
