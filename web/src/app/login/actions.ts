@@ -19,5 +19,8 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   (await cookies()).set(LAST_SEEN_COOKIE, String(Date.now()), lastSeenCookieOptions);
   // A password sign-in is always aal1; factors come from the Auth server's response.
   const aal = verifiedAal(data.user.factors, 'aal1');
-  redirect(aal.next === 'aal2' ? '/login/mfa' : '/');
+  if (aal.next === 'aal2') redirect('/login/mfa');
+  // Delegate logins have their own home; going via the staff dashboard would only redirect again.
+  const { data: profile } = await supabase.from('profiles').select('role').eq('user_id', data.user.id).maybeSingle();
+  redirect(profile?.role === 'delegate' ? '/my' : '/');
 }
