@@ -50,7 +50,7 @@ describe('delegate logins', () => {
         await c.query('rollback to savepoint s');
       }
     });
-  });
+  }, 120_000); // one round-trip per public table against the hosted dev project
 
   it('cannot call staff write functions', async () => {
     await withTx(async (c) => {
