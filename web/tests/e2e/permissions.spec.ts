@@ -38,3 +38,32 @@ test('a view-only organizer is sent away from edit-only pages, but can use the p
   await page.goto('/admin/users');
   await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
 });
+
+test('an admin changes an organizer’s permissions from the Users page', async ({ page }) => {
+  await login(page, TEST_USERS.admin.email);
+  await page.goto('/admin/users');
+  const row = page.getByTestId(`user-row-${TEST_USERS.viewer.email}`);
+  await row.getByText('Permissions', { exact: true }).click();
+  const patients = row.getByRole('group', { name: 'Patients' });
+  await expect(patients.getByRole('radio', { name: 'View' })).toBeChecked();
+  await patients.getByRole('radio', { name: 'None' }).check();
+  await row.getByRole('button', { name: 'Save permissions' }).click();
+  await expect(row.getByText('Permissions saved.')).toBeVisible();
+
+  // Put it back for the other specs (global setup pins it again on the next run anyway).
+  await page.reload();
+  await row.getByText('Permissions', { exact: true }).click();
+  await expect(row.getByRole('group', { name: 'Patients' }).getByRole('radio', { name: 'None' })).toBeChecked();
+  await row.getByRole('group', { name: 'Patients' }).getByRole('radio', { name: 'View' }).check();
+  await row.getByRole('button', { name: 'Save permissions' }).click();
+  await expect(row.getByText('Permissions saved.')).toBeVisible();
+});
+
+test('a delegate login shows as Delegate, without a role switch or permission grid', async ({ page }) => {
+  await login(page, TEST_USERS.admin.email);
+  await page.goto('/admin/users');
+  const row = page.getByTestId(`user-row-${TEST_USERS.delegate.email}`);
+  await expect(row).toContainText('Delegate');
+  await expect(row.getByRole('combobox', { name: 'Role' })).toHaveCount(0);
+  await expect(row.getByText('Permissions', { exact: true })).toHaveCount(0);
+});

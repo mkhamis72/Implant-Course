@@ -5,37 +5,31 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth/session';
 import { mapAuthError } from '@/lib/auth/errors';
-import { serverEnv } from '@/lib/env';
-import { inviteSchema, setActiveSchema, setRoleSchema, type ActionState } from '@/lib/admin/schemas';
+import { inviteSchema, permissionsSchema, setActiveSchema, setRoleSchema, type ActionState } from '@/lib/admin/schemas';
+import { createLogin } from '@/lib/admin/create-login';
+import { userMessage } from '@/lib/db-errors';
 import { updateProblem } from '@/lib/admin/results';
-import { EMAIL_OFF_MESSAGE, emailEnabled } from '@/lib/flags';
 
+/** Email on: an invitation that verifies the address. Email off: a login with a one-time password. */
 export async function inviteUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireAdmin();
-  if (!emailEnabled()) return { error: EMAIL_OFF_MESSAGE };
   const parsed = inviteSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const { email, full_name, role } = parsed.data;
-
-  const admin = createAdminClient();
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${serverEnv().siteUrl}/auth/confirm`,
-  });
-  if (error) return { error: mapAuthError(error) };
-
-  // Activate through the admin's own session so RLS and the audit log record who did it.
-  const supabase = await createClient();
-  const problem = updateProblem(
-    await supabase.from('profiles').update({ full_name, role, active: true }).eq('user_id', data.user.id).select('user_id'),
-  );
-  if (problem) {
-    // Don't leave an invited-but-inactive account behind: the invitee would land on "Account deactivated".
-    await admin.auth.admin.deleteUser(data.user.id);
-    return { error: `The invitation was cancelled: ${problem}` };
-  }
-
+  const result = await createLogin(parsed.data);
+  if ('error' in result) return result;
   revalidatePath('/admin/users');
-  return { ok: `Invitation sent to ${email}.` };
+  return result;
+}
+
+export async function savePermissions(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const parsed = permissionsSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: 'Choose None, View or Edit for every panel.' };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_user_permissions', { p_user: parsed.data.user_id, p_perms: parsed.data.perms });
+  if (error) return { error: userMessage(error)! };
+  revalidatePath('/admin/users');
+  return { ok: 'Permissions saved.' };
 }
 
 export async function setUserRole(_prev: ActionState, formData: FormData): Promise<ActionState> {

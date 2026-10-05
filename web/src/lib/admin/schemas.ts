@@ -28,4 +28,22 @@ export const settingsSchema = z.object({
     .max(480, { message: 'Session timeout must be between 5 and 480 minutes.' }),
 });
 
-export type ActionState = { ok?: string; error?: string };
+const levelField = z.enum(['none', 'view', 'edit']).transform((v) => (v === 'none' ? null : v));
+
+/** The permission grid: one None/View/Edit radio group per panel. */
+export const permissionsSchema = z
+  .object({
+    user_id: z.string().uuid(),
+    perm_patients: levelField,
+    perm_schedule: levelField,
+    perm_courses: levelField,
+    perm_checklists: levelField,
+    perm_inventory: levelField,
+    perm_delegates: levelField,
+  })
+  .transform(({ user_id, ...rest }) => ({
+    user_id,
+    perms: Object.fromEntries(Object.entries(rest).map(([k, v]) => [k.replace('perm_', ''), v])) as Record<string, 'view' | 'edit' | null>,
+  }));
+
+export type ActionState = { ok?: string; error?: string; password?: string };

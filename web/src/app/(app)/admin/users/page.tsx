@@ -2,25 +2,23 @@ import { createClient } from '@/lib/supabase/server';
 import { requireAdmin, type Profile } from '@/lib/auth/session';
 import { InviteForm } from './invite-form';
 import { UserRow } from './user-row';
-import { EMAIL_OFF_MESSAGE, emailEnabled } from '@/lib/flags';
+import { emailEnabled } from '@/lib/flags';
+import { toPermissions } from '@/lib/auth/permissions';
 
 export default async function UsersPage() {
   const me = await requireAdmin();
   const supabase = await createClient();
   const { data: users, error } = await supabase
     .from('profiles')
-    .select('user_id, full_name, email, role, active')
+    .select('user_id, full_name, email, role, active, delegate_id, permissions:user_permissions(area, level)')
     .order('full_name');
   if (error) throw new Error('Could not load users');
 
   return (
     <div className="space-y-6">
       <h1>Users</h1>
-      {emailEnabled() ? (
-        <InviteForm />
-      ) : (
-        <p data-testid="email-off" className="rounded-md bg-warn-soft p-3 text-sm text-warn">{EMAIL_OFF_MESSAGE}</p>
-      )}
+      <InviteForm emailOn={emailEnabled()} />
+      <p className="text-sm text-muted">Delegate logins are created from the delegate’s page.</p>
       <div className="card overflow-x-auto">
         <table className="table">
           <thead>
@@ -33,7 +31,9 @@ export default async function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {(users as Profile[]).map((user) => (
+            {((users ?? []) as unknown as (Omit<Profile, 'permissions'> & { permissions: { area: string; level: string }[] })[])
+              .map((u) => ({ ...u, permissions: toPermissions(u.permissions) }) as Profile)
+              .map((user) => (
               <UserRow key={user.user_id} user={user} isSelf={user.user_id === me?.user_id} />
             ))}
           </tbody>

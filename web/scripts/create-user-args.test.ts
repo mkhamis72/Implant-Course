@@ -11,8 +11,16 @@ describe('parseCreateUserArgs', () => {
     expect(parseCreateUserArgs(['--role', 'admin', 'a@x.com', 'Dr A'])).toMatchObject({ role: 'admin' });
     expect(parseCreateUserArgs(['a@x.com', 'Dr A', '--role=organizer'])).toMatchObject({ role: 'organizer' });
   });
+  it('creates a delegate login only for a named delegate', () => {
+    const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
+    expect(parseCreateUserArgs(['a@x.com', 'Dr A', '--role', 'delegate', '--delegate', id])).toEqual({
+      email: 'a@x.com', fullName: 'Dr A', role: 'delegate', delegateId: id,
+    });
+    expect(parseCreateUserArgs(['a@x.com', 'Dr A', '--role=delegate'])).toEqual({ error: 'A delegate login needs --delegate <id>.' });
+    expect(parseCreateUserArgs(['a@x.com', 'Dr A', '--role', 'delegate', '--delegate', 'nope'])).toEqual({ error: 'A delegate login needs --delegate <id>.' });
+  });
   it('refuses an unknown role, a missing name or a bad email', () => {
-    expect(parseCreateUserArgs(['a@x.com', 'Dr A', '--role', 'owner'])).toEqual({ error: 'Unknown role "owner". Use organizer or admin.' });
+    expect(parseCreateUserArgs(['a@x.com', 'Dr A', '--role', 'owner'])).toEqual({ error: 'Unknown role "owner". Use organizer, admin or delegate.' });
     expect(parseCreateUserArgs(['a@x.com'])).toHaveProperty('error');
     expect(parseCreateUserArgs(['not-an-email', 'Dr A'])).toHaveProperty('error');
   });
