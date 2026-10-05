@@ -47,7 +47,12 @@ export async function TalkDayView({ kind, searchParams }: { kind: TalkKind; sear
                 {s.room && <> · {s.room}</>}
               </p>
             </div>
-            <Link href={`/schedule/${kind}/new?session=${s.id}`} className="btn-secondary btn">Add talk</Link>
+            {/* New talks go on sessions from today on (the form offers no others); past talks can still be edited. */}
+            {s.date < todayIso() ? (
+              <span className="text-sm text-muted">Past session</span>
+            ) : (
+              <Link href={`/schedule/${kind}/new?session=${s.id}`} className="btn-secondary btn">Add talk</Link>
+            )}
           </div>
           {s.talks.length === 0 ? (
             <p className="text-sm text-muted">No talks yet.</p>

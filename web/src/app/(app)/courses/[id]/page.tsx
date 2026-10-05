@@ -37,7 +37,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
         id={c.id}
         noun="course"
         name={c.name}
-        consequences="Its sessions, enrolments and session checklists are deleted too. A course with surgery bookings or placed implants can't be deleted."
+        consequences="Its sessions, talks, enrolments and session checklists are deleted too. A course with surgery bookings or placed implants can't be deleted."
         action={deleteCourse}
       />
       <section className="space-y-3">

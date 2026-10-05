@@ -66,6 +66,9 @@ test('a lecture session shows its room and links to the lectures schedule', asyn
   await page.getByRole('button', { name: 'Add session' }).click();
   const row = page.getByTestId('session-row').filter({ hasText: 'Morning lectures' });
   await expect(row).toContainText('Hall A');
+  await page.getByRole('button', { name: 'Delete course' }).click();
+  await expect(page.getByText(/sessions, talks, enrolments and session checklists are deleted too/)).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
   await row.getByRole('link', { name: 'Talks' }).click();
   await expect(page).toHaveURL(new RegExp(`/schedule/lectures\\?date=${date}`));
 });
