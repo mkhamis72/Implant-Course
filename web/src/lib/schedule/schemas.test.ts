@@ -100,7 +100,7 @@ describe('talk schemas', () => {
     expect(err(talkSchema.safeParse({ ...talk, end: '09:00' }))).toBe('The end time must be after the start time.');
   });
   it('updates by talk id', () => {
-    const { session_id: _s, ...rest } = talk;
+    const rest = { start: talk.start, end: talk.end, lecturer_id: talk.lecturer_id, topic: talk.topic, notes: talk.notes };
     expect(updateTalkSchema.parse({ ...rest, talk_id: id })).toMatchObject({ talk_id: id, topic: 'Sinus lift' });
     expect(err(updateTalkSchema.safeParse({ ...rest, talk_id: 'x' }))).toBe('Talk not found.');
   });
