@@ -102,3 +102,19 @@ export async function book(
   );
   return rows[0].id;
 }
+
+export async function makeLecturer(c: Client, name = `Zz Lecturer ${Math.random().toString(36).slice(2, 8)}`): Promise<string> {
+  const { rows } = await c.query('insert into public.lecturers (full_name) values ($1) returning id', [name]);
+  return rows[0].id;
+}
+
+export async function addTalk(
+  c: Client,
+  a: { session: string; lecturer: string; start?: string; end?: string; topic?: string },
+): Promise<string> {
+  const { rows } = await c.query(
+    `select public.create_talk(p_session => $1, p_start => $2::time, p_end => $3::time, p_lecturer => $4, p_topic => $5) as id`,
+    [a.session, a.start ?? '09:00', a.end ?? '10:00', a.lecturer, a.topic ?? 'Sinus lift basics'],
+  );
+  return rows[0].id;
+}

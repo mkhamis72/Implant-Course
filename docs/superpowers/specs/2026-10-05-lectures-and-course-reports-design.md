@@ -101,8 +101,7 @@ Clashes are **hard errors**, with no override. Surgery uses an override because 
 `delete_talk(p_talk uuid) returns void`
 - A hard delete; talks carry no traceability.
 
-`talks_on(p_date date) returns setof public.talks`
-- Returns the talks whose session is on that date, `security invoker`, like `slots_on`.
+`talks_on` is not needed: the day view reads sessions with their talks embedded.
 
 `delete_course` needs no change: deleting a session cascades to its talks.
 
