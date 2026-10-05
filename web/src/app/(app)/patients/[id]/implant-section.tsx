@@ -55,7 +55,7 @@ function ComponentTimeline({ site }: { site: ImplantSite }) {
 }
 
 /** Shows the technique and lets it be set or corrected in place. */
-function TechniqueControl({ site, patientId }: { site: ImplantSite; patientId: string }) {
+function TechniqueControl({ site, patientId, editable }: { site: ImplantSite; patientId: string; editable: boolean }) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -86,9 +86,11 @@ function TechniqueControl({ site, patientId }: { site: ImplantSite; patientId: s
           <span className={`badge ${site.technique === 'guided' ? 'badge-guided' : site.technique ? 'badge-accent' : ''}`}>
             {site.technique ? TECHNIQUE_LABELS[site.technique] : 'Not set'}
           </span>
-          <button type="button" className="text-accent hover:underline" onClick={() => setEditing(true)}>
-            {site.technique ? 'Change' : 'Set'}
-          </button>
+          {editable && (
+            <button type="button" className="text-accent hover:underline" onClick={() => setEditing(true)}>
+              {site.technique ? 'Change' : 'Set'}
+            </button>
+          )}
         </>
       )}
       {error && <p role="alert" className="w-full text-bad">{error}</p>}
@@ -121,7 +123,7 @@ function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: 
           </ul>
         )}
         {people.length > 0 && <p className="text-muted">{people.join(', ')}</p>}
-        {site.state !== 'removed' && <TechniqueControl site={site} patientId={patientId} />}
+        {site.state !== 'removed' && <TechniqueControl site={site} patientId={patientId} editable={data.editable} />}
         {(site.state === 'placed' || site.state === 'restored') && <ComponentTimeline site={site} />}
       </div>
       {site.components.length > 0 && (
@@ -151,7 +153,7 @@ function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: 
           </ul>
         </div>
       )}
-      {site.state !== 'planned' && site.state !== 'removed' && <Corrections patientId={patientId} site={site} data={data} />}
+      {data.editable && site.state !== 'planned' && site.state !== 'removed' && <Corrections patientId={patientId} site={site} data={data} />}
     </div>
   );
 }
@@ -184,7 +186,7 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
           Planned{site.product ? `: ${productLabel(site.product)}` : ' (implant not chosen yet)'}
         </p>
       )}
-      {site?.state === 'planned' && <TechniqueControl site={site} patientId={patientId} />}
+      {site?.state === 'planned' && <TechniqueControl site={site} patientId={patientId} editable={data.editable} />}
       {site?.state === 'planned' && site.slot && (
         <p className="text-sm text-ink">
           Booked: {formatDateTime(site.slot.starts_at)}
@@ -193,7 +195,7 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
       )}
       {site && site.state !== 'planned' && <SiteDetails site={site} patientId={patientId} data={data} />}
 
-      {mode === 'none' && actions.primary && (
+      {data.editable && mode === 'none' && actions.primary && (
         // One obvious next step per state; the alternatives stay quiet beside it.
         <div className="flex flex-wrap gap-2">
           {[actions.primary, ...actions.secondary].map((a, i) =>

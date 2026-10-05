@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
 import { currentComponent, lastFollowup } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type ImplantSite } from '@/lib/inventory/types';
@@ -7,6 +8,7 @@ import { formatDate } from '@/lib/format';
 import { SITE_SELECT, sortSite } from '../chart-data';
 
 export default async function ImplantsPage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePermission('patients');
   const { id } = await params;
   const supabase = await createClient();
   const { data, error } = await supabase

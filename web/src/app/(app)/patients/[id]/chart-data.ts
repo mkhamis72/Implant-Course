@@ -1,6 +1,7 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentProfile } from '@/lib/auth/session';
+import { canEdit } from '@/lib/auth/permissions';
 import { todayIso } from '@/lib/dates';
 import { productLabel } from '@/lib/inventory/labels';
 import type { ChartData, ImplantSite, LotOnHand, Product } from '@/lib/inventory/types';
@@ -61,5 +62,6 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supervisors: (supervisors.data ?? []).map((s) => ({ id: s.id as string, label: s.full_name as string })),
     today: todayIso(),
     me: me?.user_id ?? '',
+    editable: me ? canEdit(me, 'patients') : false,
   };
 }

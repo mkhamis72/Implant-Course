@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit } from '@/lib/auth/permissions';
 import { ageOn } from '@/lib/patients/age';
 import type { Patient } from '@/lib/patients/types';
 import { IMPLANT_STAGES, IMPLANT_STAGE_LABELS, parseStages, teethByPatient, type StageSite } from '@/lib/patients/stages';
@@ -7,6 +9,8 @@ import { firstParam, type PageSearchParams } from '@/lib/search-params';
 import { DeletePatient } from './delete-patient';
 
 export default async function PatientsPage({ searchParams }: { searchParams: PageSearchParams }) {
+  const profile = await requirePermission('patients');
+  const editable = canEdit(profile, 'patients');
   const sp = await searchParams;
   const q = firstParam(sp.q);
   const archived = firstParam(sp.archived);
@@ -29,9 +33,11 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
     <div className="space-y-6">
       <div className="page-header">
         <h1>Patients</h1>
-        <Link href="/patients/new" className="btn">
-          New patient
-        </Link>
+        {editable && (
+          <Link href="/patients/new" className="btn">
+            New patient
+          </Link>
+        )}
       </div>
       <form className="card flex flex-wrap items-end gap-4" role="search">
         <label className="block min-w-64 flex-1">
@@ -87,7 +93,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
                   <td data-label="Phone">{p.phone || '—'}</td>
                   {stages.length > 0 && <td data-label="Teeth">{teeth[p.id] ?? '—'}</td>}
                   <td data-label="Actions">
-                    <DeletePatient id={p.id} name={p.full_name} triggerLabel={`Delete ${p.full_name}`} />
+                    {editable && <DeletePatient id={p.id} name={p.full_name} triggerLabel={`Delete ${p.full_name}`} />}
                   </td>
                 </tr>
               ))}

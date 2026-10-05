@@ -178,6 +178,23 @@ describe('permissions: area matrix', () => {
     });
   });
 
+  it('stock on hand is visible to those who place implants or plan surgery days, not to others', async () => {
+    await withTx(async (c) => {
+      await actAs(c, users.organizer);
+      const lot = await receive(c, await makeProduct(c), 3, 'ZZONHAND');
+      const onHand = async () =>
+        (await c.query('select coalesce(sum(on_hand), 0)::int as n from public.stock_on_hand where stock_lot_id = $1', [lot])).rows[0].n as number;
+      for (const area of ['patients', 'schedule', 'inventory'] as const) {
+        await setPerms(c, users.target, { [area]: 'view' });
+        await actAs(c, users.target);
+        expect({ area, n: await onHand() }).toEqual({ area, n: 3 });
+      }
+      await setPerms(c, users.target, { courses: 'edit' });
+      await actAs(c, users.target);
+      expect(await onHand()).toBe(0);
+    });
+  });
+
   it('the refusal names the area', async () => {
     await withTx(async (c) => {
       await setPerms(c, users.target, { inventory: 'view' });

@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/auth/session';
+import { canEdit } from '@/lib/auth/permissions';
 import { formatDate, formatDateTime } from '@/lib/format';
 import type { VisitNote } from '@/lib/patients/types';
 import { NoteForm } from './note-form';
@@ -9,6 +11,7 @@ function cairoToday(): string {
 }
 
 export default async function NotesPage({ params }: { params: Promise<{ id: string }> }) {
+  const profile = await requirePermission('patients');
   const { id } = await params;
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -22,7 +25,7 @@ export default async function NotesPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="space-y-6">
-      <NoteForm patientId={id} today={cairoToday()} />
+      {canEdit(profile, 'patients') && <NoteForm patientId={id} today={cairoToday()} />}
       <section className="space-y-3">
         <h2 className="font-semibold">Notes</h2>
         {notes.length === 0 && <p className="text-sm text-muted">No notes yet.</p>}
