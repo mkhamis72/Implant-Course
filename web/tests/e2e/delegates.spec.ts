@@ -34,3 +34,16 @@ test('a too-short name is refused and the input kept', async ({ page }) => {
   await expect(page.getByRole('main').getByRole('alert')).toHaveText('Enter the delegate’s full name (at least 2 characters).');
   await expect(page.getByLabel('Licence number')).toHaveValue('EG-1');
 });
+
+test('deletes a delegate added by mistake', async ({ page }) => {
+  const name = uniqueName('Dr Mistake');
+  await page.goto('/delegates');
+  await page.getByLabel('Full name').fill(name);
+  await page.getByRole('button', { name: 'Add delegate' }).click();
+  await page.getByTestId(`delegate-row-${name}`).getByRole('link', { name }).click();
+  await page.getByRole('button', { name: 'Delete delegate' }).click();
+  await page.getByLabel(`Type ${name} to confirm`).fill(name);
+  await page.getByRole('button', { name: 'Delete delegate' }).click();
+  await expect(page).toHaveURL(/\/delegates$/);
+  await expect(page.getByTestId(`delegate-row-${name}`)).toHaveCount(0);
+});

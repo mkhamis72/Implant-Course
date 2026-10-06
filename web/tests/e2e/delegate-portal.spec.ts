@@ -72,8 +72,10 @@ test('the delegate page shows an existing login', async ({ page }) => {
   const { data: link } = await admin.from('profiles').select('delegate_id').eq('email', TEST_USERS.delegate.email).single();
   await login(page, TEST_USERS.admin.email);
   await page.goto(`/delegates/${link!.delegate_id}`);
-  await expect(page.getByText('Login: active')).toBeVisible();
+  await expect(page.getByText(`Login ${TEST_USERS.delegate.email}: active`)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create login' })).toHaveCount(0);
+  // A lost one-time password can be replaced from here (not pressed: it would change the shared test login).
+  await expect(page.getByRole('button', { name: 'Reset password' })).toBeVisible();
 });
 
 test('a delegate can reach Account security and the set-password page', async ({ page }) => {

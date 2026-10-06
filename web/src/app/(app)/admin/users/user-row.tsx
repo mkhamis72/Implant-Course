@@ -1,7 +1,9 @@
 'use client';
 
 import { useActionState } from 'react';
-import { setUserActive, setUserRole } from './actions';
+import { removeUser, setUserActive, setUserRole } from './actions';
+import { ConfirmDelete } from '@/components/confirm-delete';
+import { ResetPassword } from './reset-password';
 import type { ActionState } from '@/lib/admin/schemas';
 import type { Profile } from '@/lib/auth/session';
 import { PermissionGrid } from './permission-grid';
@@ -46,6 +48,19 @@ export function UserRow({ user, isSelf }: { user: Profile; isSelf: boolean }) {
               {user.active ? 'Deactivate' : 'Reactivate'}
             </button>
           </form>
+        )}
+        {!isSelf && (
+          <div className="mt-2 space-y-2">
+            <ResetPassword userId={user.user_id} label={`Reset password for ${user.email}`} />
+            <ConfirmDelete
+              id={user.user_id}
+              noun="user"
+              name={user.full_name || user.email}
+              consequences="Their login is deleted. Someone who has records in the app (implants, stock, notes, checklist work) can't be deleted — deactivate them instead."
+              action={removeUser}
+              triggerLabel={`Delete user ${user.email}`}
+            />
+          </div>
         )}
         {user.role === 'organizer' && !isSelf && (
           <details className="mt-2">

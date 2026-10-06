@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { createLogin, rpc } = vi.hoisted(() => ({ createLogin: vi.fn(), rpc: vi.fn() }));
+const { createLogin, rpc, deleteAuthUser, setTemporaryPassword } = vi.hoisted(() => ({
+  createLogin: vi.fn(), rpc: vi.fn(), deleteAuthUser: vi.fn(), setTemporaryPassword: vi.fn(),
+}));
 vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: 'me' })) }));
 vi.mock('@/lib/admin/create-login', () => ({ createLogin }));
+vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, setTemporaryPassword }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/env', () => ({ serverEnv: () => ({ siteUrl: 'http://localhost:3000' }) }));
-import { inviteUser, savePermissions } from './actions';
+import { inviteUser, removeUser, resetPassword, savePermissions } from './actions';
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -44,5 +47,43 @@ describe('savePermissions', () => {
   it('shows the database’s refusal', async () => {
     rpc.mockResolvedValue({ error: { message: 'You cannot change your own permissions.', hint: 'user' } });
     expect(await savePermissions({}, form(grid))).toEqual({ error: 'You cannot change your own permissions.' });
+  });
+});
+
+describe('removeUser', () => {
+  const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
+  it('removes the profile through delete_user, then the sign-in account', async () => {
+    rpc.mockResolvedValue({ error: null });
+    deleteAuthUser.mockResolvedValue(null);
+    expect(await removeUser({}, form({ id }))).toEqual({ ok: 'User removed.' });
+    expect(rpc).toHaveBeenCalledWith('delete_user', { p_user: id });
+    expect(deleteAuthUser).toHaveBeenCalledWith(id);
+  });
+  it('keeps the account when the database refuses (e.g. the user has records)', async () => {
+    rpc.mockResolvedValue({ error: { message: 'Dr X has records in the app … Deactivate them instead.', hint: 'user' } });
+    expect(await removeUser({}, form({ id }))).toEqual({ error: 'Dr X has records in the app … Deactivate them instead.' });
+    expect(deleteAuthUser).not.toHaveBeenCalled();
+  });
+  it('says so when the sign-in account could not be deleted', async () => {
+    rpc.mockResolvedValue({ error: null });
+    deleteAuthUser.mockResolvedValue('Something went wrong.');
+    expect(await removeUser({}, form({ id }))).toHaveProperty('error');
+  });
+  it('rejects a malformed id before touching anything', async () => {
+    expect(await removeUser({}, form({ id: 'nope' }))).toHaveProperty('error');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('resetPassword', () => {
+  const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
+  it('sets and passes back a new one-time password', async () => {
+    setTemporaryPassword.mockResolvedValue({ password: 'New-Temp-1' });
+    expect(await resetPassword({}, form({ user_id: id }))).toEqual({ ok: 'New one-time password set.', password: 'New-Temp-1' });
+    expect(setTemporaryPassword).toHaveBeenCalledWith(id);
+  });
+  it('is not for your own account', async () => {
+    expect(await resetPassword({}, form({ user_id: 'me' }))).toHaveProperty('error');
+    expect(setTemporaryPassword).not.toHaveBeenCalled();
   });
 });

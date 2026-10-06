@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import type { ActionState } from '@/lib/admin/schemas';
 import { createDelegateLogin } from '../actions';
+import { TemporaryPassword } from '@/components/temporary-password';
 
 /** Admin only: a login for this delegate (invitation with email on, one-time password with email off). */
 export function CreateLogin({ delegateId, emailOn }: { delegateId: string; emailOn: boolean }) {
@@ -19,12 +20,7 @@ export function CreateLogin({ delegateId, emailOn }: { delegateId: string; email
       </button>
       {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
       {state.ok && <p className="text-sm text-ok">{state.ok}</p>}
-      {state.password && (
-        <p data-testid="temporary-password" className="rounded-md bg-warn-soft p-3 text-sm">
-          Temporary password: <code className="font-mono font-semibold">{state.password}</code> — hand it over in person; it is shown only once.
-          They change it under Account security.
-        </p>
-      )}
+      {state.password && <TemporaryPassword password={state.password} />}
     </form>
   );
 }

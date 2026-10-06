@@ -259,7 +259,7 @@ describe('permissions: guard rails', () => {
         where n.nspname = 'public' and p.prosecdef and p.prosrc not like '%require_perm(%'`);
       const allow = new Set([
         'is_active_user', 'is_admin', 'is_delegate_user', 'my_delegate_id', 'can',
-        'set_user_permissions', 'my_schedule', 'my_report', 'next_file_no',
+        'set_user_permissions', 'delete_user', 'my_schedule', 'my_report', 'next_file_no',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });

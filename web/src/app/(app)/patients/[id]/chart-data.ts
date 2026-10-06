@@ -41,7 +41,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supabase.from('products').select('*').eq('active', true),
     supabase.from('stock_on_hand').select('*').gt('on_hand', 0),
     supabase.from('delegates').select('id, full_name').eq('active', true).order('full_name'),
-    supabase.from('profiles').select('user_id, full_name, email').eq('active', true).order('full_name'),
+    supabase.from('profiles').select('user_id, full_name, email').eq('active', true).in('role', ['admin', 'organizer']).order('full_name'),
     supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name'),
   ]);
   for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors]) {

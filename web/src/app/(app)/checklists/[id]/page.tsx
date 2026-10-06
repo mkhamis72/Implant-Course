@@ -45,7 +45,8 @@ export default async function ChecklistPage({ params }: { params: Promise<{ id: 
       `)
       .eq('id', id)
       .maybeSingle(),
-    supabase.from('profiles').select('user_id, full_name, email').eq('active', true).order('full_name'),
+    // Tasks go to staff: delegate logins are not assignable (0037).
+    supabase.from('profiles').select('user_id, full_name, email').eq('active', true).in('role', ['admin', 'organizer']).order('full_name'),
   ]);
   if (!checklist) notFound();
   const c = checklist as unknown as {
