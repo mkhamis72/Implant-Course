@@ -11,7 +11,12 @@ async function all(): Promise<Tenant[]> {
 }
 
 export async function findTenantByHost(host: string): Promise<Tenant | null> {
-  return (await all()).find((t) => t.hosts.includes(host) || t.hosts.includes(ANY_HOST)) ?? null;
+  if (usesControl()) {
+    return (await controlTenants()).find((t) => t.hosts.includes(host)) ?? null;
+  }
+  // Static mode: prefer exact match, then ANY_HOST
+  const tenants = staticTenants().map(publicPart);
+  return tenants.find((t) => t.hosts.includes(host)) ?? tenants.find((t) => t.hosts.includes(ANY_HOST)) ?? null;
 }
 
 export async function findTenantBySlug(slug: string): Promise<Tenant | null> {

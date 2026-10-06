@@ -39,4 +39,9 @@ describe('control mode', () => {
     expect(await tenantServiceKey('a')).toBe('vault-key');
     expect(controlSecret).toHaveBeenCalledWith('a', 'service_role_key');
   });
+  it('does not honour wildcard hosts in control mode', async () => {
+    controlTenants.mockResolvedValue([{ ...a, slug: 'wild', hosts: ['*'] }, a]);
+    expect(await findTenantByHost('b.example.com')).toBeNull();
+    expect(await findTenantByHost('a.example.com')).toEqual(a);
+  });
 });
