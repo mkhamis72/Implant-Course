@@ -51,3 +51,8 @@ export function reportAccessNote(p: Who): string | null {
     ? 'Follow-up results are only shown to users with access to Patients.'
     : 'Implant records are only shown to users with access to Patients.';
 }
+
+/** Implant records are readable with Patients or Schedule view (0032); without either, implant reports have nothing to show. */
+export function canSeeImplants(p: Who): boolean {
+  return canView(p, 'patients') || canView(p, 'schedule');
+}

@@ -53,4 +53,13 @@ describe('<PlaceForm> booked supervisor', () => {
     render(<PlaceForm patientId="pt" tooth={36} data={{ ...data, supervisors: [{ id: 'sup1', label: 'Prof. Laila Samir' }] }} onDone={() => {}} plannedProductId="p1" slot={slot} />);
     expect(screen.getByRole('combobox', { name: /Supervisor/ })).toHaveValue('');
   });
+  it('sends ISQ and bone type with the placement', async () => {
+    const { placeImplant } = await import('./implant-actions');
+    vi.mocked(placeImplant).mockResolvedValue({});
+    render(<PlaceForm patientId="pt" tooth={36} data={{ ...data, supervisors: [{ id: 'sup1', label: 'Prof' }] }} onDone={() => {}} plannedProductId="p1" />);
+    fireEvent.change(screen.getByLabelText(/ISQ/), { target: { value: '72' } });
+    fireEvent.change(screen.getByRole('combobox', { name: /Bone type/ }), { target: { value: 'D2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save placement' }));
+    expect(vi.mocked(placeImplant).mock.calls.at(-1)?.[0]).toMatchObject({ isq: '72', boneType: 'D2' });
+  });
 });

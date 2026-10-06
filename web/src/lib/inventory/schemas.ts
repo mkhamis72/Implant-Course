@@ -74,6 +74,8 @@ export const planSchema = z.object({
   notes: text(1000),
 });
 
+export const BONE_TYPES = ['D1', 'D2', 'D3', 'D4'] as const;
+
 export const placeSchema = z.object({
   patientId: requiredId('Patient not found.'),
   tooth,
@@ -86,6 +88,11 @@ export const placeSchema = z.object({
   supervisorId: requiredId('Choose a supervisor.'),
   technique,
   torque: optionalNumber(0, 150, 'Enter an insertion torque between 0 and 150 Ncm.'),
+  isq: optionalNumber(0, 100, 'Enter an ISQ between 0 and 100.'),
+  boneType: z.preprocess(
+    (v) => (v === '' || v === undefined || v === null ? null : v),
+    z.enum(BONE_TYPES, { message: 'Choose a bone type from D1 to D4.' }).nullable(),
+  ),
   graft: text(200),
   notes: text(1000),
 });

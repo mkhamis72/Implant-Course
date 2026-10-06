@@ -36,7 +36,10 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="space-y-6">
-      <h1>{c.name}</h1>
+      <div className="page-header">
+        <h1>{c.name}</h1>
+        <Link href={`/courses/${c.id}/report`} className="btn-secondary btn">Report</Link>
+      </div>
       {editable ? (
         <CourseForm action={updateCourse} course={c} />
       ) : (

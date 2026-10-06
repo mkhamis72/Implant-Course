@@ -67,3 +67,17 @@ describe('placeSchema / componentSchema', () => {
     expect(componentSchema.parse({ ...c, componentType: 'final_restoration' })).toMatchObject({ productId: null, lotId: null });
   });
 });
+
+describe('placeSchema ISQ and bone type', () => {
+  const ok = {
+    patientId: id, tooth: '36', productId: id, lotId: id, placedOn: '2020-01-01', placingDelegateId: id, supervisorId: id, technique: 'guided',
+  };
+  it('accepts blanks as not recorded', () => {
+    expect(placeSchema.parse({ ...ok, isq: '', boneType: '' })).toMatchObject({ isq: null, boneType: null });
+  });
+  it('accepts valid values and refuses others', () => {
+    expect(placeSchema.parse({ ...ok, isq: '72.5', boneType: 'D2' })).toMatchObject({ isq: 72.5, boneType: 'D2' });
+    expect(err(placeSchema.safeParse({ ...ok, isq: '101' }))).toBe('Enter an ISQ between 0 and 100.');
+    expect(err(placeSchema.safeParse({ ...ok, boneType: 'D5' }))).toBe('Choose a bone type from D1 to D4.');
+  });
+});

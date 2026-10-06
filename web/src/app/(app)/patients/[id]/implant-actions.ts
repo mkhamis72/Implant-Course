@@ -36,7 +36,7 @@ export async function placeImplant(input: Record<string, unknown>): Promise<Resu
   const parsed = placeSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const p = parsed.data;
-  return run(p.patientId, 'place_implant', {
+  return run(p.patientId, 'place_implant_v2', {
     p_patient: p.patientId,
     p_tooth: p.tooth,
     p_product: p.productId,
@@ -46,6 +46,8 @@ export async function placeImplant(input: Record<string, unknown>): Promise<Resu
     p_supervisor: p.supervisorId,
     p_assisting_delegate: p.assistingDelegateId,
     p_torque: p.torque,
+    p_isq: p.isq,
+    p_bone_type: p.boneType,
     p_graft: p.graft,
     p_notes: p.notes,
     p_slot: p.slotId,

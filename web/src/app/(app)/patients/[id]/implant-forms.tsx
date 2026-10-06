@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { availableLots } from '@/lib/inventory/lots';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { acceptsProduct } from '@/lib/inventory/components';
+import { BONE_TYPES } from '@/lib/inventory/schemas';
 import {
   COMPONENT_LABELS, COMPONENT_TYPES, FOLLOWUP_OUTCOMES, OUTCOME_LABELS, TECHNIQUES, TECHNIQUE_LABELS,
   type ChartData, type ComponentType, type ImplantSite, type Technique,
@@ -213,7 +214,7 @@ export function PlaceForm({
   const [v, setV] = useState({
     productId: plannedProductId ?? '', technique: plannedTechnique ?? '', lotId: '', placedOn: data.today,
     placingDelegateId: placingFromSlot, assistingDelegateId: assistingFromSlot,
-    supervisorId: slot?.supervisor_id ?? (data.supervisors.some((s) => s.id === data.me) ? data.me : ''), torque: '', graft: '', notes: '',
+    supervisorId: slot?.supervisor_id ?? (data.supervisors.some((s) => s.id === data.me) ? data.me : ''), torque: '', isq: '', boneType: '', graft: '', notes: '',
   });
   const set = (key: keyof typeof v) => (value: string) =>
     setV((cur) => ({
@@ -265,6 +266,17 @@ export function PlaceForm({
         </Field>
       </People>
       <TorqueField value={v.torque} onChange={set('torque')} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="ISQ (optional)">
+          <input className="input" inputMode="decimal" value={v.isq} onChange={(e) => set('isq')(e.target.value)} />
+        </Field>
+        <Field label="Bone type (optional)">
+          <select className="input" value={v.boneType} onChange={(e) => set('boneType')(e.target.value)}>
+            <option value="">—</option>
+            {BONE_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </Field>
+      </div>
       <Field label="Graft (optional)">
         <input className="input" value={v.graft} onChange={(e) => set('graft')(e.target.value)} />
       </Field>
