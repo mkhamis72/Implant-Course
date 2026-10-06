@@ -37,14 +37,37 @@ describe('controlTenants', () => {
     select.mockResolvedValueOnce({ data: [row], error: null });
     await controlTenants(0);
     select.mockResolvedValue({ data: null, error: { message: 'down' } });
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(await controlTenants(STALE_MS - 1)).toEqual([tenant]);
+    expect(consoleErrorSpy).toHaveBeenCalled();
     await expect(controlTenants(STALE_MS + 1)).rejects.toBeInstanceOf(RegistryUnavailableError);
   });
 
   it('is unavailable when the very first fetch fails', async () => {
     select.mockRejectedValue(new Error('network'));
     await expect(controlTenants(0)).rejects.toBeInstanceOf(RegistryUnavailableError);
+  });
+
+  it('shares one in-flight fetch for concurrent calls on cold cache', async () => {
+    select.mockResolvedValue({ data: [row], error: null });
+    const [r1, r2] = await Promise.all([controlTenants(0), controlTenants(0)]);
+    expect(r1).toEqual([tenant]);
+    expect(r2).toEqual([tenant]);
+    expect(select).toHaveBeenCalledTimes(1);
+  });
+
+  it('avoids retry within RETRY_MS after a failed refresh', async () => {
+    select.mockResolvedValueOnce({ data: [row], error: null });
+    await controlTenants(0);
+    select.mockResolvedValue({ data: null, error: { message: 'down' } });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failureTime = FRESH_MS + 1;
+    await controlTenants(failureTime);
+    const RETRY_MS = 15_000;
+    expect(await controlTenants(failureTime + RETRY_MS - 1)).toEqual([tenant]);
+    expect(select).toHaveBeenCalledTimes(2);
+    await controlTenants(failureTime + RETRY_MS);
+    expect(select).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -60,5 +83,16 @@ describe('controlSecret', () => {
   it('throws when the secret is missing', async () => {
     rpc.mockResolvedValue({ data: null, error: null });
     await expect(controlSecret('academy', 'service_role_key', 0)).rejects.toThrow(/missing/);
+  });
+
+  it('shares one in-flight fetch for concurrent calls with the same key', async () => {
+    rpc.mockResolvedValue({ data: 'service-key', error: null });
+    const [r1, r2] = await Promise.all([
+      controlSecret('academy', 'service_role_key', 0),
+      controlSecret('academy', 'service_role_key', 0),
+    ]);
+    expect(r1).toBe('service-key');
+    expect(r2).toBe('service-key');
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });
