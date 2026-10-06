@@ -1,12 +1,14 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Client } from 'pg';
+import type { ClientConfig } from 'pg';
 import { pgConfig } from './db';
 
 export async function migrate(
   dir = path.join(process.cwd(), 'supabase', 'migrations'),
+  config: ClientConfig = pgConfig(),
 ): Promise<string[]> {
-  const client = new Client(pgConfig());
+  const client = new Client(config);
   await client.connect();
   const applied: string[] = [];
   try {
