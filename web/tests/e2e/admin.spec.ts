@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
+import { Client } from 'pg';
+import { pgConfig } from '../../scripts/db';
+import { adminClient, setProfile } from '../../scripts/users';
 import { login } from './helpers';
 
 test.describe('admin users', () => {
@@ -47,6 +50,40 @@ test.describe('admin users', () => {
     await form.getByRole('button', { name: 'Send invite' }).click();
     await expect(form.getByRole('alert')).toHaveText('A user with this email already exists.');
   });
+});
+
+test('an admin resets a lost password, the user signs in with it, then the admin deletes the user', async ({ page, browser }) => {
+  const admin = adminClient();
+  const email = `icm-remove-${Date.now()}@example.com`;
+  const { data, error } = await admin.auth.admin.createUser({ email, password: `Unknown-${Date.now()}`, email_confirm: true });
+  expect(error).toBeNull();
+  const userId = data.user!.id;
+  const pg = new Client(pgConfig());
+  await pg.connect();
+  try {
+    await setProfile(pg, userId, { full_name: 'E2E Remove Me', role: 'organizer', active: true });
+    await login(page, TEST_USERS.admin.email);
+    await page.goto('/admin/users');
+    const row = page.getByTestId(`user-row-${email}`);
+    await row.getByRole('button', { name: `Reset password for ${email}` }).click();
+    const password = (await row.getByTestId('temporary-password').locator('code').textContent())!;
+    expect(password.length).toBeGreaterThan(10);
+
+    const other = await browser.newContext();
+    const theirPage = await other.newPage();
+    await login(theirPage, email, password);
+    await expect(theirPage.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
+    await other.close();
+
+    await row.getByRole('button', { name: `Delete user ${email}` }).click();
+    await row.getByLabel('Type E2E Remove Me to confirm').fill('E2E Remove Me');
+    await row.getByRole('button', { name: 'Delete user' }).click();
+    await expect(page.getByTestId(`user-row-${email}`)).toHaveCount(0);
+    expect((await admin.auth.admin.getUserById(userId)).data.user).toBeNull();
+  } finally {
+    await pg.end();
+    await admin.auth.admin.deleteUser(userId).catch(() => {});
+  }
 });
 
 test('organizer is redirected away from admin pages', async ({ page }) => {

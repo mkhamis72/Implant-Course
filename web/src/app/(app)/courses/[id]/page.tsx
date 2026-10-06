@@ -26,7 +26,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
     supabase.from('sessions').select('*, checklists(id, items:checklist_items(done_at))').eq('course_id', id).order('date').order('start_time'),
     supabase.from('enrollments').select('id, delegate:delegates(id, full_name)').eq('course_id', id),
     supabase.from('delegates').select('id, full_name').eq('active', true).order('full_name'),
-    supabase.from('profiles').select('user_id, full_name, email').eq('active', true).order('full_name'),
+    supabase.from('profiles').select('user_id, full_name, email').eq('active', true).in('role', ['admin', 'organizer']).order('full_name'),
   ]);
   if (!course) notFound();
   const c = course as Course;

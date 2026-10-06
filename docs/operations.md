@@ -67,8 +67,9 @@ All commands are run with `ENV_FILE=.env.prod` (see the top of this page).
 - **From the command line:**
   - Staff: `npm run create-user -- dr@example.com "Dr Name" [--role admin]`.
   - Delegate: `npm run create-user -- d@example.com "Dr Name" --role delegate --delegate <delegate id>`.
-- **Reset a password:** run the same command again for that email.
+- **Reset a password** (lost, or never received): Admin → Users → **Reset password**, or **Reset password** in the Login section of a delegate's page. It shows a new one-time password to hand over, whether email is on or off. From the command line, run the same `create-user` command again for that email.
 - **Deactivate, or change role:** Admin → Users in the app. Delegate logins are deactivated there too.
+- **Delete** a user or delegate added by mistake: Admin → Users → **Delete user**, or **Delete delegate** on the delegate's page (this also deletes their login and course enrollments). Anyone with records — implants, stock, notes, checklist work, surgery bookings — can't be deleted: deactivate them, or set the delegate Inactive.
 
 ### Turning on email verification
 

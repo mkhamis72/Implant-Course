@@ -1,9 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdmin, requirePermission } from '@/lib/auth/session';
 import { createLogin } from '@/lib/admin/create-login';
+import { deleteAuthUser } from '@/lib/admin/auth-accounts';
 import type { ActionState } from '@/lib/admin/schemas';
 import { delegateSchema } from '@/lib/inventory/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
@@ -47,4 +49,19 @@ export async function createDelegateLogin(_prev: ActionState, formData: FormData
   if ('error' in result) return result;
   revalidatePath(`/delegates/${id}`);
   return result;
+}
+
+/** Removes a delegate added by mistake; the database refuses one with implant records or surgery bookings. */
+export async function deleteDelegate(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requirePermission('delegates', 'edit');
+  const id = String(formData.get('id') ?? '');
+  const supabase = await createClient();
+  const { data: login, error } = await supabase.rpc('delete_delegate', { p_delegate: id });
+  if (error) return { error: userMessage(error)! };
+  // A delegate login goes with the delegate: its profile is gone, so delete the sign-in account too.
+  const authError = login ? await deleteAuthUser(login as string) : null;
+  revalidatePath('/delegates');
+  revalidatePath('/admin/users');
+  if (authError) return { error: authError };
+  redirect('/delegates');
 }

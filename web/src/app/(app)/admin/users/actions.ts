@@ -9,6 +9,9 @@ import { inviteSchema, permissionsSchema, setActiveSchema, setRoleSchema, type A
 import { createLogin } from '@/lib/admin/create-login';
 import { userMessage } from '@/lib/db-errors';
 import { updateProblem } from '@/lib/admin/results';
+import { deleteAuthUser, setTemporaryPassword } from '@/lib/admin/auth-accounts';
+import type { FormState } from '@/lib/patients/form-state';
+import { z } from 'zod';
 
 /** Email on: an invitation that verifies the address. Email off: a login with a one-time password. */
 export async function inviteUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -67,4 +70,28 @@ export async function setUserActive(_prev: ActionState, formData: FormData): Pro
 
   revalidatePath('/admin/users');
   return { ok: active ? 'User reactivated.' : 'User deactivated.' };
+}
+
+/** Removes a user without records (test or mistaken accounts); the database refuses anyone with records. */
+export async function removeUser(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requireAdmin();
+  const id = z.string().uuid().safeParse(formData.get('id'));
+  if (!id.success) return { error: 'Invalid request.' };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('delete_user', { p_user: id.data });
+  if (error) return { error: userMessage(error)! };
+  const authError = await deleteAuthUser(id.data);
+  revalidatePath('/admin/users');
+  return authError ? { error: authError } : { ok: 'User removed.' };
+}
+
+/** A new one-time password for someone who lost theirs (works with email on or off). */
+export async function resetPassword(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const me = await requireAdmin();
+  const userId = String(formData.get('user_id') ?? '');
+  if (userId === me.user_id) return { error: 'Change your own password under Account security.' };
+  if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
+  const result = await setTemporaryPassword(userId);
+  if ('error' in result) return result;
+  return { ok: 'New one-time password set.', password: result.password };
 }

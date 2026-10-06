@@ -10,6 +10,8 @@ import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutco
 import type { ReportRow } from '@/lib/schedule/types';
 import { DelegateForm, type DelegateRow } from '../delegate-form';
 import { CreateLogin } from './create-login';
+import { DeleteDelegate } from './delete-delegate';
+import { ResetPassword } from '../../admin/users/reset-password';
 import { emailEnabled } from '@/lib/flags';
 import { updateDelegate } from '../actions';
 
@@ -38,7 +40,7 @@ export default async function DelegatePage({ params }: { params: Promise<{ id: s
   const delegate = data as DelegateRow;
   const isAdmin = profile.role === 'admin';
   const { data: login } = isAdmin
-    ? await supabase.from('profiles').select('active').eq('delegate_id', id).maybeSingle()
+    ? await supabase.from('profiles').select('user_id, email, active').eq('delegate_id', id).maybeSingle()
     : { data: null };
   const report = (reportData ?? []) as ReportRow[];
 
@@ -48,14 +50,19 @@ export default async function DelegatePage({ params }: { params: Promise<{ id: s
       <fieldset disabled={!canEdit(profile, 'delegates')} className="min-w-0">
         <DelegateForm action={updateDelegate} delegate={delegate} />
       </fieldset>
+      {canEdit(profile, 'delegates') && <DeleteDelegate id={delegate.id} name={delegate.full_name} />}
       {isAdmin && (
         <section className="card space-y-2">
           <h2 className="font-semibold">Login</h2>
           {login ? (
-            <p className="text-sm">
-              Login: {login.active ? 'active' : 'inactive'} ·{' '}
-              <Link href="/admin/users" className="text-accent hover:underline">Manage in Admin → Users</Link>
-            </p>
+            <>
+              <p className="text-sm">
+                Login {login.email}: {login.active ? 'active' : 'inactive'} ·{' '}
+                <Link href="/admin/users" className="text-accent hover:underline">Manage in Admin → Users</Link>
+              </p>
+              <p className="text-sm text-muted">Lost or never received their password? Reset it to get a new one-time password to hand over.</p>
+              <ResetPassword userId={login.user_id} />
+            </>
           ) : (
             <CreateLogin delegateId={delegate.id} emailOn={emailEnabled()} />
           )}

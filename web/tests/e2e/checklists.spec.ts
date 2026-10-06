@@ -71,7 +71,11 @@ test('adds, edits, assigns, reorders and deletes items; "Mine" lists my open ite
   const item = page.getByTestId('checklist-item').nth(1);
   await item.getByRole('button', { name: 'Edit' }).click();
   await item.getByLabel('Item text').fill(edited);
-  await item.getByRole('combobox', { name: 'Assigned to', exact: true }).selectOption({ label: 'Test Organizer' });
+  const assignee = item.getByRole('combobox', { name: 'Assigned to', exact: true });
+  // Staff only: delegate logins are not offered.
+  await expect(assignee.locator('option', { hasText: 'Test Admin' })).toHaveCount(1);
+  await expect(assignee.locator('option', { hasText: 'Test Delegate Login' })).toHaveCount(0);
+  await assignee.selectOption({ label: 'Test Organizer' });
   await item.getByLabel('Due date').fill('2031-01-15');
   await item.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByTestId('checklist-item').nth(1)).toContainText(edited);
