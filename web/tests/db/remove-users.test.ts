@@ -142,4 +142,16 @@ describe('checklist assignees', () => {
       await refused(c, () => assign(users.delegate, 3), /organizer or admin/);
     });
   });
+
+  it('no existing task is assigned to a delegate login (0038 cleared them)', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      const n = await count(
+        c,
+        `select count(*)::int as n from public.checklist_items i join public.profiles p on p.user_id = i.assignee_id where p.role = 'delegate'`,
+        [],
+      );
+      expect(n).toBe(0);
+    });
+  });
 });
