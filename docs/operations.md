@@ -141,3 +141,23 @@ Steps, in Git Bash from `web/`:
 3. Create a test patient named "Pilot test …", add a checklist, and tick an item.
 4. Browser dev tools → Network → reload: the page response has `content-security-policy` and `strict-transport-security` headers.
 5. Catalog check: `npm run catalog-export` (with `ENV_FILE=.env.prod`), then compare the CSV with your supplier lists. Fix products in the app; untick **Sample** on each verified product, and deactivate products you don't stock.
+
+## G. Control project (companies)
+
+The app serves each company from its own Supabase project. Without `CONTROL_SUPABASE_URL` it serves one company (tenant `default`) from the `NEXT_PUBLIC_SUPABASE_*` / `SUPABASE_SERVICE_ROLE_KEY` env vars, as before.
+
+**Set up (once, owner):**
+1. Create the project `implant-course-control` (Frankfurt). Until Supabase Pro, it lives in the separate free org "Implant Course Dev".
+2. In `web/.env.prod` add `CONTROL_SUPABASE_URL`, `CONTROL_SERVICE_ROLE_KEY` ⟨secret⟩ and `CONTROL_DATABASE_URL` ⟨secret⟩ (Session pooler). The Supabase CA certificate is shared, so `DATABASE_CA_CERT` covers it; otherwise set `CONTROL_DATABASE_CA_CERT`.
+3. Apply the control schema: `ENV_FILE=.env.prod npm run db:migrate -- --control`. The first line must read `Target project: control <ref>.supabase.co`. The control project's `tenant_audit` table is read-only even for the service-role key.
+
+**Register a company** (its project's keys come from the loaded env file; for the academy that's `.env.prod`):
+
+```bash
+ENV_FILE=.env.prod npm run tenant:register -- academy "Implant Course Academy" implant-course.vercel.app
+ENV_FILE=.env.prod npm run tenant:check -- academy        # → Target project: control <host>; company academy (active): OK
+```
+
+**Switch production to the control project:** in Vercel (Production) add `CONTROL_SUPABASE_URL` and `CONTROL_SERVICE_ROLE_KEY` ⟨secret⟩, then run Release. To roll back, remove both and run Release again.
+
+Unknown hosts get 404; a suspended company gets 503. If the control project is down, the app keeps routing from its last list for 10 minutes, then shows "Service unavailable".

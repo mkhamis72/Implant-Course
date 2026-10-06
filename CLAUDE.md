@@ -28,6 +28,8 @@ There is no local Supabase: DB and E2E tests hit the hosted **dev** project conf
 
 **Stack:** Next.js 15 App Router (server components + server actions), React 19, Tailwind v4, Zod v4, Supabase (`@supabase/ssr`) with Postgres RLS.
 
+**Companies (multi-tenant, part 1):** one Supabase project per company behind one app. `src/lib/tenant/` routes by Host: middleware (Node runtime) → `routeHost()` → registry → sets the trusted `x-tenant` (any browser-sent one is dropped) and that company's CSP. Server code gets it with `currentTenant()`; `createClient()` / `createAdminClient()` (async) use it. Registry: none configured = today's env vars as tenant `default`; `TENANTS_FILE` = local list (dev/isolation E2E only); `CONTROL_SUPABASE_URL` = the control project (`tenants`, Vault `tenant/<slug>/…`, cache 60 s, stale ≤ 10 min). Control migrations: `supabase/control/migrations/`, `npm run db:migrate -- --control`. Unknown host 404, suspended 503.
+
 **The database is the source of truth for rules.** Every multi-table or integrity-sensitive operation (place implant, fit component, receive stock, corrections, booking, checklists) is a `public.*` plpgsql function called via `supabase.rpc(...)`. Conventions in those functions:
 - `security definer set search_path = ''`, first line `perform app_private.require_perm('<area>', 'edit');` (plain `require_active()` only for non-area helpers), explicit `revoke … from public, anon` / `grant … to authenticated`. Readers that should obey RLS are `security invoker`.
 - Business errors are raised with `app_private.fail('message')` (hint `'user'`). In TS, `userMessage(error)` (`src/lib/db-errors.ts`) shows those verbatim and hides everything else.
