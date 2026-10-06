@@ -103,6 +103,8 @@ function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: 
     site.lot ? (site.lot.lot_no ? `Lot ${site.lot.lot_no}` : 'No lot') : null,
     site.placed_on ? formatDate(site.placed_on) : null,
     site.torque_ncm !== null ? `${site.torque_ncm} Ncm` : null,
+    site.isq !== null && site.isq !== undefined ? `ISQ ${site.isq}` : null,
+    site.bone_type ? `Bone ${site.bone_type}` : null,
     site.graft ? `Graft: ${site.graft}` : null,
   ].filter(Boolean) as string[];
   const people = [

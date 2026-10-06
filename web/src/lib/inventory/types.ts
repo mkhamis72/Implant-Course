@@ -111,6 +111,8 @@ export type ImplantSite = {
   placed_on: string | null;
   stock_lot_id: string | null;
   torque_ncm: number | null;
+  isq: number | null;
+  bone_type: string | null;
   graft: string;
   notes: string;
   product: Product | null;
