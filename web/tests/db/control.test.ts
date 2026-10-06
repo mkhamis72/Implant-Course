@@ -70,6 +70,27 @@ describe('control registry', () => {
     await withControl(async (c) => {
       await c.query('set local role service_role');
       await refused(c, () => c.query(`select public.tenant_secret('zz-academy', 'anything')`), /Unknown secret/);
+      await refused(c, () => c.query(`select public.tenant_secret('zz-academy', null)`), /Unknown secret/);
+    });
+  });
+
+  it('service role writes are audited, but it cannot touch the audit table or truncate', async () => {
+    await withControl(async (c) => {
+      await c.query('set local role service_role');
+      const ins = `insert into public.tenants (slug, name, hosts, supabase_url, anon_key) values ('zz-svc', 'Zz Svc', array['svc.example.com'], 'https://abcdefgh.supabase.co', 'a')`;
+      await c.query(ins);
+      await c.query(`update public.tenants set name = 'Zz Svc 2' where slug = 'zz-svc'`);
+      expect((await c.query(`select count(*)::int as n from public.tenant_audit where slug = 'zz-svc'`)).rows[0].n).toBe(2);
+      await refused(c, () => c.query('delete from public.tenant_audit'), /permission denied/);
+      await refused(c, () => c.query('truncate public.tenants'), /permission denied/);
+    });
+  });
+
+  it('refuses null hosts', async () => {
+    await withControl(async (c) => {
+      await refused(c, () => c.query(
+        `insert into public.tenants (slug, name, hosts, supabase_url, anon_key) values ('zz-null', 'Zz Null', array['a.example.com', null], 'https://abcdefgh.supabase.co', 'a')`,
+      ), /Invalid host/);
     });
   });
 });

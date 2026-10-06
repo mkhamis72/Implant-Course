@@ -6,7 +6,9 @@ import { checkTenant } from './tenants';
 async function main() {
   const slug = process.argv[2];
   if (!slug) throw new Error('Usage: npm run tenant:check -- <slug>');
-  const c = new Client(migrateTarget(['--control'], process.env).config);
+  const target = migrateTarget(['--control'], process.env);
+  console.log(`Target project: ${target.label}; company ${slug}`);
+  const c = new Client(target.config);
   await c.connect();
   try {
     const t = (await c.query('select supabase_url, anon_key, status from public.tenants where slug = $1', [slug])).rows[0];

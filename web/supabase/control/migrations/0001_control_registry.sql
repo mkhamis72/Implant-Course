@@ -31,11 +31,11 @@ declare
 begin
   new.hosts := array(select distinct regexp_replace(regexp_replace(lower(trim(h)), ':\d+$', ''), '\.$', '') from unnest(new.hosts) h);
   foreach v_host in array new.hosts loop
-    if v_host !~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$' then
-      raise exception 'Invalid host: %', v_host;
+    if v_host is null or v_host !~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$' then
+      raise exception 'Invalid host: %', coalesce(v_host, 'null');
     end if;
   end loop;
-  lock table public.tenants in share row exclusive mode;
+  perform pg_advisory_xact_lock(hashtext('public.tenants.hosts'));
   select t.slug into v_owner from public.tenants t where t.slug <> new.slug and t.hosts && new.hosts limit 1;
   if v_owner is not null then
     raise exception 'A host of % is already used by %', new.slug, v_owner;
@@ -47,7 +47,7 @@ create trigger tenants_normalise before insert or update on public.tenants
   for each row execute function public.tenants_normalise();
 
 create function public.tenants_audit() returns trigger
-language plpgsql set search_path = '' as $$
+language plpgsql security definer set search_path = '' as $$
 begin
   insert into public.tenant_audit (slug, action, before, after)
   values (coalesce(new.slug, old.slug), lower(tg_op),
@@ -61,6 +61,8 @@ create trigger tenants_audit after insert or update or delete on public.tenants
 alter table public.tenants enable row level security;
 alter table public.tenant_audit enable row level security;
 revoke all on public.tenants, public.tenant_audit from public, anon, authenticated;
+-- Supabase default privileges give service_role everything on new tables; keep only what is needed (no truncate).
+revoke all on public.tenants, public.tenant_audit from service_role;
 grant select, insert, update, delete on public.tenants to service_role;
 grant select on public.tenant_audit to service_role;
 revoke execute on function public.tenants_normalise(), public.tenants_audit() from public, anon, authenticated;
@@ -71,7 +73,7 @@ language plpgsql stable security definer set search_path = '' as $$
 declare
   v_secret text;
 begin
-  if p_name not in ('service_role_key', 'database_url') then
+  if p_name is null or p_name not in ('service_role_key', 'database_url') then
     raise exception 'Unknown secret %', p_name;
   end if;
   select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'tenant/' || p_slug || '/' || p_name;

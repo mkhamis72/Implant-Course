@@ -29,7 +29,7 @@ async function main() {
     await registerTenant(c, company);
     await c.query('commit');
   } catch (error) {
-    await c.query('rollback');
+    await c.query('rollback').catch(() => {});
     throw error;
   } finally {
     await c.end();
