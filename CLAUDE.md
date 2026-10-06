@@ -40,7 +40,8 @@ There is no local Supabase: DB and E2E tests hit the hosted **dev** project conf
     - Some reads cross areas, for example schedule → patients/courses and patients → bookings; see 0032 and 0033.
     - In TS, pages call `requirePermission(area)`, actions call `requirePermission(area, 'edit')`, and controls hide unless `canEdit(profile, area)`.
   - **Delegates** (`profiles.delegate_id`) get no table access. They read only through `my_schedule()` and `my_report()`, on the `/my` pages.
-- `app_private.audit_row()` trigger on every table → `audit_log` (patient History tab reads it via `patient_history`).
+  - Staff-picker lists (checklist assignee, lead organizer, fitted by organizer) filter `role in ('admin','organizer')`: an active profile may be a delegate login. `check_assignee` enforces it for checklists (0037).
+- `app_private.audit_row()` trigger on every table → `audit_log` (patient History tab reads it via `patient_history`). Patients view reads only the patient tables' audit rows; admins read all (0036).
 - `stock_movements` is an append-only ledger; corrections are reversing movements. Lock order: site → batch.
 - Dates are Cairo dates: use `public.cairo_today()` in SQL, `todayIso()` (`src/lib/dates.ts`) and `formatDate/formatTime` (`src/lib/format.ts`) in TS — never `current_date` / `new Date()` formatting.
 - Patients and medical history use optimistic concurrency on `updated_at`.
@@ -52,7 +53,7 @@ There is no local Supabase: DB and E2E tests hit the hosted **dev** project conf
   - `place_implant` stays only as a 13-argument wrapper for the release window, and a later PR drops it. Don't add an overload with defaulted parameters: PostgREST's named-argument calls become ambiguous.
   - `course_report(course)` is security invoker, so implants show only to users with Patients or Schedule view. The report's summaries and CSV are built in `src/lib/reports/course-report.ts`.
 - **Lectures & workshops (0028):** `sessions.type` lecture/workshop sessions hold `talks` (time, `lecturers` row, topic), written only via `create_talk` / `update_talk` / `delete_talk`, which refuse times outside the session, overlaps in the session and double-booked lecturers. UI: `schedule/lectures|workshops`, sharing `schedule/_talks/`. Sessions have an optional `room`.
-- Courses and patients are hard-deleted only through `delete_course` / `delete_patient`, which refuse anything with stock traceability or placed implants (the ledger is permanent); otherwise patients are archived.
+- Courses and patients are hard-deleted only through `delete_course` / `delete_patient`, which refuse anything with stock traceability or placed implants (the ledger is permanent); otherwise patients are archived. Users and delegates likewise only through `delete_user` (admin; any FK to the profile = "has records") / `delete_delegate` (refuses implant records or bookings) (0037); the action then deletes the Auth account with the service role (`src/lib/admin/auth-accounts.ts`), which also sets one-time passwords for **Reset password**.
 - Tooth state `extracted` is labelled "To be extracted" (the tooth is still present); the enum value is unchanged.
 
 **Migrations** (`web/supabase/migrations/NNNN_*.sql`) are applied once, in order, by `scripts/migrate.ts`; never edit an applied one. To change a function, add a new migration with `create or replace` of the *latest* definition (search later migrations — functions are redefined several times). New public tables get no privileges by default (0019) and must grant what they need.
