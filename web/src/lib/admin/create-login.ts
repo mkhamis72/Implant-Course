@@ -1,7 +1,7 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
-import { serverEnv } from '@/lib/env';
+import { requestOrigin } from '@/lib/tenant/current';
 import { mapAuthError } from '@/lib/auth/errors';
 import { updateProblem } from './results';
 import { emailEnabled } from '@/lib/flags';
@@ -21,11 +21,16 @@ export async function createLogin(a: { email: string; full_name: string; role: R
   const { data: taken } = await supabase.from('profiles').select('user_id').eq('email', email).limit(1);
   if (taken?.length) return { error: 'A user with this email already exists.' };
 
-  const admin = createAdminClient();
+  let admin;
+  try {
+    admin = await createAdminClient();
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
   const password = emailEnabled() ? undefined : temporaryPassword();
   const { data, error } = password
     ? await admin.auth.admin.createUser({ email, password, email_confirm: true })
-    : await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${serverEnv().siteUrl}/auth/confirm` });
+    : await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${await requestOrigin()}/auth/confirm` });
   if (error || !data?.user) return { error: error ? mapAuthError(error) : 'Could not create the login.' };
 
   // Through the admin's own session so RLS and the audit log record who did it.

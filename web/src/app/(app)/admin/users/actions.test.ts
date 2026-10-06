@@ -9,7 +9,6 @@ vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, setTemporaryPasswo
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-vi.mock('@/lib/env', () => ({ serverEnv: () => ({ siteUrl: 'http://localhost:3000' }) }));
 import { inviteUser, removeUser, resetPassword, savePermissions } from './actions';
 
 beforeEach(() => vi.clearAllMocks());

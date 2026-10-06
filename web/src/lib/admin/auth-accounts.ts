@@ -8,13 +8,26 @@ import { temporaryPassword } from './passwords';
  * decides whether removing is allowed. Returns an error message, or null.
  */
 export async function deleteAuthUser(userId: string): Promise<string | null> {
-  const { error } = await createAdminClient().auth.admin.deleteUser(userId);
-  return error ? `The user was removed from the app, but their sign-in account was not deleted: ${mapAuthError(error)}` : null;
+  const prefix = 'The user was removed from the app, but their sign-in account was not deleted: ';
+  let admin;
+  try {
+    admin = await createAdminClient();
+  } catch (error) {
+    return prefix + (error as Error).message;
+  }
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  return error ? prefix + mapAuthError(error) : null;
 }
 
 /** Replaces a login's password with a new one-time password for the admin to hand over. */
 export async function setTemporaryPassword(userId: string): Promise<{ password: string } | { error: string }> {
+  let admin;
+  try {
+    admin = await createAdminClient();
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
   const password = temporaryPassword();
-  const { error } = await createAdminClient().auth.admin.updateUserById(userId, { password });
+  const { error } = await admin.auth.admin.updateUserById(userId, { password });
   return error ? { error: mapAuthError(error) } : { password };
 }

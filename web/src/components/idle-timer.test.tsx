@@ -42,7 +42,7 @@ describe('<IdleTimer>', () => {
   it('default idle sign-out only signs out this browser, not every device', async () => {
     const assign = vi.fn();
     vi.stubGlobal('location', { ...window.location, assign });
-    render(<IdleTimer timeoutMinutes={5} />);
+    render(<IdleTimer timeoutMinutes={5} supabase={{ url: 'https://a.supabase.co', anonKey: 'k' }} />);
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     expect(signOut).toHaveBeenCalledWith({ scope: 'local' });
     expect(assign).toHaveBeenCalledWith('/login?reason=idle');

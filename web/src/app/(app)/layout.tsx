@@ -4,12 +4,14 @@ import { IdleTimer } from '@/components/idle-timer';
 import { getCurrentProfile, getSettings } from '@/lib/auth/session';
 import { PilotBanner } from '@/components/pilot-banner';
 import { pilotMode } from '@/lib/flags';
+import { currentTenant } from '@/lib/tenant/current';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect('/login');
   if (!profile.active) redirect('/deactivated');
   const settings = await getSettings();
+  const tenant = await currentTenant();
   return (
     <div className="min-h-screen lg:flex">
       <a
@@ -25,7 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {children}
         </div>
       </main>
-      <IdleTimer timeoutMinutes={settings.session_timeout_minutes} />
+      <IdleTimer timeoutMinutes={settings.session_timeout_minutes} supabase={{ url: tenant.supabaseUrl, anonKey: tenant.anonKey }} />
     </div>
   );
 }
