@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AREAS, canEdit, canView, permissionMessage, reportAccessNote, toPermissions } from './permissions';
+import { AREAS, canEdit, canSeeImplants, canView, permissionMessage, reportAccessNote, toPermissions } from './permissions';
 
 const org = (permissions = {}) => ({ role: 'organizer' as const, permissions });
 
@@ -44,5 +44,15 @@ describe('reportAccessNote', () => {
     );
     expect(reportAccessNote({ role: 'organizer', permissions: { delegates: 'view', patients: 'view' } })).toBeNull();
     expect(reportAccessNote({ role: 'admin', permissions: {} })).toBeNull();
+  });
+});
+
+describe('canSeeImplants', () => {
+  it('needs Patients or Schedule view (implant records are readable through either)', () => {
+    expect(canSeeImplants({ role: 'organizer', permissions: { courses: 'view' } })).toBe(false);
+    expect(canSeeImplants({ role: 'organizer', permissions: { courses: 'view', schedule: 'view' } })).toBe(true);
+    expect(canSeeImplants({ role: 'organizer', permissions: { patients: 'edit' } })).toBe(true);
+    expect(canSeeImplants({ role: 'admin', permissions: {} })).toBe(true);
+    expect(canSeeImplants({ role: 'delegate', permissions: {} })).toBe(false);
   });
 });

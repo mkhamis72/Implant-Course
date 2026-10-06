@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
-import { reportAccessNote } from '@/lib/auth/permissions';
+import { canSeeImplants, reportAccessNote } from '@/lib/auth/permissions';
 import { formatDate, formatTime } from '@/lib/format';
 import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutcome, type SiteState, type Technique } from '@/lib/inventory/types';
 import type { Course } from '@/lib/schedule/types';
@@ -64,6 +64,9 @@ export default async function CourseReportPage({ params }: { params: Promise<{ i
         </div>
       </div>
       {note && <p className="rounded-md bg-warn-soft p-3 text-sm text-warn">{note}</p>}
+      {/* Without access to implant records the figures below would read as "nothing placed". */}
+      {canSeeImplants(profile) && (
+        <>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-3">
         <div className="card space-y-1">
@@ -125,8 +128,8 @@ export default async function CourseReportPage({ params }: { params: Promise<{ i
             {g.date && <span className="font-normal text-muted"> · {formatDate(g.date)}</span>}
           </h2>
           <SummaryLine s={g.summary} />
-          <div className="overflow-x-auto">
-            <table className="table">
+          <div className="overflow-x-auto print:overflow-visible">
+            <table className="table print:text-[10px]">
               <thead>
                 <tr>
                   <th>Time</th>
@@ -137,7 +140,7 @@ export default async function CourseReportPage({ params }: { params: Promise<{ i
                   <th>Placed by</th>
                   <th>Assisted by</th>
                   <th>Supervisor</th>
-                  <th>Torque</th>
+                  <th>Torque (Ncm)</th>
                   <th>ISQ</th>
                   <th>Bone</th>
                   <th>Technique</th>
@@ -170,6 +173,8 @@ export default async function CourseReportPage({ params }: { params: Promise<{ i
         </section>
       ))}
       {sessions.length === 0 && <p className="card text-muted">No implants placed in this course yet.</p>}
+        </>
+      )}
     </div>
   );
 }

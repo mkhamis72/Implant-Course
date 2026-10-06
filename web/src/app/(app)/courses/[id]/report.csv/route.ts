@@ -2,13 +2,15 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentProfile } from '@/lib/auth/session';
-import { canView } from '@/lib/auth/permissions';
+import { canSeeImplants, canView } from '@/lib/auth/permissions';
 import { contentDisposition, csvFilename } from '@/lib/csv';
 import { courseReportCsv, type CourseReportRow } from '@/lib/reports/course-report';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
   if (!profile?.active || !canView(profile, 'courses')) return new NextResponse('Not allowed', { status: 403 });
+  // An empty file would read as "nothing placed".
+  if (!canSeeImplants(profile)) return new NextResponse('Implant records need access to Patients or Schedule.', { status: 403 });
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) return new NextResponse('Not found', { status: 404 });
   const supabase = await createClient();

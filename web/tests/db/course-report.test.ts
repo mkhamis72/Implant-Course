@@ -95,6 +95,22 @@ describe('course_report', () => {
     });
   });
 
+  it('keeps failed implants and leaves removed ones out', async () => {
+    await withTx(async (c) => {
+      const w = await world(c);
+      const p = await makePatient(c, 'Zz Report States');
+      const slot = await book(c, { session: w.session, chair: w.chair, patient: p, supervisor: users.organizer, placing: [w.d1], implants: [{ tooth: 36 }, { tooth: 46 }] });
+      const failed = await place(c, { patient: p, tooth: 36, product: w.product, lot: w.lot, delegate: w.d1, supervisor: users.organizer, slot, placedOn: '2026-01-10' });
+      const removed = await place(c, { patient: p, tooth: 46, product: w.product, lot: w.lot, delegate: w.d1, supervisor: users.organizer, slot, placedOn: '2026-01-10' });
+      await c.query('reset role');
+      await c.query(`update public.implant_sites set state = 'failed' where id = $1`, [failed]);
+      await c.query(`update public.implant_sites set state = 'removed' where id = $1`, [removed]);
+      await actAs(c, users.organizer);
+      const { rows } = await c.query('select tooth, state from public.course_report($1) order by tooth', [w.course]);
+      expect(rows).toEqual([{ tooth: 36, state: 'failed' }]);
+    });
+  });
+
   it('includes unlinked placements by enrolled delegates within the course dates only', async () => {
     await withTx(async (c) => {
       const w = await world(c);

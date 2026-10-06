@@ -48,6 +48,12 @@ test('course report shows each placed implant, a session summary, and downloads 
   await expect(implant).toContainText('D2');
   await expect(page.getByTestId('report-delegates')).toContainText(placer);
 
+  // Printed, the session table must not be clipped by its scroll box.
+  await page.emulateMedia({ media: 'print' });
+  const overflow = await section.locator('table').evaluate((t) => getComputedStyle(t.parentElement!).overflowX);
+  expect(overflow).toBe('visible');
+  await page.emulateMedia({ media: 'screen' });
+
   const download = page.waitForEvent('download');
   await page.getByRole('link', { name: 'Download CSV' }).click();
   const file = await download;

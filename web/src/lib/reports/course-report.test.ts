@@ -15,6 +15,9 @@ describe('stats', () => {
     expect(stats([35, null, 45, 40])).toEqual({ n: 3, mean: 40, median: 40, min: 35, max: 45 });
     expect(stats([30, '40'])).toEqual({ n: 2, mean: 35, median: 35, min: 30, max: 40 });
   });
+  it('rounds the median like the mean (no float noise)', () => {
+    expect(stats([35.1, 35.2]).median).toBe(35.2);
+  });
   it('returns nulls when nothing was recorded', () => {
     expect(stats([null, null])).toEqual({ n: 0, mean: null, median: null, min: null, max: null });
   });

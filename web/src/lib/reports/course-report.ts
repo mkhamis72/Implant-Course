@@ -41,7 +41,7 @@ export function stats(values: (number | string | null)[]): Stats {
     .sort((a, b) => a - b);
   if (xs.length === 0) return { n: 0, mean: null, median: null, min: null, max: null };
   const mid = Math.floor(xs.length / 2);
-  const median = xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
+  const median = round1(xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2);
   return { n: xs.length, mean: round1(xs.reduce((a, b) => a + b, 0) / xs.length), median, min: xs[0], max: xs[xs.length - 1] };
 }
 
