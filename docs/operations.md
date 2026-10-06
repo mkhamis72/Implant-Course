@@ -74,9 +74,19 @@ All commands are run with `ENV_FILE=.env.prod` (see the top of this page).
 ### Turning on email verification
 
 1. In Supabase → Authentication → SMTP Settings, enter the SMTP provider's host, port, user and password, and a sender address on your domain.
-2. In Authentication → URL Configuration, set the Site URL to the production URL and add `https://<site>/auth/confirm` to the redirect URLs.
-3. In Vercel → Settings → Environment Variables (Production), set `EMAIL_ENABLED=true` and redeploy.
-4. Check it: create a login for a test address you own. The email should arrive, its link should open "Set a password", and the new user should reach the app.
+2. In Authentication → Email Templates, point the links at the app's `/auth/confirm` route. The default `{{ .ConfirmationURL }}` link does not work with it.
+   - **Invite user:** `<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite">Accept the invitation and set your password</a>`
+   - **Reset password:** the same link with `type=recovery`.
+3. In Authentication → Sign In / Providers → Email, set **Email OTP Expiration** to `86400` so invitation links last 24 hours (the default is 1 hour).
+4. In Authentication → URL Configuration, set the Site URL to the production URL and add `https://<site>/auth/confirm` to the redirect URLs.
+5. In Vercel → Settings → Environment Variables (Production), set `EMAIL_ENABLED=true`, then redeploy: Actions → **Release** → Run workflow (branch `master`).
+6. Check it: create a login for a test address you own. The email should arrive, its link should open "Set a password", and the new user should reach the app. If nothing arrives, look in Supabase → Logs → Auth for SMTP errors.
+
+**Pilot: Gmail SMTP** (free, about 500 emails a day, may land in spam; switch to Resend on your domain before go-live, see `docs/go-live.md`):
+- Use a **dedicated** Gmail account, not a personal one: its app password can read and send all of that account's mail.
+- Turn on 2-Step Verification for it, then create an app password at https://myaccount.google.com/apppasswords ⟨secret⟩.
+- SMTP settings: host `smtp.gmail.com`, port `465`, username and sender = the Gmail address, password = the app password without spaces.
+- To turn email off again, set `EMAIL_ENABLED=false` and re-run Release: logins go back to temporary passwords.
 
 ## C. Releases
 
