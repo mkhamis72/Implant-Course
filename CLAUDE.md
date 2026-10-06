@@ -20,6 +20,8 @@ npm run test:e2e            # Playwright, 1 worker, starts/reuses the dev server
 npx playwright test schedule -g "clash"   # single spec / test
 npm run db:migrate          # apply supabase/migrations/*.sql not yet in app_private.schema_migrations
 npm run create-user -- you@example.com "Name" [--role admin | --role delegate --delegate <id>]   # temporary password; ENV_FILE=.env.prod targets prod
+./scripts/ship.sh verify [e2e specs…]   # on a feature branch, all committed: tsc, lint, unit, test:db (dev), named E2E specs
+./scripts/ship.sh ship                  # push → PR → merge → watch release.yml (migrates PROD, then deploys) — the owner runs this
 ```
 
 There is no local Supabase: DB and E2E tests hit the hosted **dev** project configured in `web/.env.local` (never print its contents). Test fixtures refuse to run unless `ALLOW_TEST_FIXTURES=1` and the URLs match `TEST_SUPABASE_PROJECT_REF` (`scripts/test-guard.ts`). `scripts/db.ts` `pgConfig()` requires `DATABASE_CA_CERT` except on that dev project. `DATABASE_URL` must be the Session pooler URI.
@@ -70,7 +72,9 @@ Releases (`.github/workflows/release.yml`) migrate production *before* the new c
 
 Runbook: `docs/operations.md` (provisioning, accounts, releases, backup/restore); go-live checklist: `docs/go-live.md`.
 - Pilot on Supabase Free (Frankfurt) + Vercel Hobby (`fra1`, `web/vercel.json`). Merging to `master` runs `.github/workflows/release.yml`: checks + `next build` → migrate prod → Vercel deploy hook (Vercel's own git deploys are off). `backup.yml` takes a nightly encrypted data-only dump; `mode=verify` checks it. `web/scripts/workflows.test.ts` pins these workflows' safety properties — keep it green when editing them.
-- Pilot switches (Vercel env): `EMAIL_ENABLED=false` replaces invites with `create-user` (no SMTP yet); `NEXT_PUBLIC_PILOT=1` shows the pilot banner (`src/lib/flags.ts`).
+- Pilot switches (Vercel env, `src/lib/flags.ts`): `EMAIL_ENABLED` — on in prod since 2026-10-06 (Supabase Auth SMTP via a dedicated Gmail account); `false` makes Create login show a one-time password instead of sending an invite. `NEXT_PUBLIC_PILOT=1` shows the pilot banner. The Supabase invite/reset email templates must link to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite|recovery` — the default `{{ .ConfirmationURL }}` doesn't work with `src/app/auth/confirm/route.ts` (`docs/operations.md` → Turning on email verification).
+- Supabase Free allows **2 projects per account across all orgs** — dev and prod use both; any further project needs Supabase Pro.
+- Multi-company (multi-tenant) part 1 is built and reviewed but **paused, unmerged** on branch `docs/multi-tenant-spec` (spec and plan dated 2026-10-07 in `docs/superpowers/`); it waits for Supabase Pro. `master` is single-company.
 - Scripts target prod with `ENV_FILE=.env.prod` (`scripts/env-file.ts`); every script prints `Target project: <host>` first. Never name a prod env file `.env.production*` — Next.js would load it automatically. `npm run catalog-export` writes the product catalog to CSV.
 
 ## Tests
