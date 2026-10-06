@@ -18,5 +18,13 @@ const PAGES = {
 export function blockedResponse(kind: keyof typeof PAGES): Response {
   const p = PAGES[kind];
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${p.title}</title></head><body style="font-family:system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem"><h1>${p.title}</h1><p>${p.body}</p></body></html>`;
-  return new Response(html, { status: p.status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+  return new Response(html, {
+    status: p.status,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+      'x-content-type-options': 'nosniff',
+    },
+  });
 }

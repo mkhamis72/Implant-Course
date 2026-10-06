@@ -19,5 +19,7 @@ describe('blockedResponse', () => {
     expect(r.status).toBe(status);
     expect(await r.text()).toContain(text);
     expect(r.headers.get('cache-control')).toBe('no-store');
+    expect(r.headers.get('content-security-policy')).toBe("default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+    expect(r.headers.get('x-content-type-options')).toBe('nosniff');
   });
 });
