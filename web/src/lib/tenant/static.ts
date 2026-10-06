@@ -10,7 +10,7 @@ type Env = Record<string, string | undefined>;
 export const ANY_HOST = '*';
 
 const entry = z.object({
-  slug: z.string().regex(/^[a-z0-9-]{1,40}$/),
+  slug: z.string().regex(/^[a-z0-9-]{2,40}$/),
   hosts: z.array(z.string()).min(1),
   supabaseUrl: z.string().url(),
   anonKey: z.string().min(1),
@@ -41,7 +41,14 @@ export function staticTenants(env: Env = process.env, read: (path: string) => st
     }];
   }
   if (env.NODE_ENV === 'production') throw new Error('TENANTS_FILE is for local development only and is refused in production.');
-  const parsed = z.array(entry).safeParse(JSON.parse(read(path)));
+  let content: string;
+  try {
+    content = read(path);
+    JSON.parse(content);
+  } catch (error) {
+    throw new Error(`Cannot read TENANTS_FILE ${path}: ${(error as Error).message}`);
+  }
+  const parsed = z.array(entry).safeParse(JSON.parse(content));
   if (!parsed.success) throw new Error(`Invalid tenant in ${path}: ${parsed.error.issues[0].message}`);
   const seen = new Map<string, string>();
   return parsed.data.map((t) => {

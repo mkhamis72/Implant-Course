@@ -33,11 +33,28 @@ describe('staticTenants', () => {
 
   it('refuses a host listed by two tenants', () => {
     const env = { TENANTS_FILE: 'x.json', NODE_ENV: 'development' };
-    expect(() => staticTenants(env, file([local('a', ['localhost']), local('b', ['localhost'])]))).toThrow(/localhost.*two tenants/);
+    expect(() => staticTenants(env, file([local('aa', ['localhost']), local('bb', ['localhost'])]))).toThrow(/localhost.*two tenants/);
   });
 
   it('refuses malformed entries', () => {
     const env = { TENANTS_FILE: 'x.json', NODE_ENV: 'development' };
-    expect(() => staticTenants(env, file([{ slug: 'a', hosts: [] }]))).toThrow(/Invalid tenant/);
+    expect(() => staticTenants(env, file([{ slug: 'aa', hosts: [] }]))).toThrow(/Invalid tenant/);
+  });
+
+  it('refuses when file cannot be read', () => {
+    const env = { TENANTS_FILE: 'x.json', NODE_ENV: 'development' };
+    const read = () => { throw new Error('ENOENT'); };
+    expect(() => staticTenants(env, read)).toThrow(/Cannot read TENANTS_FILE x\.json/);
+  });
+
+  it('refuses malformed JSON', () => {
+    const env = { TENANTS_FILE: 'x.json', NODE_ENV: 'development' };
+    const read = () => 'not json';
+    expect(() => staticTenants(env, read)).toThrow(/Cannot read TENANTS_FILE x\.json/);
+  });
+
+  it('refuses a bad host string', () => {
+    const env = { TENANTS_FILE: 'x.json', NODE_ENV: 'development' };
+    expect(() => staticTenants(env, file([local('cc', ['evil.com/x'])]))).toThrow(/bad host evil\.com\/x/);
   });
 });
