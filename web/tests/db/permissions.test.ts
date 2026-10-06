@@ -215,6 +215,29 @@ describe('permissions: area matrix', () => {
     });
   });
 
+  it('patients view reads the audit log of patient records only; admins read all of it', async () => {
+    await withTx(async (c) => {
+      await actAs(c, users.organizer);
+      const patient = (await c.query(`insert into public.patients (full_name) values ('Zz Perm Audit Patient') returning id`)).rows[0].id;
+      const course = await makeCourse(c);
+      await setPerms(c, users.target, { patients: 'view' });
+      const audited = async (table: string, row: string) =>
+        (await c.query('select count(*)::int as n from public.audit_log where table_name = $1 and row_id = $2', [table, row])).rows[0].n as number;
+
+      await actAs(c, users.target);
+      expect(await audited('patients', patient)).toBeGreaterThan(0);
+      expect(await audited('courses', course)).toBe(0);
+      expect(await audited('user_permissions', users.target)).toBe(0);
+      const { rows } = await c.query('select distinct table_name from public.audit_log');
+      const patientTables = ['patients', 'medical_history', 'tooth_status', 'visit_notes', 'implant_sites', 'site_components', 'implant_followups'];
+      expect(rows.map((r) => r.table_name).filter((t) => !patientTables.includes(t))).toEqual([]);
+
+      await actAs(c, users.admin);
+      expect(await audited('courses', course)).toBeGreaterThan(0);
+      expect(await audited('user_permissions', users.target)).toBeGreaterThan(0);
+    });
+  });
+
   it('the refusal names the area', async () => {
     await withTx(async (c) => {
       await setPerms(c, users.target, { inventory: 'view' });
