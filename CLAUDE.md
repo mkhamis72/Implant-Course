@@ -47,6 +47,10 @@ There is no local Supabase: DB and E2E tests hit the hosted **dev** project conf
 - Supervisors on bookings and implants (`surgery_slots.supervisor_id`, `implant_sites.supervisor_id`) reference `public.supervisors`, an admin-maintained list of names (Admin → Supervisors), not user accounts. Accounts copied in by 0024 kept their profile id as supervisor id. Embed names via `supervisors!*_supervisor_ref_fkey`. "Fitted by organizer" on components still references `profiles`.
 - The catalogue is Oxy Implant PSK-MDK + MD EXT, generated from `docs/catalog/oxy-catalog.csv` (0026). The 0008 sample brands are deactivated (`is_sample`), not deleted. Any component can be fitted without a product (Oxy cover screws come in the implant box).
 - `implant_sites.technique` is `guided` / `free_hand`, nullable in the DB (older rows and the previous app version) but required by the app's Zod schemas; the schedule colours bookings by it (`bookingTechnique`). Bookings are edited in place with `update_surgery_slot` (same day only) and completed/reopened with `set_slot_status` (0027).
+- **Placement and course reports (0035).**
+  - The app places implants with `place_implant_v2`, which adds `p_isq` and `p_bone_type` (D1–D4).
+  - `place_implant` stays only as a 13-argument wrapper for the release window, and a later PR drops it. Don't add an overload with defaulted parameters: PostgREST's named-argument calls become ambiguous.
+  - `course_report(course)` is security invoker, so implants show only to users with Patients or Schedule view. The report's summaries and CSV are built in `src/lib/reports/course-report.ts`.
 - Courses and patients are hard-deleted only through `delete_course` / `delete_patient`, which refuse anything with stock traceability or placed implants (the ledger is permanent); otherwise patients are archived.
 - Tooth state `extracted` is labelled "To be extracted" (the tooth is still present); the enum value is unchanged.
 
