@@ -27,8 +27,14 @@ export function IdleTimer({
   supabase?: { url: string; anonKey: string };
   onIdle?: () => void;
 }) {
+  const url = supabase?.url;
+  const anonKey = supabase?.anonKey;
   useEffect(() => {
-    const handleIdle = onIdle ?? (() => supabase && signOutForIdle(supabase));
+    const handleIdle =
+      onIdle ??
+      (() => {
+        if (url && anonKey) void signOutForIdle({ url, anonKey });
+      });
     const timer = createIdleTimer(timeoutMinutes * 60_000, handleIdle);
     let lastBroadcast = 0;
     let lastHeartbeat = 0;
@@ -60,6 +66,6 @@ export function IdleTimer({
       ACTIVITY_EVENTS.forEach((e) => window.removeEventListener(e, onLocalActivity));
       window.removeEventListener('storage', onStorage);
     };
-  }, [timeoutMinutes, onIdle, supabase?.url, supabase?.anonKey]);
+  }, [timeoutMinutes, onIdle, url, anonKey]);
   return null;
 }

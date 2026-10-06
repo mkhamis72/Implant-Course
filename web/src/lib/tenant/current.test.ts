@@ -35,6 +35,11 @@ describe('requestOrigin', () => {
     headerMap.set('x-forwarded-proto', 'https');
     expect(await requestOrigin()).toBe('https://academy.example.com');
   });
+  it('takes only the first forwarded protocol', async () => {
+    headerMap.set('host', 'academy.example.com');
+    headerMap.set('x-forwarded-proto', 'https,http');
+    expect(await requestOrigin()).toBe('https://academy.example.com');
+  });
   it('falls back to http for localhost', async () => {
     headerMap.set('host', 'localhost:3000');
     expect(await requestOrigin()).toBe('http://localhost:3000');

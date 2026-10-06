@@ -15,6 +15,6 @@ export async function currentTenant(): Promise<Tenant> {
 export async function requestOrigin(): Promise<string> {
   const h = await headers();
   const host = h.get('host') ?? 'localhost:3000';
-  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') || host.includes('.localhost') ? 'http' : 'https');
+  const proto = h.get('x-forwarded-proto')?.split(',')[0].trim() ?? (host.startsWith('localhost') || host.includes('.localhost') ? 'http' : 'https');
   return `${proto}://${host}`;
 }
