@@ -9,6 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "db:migrate": "tsx scripts/migrate-cli.ts",
+    "tenant:register": "tsx scripts/tenant-register.ts",
+    "tenant:check": "tsx scripts/tenant-check.ts",
     "test:db": "vitest run -c vitest.db.config.mts",
     "test:e2e": "playwright test",
     "create-user": "tsx scripts/create-user.ts",
