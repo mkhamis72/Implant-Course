@@ -260,6 +260,8 @@ describe('permissions: guard rails', () => {
       const allow = new Set([
         'is_active_user', 'is_admin', 'is_delegate_user', 'my_delegate_id', 'can',
         'set_user_permissions', 'delete_user', 'my_schedule', 'my_report', 'next_file_no',
+        // Branding (0040): public readers for the signed-out login page; admin-only writers.
+        'branding_public', 'branding_logo', 'update_branding', 'set_branding_logo', 'clear_branding_logo',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
@@ -272,7 +274,9 @@ describe('permissions: guard rails', () => {
         where n.nspname = 'public' and c.relkind = 'r'
           and not exists (select 1 from pg_policies pp where pp.schemaname = 'public' and pp.tablename = c.relname
                           and pp.permissive = 'RESTRICTIVE')`);
-      const shared = new Set(['profiles', 'settings', 'user_permissions', 'chairs', 'supervisors', 'lecturers', 'stock_lots']);
+      const shared = new Set(['profiles', 'settings', 'user_permissions', 'chairs', 'supervisors', 'lecturers', 'stock_lots',
+        // Branding (0040): closed tables (no grants), reached only through the definer functions.
+        'branding', 'branding_logos']);
       expect(rows.map((r) => r.relname).filter((n) => !shared.has(n)).sort()).toEqual([]);
     });
   });
