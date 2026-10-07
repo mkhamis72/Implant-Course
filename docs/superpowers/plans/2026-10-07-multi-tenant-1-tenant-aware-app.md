@@ -1671,8 +1671,8 @@ CONTROL_DATABASE_CA_CERT=
 The app serves each company from its own Supabase project. Without `CONTROL_SUPABASE_URL` it serves one company (tenant `default`) from the `NEXT_PUBLIC_SUPABASE_*` / `SUPABASE_SERVICE_ROLE_KEY` env vars, as before.
 
 **Set up (once, owner):**
-1. Create the project `implant-course-control` (Frankfurt). Until Supabase Pro, it lives in the separate free org "Implant Course Dev".
-2. In `web/.env.prod` add `CONTROL_SUPABASE_URL`, `CONTROL_SERVICE_ROLE_KEY` ⟨secret⟩ and `CONTROL_DATABASE_URL` ⟨secret⟩ (Session pooler). The Supabase CA certificate is shared, so `DATABASE_CA_CERT` covers it; otherwise set `CONTROL_DATABASE_CA_CERT`.
+1. Create the project `implant-course-control` (Frankfurt). Create it in your existing Supabase organisation (the second Free slot; Free allows 2 active projects per account).
+2. In `web/.env.prod` add `CONTROL_SUPABASE_URL` and `CONTROL_DATABASE_URL` ⟨secret⟩ (Session pooler). `CONTROL_SERVICE_ROLE_KEY` goes only in Vercel (no script reads it). The Supabase CA certificate is shared, so `DATABASE_CA_CERT` covers it; otherwise set `CONTROL_DATABASE_CA_CERT`.
 3. Apply the control schema: `ENV_FILE=.env.prod npm run db:migrate -- --control`. The first line must read `Target project: control <ref>.supabase.co`.
 
 **Register a company** (its project's keys come from the loaded env file; for the academy that's `.env.prod`):
@@ -1682,7 +1682,7 @@ ENV_FILE=.env.prod npm run tenant:register -- academy "Implant Course Academy" i
 ENV_FILE=.env.prod npm run tenant:check -- academy        # → academy (active): OK
 ```
 
-**Switch production to the control project:** in Vercel (Production) add `CONTROL_SUPABASE_URL` and `CONTROL_SERVICE_ROLE_KEY` ⟨secret⟩, then run Release. To roll back, remove both and run Release again.
+**Switch production to the control project:** in Vercel (Production) add `CONTROL_SUPABASE_URL` and `CONTROL_SERVICE_ROLE_KEY` ⟨secret⟩, then run Release. To roll back, remove both and run Release again. Right after a deploy the first request has no cache; if the control project takes over 3 s it gets a 503, so reload.
 
 Unknown hosts get 404; a suspended company gets 503. If the control project is down, the app keeps routing from its last list for 10 minutes, then shows "Service unavailable".
 ````
@@ -1831,8 +1831,8 @@ Expected: all green; the isolation spec is skipped.
 - [ ] **Step 2: Release 1 (owner).** Push the branch and open a PR (Claude). The **owner** merges or runs `./scripts/ship.sh ship`. Production now runs the tenant runtime in single-tenant mode. Claude checks read-only that the release is green and that the site works (log in, dashboard).
 
 - [ ] **Step 3: Create the control project (owner).**
-1. In the free org from Task 11, create the project `implant-course-control` (Frankfurt).
-2. Add these to `web/.env.prod`, using `Read-Host -AsSecureString` prompts: `CONTROL_SUPABASE_URL`, `CONTROL_SERVICE_ROLE_KEY` ⟨secret⟩ and `CONTROL_DATABASE_URL` ⟨secret⟩ (session pooler). The Supabase CA is shared across projects, so `DATABASE_CA_CERT=prod-ca.crt` also covers it; otherwise set `CONTROL_DATABASE_CA_CERT`.
+1. In your existing Supabase organisation (the second Free slot), create the project `implant-course-control` (Frankfurt).
+2. Add these to `web/.env.prod`, using `Read-Host -AsSecureString` prompts: `CONTROL_SUPABASE_URL` and `CONTROL_DATABASE_URL` ⟨secret⟩ (session pooler); `CONTROL_SERVICE_ROLE_KEY` goes only in Vercel. The Supabase CA is shared across projects, so `DATABASE_CA_CERT=prod-ca.crt` also covers it; otherwise set `CONTROL_DATABASE_CA_CERT`.
 3. Apply the schema: `ENV_FILE=.env.prod npm run db:migrate -- --control`. The first line must be `Target project: control <control ref>.supabase.co`, followed by `Applied: 0001_control_registry.sql`.
 
 - [ ] **Step 4: Register the academy (owner runs, Claude guides)**

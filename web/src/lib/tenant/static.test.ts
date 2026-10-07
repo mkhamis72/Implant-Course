@@ -14,6 +14,30 @@ describe('staticTenants', () => {
     ]);
   });
 
+  it('the default tenant works without a service key (only admin actions need it)', () => {
+    const noKey: Record<string, string | undefined> = { ...single, SUPABASE_SERVICE_ROLE_KEY: undefined };
+    const [t] = staticTenants(noKey);
+    expect(t.slug).toBe('default');
+    expect(t.serviceRoleKey).toBeUndefined();
+  });
+
+  it('a TENANTS_FILE entry still needs its service key', () => {
+    const env = { TENANTS_FILE: 'x.json', NODE_ENV: 'development' };
+    const noKey = { ...local('dev', ['localhost']), serviceRoleKey: undefined };
+    expect(() => staticTenants(env, file([noKey]))).toThrow(/Invalid tenant/);
+  });
+
+  it('invalid JSON in TENANTS_FILE names the file but never echoes its contents', () => {
+    const env = { TENANTS_FILE: 'x.json', NODE_ENV: 'development' };
+    let message = '';
+    try {
+      staticTenants(env, () => '[{"serviceRoleKey": "SECRET-VALUE" oops}]');
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toBe('TENANTS_FILE x.json is not valid JSON');
+  });
+
   it('needs the env vars in single-tenant mode', () => {
     expect(() => staticTenants({})).toThrow(/NEXT_PUBLIC_SUPABASE_URL/);
   });
@@ -44,13 +68,13 @@ describe('staticTenants', () => {
   it('refuses when file cannot be read', () => {
     const env = { TENANTS_FILE: 'x.json', NODE_ENV: 'development' };
     const read = () => { throw new Error('ENOENT'); };
-    expect(() => staticTenants(env, read)).toThrow(/Cannot read TENANTS_FILE x\.json/);
+    expect(() => staticTenants(env, read)).toThrow(/TENANTS_FILE x\.json/);
   });
 
   it('refuses malformed JSON', () => {
     const env = { TENANTS_FILE: 'x.json', NODE_ENV: 'development' };
     const read = () => 'not json';
-    expect(() => staticTenants(env, read)).toThrow(/Cannot read TENANTS_FILE x\.json/);
+    expect(() => staticTenants(env, read)).toThrow(/TENANTS_FILE x\.json/);
   });
 
   it('refuses a bad host string', () => {

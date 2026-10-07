@@ -4,6 +4,10 @@ import { ANY_HOST, staticTenants, type StaticTenant } from './static';
 import type { Tenant } from './types';
 
 const usesControl = () => Boolean(process.env.CONTROL_SUPABASE_URL);
+
+/** Neither a control project nor TENANTS_FILE: today's single project. */
+export const isSingleTenant = () => !usesControl() && !process.env.TENANTS_FILE;
+
 const publicPart = (t: StaticTenant): Tenant => ({ slug: t.slug, hosts: t.hosts, supabaseUrl: t.supabaseUrl, anonKey: t.anonKey, status: t.status });
 
 async function all(): Promise<Tenant[]> {
@@ -28,5 +32,6 @@ export async function tenantServiceKey(slug: string): Promise<string> {
   if (usesControl()) return controlSecret(slug, 'service_role_key');
   const t = staticTenants().find((s) => s.slug === slug);
   if (!t) throw new Error(`Unknown tenant ${slug}`);
+  if (!t.serviceRoleKey) throw new Error('No service key configured');
   return t.serviceRoleKey;
 }

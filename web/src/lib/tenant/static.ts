@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { normaliseHost } from './host';
 import type { Tenant } from './types';
 
-export type StaticTenant = Tenant & { serviceRoleKey: string };
+export type StaticTenant = Tenant & { serviceRoleKey?: string };
 type Env = Record<string, string | undefined>;
 
 /** The single-tenant default matches every host. */
@@ -36,7 +36,8 @@ export function staticTenants(env: Env = process.env, read: (path: string) => st
       hosts: [ANY_HOST],
       supabaseUrl: required(env, 'NEXT_PUBLIC_SUPABASE_URL'),
       anonKey: required(env, 'NEXT_PUBLIC_SUPABASE_ANON_KEY'),
-      serviceRoleKey: required(env, 'SUPABASE_SERVICE_ROLE_KEY'),
+      // Optional: only admin actions need it, and they fail with ADMIN_UNAVAILABLE.
+      serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY || undefined,
       status: 'active',
     }];
   }
@@ -46,7 +47,8 @@ export function staticTenants(env: Env = process.env, read: (path: string) => st
     content = read(path);
     JSON.parse(content);
   } catch (error) {
-    throw new Error(`Cannot read TENANTS_FILE ${path}: ${(error as Error).message}`);
+    // Never echo the parser message: it can quote file contents (keys).
+    throw new Error(error instanceof SyntaxError ? `TENANTS_FILE ${path} is not valid JSON` : `Cannot read TENANTS_FILE ${path}`);
   }
   const parsed = z.array(entry).safeParse(JSON.parse(content));
   if (!parsed.success) throw new Error(`Invalid tenant in ${path}: ${parsed.error.issues[0].message}`);
