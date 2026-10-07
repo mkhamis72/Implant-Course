@@ -5,6 +5,7 @@ import { getCurrentProfile, getSettings } from '@/lib/auth/session';
 import { PilotBanner } from '@/components/pilot-banner';
 import { pilotMode } from '@/lib/flags';
 import { currentTenant } from '@/lib/tenant/current';
+import { getBranding } from '@/lib/branding/get';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getCurrentProfile();
@@ -12,6 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!profile.active) redirect('/deactivated');
   const settings = await getSettings();
   const tenant = await currentTenant();
+  const branding = await getBranding();
   return (
     <div className="min-h-screen lg:flex">
       <a
@@ -20,7 +22,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       >
         Skip to content
       </a>
-      <Nav role={profile.role} permissions={profile.permissions} name={profile.full_name || profile.email} />
+      <Nav
+        role={profile.role}
+        permissions={profile.permissions}
+        name={profile.full_name || profile.email}
+        brand={{ name: branding.name, logoUrl: branding.logoUrl }}
+      />
       <main id="main" tabIndex={-1} className="min-w-0 flex-1 px-4 py-5 outline-none sm:px-6 lg:px-10 lg:py-8 print:p-0">
         <div className="mx-auto max-w-6xl">
           <PilotBanner show={pilotMode()} />

@@ -37,6 +37,11 @@
   /* Surgical technique: free hand uses the accent; guided is violet so the two read apart on the schedule. */
   --color-guided: #5b3fb0;
   --color-guided-soft: #efebfa;
+  /* Navigation (sidebar, phone top bar). A company's navigation colour overrides these (src/lib/branding/css.ts). */
+  --color-nav: #ffffff;
+  --color-nav-ink: #17262b;
+  --color-nav-hover: #eaf0ee;
+  --color-nav-line: #d9e2df;
 
   /* Odontogram drawing colours (status colours come from the tokens above). */
   --color-tooth: #3d4f55;         /* tooth outline */

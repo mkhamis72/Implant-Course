@@ -6,13 +6,13 @@ import { usePathname } from 'next/navigation';
 import { isActive, visibleNavItems, type Role } from './nav-items';
 import type { Permissions } from '@/lib/auth/permissions';
 import { signOut } from '@/app/actions/auth';
-import { Mark } from './mark';
+import { BrandMark } from './brand-mark';
 
-function Wordmark() {
+function Wordmark({ brand }: { brand: { name: string; logoUrl: string | null } }) {
   return (
-    <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight text-ink">
-      <Mark />
-      <span className="leading-tight">Implant Course Manager</span>
+    <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight text-nav-ink">
+      <BrandMark logoUrl={brand.logoUrl} />
+      <span className="leading-tight">{brand.name}</span>
     </Link>
   );
 }
@@ -20,7 +20,7 @@ function Wordmark() {
 /**
  * One set of links: a fixed sidebar from 1024px, a slide-over panel opened from the top bar below that.
  */
-export function Nav({ role, permissions, name }: { role: Role; permissions: Permissions; name: string }) {
+export function Nav({ role, permissions, name, brand }: { role: Role; permissions: Permissions; name: string; brand: { name: string; logoUrl: string | null } }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -49,8 +49,8 @@ export function Nav({ role, permissions, name }: { role: Role; permissions: Perm
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-surface/95 px-4 py-2.5 backdrop-blur lg:hidden print:hidden">
-        <Wordmark />
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-nav-line bg-nav px-4 py-2.5 lg:hidden print:hidden">
+        <Wordmark brand={brand} />
         <button
           ref={menuButton}
           type="button"
@@ -68,10 +68,10 @@ export function Nav({ role, permissions, name }: { role: Role; permissions: Perm
       <aside
         ref={panel}
         id="main-nav"
-        className={`${open ? 'fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] shadow-xl' : 'hidden'} flex-col border-r border-line bg-surface p-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:shadow-none print:hidden`}
+        className={`${open ? 'fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] shadow-xl' : 'hidden'} flex-col border-r border-nav-line bg-nav p-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:shadow-none print:hidden`}
       >
         <div className="mb-6 flex items-center justify-between gap-2">
-          <Wordmark />
+          <Wordmark brand={brand} />
           {open && (
             <button type="button" className="btn-secondary btn px-3 lg:hidden" onClick={() => setOpen(false)}>
               Close
@@ -88,7 +88,7 @@ export function Nav({ role, permissions, name }: { role: Role; permissions: Perm
                 aria-current={active ? 'page' : undefined}
                 onClick={() => setOpen(false)}
                 className={`flex min-h-11 items-center rounded-md px-3 py-2 lg:min-h-0 ${
-                  active ? 'bg-accent-soft font-semibold text-accent-strong' : 'text-ink hover:bg-sunken'
+                  active ? 'bg-accent-soft font-semibold text-accent-strong' : 'text-nav-ink hover:bg-nav-hover'
                 }`}
               >
                 {item.label}
@@ -96,13 +96,13 @@ export function Nav({ role, permissions, name }: { role: Role; permissions: Perm
             );
           })}
         </nav>
-        <div className="space-y-1 border-t border-line pt-4 text-sm">
-          <div className="truncate px-3 font-medium text-ink">{name}</div>
-          <Link href="/account/security" onClick={() => setOpen(false)} className="block rounded-md px-3 py-1.5 text-muted hover:bg-sunken hover:text-ink">
+        <div className="space-y-1 border-t border-nav-line pt-4 text-sm">
+          <div className="truncate px-3 font-medium text-nav-ink">{name}</div>
+          <Link href="/account/security" onClick={() => setOpen(false)} className="block rounded-md px-3 py-1.5 text-nav-ink hover:bg-nav-hover">
             Account security
           </Link>
           <form action={signOut}>
-            <button className="w-full rounded-md px-3 py-1.5 text-left text-muted hover:bg-sunken hover:text-ink">Sign out</button>
+            <button className="w-full rounded-md px-3 py-1.5 text-left text-nav-ink hover:bg-nav-hover">Sign out</button>
           </form>
         </div>
       </aside>
