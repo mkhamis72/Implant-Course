@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
 
-type Step = { name?: string; run?: string; uses?: string; with?: Record<string, unknown> };
+type Step = { name?: string; if?: string; run?: string; uses?: string; with?: Record<string, unknown> };
 type Job = { if?: string; needs?: string; steps: Step[] };
 const load = (file: string) =>
   parse(readFileSync(path.join(__dirname, '..', '..', '.github', 'workflows', file), 'utf8')) as { jobs: Record<string, Job> };
@@ -90,9 +90,17 @@ describe('backup.yml', () => {
     expect(dump).toContain('failed+=');
     expect(runOf(jobs.backup, 'Fail')).toContain('exit 1');
   });
+  it('keep-awake records failures and continues; the final step runs even after a failure and reports both lists', () => {
+    expect(runOf(jobs.backup, 'Keep')).toContain('woke_failed+=');
+    expect(runOf(jobs.backup, 'Keep')).toContain('keepawake-failed.txt');
+    const fail = jobs.backup.steps.find((s) => s.name?.startsWith('Fail'));
+    expect(fail?.if).toBe('${{ !cancelled() }}');
+    expect(fail?.run).toContain('keepawake-failed.txt');
+    expect(fail?.run).toContain('Keep-awake failed for');
+  });
   it('backs up only the registry from the control project', () => {
     expect(dump).toContain('--table=public.tenants --table=public.tenant_audit');
-    expect(dump).toContain('out/control-$day.dump.gpg');
+    expect(dump).toContain('out/_control-$day.dump.gpg');
   });
   it('uploads one artifact per night', () => {
     const upload = jobs.backup.steps.find((s) => s.uses?.startsWith('actions/upload-artifact'));
