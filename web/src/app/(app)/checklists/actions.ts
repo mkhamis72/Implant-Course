@@ -3,8 +3,13 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requirePermission } from '@/lib/auth/session';
+import { requirePermission, type Profile } from '@/lib/auth/session';
+import { getBranding } from '@/lib/branding/get';
+import { assignmentEmail, assignmentNotice, type ItemSnapshot, type Notice } from '@/lib/checklists/notify';
 import { addItemsSchema, itemEditSchema, newChecklistSchema, templateSchema } from '@/lib/checklists/schemas';
+import { sendEmail } from '@/lib/email/send';
+import { emailEnabled } from '@/lib/flags';
+import { requestOrigin } from '@/lib/tenant/current';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
 
@@ -90,16 +95,39 @@ export async function moveItem(input: { id: string; checklistId: string; directi
   return {};
 }
 
-export async function editItem(input: Record<string, unknown> & { checklistId: string }): Promise<Result> {
-  await requirePermission('checklists', 'edit');
+export async function editItem(input: Record<string, unknown> & { checklistId: string }): Promise<Result & { warning?: string }> {
+  const profile = await requirePermission('checklists', 'edit');
   const parsed = itemEditSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { id, ...fields } = parsed.data;
   const supabase = await createClient();
+  const { data: before } = await supabase
+    .from('checklist_items')
+    .select('text, assignee_id, due_date, checklist_id, checklist:checklists(title)')
+    .eq('id', id)
+    .maybeSingle<ItemSnapshot & { checklist_id: string; checklist: { title: string } | null }>();
   const { data, error } = await supabase.from('checklist_items').update(fields).eq('id', id).select('id');
   if (error || !data?.length) return { error: userMessage(error) ?? 'Item not found.' };
   revalidatePath(`/checklists/${input.checklistId}`);
-  return {};
+  const notice = before && emailEnabled() ? assignmentNotice(before, fields, profile.user_id) : null;
+  if (!notice || !before) return {};
+  return notifyAssignee(notice, fields, before.checklist_id, before.checklist?.title ?? '', profile);
+}
+
+/** Emails the assignee about an edit that was already saved; a failure only adds a warning. */
+async function notifyAssignee(notice: Notice, item: ItemSnapshot, checklistId: string, checklistTitle: string, by: Profile): Promise<{ warning?: string }> {
+  const supabase = await createClient();
+  const { data: assignee } = await supabase.from('profiles').select('full_name, email').eq('user_id', item.assignee_id!).maybeSingle();
+  if (!assignee?.email) return {};
+  const email = assignmentEmail(notice, {
+    company: (await getBranding()).name,
+    checklistTitle,
+    item,
+    by: by.full_name || by.email,
+    link: `${await requestOrigin()}/checklists/${checklistId}`,
+  });
+  const sent = await sendEmail({ to: assignee.email, ...email });
+  return sent === 'failed' ? { warning: `Saved, but the email to ${assignee.full_name || assignee.email} couldn't be sent.` } : {};
 }
 
 export async function deleteItem(input: { id: string; checklistId: string }): Promise<Result> {

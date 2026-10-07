@@ -33,3 +33,17 @@ describe('<ItemRow> inactive assignee', () => {
     expect(screen.getByRole('option', { name: 'Dr Gone (inactive)' })).toBeInTheDocument();
   });
 });
+
+describe('<ItemRow> email warning', () => {
+  it('closes the edit form after saving and shows a warning when the email failed', async () => {
+    const { editItem } = await import('../actions');
+    vi.mocked(editItem).mockResolvedValueOnce({ warning: "Saved, but the email to Dr X couldn't be sent." });
+    render(<ul><ItemRow item={base} checklistId="c1" organizers={organizers} first last /></ul>);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Assigned to' }), { target: { value: 'u1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('status')).toHaveTextContent("Saved, but the email to Dr X couldn't be sent.");
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    expect(editItem).toHaveBeenCalledWith({ id: 'i1', checklistId: 'c1', text: 'Call the lab', assignee_id: 'u1', due_date: '' });
+  });
+});

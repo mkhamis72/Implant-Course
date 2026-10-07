@@ -15,18 +15,23 @@ export function ItemRow({ item, checklistId, organizers, first, last }: {
   const [assignee, setAssignee] = useState(item.assignee_id ?? '');
   const [due, setDue] = useState(item.due_date ?? '');
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const savedDone = Boolean(item.done_at);
   // Show the tick immediately; it falls back to the saved state if the server refuses.
   const [done, setDone] = useOptimistic(savedDone);
   const who = item.done_by_profile?.full_name || item.done_by_profile?.email || 'someone';
 
-  const run = (fn: () => Promise<{ error?: string }>, after?: () => void) => {
+  const run = (fn: () => Promise<{ error?: string; warning?: string }>, after?: () => void) => {
     setError(null);
+    setWarning(null);
     start(async () => {
       const r = await fn();
       if (r.error) setError(r.error);
-      else after?.();
+      else {
+        if (r.warning) setWarning(r.warning);
+        after?.();
+      }
     });
   };
 
@@ -107,6 +112,7 @@ export function ItemRow({ item, checklistId, organizers, first, last }: {
         </form>
       )}
       {error && <p role="alert" className="ml-9 text-sm text-bad">{error}</p>}
+      {warning && <p role="status" className="ml-9 text-sm text-warn">{warning}</p>}
     </li>
   );
 }
