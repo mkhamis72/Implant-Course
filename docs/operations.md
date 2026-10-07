@@ -44,10 +44,11 @@ Always end with `Remove-Item Env:ENV_FILE`: a leftover `ENV_FILE` would point ev
      - `VERCEL_DEPLOY_HOOK_URL`.
      - `BACKUP_PASSPHRASE`: a long random passphrase. **Also store it in your password manager: without it, backups cannot be read.**
      - `CONTROL_SUPABASE_URL` and `CONTROL_ANON_KEY`.
-5. **First release:** Actions → **Release** → Run workflow (branch `master`). It builds, migrates the empty production database (0001…0022), then deploys.
-6. **First admin:** `npm run create-user -- you@example.com "Your Name" --role admin`, run with `ENV_FILE=.env.prod` as shown at the top. The first line must name the **production** project host.
-7. **Smoke check** (section F), then the **first backup**: Actions → **Backup** → Run workflow, first with mode `backup`, then with mode `verify`.
-8. **Restore rehearsal** (once, before go-live): follow section D into a scratch Supabase project, then delete that project.
+5. **Control project and first company:** a release migrates only the control project and registered companies, so do §G first (it creates the `CONTROL_*` values that step 4 needs): create the control project, migrate it, and register the first company. Migrate that company directly before registering (`tenant:register` checks its schema): `ENV_FILE=.env.prod npm run db:migrate`.
+6. **First release:** Actions → **Release** → Run workflow (branch `master`). It builds, migrates the control project and every company (already up to date), then deploys.
+7. **First admin:** `npm run create-user -- you@example.com "Your Name" --role admin`, run with `ENV_FILE=.env.prod` as shown at the top. The first line must name the **production** project host.
+8. **Smoke check** (section F), then the **first backup**: Actions → **Backup** → Run workflow, first with mode `backup`, then with mode `verify`.
+9. **Restore rehearsal** (once, before go-live): follow section D into a scratch Supabase project, then delete that project.
 
 ## B. Accounts (no email during the pilot)
 
@@ -115,8 +116,8 @@ You need:
 **Restore one company** (the others are untouched). Steps, in Git Bash from `web/`:
 1. Download the newest `backups-*` artifact, unzip it, and decrypt the company's file: `gpg --decrypt <slug>-<date>.dump.gpg > <slug>.dump`. It asks for the passphrase.
 2. Create a new Supabase project (Frankfurt), with the same auth settings as §A.1.
-3. Re-register the company with the new project's URL, keys and database URL: `ENV_FILE=.env.prod npm run tenant:register -- <slug> "<Name>" <hosts…>`, with the new values in the env file it reads.
-4. Apply the schema: `ENV_FILE=.env.prod npm run db:migrate -- --tenant <slug>`. If the backup is older than the newest migrations, check out the commit the backup belongs to first: the newest migration it has is the newest migration file at that date.
+3. Make an env file `.env.restore` with the new project's `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (session pooler) and `DATABASE_CA_CERT`, plus the `CONTROL_SUPABASE_URL` and `CONTROL_DATABASE_URL` lines copied from `.env.prod` (`tenant:register` reads the company from the first group and the control project from the second).
+4. Apply the schema to the new project directly: `ENV_FILE=.env.restore npm run db:migrate`. If the backup is older than the newest migrations, check out the commit the backup belongs to first: the newest migration it has is the newest migration file at that date.
 5. Turn the dump into SQL: `pg_restore --data-only --no-owner -f data.sql <slug>.dump`.
 6. Load it in one transaction, with triggers off so nothing is created twice. This is Supabase's documented restore method. The migrations seeded `settings`, `branding` and the sample `products`, so empty those first:
 
@@ -127,15 +128,19 @@ You need:
      -f data.sql
    ```
 
-7. Check it: `ENV_FILE=.env.prod npm run tenant:check -- <slug>`. Sign-in accounts come back with the data: everyone keeps their password and 2FA.
+7. Repoint the company: `ENV_FILE=.env.restore npm run tenant:register -- <slug> "<Name>" <hosts…>`, with the same slug and hosts as before. This points the company at the new project and replaces its Vault secrets.
+8. Check it: `ENV_FILE=.env.prod npm run tenant:check -- <slug>`. Sign-in accounts come back with the data: everyone keeps their password and 2FA.
 
-**Restore the control project:** create a fresh project; run `ENV_FILE=.env.prod npm run db:migrate -- --control` (with `CONTROL_*` pointing at it); load `_control-<date>.dump` the same way (no TRUNCATE needed); re-run `tenant:register` for every company (Vault secrets aren't in the backup); update `CONTROL_SUPABASE_URL` and `CONTROL_SERVICE_ROLE_KEY` in Vercel and `CONTROL_DATABASE_URL`, `CONTROL_SUPABASE_URL` and `CONTROL_ANON_KEY` in GitHub; re-run Release.
+`.env.restore` can be deleted afterwards: the control project now holds the new keys. If the restored company is the academy, update the academy values in `.env.prod` only if you still use them.
+
+**Restore the control project:** create a fresh project; run `ENV_FILE=.env.prod npm run db:migrate -- --control` (with `CONTROL_*` pointing at it); load `_control-<date>.dump` the same way (no TRUNCATE needed). Read each company's slug, name and hosts with `select slug, name, hosts from public.tenants`. Re-run `tenant:register` for every company (Vault secrets aren't in the backup; use an env file with that company's keys, as in step 3 above), then `tenant:check -- <slug>` for each. Update `CONTROL_SUPABASE_URL` and `CONTROL_SERVICE_ROLE_KEY` in Vercel and `CONTROL_DATABASE_URL`, `CONTROL_SUPABASE_URL` and `CONTROL_ANON_KEY` in GitHub; re-run Release.
 
 **Free plan pause:** if the Supabase dashboard shows the project as paused, open it and choose **Restore project**. The nightly backup's requests normally prevent this.
 
 ## E. Keys and secrets
 
-- To rotate the service role key or the database password: change it in Supabase, then update `web/.env.prod`, Vercel's environment variables and the GitHub secrets, then re-run Release.
+- To rotate a company's service role key or database password: change it in Supabase, then re-run `tenant:register` for that company (the control project's Vault holds them), then `tenant:check`.
+- To rotate the control project's keys or password: change it in Supabase, then update `web/.env.prod`, Vercel (`CONTROL_*`) and the GitHub secrets (`CONTROL_*`), then re-run Release.
 - If a key was exposed, rotate it immediately, then check Supabase's auth logs.
 
 ## F. Smoke check after a release
