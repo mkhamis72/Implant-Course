@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { BrandingForm } from './branding-form';
 
-vi.mock('./actions', () => ({ saveBranding: vi.fn(), removeLogo: vi.fn(), resetBranding: vi.fn() }));
+vi.mock('./actions', () => ({ brandingAction: vi.fn() }));
 
 const unbranded = { name: 'Implant Course Manager', brandColor: null, navColor: null, logoUrl: null };
 
@@ -48,5 +48,23 @@ describe('BrandingForm', () => {
     rerender(<BrandingForm branding={unbranded} />);
     expect(screen.getByRole('textbox', { name: 'Brand colour' })).toHaveValue('');
     expect(screen.getByRole('textbox', { name: 'Navigation colour' })).toHaveValue('');
+  });
+  it('submits through one action: the buttons carry the save, remove and reset intents', () => {
+    const { unmount } = render(<BrandingForm branding={unbranded} />);
+    expect(screen.getByRole('button', { name: 'Save branding' })).toHaveAttribute('name', 'intent');
+    expect(screen.getByRole('button', { name: 'Save branding' })).toHaveAttribute('value', 'save');
+    expect(screen.getByRole('button', { name: 'Reset to defaults' })).toHaveAttribute('value', 'reset');
+    expect(screen.queryByRole('button', { name: 'Remove logo' })).not.toBeInTheDocument();
+    unmount();
+    render(<BrandingForm branding={{ ...unbranded, logoUrl: '/brand/logo?v=1' }} />);
+    expect(screen.getByRole('button', { name: 'Remove logo' })).toHaveAttribute('name', 'intent');
+    expect(screen.getByRole('button', { name: 'Remove logo' })).toHaveAttribute('value', 'remove');
+  });
+
+  it('shows only one alert at a time', () => {
+    render(<BrandingForm branding={unbranded} />);
+    const big = new File([new Uint8Array(204801)], 'photo.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText(/Logo/), { target: { files: [big] } });
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
 });

@@ -1,12 +1,12 @@
 'use client';
 
-import { useActionState, useId, useRef, useState } from 'react';
+import { useActionState, useId, useState } from 'react';
 import Image from 'next/image';
-import type { ActionState } from '@/lib/admin/schemas';
 import { DEFAULT_NAME, type Branding } from '@/lib/branding/branding';
 import { DEFAULT_ACCENT, INK, NAV_COLOR_UNREADABLE, WHITE, brandColorProblem, navInk, normaliseHex } from '@/lib/branding/colors';
 import { MAX_LOGO_BYTES } from '@/lib/branding/image';
-import { removeLogo, resetBranding, saveBranding } from './actions';
+import { valueOf, type FormState } from '@/lib/patients/form-state';
+import { brandingAction } from './actions';
 
 function ColorField(p: { name: string; label: string; value: string; onChange: (v: string) => void; fallback: string; problem: string | null }) {
   const hex = normaliseHex(p.value);
@@ -15,15 +15,15 @@ function ColorField(p: { name: string; label: string; value: string; onChange: (
     <div className="space-y-1">
       <label className="label" htmlFor={id}>{p.label}</label>
       <div className="flex items-center gap-2">
-          <input
-            type="color"
-            aria-hidden="true"
-            tabIndex={-1}
-            className="h-10 w-12 shrink-0 cursor-pointer rounded border border-line-strong bg-surface"
-            value={hex ?? p.fallback}
-            onChange={(e) => p.onChange(e.target.value)}
-          />
-          <input id={id} className="input" name={p.name} value={p.value} placeholder={`Default (${p.fallback})`} onChange={(e) => p.onChange(e.target.value)} />
+        <input
+          type="color"
+          aria-hidden="true"
+          tabIndex={-1}
+          className="h-10 w-12 shrink-0 cursor-pointer rounded border border-line-strong bg-surface"
+          value={hex ?? p.fallback}
+          onChange={(e) => p.onChange(e.target.value)}
+        />
+        <input id={id} className="input" name={p.name} value={p.value} placeholder={`Default (${p.fallback})`} onChange={(e) => p.onChange(e.target.value)} />
       </div>
       {p.problem && <p className="text-sm text-bad">{p.problem}</p>}
     </div>
@@ -32,9 +32,7 @@ function ColorField(p: { name: string; label: string; value: string; onChange: (
 
 /** Name, colours and logo of this company; blank fields use today's defaults. */
 export function BrandingForm({ branding }: { branding: Branding }) {
-  const [state, action, pending] = useActionState<ActionState, FormData>(saveBranding, {});
-  const [removeState, removeAction, removing] = useActionState<ActionState>(removeLogo, {});
-  const [resetState, resetAction, resetting] = useActionState<ActionState>(resetBranding, {});
+  const [state, action, pending] = useActionState<FormState, FormData>(brandingAction, {});
   const [brand, setBrand] = useState(branding.brandColor ?? '');
   const [nav, setNav] = useState(branding.navColor ?? '');
   // Follow the saved colours when they change (after a save or reset) without remounting,
@@ -46,7 +44,6 @@ export function BrandingForm({ branding }: { branding: Branding }) {
     setNav(branding.navColor ?? '');
   }
   const [fileError, setFileError] = useState<string | null>(null);
-  const logoInput = useRef<HTMLInputElement>(null);
 
   const brandHex = normaliseHex(brand);
   const navHex = normaliseHex(nav);
@@ -54,15 +51,15 @@ export function BrandingForm({ branding }: { branding: Branding }) {
   const navText = navHex ? navInk(navHex) : null;
   const navProblem = navHex && !navText ? NAV_COLOR_UNREADABLE : null;
   const previewAccent = brandHex && !brandProblem ? brandHex : DEFAULT_ACCENT;
-  const message = fileError ?? state.error ?? removeState.error ?? resetState.error;
-  const ok = state.ok ?? removeState.ok ?? resetState.ok;
+  const message = fileError ?? state.error;
+  const ok = state.ok;
 
   return (
     <div className="card max-w-xl space-y-4">
       <form action={action} className="space-y-4" key={branding.logoUrl ?? 'no-logo'}>
         <label className="block">
           <span className="label">Name</span>
-          <input className="input" name="name" defaultValue={branding.name === DEFAULT_NAME ? '' : branding.name} placeholder={DEFAULT_NAME} />
+          <input className="input" name="name" defaultValue={valueOf(state, 'name', branding.name === DEFAULT_NAME ? '' : branding.name)} placeholder={DEFAULT_NAME} />
         </label>
         <ColorField name="brand_color" label="Brand colour" value={brand} onChange={setBrand} fallback={DEFAULT_ACCENT} problem={brandProblem} />
         <ColorField name="nav_color" label="Navigation colour" value={nav} onChange={setNav} fallback={WHITE} problem={navProblem} />
@@ -75,7 +72,6 @@ export function BrandingForm({ branding }: { branding: Branding }) {
         <label className="block">
           <span className="label">Logo (PNG, JPEG or WebP, up to 200 KB)</span>
           <input
-            ref={logoInput}
             className="input"
             type="file"
             name="logo"
@@ -95,11 +91,11 @@ export function BrandingForm({ branding }: { branding: Branding }) {
         {message && <p role="alert" className="text-sm text-bad">{message}</p>}
         {ok && !message && <p role="status" className="text-sm text-ok">{ok}</p>}
         <div className="flex flex-wrap gap-2">
-          <button className="btn" disabled={pending}>Save branding</button>
+          <button className="btn" name="intent" value="save" disabled={pending}>Save branding</button>
           {branding.logoUrl && (
-            <button className="btn-secondary btn" formAction={removeAction} disabled={removing}>Remove logo</button>
+            <button className="btn-secondary btn" name="intent" value="remove" disabled={pending}>Remove logo</button>
           )}
-          <button className="btn-secondary btn" formAction={resetAction} disabled={resetting}>Reset to defaults</button>
+          <button className="btn-secondary btn" name="intent" value="reset" disabled={pending}>Reset to defaults</button>
         </div>
       </form>
     </div>
