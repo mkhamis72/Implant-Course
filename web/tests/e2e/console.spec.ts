@@ -87,8 +87,8 @@ test('a signed-in control user who is not a console admin is refused', async ({ 
   }
 });
 
-async function signInWith2fa(page: Page) {
-  await signIn(page);
+async function signInWith2fa(page: Page, password = PASSWORD) {
+  await signIn(page, email, password);
   await expect(page).toHaveURL(/\/console\/login\/mfa$/);
   await page.getByLabel('Authentication code').fill(await freshCode());
   await page.getByRole('button', { name: 'Verify' }).click();
@@ -171,4 +171,21 @@ test('adding a company checks its keys first', async ({ page }) => {
     await c.query("delete from vault.secrets where name like 'tenant/' || $1 || '/%'", [slug]);
     await c.end();
   }
+});
+
+test('a console admin changes their password and signs in with the new one', async ({ page }) => {
+  test.setTimeout(180_000);
+  await signInWith2fa(page);
+  await page.getByRole('link', { name: 'Change password' }).click();
+  await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible();
+  const newPassword = `${PASSWORD}-new`;
+  await page.getByLabel('New password', { exact: true }).fill(newPassword);
+  await page.getByLabel('Confirm new password').fill(newPassword);
+  await page.getByRole('button', { name: 'Change password' }).click();
+  await expect(page.getByRole('status')).toHaveText('Password changed.');
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL(/\/console\/login$/);
+  await signIn(page, email, PASSWORD);
+  await expect(page.getByRole('alert').filter({ hasText: 'Incorrect email or password.' })).toBeVisible();
+  await signInWith2fa(page, newPassword);
 });

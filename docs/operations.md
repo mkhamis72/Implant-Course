@@ -188,7 +188,7 @@ Unknown hosts get 404; a suspended company gets 503. If the control project is d
 1. Control project → Authentication → Sign In / Providers: disable new sign-ups. Multi-Factor: enable TOTP. Authentication → Rate Limits: keep the MFA verification limits at their defaults or stricter. Do this **before** the next step, which exposes the console.
 2. Vercel → Domains: add the console address to the project. Environment Variables (Production): `CONSOLE_HOST` = the host name only, for example `implant-console.vercel.app` (no `https://`, no path), `NEXT_PUBLIC_CONTROL_ANON_KEY` = the control project's anon key. Re-run Release.
 3. Add `CONTROL_SUPABASE_URL` (already there) and `CONTROL_SERVICE_ROLE_KEY` to `.env.prod` just for this step, run `ENV_FILE=.env.prod npm run console:admin -- you@example.com` (it prints a temporary password), then remove the service key line again. Running it again for an existing admin sets a new temporary password and keeps their authenticators.
-4. **Sign in straight away and set up 2FA.** Until you do, anyone who has the temporary password could enrol their own authenticator first. Then check that the academy row shows OK.
+4. **Sign in straight away and set up 2FA.** Until you do, anyone who has the temporary password could enrol their own authenticator first. Then replace the temporary password under **Change password** (top bar) and check that the academy row shows OK.
 
 *Lost authenticator:* control project → Authentication → Users → the user → delete the factor, run `console:admin` again for that email (new temporary password), sign in and set up 2FA at once.
 
