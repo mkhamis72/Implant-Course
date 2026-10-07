@@ -9,6 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "db:migrate": "tsx scripts/migrate-cli.ts",
+    "console:admin": "tsx scripts/console-admin.ts",
+    "console:local": "tsx scripts/console-local.ts",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:status": "supabase status",

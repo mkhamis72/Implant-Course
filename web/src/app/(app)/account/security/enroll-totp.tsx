@@ -2,9 +2,17 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { confirmEnroll, startEnroll, type Enrollment } from './actions';
+import type { Enrollment } from './actions';
 
-export function EnrollTotp() {
+export function EnrollTotp({
+  start,
+  confirm,
+  onDone,
+}: {
+  start: () => Promise<Enrollment | { error: string }>;
+  confirm: (factorId: string, code: string) => Promise<{ ok: true } | { error: string }>;
+  onDone?: () => void;
+}) {
   const router = useRouter();
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [code, setCode] = useState('');
@@ -14,7 +22,7 @@ export function EnrollTotp() {
   function begin() {
     setError(null);
     startTransition(async () => {
-      const result = await startEnroll();
+      const result = await start();
       if ('error' in result) setError(result.error);
       else setEnrollment(result);
     });
@@ -25,14 +33,15 @@ export function EnrollTotp() {
     if (!enrollment) return;
     setError(null);
     startTransition(async () => {
-      const result = await confirmEnroll(enrollment.factorId, code);
+      const result = await confirm(enrollment.factorId, code);
       if ('error' in result) {
         setError(result.error);
         return;
       }
       setEnrollment(null);
       setCode('');
-      router.refresh();
+      if (onDone) onDone();
+      else router.refresh();
     });
   }
 

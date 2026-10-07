@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { EnrollTotp } from './enroll-totp';
-import { removeFactor } from './actions';
+import { confirmEnroll, removeFactor, startEnroll } from './actions';
 import { requireSignedIn } from '@/lib/auth/session';
 
 export default async function SecurityPage() {
@@ -26,7 +26,7 @@ export default async function SecurityPage() {
             ))}
           </div>
         ) : (
-          <EnrollTotp />
+          <EnrollTotp start={startEnroll} confirm={confirmEnroll} />
         )}
       </section>
       <section className="card space-y-2">

@@ -49,6 +49,26 @@ describe('<IdleTimer>', () => {
     vi.unstubAllGlobals();
   });
 
+  it('redirects to a custom loginPath on idle sign-out', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    render(
+      <IdleTimer timeoutMinutes={5} loginPath="/console/login" supabase={{ url: 'https://a.supabase.co', anonKey: 'k' }} />,
+    );
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(assign).toHaveBeenCalledWith('/console/login?reason=idle');
+    vi.unstubAllGlobals();
+  });
+
+  it('posts the heartbeat to a custom heartbeatPath', () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<IdleTimer timeoutMinutes={5} heartbeatPath="/console/api/activity" onIdle={vi.fn()} />);
+    fireEvent.keyDown(window);
+    expect(fetchMock).toHaveBeenCalledWith('/console/api/activity', { method: 'POST' });
+    vi.unstubAllGlobals();
+  });
+
   it('tells the server about activity at most once a minute (server-side idle check)', () => {
     const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
     vi.stubGlobal('fetch', fetchMock);

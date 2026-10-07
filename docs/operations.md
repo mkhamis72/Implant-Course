@@ -181,3 +181,17 @@ ENV_FILE=.env.prod npm run tenant:check -- academy        # → Target project: 
 **Switch production to the control project:** in Vercel (Production) add `CONTROL_SUPABASE_URL` and `CONTROL_SERVICE_ROLE_KEY` ⟨secret⟩, then run Release. To roll back, remove both and run Release again. Right after a deploy the first request has no cache; if the control project takes over 3 s it gets a 503, so reload.
 
 Unknown hosts get 404; a suspended company gets 503. If the control project is down, the app keeps routing from its last list for 10 minutes, then shows "Service unavailable".
+
+**Console.** The super-admin console manages the companies from a browser, at its own address (`CONSOLE_HOST`): sign in with a console admin account (email and password) and an authenticator app. Idle sessions are signed out after 15 minutes. Company addresses never serve it (they return 404 for `/console`).
+
+*Setting it up (once, after merging part 4):*
+1. Control project → Authentication → Sign In / Providers: disable new sign-ups. Multi-Factor: enable TOTP. Authentication → Rate Limits: keep the MFA verification limits at their defaults or stricter. Do this **before** the next step, which exposes the console.
+2. Vercel → Domains: add the console address to the project. Environment Variables (Production): `CONSOLE_HOST` = the host name only, for example `implant-console.vercel.app` (no `https://`, no path), `NEXT_PUBLIC_CONTROL_ANON_KEY` = the control project's anon key. Re-run Release.
+3. Add `CONTROL_SUPABASE_URL` (already there) and `CONTROL_SERVICE_ROLE_KEY` to `.env.prod` just for this step, run `ENV_FILE=.env.prod npm run console:admin -- you@example.com` (it prints a temporary password), then remove the service key line again. Running it again for an existing admin sets a new temporary password and keeps their authenticators.
+4. **Sign in straight away and set up 2FA.** Until you do, anyone who has the temporary password could enrol their own authenticator first. Then check that the academy row shows OK.
+
+*Lost authenticator:* control project → Authentication → Users → the user → delete the factor, run `console:admin` again for that email (new temporary password), sign in and set up 2FA at once.
+
+*Using it:* the Companies page shows each company's health (a live check of its project) and counts. A company's page lets you suspend it (reason, and type the slug to confirm) and reactivate it, edit its name and addresses, replace its keys (checked before saving), and create its first admin login (a one-time password, shown once). **Add company** needs an existing, migrated project: the keys and database URL are checked before anything is saved, and an existing slug is refused. Every change, including creating or resetting a first admin login (the target email, never the password), is recorded in the company's History table with the admin's email. `tenant:register` / `tenant:check` still work and are recorded as `script`.
+
+*Locally:* `npm run db:dev2:start`, `ENV_FILE=.env.dev2 npm run db:migrate`, `npm run console:local` (refuses non-local stacks; writes `.env.console`), then `set -a; source .env.console; set +a; npm run dev` and open `http://console.localhost:3000/console`. The console E2E (`npx playwright test console --project=chromium`, with the same env loaded and nothing on :3000) skips without `CONSOLE_HOST`; `npm run console:admin` is for real projects.
