@@ -10,6 +10,12 @@ export function checkAllTenantsArgs(argv: string[]): void {
   }
 }
 
+/** Throws if `--tenant` and `--control` are both given (they name different projects). */
+export function checkTargetArgs(argv: string[]): void {
+  const tenant = argv.some((a) => a === '--tenant' || a.startsWith('--tenant='));
+  if (tenant && argv.includes('--control')) throw new Error('Use --tenant or --control, not both.');
+}
+
 /** Applies the app migrations to every company in turn; the first failure stops the run (nothing is deployed). */
 export async function migrateAllTenants(
   companies: Company[],

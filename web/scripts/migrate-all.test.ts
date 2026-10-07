@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { migrateAllTenants, checkAllTenantsArgs } from './migrate-all';
+import { migrateAllTenants, checkAllTenantsArgs, checkTargetArgs } from './migrate-all';
 import type { Company } from './tenant-env';
 
 const company = (slug: string): Company => ({
@@ -30,6 +30,19 @@ describe('migrateAllTenants', () => {
 
   it('refuses an empty registry', async () => {
     await expect(migrateAllTenants([], undefined, vi.fn(), () => {})).rejects.toThrow('No companies in the control project.');
+  });
+});
+
+describe('checkTargetArgs', () => {
+  it('allows --tenant or --control alone, or neither', () => {
+    expect(() => checkTargetArgs(['--tenant', 'academy'])).not.toThrow();
+    expect(() => checkTargetArgs(['--control'])).not.toThrow();
+    expect(() => checkTargetArgs([])).not.toThrow();
+  });
+
+  it('throws when --tenant appears with --control', () => {
+    expect(() => checkTargetArgs(['--tenant', 'x', '--control'])).toThrow('Use --tenant or --control, not both.');
+    expect(() => checkTargetArgs(['--control', '--tenant=x'])).toThrow('Use --tenant or --control, not both.');
   });
 });
 

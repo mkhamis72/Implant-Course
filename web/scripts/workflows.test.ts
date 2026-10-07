@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
 
-type Step = { name?: string; if?: string; run?: string; uses?: string; with?: Record<string, unknown> };
+type Step = { id?: string; name?: string; if?: string; env?: Record<string, string>; run?: string; uses?: string; with?: Record<string, unknown> };
 type Job = { if?: string; needs?: string; steps: Step[] };
 const load = (file: string) =>
   parse(readFileSync(path.join(__dirname, '..', '..', '.github', 'workflows', file), 'utf8')) as { jobs: Record<string, Job> };
@@ -37,6 +37,13 @@ describe('release.yml', () => {
     expect(run).not.toContain('PROD_DATABASE_URL');
     expect(run.indexOf('CONTROL_DATABASE_URL secret is missing')).toBeLessThan(control);
     expect(run).toContain('set -euo pipefail');
+    expect(run).toContain('DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt"');
+    expect(run.split('\n').find((l) => l.includes('export '))).toContain('DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt"');
+  });
+  it('deploys unconditionally after the migration step (no step-level if)', () => {
+    const step = deploy.steps.find((s) => s.name?.startsWith('Deploy'));
+    expect(step).toBeDefined();
+    expect(step).not.toHaveProperty('if');
   });
 });
 
@@ -98,6 +105,22 @@ describe('backup.yml', () => {
     expect(fail?.run).toContain('keepawake-failed.txt');
     expect(fail?.run).toContain('Keep-awake failed for');
   });
+  it('the final step fails the run when the export or dump step did not succeed, before reporting success', () => {
+    const ids = jobs.backup.steps.map((s) => s.id);
+    expect(ids).toContain('export');
+    expect(ids).toContain('dump');
+    const fail = jobs.backup.steps.find((s) => s.name?.startsWith('Fail'));
+    expect(fail?.env?.EXPORT_OUTCOME).toContain('steps.export.outcome');
+    expect(fail?.env?.DUMP_OUTCOME).toContain('steps.dump.outcome');
+    expect(fail?.run).toContain('Backup did not run');
+    expect(fail!.run!.indexOf('Backup did not run')).toBeLessThan(fail!.run!.indexOf('were backed up'));
+  });
+  it('keep-awake checks the control secrets before the loop and records, not exits, when they are missing', () => {
+    const keep = runOf(jobs.backup, 'Keep');
+    expect(keep).toContain('control (secrets missing)');
+    expect(keep.indexOf('secrets are missing')).toBeLessThan(keep.indexOf('for f in'));
+    expect(keep).not.toContain('exit 1');
+  });
   it('backs up only the registry from the control project', () => {
     expect(dump).toContain('--table=public.tenants --table=public.tenant_audit');
     expect(dump).toContain('out/_control-$day.dump.gpg');
@@ -122,5 +145,8 @@ describe('backup.yml', () => {
     expect(verify).toContain('TABLE DATA public tenants');
     expect(verify).toContain('for f in in/*.dump.gpg');
     expect(runOf(jobs.verify, 'Download')).toContain('startswith("backups-")');
+    expect(verify).toContain('Backup problem');
+    expect(verify).toContain('registry file missing');
+    expect(verify).toContain('no company files');
   });
 });

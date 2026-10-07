@@ -1,7 +1,7 @@
 import './load-env';
 import { migrate } from './migrate';
 import { migrateTarget } from './migrate-target';
-import { migrateAllTenants, checkAllTenantsArgs } from './migrate-all';
+import { migrateAllTenants, checkAllTenantsArgs, checkTargetArgs } from './migrate-all';
 import { applyTenantArg, loadCompanies } from './tenant-env';
 
 async function main() {
@@ -12,6 +12,7 @@ async function main() {
     await migrateAllTenants(companies, process.env.CONTROL_DATABASE_CA_CERT ?? process.env.DATABASE_CA_CERT, migrate, console.log);
     return;
   }
+  checkTargetArgs(argv);
   const { argv: rest, label } = await applyTenantArg(argv, process.env);
   const target = migrateTarget(rest, process.env);
   // Printed first so a migration against the wrong project (e.g. a leftover ENV_FILE) is visible.

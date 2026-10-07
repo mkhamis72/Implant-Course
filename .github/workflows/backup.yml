@@ -39,6 +39,7 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
           echo "PG_BIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)" >> "$GITHUB_ENV"
       - name: Export the companies from the control project (secrets masked)
+        id: export
         env:
           CONTROL_DATABASE_URL: ${{ secrets.CONTROL_DATABASE_URL }}
           CONTROL_SUPABASE_URL: ${{ secrets.CONTROL_SUPABASE_URL }}
@@ -54,6 +55,7 @@ jobs:
           CONTROL_DATABASE_URL="$CONTROL_DATABASE_URL" CONTROL_SUPABASE_URL="$CONTROL_SUPABASE_URL" \
             DATABASE_CA_CERT="$RUNNER_TEMP/ca.crt" npm run tenants:export -- --dir "$RUNNER_TEMP/tenants"
       - name: Dump and encrypt each company and the control registry (the plain dump never touches disk)
+        id: dump
         env:
           CONTROL_DATABASE_URL: ${{ secrets.CONTROL_DATABASE_URL }}
           CA: ${{ secrets.PROD_DATABASE_CA_CERT }}
@@ -112,17 +114,31 @@ jobs:
           CONTROL_SUPABASE_URL="$(clean "$CONTROL_SUPABASE_URL")"
           CONTROL_ANON_KEY="$(clean "$CONTROL_ANON_KEY")"
           woke_failed=()
+          # Missing secrets are recorded, not fatal here: the company pings still run and the file is always written.
+          control_ok=1
+          if [ -z "$CONTROL_SUPABASE_URL" ] || [ -z "$CONTROL_ANON_KEY" ]; then
+            echo "CONTROL_SUPABASE_URL / CONTROL_ANON_KEY secrets are missing"
+            woke_failed+=("control (secrets missing)")
+            control_ok=0
+          fi
+          shopt -s nullglob
           for f in "$RUNNER_TEMP"/tenants/*.env; do
             ( source "$f"; curl --fail --silent --show-error "$SUPABASE_URL/auth/v1/health" -H "apikey: $ANON_KEY" -o /dev/null ) \
               || woke_failed+=("$(basename "$f" .env)")
           done
-          test -n "$CONTROL_SUPABASE_URL" && test -n "$CONTROL_ANON_KEY" || { echo "CONTROL_SUPABASE_URL / CONTROL_ANON_KEY secrets are missing"; exit 1; }
-          curl --fail --silent --show-error "$CONTROL_SUPABASE_URL/auth/v1/health" -H "apikey: $CONTROL_ANON_KEY" -o /dev/null \
-            || woke_failed+=(control)
+          if [ "$control_ok" = 1 ]; then
+            curl --fail --silent --show-error "$CONTROL_SUPABASE_URL/auth/v1/health" -H "apikey: $CONTROL_ANON_KEY" -o /dev/null \
+              || woke_failed+=(control)
+          fi
           printf '%s\n' "${woke_failed[@]}" > "$RUNNER_TEMP/keepawake-failed.txt"
       - name: Fail if any backup or keep-awake check failed
         if: ${{ !cancelled() }}
+        env:
+          EXPORT_OUTCOME: ${{ steps.export.outcome }}
+          DUMP_OUTCOME: ${{ steps.dump.outcome }}
         run: |
+          if [ "$EXPORT_OUTCOME" != "success" ]; then echo "Backup did not run: the export step failed."; exit 1; fi
+          if [ "$DUMP_OUTCOME" != "success" ]; then echo "Backup did not run: the dump step failed."; exit 1; fi
           failed=""; woke_failed=""
           [ -f "$RUNNER_TEMP/failed.txt" ] && failed=$(grep -v '^$' "$RUNNER_TEMP/failed.txt" || true)
           [ -f "$RUNNER_TEMP/keepawake-failed.txt" ] && woke_failed=$(grep -v '^$' "$RUNNER_TEMP/keepawake-failed.txt" || true)
@@ -164,8 +180,10 @@ jobs:
           clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
           PASSPHRASE="$(clean "$PASSPHRASE")"
           bad=()
+          control_files=0; company_files=0
           for f in in/*.dump.gpg; do
             name=$(basename "$f" .dump.gpg)
+            case "$name" in _control-*) control_files=$((control_files + 1)) ;; *) company_files=$((company_files + 1)) ;; esac
             if ! gpg --batch --pinentry-mode loopback --decrypt --passphrase-fd 3 3<<<"$PASSPHRASE" "$f" > "$RUNNER_TEMP/check.dump" \
                || ! "$PG_BIN/pg_restore" --list "$RUNNER_TEMP/check.dump" > "$RUNNER_TEMP/list.txt"; then
               bad+=("$name: unreadable"); continue
@@ -178,5 +196,7 @@ jobs:
             esac
           done
           rm -f "$RUNNER_TEMP/check.dump"
+          [ "$control_files" -gt 0 ] || bad+=("registry file missing")
+          [ "$company_files" -gt 0 ] || bad+=("no company files")
           if [ ${#bad[@]} -gt 0 ]; then printf 'Backup problem: %s\n' "${bad[@]}"; exit 1; fi
           echo "Every backup is readable and complete."
