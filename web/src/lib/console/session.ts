@@ -13,8 +13,7 @@ async function signedInListed() {
   if (!user) redirect('/console/login');
   const { data: row } = await createConsoleServiceClient().from('console_admins').select('active').eq('user_id', user.id).maybeSingle();
   if (!row?.active) {
-    await supabase.auth.signOut({ scope: 'local' });
-    redirect('/console/login?reason=not-admin');
+    redirect('/console/signout?reason=not-admin');
   }
   return { supabase, user };
 }
@@ -35,8 +34,7 @@ export const requireConsoleAdmin = cache(async (): Promise<ConsoleAdmin> => {
   if (step === 'verify') redirect('/console/login/mfa');
   const { data: ok } = await supabase.rpc('is_console_admin');
   if (!ok) {
-    await supabase.auth.signOut({ scope: 'local' });
-    redirect('/console/login?reason=not-admin');
+    redirect('/console/signout?reason=not-admin');
   }
   return { userId: user.id, email: user.email ?? '' };
 });
