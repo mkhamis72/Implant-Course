@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
 import { registerTenant } from '../../scripts/tenants';
+import { listTenants, tenantSecrets } from '../../scripts/tenant-env';
 
 const CONTROL_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0001_control_registry.sql'), 'utf8');
 
@@ -91,6 +92,31 @@ describe('control registry', () => {
       await refused(c, () => c.query(
         `insert into public.tenants (slug, name, hosts, supabase_url, anon_key) values ('zz-null', 'Zz Null', array['a.example.com', null], 'https://abcdefgh.supabase.co', 'a')`,
       ), /Invalid host/);
+    });
+  });
+});
+
+describe('operations: reading companies from the control project', () => {
+  it('lists every company, suspended ones too, in slug order', async () => {
+    await withControl(async (c) => {
+      await registerTenant(c, { ...academy, slug: 'zz-b', hosts: ['b.example.com'] });
+      await registerTenant(c, { ...academy, slug: 'zz-a', hosts: ['a.example.com'] });
+      await c.query(`update public.tenants set status = 'suspended' where slug = 'zz-b'`);
+      const mine = (await listTenants(c)).filter((t) => t.slug.startsWith('zz-'));
+      expect(mine.map((t) => [t.slug, t.status])).toEqual([['zz-a', 'active'], ['zz-b', 'suspended']]);
+      expect(mine[0]).toMatchObject({ supabase_url: 'https://abcdefgh.supabase.co', anon_key: 'anon' });
+    });
+  });
+
+  it('reads both Vault secrets, and names a missing one', async () => {
+    await withControl(async (c) => {
+      await registerTenant(c, academy);
+      expect(await tenantSecrets(c, 'zz-academy')).toEqual({ serviceRoleKey: 'svc-secret', databaseUrl: 'postgres://secret' });
+      await asPostgres(c);
+      await c.query(`delete from vault.secrets where name = 'tenant/zz-academy/database_url'`);
+      await expect(tenantSecrets(c, 'zz-academy')).rejects.toThrow(
+        'Company zz-academy has no database_url in Vault; register it again with tenant:register.',
+      );
     });
   });
 });

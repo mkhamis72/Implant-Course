@@ -42,19 +42,25 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json }
       - run: npm ci
-      - name: Migrate production (verified TLS)
+      - name: Migrate the control project, then every company (verified TLS)
         env:
-          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          CONTROL_DATABASE_URL: ${{ secrets.CONTROL_DATABASE_URL }}
+          CONTROL_SUPABASE_URL: ${{ secrets.CONTROL_SUPABASE_URL }}
           PROD_DATABASE_CA_CERT: ${{ secrets.PROD_DATABASE_CA_CERT }}
         run: |
           set -euo pipefail
           clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
-          DATABASE_URL="$(clean "$DATABASE_URL")"
+          CONTROL_DATABASE_URL="$(clean "$CONTROL_DATABASE_URL")"
+          CONTROL_SUPABASE_URL="$(clean "$CONTROL_SUPABASE_URL")"
           PROD_DATABASE_CA_CERT="$(clean "$PROD_DATABASE_CA_CERT")"
-          test -n "$DATABASE_URL" || { echo "PROD_DATABASE_URL secret is missing"; exit 1; }
+          test -n "$CONTROL_DATABASE_URL" || { echo "CONTROL_DATABASE_URL secret is missing"; exit 1; }
           test -n "$PROD_DATABASE_CA_CERT" || { echo "PROD_DATABASE_CA_CERT secret is missing"; exit 1; }
+          # The Supabase CA is shared by every project: it verifies the control project and each company.
           printf '%s\n' "$PROD_DATABASE_CA_CERT" > "$RUNNER_TEMP/prod-ca.crt"
-          DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt" npm run db:migrate
+          export CONTROL_DATABASE_URL CONTROL_SUPABASE_URL DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt"
+          npm run db:migrate -- --control
+          # Stops at the first company that fails; the deploy below then never runs.
+          npm run db:migrate -- --all-tenants
       - name: Deploy on Vercel (only after a successful migration)
         env:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
