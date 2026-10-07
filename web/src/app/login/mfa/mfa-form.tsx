@@ -1,10 +1,10 @@
 'use client';
 
 import { useActionState } from 'react';
-import { verifyMfa, type MfaState } from './actions';
+import type { MfaState } from './actions';
 
-export function MfaForm() {
-  const [state, action, pending] = useActionState<MfaState, FormData>(verifyMfa, {});
+export function MfaForm({ action: verify }: { action: (prev: MfaState, formData: FormData) => Promise<MfaState> }) {
+  const [state, action, pending] = useActionState<MfaState, FormData>(verify, {});
   return (
     <form action={action} className="space-y-4">
       <label className="block">
