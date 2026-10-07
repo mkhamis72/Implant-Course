@@ -23,11 +23,13 @@ export function IdleTimer({
   supabase,
   onIdle,
   loginPath = '/login',
+  heartbeatPath = '/api/activity',
 }: {
   timeoutMinutes: number;
   supabase?: { url: string; anonKey: string };
   onIdle?: () => void;
   loginPath?: string;
+  heartbeatPath?: string;
 }) {
   const url = supabase?.url;
   const anonKey = supabase?.anonKey;
@@ -46,7 +48,7 @@ export function IdleTimer({
       const now = Date.now();
       if (now - lastHeartbeat >= HEARTBEAT_EVERY_MS) {
         lastHeartbeat = now;
-        fetch('/api/activity', { method: 'POST' }).catch(() => {});
+        fetch(heartbeatPath, { method: 'POST' }).catch(() => {});
       }
       if (now - lastBroadcast < BROADCAST_EVERY_MS) return;
       lastBroadcast = now;
@@ -68,6 +70,6 @@ export function IdleTimer({
       ACTIVITY_EVENTS.forEach((e) => window.removeEventListener(e, onLocalActivity));
       window.removeEventListener('storage', onStorage);
     };
-  }, [timeoutMinutes, onIdle, url, anonKey, loginPath]);
+  }, [timeoutMinutes, onIdle, url, anonKey, loginPath, heartbeatPath]);
   return null;
 }

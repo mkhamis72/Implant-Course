@@ -4,6 +4,7 @@ import { TENANT_HEADER } from '@/lib/tenant/types';
 import { contentSecurityPolicy } from '@/lib/security-headers';
 import { isIdleExpired } from '@/lib/idle';
 import { lastSeenCookieOptions } from '@/lib/supabase/middleware';
+import { blockedResponse } from '@/lib/tenant/responses';
 import { controlConfig } from './env';
 
 export const CONSOLE_LAST_SEEN_COOKIE = 'icm_console_last_seen';
@@ -11,8 +12,13 @@ export const CONSOLE_IDLE_MINUTES = 15;
 export const CONSOLE_PUBLIC_PATHS = ['/console/login'];
 
 /** Console requests: refresh the control-project session, enforce the 15-minute idle limit, control-only CSP. */
-export async function updateConsoleSession(request: NextRequest): Promise<NextResponse> {
-  const control = controlConfig();
+export async function updateConsoleSession(request: NextRequest): Promise<Response> {
+  let control: ReturnType<typeof controlConfig>;
+  try {
+    control = controlConfig();
+  } catch {
+    return blockedResponse('unavailable');
+  }
   const csp = contentSecurityPolicy(control.url, process.env.NODE_ENV !== 'production');
   // Never a company request: drop any browser-sent company header.
   const headers = new Headers(request.headers);
