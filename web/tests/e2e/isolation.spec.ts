@@ -10,7 +10,7 @@ import { apiAs } from './api';
 const file = process.env.TENANTS_FILE;
 test.skip(!file || !existsSync(file), 'needs TENANTS_FILE (two dev companies)');
 
-const tenants = file && existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as { slug: string; supabaseUrl: string; serviceRoleKey: string }[]) : [];
+const tenants = file && existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as { slug: string; supabaseUrl: string; serviceRoleKey: string; anonKey: string }[]) : [];
 const dev2 = tenants.find((t) => t.slug === 'dev2');
 const B = 'http://tenant2.localhost:3000';
 const PASSWORD = `Dev2-${Date.now()}-pw`;
@@ -105,6 +105,21 @@ test.describe('company isolation', () => {
       expect(activity.status()).toBe(503);
     } finally {
       writeFileSync(file!, original);
+    }
+  });
+  test("company B's branding never shows on company A", async ({ page }) => {
+    const b = createClient(dev2!.supabaseUrl, dev2!.anonKey, { auth: { persistSession: false } });
+    const { error: signInError } = await b.auth.signInWithPassword({ email: dev2Email, password: PASSWORD });
+    if (signInError) throw signInError;
+    try {
+      const { error } = await b.rpc('update_branding', { p_name: 'Dev2 Academy', p_brand_color: null, p_nav_color: null });
+      expect(error).toBeNull();
+      await page.goto(`${B}/login`);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dev2 Academy');
+      await page.goto('http://localhost:3000/login');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Implant Course Manager');
+    } finally {
+      await b.rpc('update_branding', { p_name: null, p_brand_color: null, p_nav_color: null });
     }
   });
 });

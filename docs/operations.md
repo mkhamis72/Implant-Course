@@ -116,12 +116,12 @@ Steps, in Git Bash from `web/`:
 2. Decrypt it: `gpg --decrypt prod-<date>.dump.gpg > prod.dump`. It asks for the passphrase.
 3. Create a new Supabase project (Frankfurt), with the same auth settings as §A.1, and make an env file for it, e.g. `.env.restore`. If the backup is older than the newest migrations, check out the commit the backup belongs to: the newest migration it has is the newest migration file at that date. Then run `ENV_FILE=.env.restore npm run db:migrate`.
 4. Turn the dump into SQL: `pg_restore --data-only --no-owner -f data.sql prod.dump`.
-5. Load it in one transaction, with triggers off so nothing is created twice. This is Supabase's documented restore method. The migrations seeded `settings` and the sample `products`, so empty those first:
+5. Load it in one transaction, with triggers off so nothing is created twice. This is Supabase's documented restore method. The migrations seeded `settings`, `branding` and the sample `products`, so empty those first:
 
    ```bash
    psql "<new session pooler URI>" --single-transaction -v ON_ERROR_STOP=1 \
      -c "SET session_replication_role = replica" \
-     -c "TRUNCATE public.settings, public.products CASCADE" \
+     -c "TRUNCATE public.settings, public.products, public.branding CASCADE" \
      -f data.sql
    ```
 

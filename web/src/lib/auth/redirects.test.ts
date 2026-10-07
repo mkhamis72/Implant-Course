@@ -8,6 +8,7 @@ const aal2 = { current: 'aal2', next: 'aal2' };
 describe('classifyPath', () => {
   it.each([
     ['/login', 'public'],
+    ['/brand/logo', 'public'],
     ['/auth/confirm', 'public'],
     ['/auth/error', 'public'],
     ['/login/mfa', 'mfa'],

@@ -12,10 +12,14 @@ async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp) {
 }
 
 describe('supervisors', () => {
-  it('every staff profile has a supervisor with the same id (delegate logins never supervise)', async () => {
+  // Only the test accounts: staff created later by hand (create-user) get no supervisor row, by design.
+  it('every staff test user has a supervisor with the same id (delegate logins never supervise)', async () => {
     await withTx(async (c) => {
       const { rows } = await c.query(
-        "select count(*)::int as n from public.profiles p where p.role <> 'delegate' and not exists (select 1 from public.supervisors s where s.id = p.user_id)",
+        `select count(*)::int as n from public.profiles p
+         where p.user_id = any($1) and p.role <> 'delegate'
+           and not exists (select 1 from public.supervisors s where s.id = p.user_id)`,
+        [Object.values(users)],
       );
       expect(rows[0].n).toBe(0);
     });
