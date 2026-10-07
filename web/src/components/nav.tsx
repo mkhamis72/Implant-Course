@@ -10,7 +10,7 @@ import { BrandMark } from './brand-mark';
 
 function Wordmark({ brand }: { brand: { name: string; logoUrl: string | null } }) {
   return (
-    <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight text-nav-ink">
+    <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight text-nav-ink focus-visible:outline-nav-ink">
       <BrandMark logoUrl={brand.logoUrl} />
       <span className="leading-tight">{brand.name}</span>
     </Link>
@@ -54,7 +54,7 @@ export function Nav({ role, permissions, name, brand }: { role: Role; permission
         <button
           ref={menuButton}
           type="button"
-          className="btn-secondary btn px-3"
+          className="btn-secondary btn px-3 focus-visible:outline-nav-ink"
           aria-expanded={open}
           aria-controls="main-nav"
           onClick={() => setOpen(true)}
@@ -73,7 +73,7 @@ export function Nav({ role, permissions, name, brand }: { role: Role; permission
         <div className="mb-6 flex items-center justify-between gap-2">
           <Wordmark brand={brand} />
           {open && (
-            <button type="button" className="btn-secondary btn px-3 lg:hidden" onClick={() => setOpen(false)}>
+            <button type="button" className="btn-secondary btn px-3 focus-visible:outline-nav-ink lg:hidden" onClick={() => setOpen(false)}>
               Close
             </button>
           )}
@@ -87,7 +87,7 @@ export function Nav({ role, permissions, name, brand }: { role: Role; permission
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
                 onClick={() => setOpen(false)}
-                className={`flex min-h-11 items-center rounded-md px-3 py-2 lg:min-h-0 ${
+                className={`flex min-h-11 items-center rounded-md px-3 py-2 lg:min-h-0 focus-visible:outline-nav-ink ${
                   active ? 'bg-accent-soft font-semibold text-accent-strong' : 'text-nav-ink hover:bg-nav-hover'
                 }`}
               >
@@ -98,11 +98,11 @@ export function Nav({ role, permissions, name, brand }: { role: Role; permission
         </nav>
         <div className="space-y-1 border-t border-nav-line pt-4 text-sm">
           <div className="truncate px-3 font-medium text-nav-ink">{name}</div>
-          <Link href="/account/security" onClick={() => setOpen(false)} className="block rounded-md px-3 py-1.5 text-nav-ink hover:bg-nav-hover">
+          <Link href="/account/security" onClick={() => setOpen(false)} className="block rounded-md px-3 py-1.5 text-nav-ink hover:bg-nav-hover focus-visible:outline-nav-ink">
             Account security
           </Link>
           <form action={signOut}>
-            <button className="w-full rounded-md px-3 py-1.5 text-left text-nav-ink hover:bg-nav-hover">Sign out</button>
+            <button className="w-full rounded-md px-3 py-1.5 text-left text-nav-ink hover:bg-nav-hover focus-visible:outline-nav-ink">Sign out</button>
           </form>
         </div>
       </aside>

@@ -13,7 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: branding.name,
     description: 'Patients, implants, inventory and courses for implant-course organizers',
-    ...(branding.logoUrl ? { icons: { icon: branding.logoUrl } } : {}),
+    icons: { icon: branding.logoUrl ?? '/favicon.ico' },
   };
 }
 

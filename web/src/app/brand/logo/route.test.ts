@@ -18,7 +18,7 @@ describe('GET /brand/logo', () => {
     const res = await GET(req('http://localhost:3000/brand/logo?v=3'));
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/png');
-    expect(res.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect(res.headers.get('cache-control')).toBe('private, max-age=31536000, immutable');
     expect(Array.from(new Uint8Array(await res.arrayBuffer()))).toEqual([0x89, 0x50, 0x4e, 0x47]);
   });
 
@@ -31,6 +31,13 @@ describe('GET /brand/logo', () => {
     maybeSingle.mockResolvedValue({ data: null, error: null });
     expect((await GET(req('http://localhost:3000/brand/logo?v=1'))).status).toBe(404);
     maybeSingle.mockResolvedValue({ data: null, error: { message: 'boom' } });
+    expect((await GET(req('http://localhost:3000/brand/logo?v=1'))).status).toBe(404);
+  });
+});
+
+describe('GET /brand/logo failures', () => {
+  it('is 404 when the read throws', async () => {
+    maybeSingle.mockRejectedValue(new Error('network'));
     expect((await GET(req('http://localhost:3000/brand/logo?v=1'))).status).toBe(404);
   });
 });
