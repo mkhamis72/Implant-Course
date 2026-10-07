@@ -13,6 +13,7 @@ import { TECHNIQUE_LABELS } from '@/lib/inventory/types';
 import { bookingTechnique, TECHNIQUE_SHORT, type BookingTechnique } from '@/lib/schedule/technique';
 import { CancelBooking } from './cancel-booking';
 import { BookingStatus } from './booking-status';
+import { SurgerySessions, type DaySession } from './surgery-sessions';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
 
 // Card colours by surgical technique; a booking whose implants differ gets a two-colour stripe.
@@ -60,11 +61,16 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
   const raw = (await readParams(searchParams, 'date')).date || undefined;
   const date = raw && isRealDate(String(raw)) ? String(raw) : todayIso();
   const supabase = await createClient();
-  const [{ data: chairs }, { data: slots, error }] = await Promise.all([
+  const [{ data: chairs }, { data: slots, error }, { data: daySessions, error: sessionsError }, { data: runningCourses, error: coursesError }] = await Promise.all([
     supabase.from('chairs').select('id, name, active').order('name'),
     supabase.rpc('slots_on', { p_date: date }).select(SLOT_SELECT),
+    supabase.from('sessions').select('id, title, start_time, end_time, room, course:courses(id, name)')
+      .eq('type', 'surgery').eq('date', date).order('start_time'),
+    editable
+      ? supabase.from('courses').select('id, name').lte('start_date', date).gte('end_date', date).order('start_date')
+      : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
   ]);
-  if (error) throw new Error('Could not load the schedule');
+  if (error || sessionsError || coursesError) throw new Error('Could not load the schedule');
   const bookings = (slots ?? []) as unknown as SlotRow[];
   // Cancelled bookings are listed under the grid so they never cover a live booking.
   const live = bookings.filter((b) => b.status !== 'cancelled');
@@ -93,6 +99,13 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
           <button className="btn-secondary btn">Go</button>
         </form>
       </div>
+      <SurgerySessions
+        date={date}
+        sessions={(daySessions ?? []) as unknown as DaySession[]}
+        courses={(runningCourses ?? []).map((c) => ({ id: c.id, label: c.name }))}
+        editable={editable}
+        coursesVisible={canView(profile, 'courses')}
+      />
       {live.length > 0 && <Legend />}
       {chairList.length === 0 ? (
         <p className="card text-muted">No chairs yet. An admin can add chairs under Admin → Chairs.</p>

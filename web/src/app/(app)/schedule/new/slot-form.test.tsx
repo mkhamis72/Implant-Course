@@ -15,6 +15,12 @@ describe('SlotForm', () => {
     render(<SlotForm {...props} sessions={[]} />);
     expect(screen.getByText(/No upcoming surgery sessions/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Courses' })).toHaveAttribute('href', '/courses');
+    expect(screen.getByRole('link', { name: 'Add surgery day' })).toHaveAttribute('href', '/schedule');
+  });
+
+  it('links Add surgery day to the Schedule page for the chosen date', () => {
+    render(<SlotForm {...props} sessions={[]} initial={{ ...props.initial, date: '2030-03-02' }} />);
+    expect(screen.getByRole('link', { name: 'Add surgery day' })).toHaveAttribute('href', '/schedule?date=2030-03-02');
   });
 
   it('lists the upcoming sessions without the hint', () => {

@@ -33,7 +33,7 @@ type Props = {
   implants: Product[];
   supervisors: Option[];
   me: string;
-  initial: { sessionId: string; chairId: string; start: string; fileNo: string };
+  initial: { sessionId: string; chairId: string; start: string; fileNo: string; date?: string };
   edit?: EditedBooking;
 };
 
@@ -119,8 +119,9 @@ export function SlotForm(p: Props) {
             </label>
             {p.sessions.length === 0 && (
               <p className="-mt-2 text-sm text-warn sm:col-span-2">
-                No upcoming surgery sessions. Sessions dated before today aren’t listed — add or edit one under{' '}
-                <Link href="/courses" className="text-accent underline">Courses</Link>.
+                No upcoming surgery sessions. Sessions dated before today aren’t listed — add one with{' '}
+                <Link href={p.initial.date ? `/schedule?date=${p.initial.date}` : '/schedule'} className="text-accent underline">Add surgery day</Link>{' '}
+                on the Schedule page, or under <Link href="/courses" className="text-accent underline">Courses</Link>.
               </p>
             )}
           </>
