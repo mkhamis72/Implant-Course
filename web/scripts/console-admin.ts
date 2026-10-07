@@ -13,7 +13,7 @@ export function parseConsoleAdminArgs(argv: string[]): { email: string } {
 /** Creates (or resets) a console admin in the control project; needs CONTROL_SUPABASE_URL and CONTROL_SERVICE_ROLE_KEY. */
 async function main() {
   const { email } = parseConsoleAdminArgs(process.argv.slice(2));
-  console.log(`Target project: control ${targetLabel(process.env.CONTROL_SUPABASE_URL)}`);
+  console.log(`Target project: control ${process.env.CONTROL_SUPABASE_URL ? targetLabel(process.env.CONTROL_SUPABASE_URL) : '(CONTROL_SUPABASE_URL not set)'}`);
   const url = process.env.CONTROL_SUPABASE_URL;
   const key = process.env.CONTROL_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('CONTROL_SUPABASE_URL / CONTROL_SERVICE_ROLE_KEY missing: add the service key to the env file for this command, then remove it.');
@@ -24,7 +24,7 @@ async function main() {
   if (error) throw new Error(`Could not list ${email} as a console admin: ${error.message}`);
   console.log(`Console admin ready: ${email}`);
   console.log(`Temporary password: ${password}`);
-  console.log('Sign in on the console address and set up 2FA at first sign-in.');
+  console.log('Sign in on the console address; set up 2FA at first sign-in (an existing authenticator is kept).');
 }
 
 if (process.argv[1]?.endsWith('console-admin.ts')) {
