@@ -122,3 +122,45 @@ test('General templates cannot attach automatically; deleting a template asks fi
   await expect(page).toHaveURL(/\/checklists\/templates$/);
   await expect(page.getByText(name)).toHaveCount(0);
 });
+
+// Mailpit (the local stack's mail catcher): messages whose text matches the query.
+async function mailpit(query: string): Promise<{ Subject: string; To: { Address: string }[] }[]> {
+  const res = await fetch(`http://127.0.0.1:54324/api/v1/search?query=${encodeURIComponent(query)}`);
+  return (await res.json()).messages ?? [];
+}
+
+test('emails an organizer when an item is assigned to them and when it changes, not on self-assignment', async ({ page }) => {
+  await login(page, TEST_USERS.organizer.email);
+  await page.goto('/checklists');
+  await page.getByLabel('Title').fill(uniqueName('Email list'));
+  const theirs = `Mail item ${Date.now()}`;
+  const mine = `Self item ${Date.now()}`;
+  await page.getByLabel('Items (one per line)').fill(`${theirs}\n${mine}`);
+  await page.getByRole('button', { name: 'Create checklist' }).click();
+
+  const assign = async (n: number, who: string, due?: string) => {
+    const item = page.getByTestId('checklist-item').nth(n);
+    await item.getByRole('button', { name: 'Edit' }).click();
+    await item.getByRole('combobox', { name: 'Assigned to', exact: true }).selectOption({ label: who });
+    if (due) await item.getByLabel('Due date').fill(due);
+    await item.getByRole('button', { name: 'Save' }).click();
+    await expect(item.getByRole('button', { name: 'Save' })).toHaveCount(0);
+  };
+
+  await assign(0, 'Test Viewer');
+  await expect.poll(async () => (await mailpit(`"${theirs}"`)).map((m) => m.Subject), { timeout: 20_000 }).toEqual([
+    "Checklist: you've been assigned an item",
+  ]);
+  expect((await mailpit(`"${theirs}"`))[0].To[0].Address).toBe(TEST_USERS.viewer.email);
+
+  await assign(0, 'Test Viewer', '2031-01-15');
+  await expect.poll(async () => (await mailpit(`"${theirs}"`)).map((m) => m.Subject).sort(), { timeout: 20_000 }).toEqual([
+    'Checklist: an item assigned to you changed',
+    "Checklist: you've been assigned an item",
+  ]);
+
+  await assign(1, 'Test Organizer');
+  await assign(0, 'Test Viewer', '2031-01-16'); // a later email proves the self-assignment had its chance to send
+  await expect.poll(async () => (await mailpit(`"${theirs}"`)).length, { timeout: 20_000 }).toBe(3);
+  expect(await mailpit(`"${mine}"`)).toEqual([]);
+});

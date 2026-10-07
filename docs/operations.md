@@ -90,6 +90,16 @@ All commands are run with `ENV_FILE=.env.prod` (see the top of this page).
 - SMTP settings: host `smtp.gmail.com`, port `465`, username and sender = the Gmail address, password = the app password without spaces.
 - To turn email off again, set `EMAIL_ENABLED=false` and re-run Release: logins go back to temporary passwords.
 
+### Checklist assignment emails
+
+The app emails an organizer when a checklist item is assigned to them, and when the text or due date of an item assigned to them changes. Nothing is sent when you assign an item to yourself. These emails come from the app itself, not from Supabase Auth, so they need their own SMTP settings. They are off until `SMTP_HOST` is set, and also off while `EMAIL_ENABLED=false`.
+1. Create a second app password for the same dedicated Gmail account at https://myaccount.google.com/apppasswords ⟨secret⟩. A separate one can be revoked without breaking invites.
+2. In Vercel → Settings → Environment Variables (Production), add `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_USER=<the Gmail address>`, `SMTP_PASS=<the app password, no spaces>` (mark it Sensitive) and `SMTP_FROM=Implant Course <the Gmail address>`.
+3. Re-run **Release** (branch `master`).
+4. Check it: assign a checklist item to another organizer login whose mailbox you can read. If saving shows "Saved, but the email … couldn't be sent.", look in Vercel → Logs for `sendEmail failed`.
+
+One sender serves every company; the email names the company. Locally the emails land in Mailpit (http://127.0.0.1:54324).
+
 ## C. Releases
 
 - Merging to `master` runs **Release**:
