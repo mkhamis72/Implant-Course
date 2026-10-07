@@ -5,9 +5,11 @@ import { pgConfig } from './db';
 import { toCsv } from '../src/lib/csv';
 import { CATALOG_HEADERS, catalogRow, type CatalogProduct } from './catalog-csv';
 import { targetLabel } from './create-user-args';
+import { applyTenantArg } from './tenant-env';
 
 async function main() {
-  console.log(`Target project: ${targetLabel(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
+  const { label } = await applyTenantArg(process.argv.slice(2), process.env);
+  console.log(`Target project: ${label ?? targetLabel(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
   const pg = new Client(pgConfig());
   await pg.connect();
   try {

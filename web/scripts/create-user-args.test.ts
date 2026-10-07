@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseCreateUserArgs, targetLabel } from './create-user-args';
+import { takeTenantArg } from './tenant-env';
 
 describe('parseCreateUserArgs', () => {
   it('defaults to organizer and joins the name', () => {
@@ -23,6 +24,10 @@ describe('parseCreateUserArgs', () => {
     expect(parseCreateUserArgs(['a@x.com', 'Dr A', '--role', 'owner'])).toEqual({ error: 'Unknown role "owner". Use organizer, admin or delegate.' });
     expect(parseCreateUserArgs(['a@x.com'])).toHaveProperty('error');
     expect(parseCreateUserArgs(['not-an-email', 'Dr A'])).toHaveProperty('error');
+  });
+  it('parses the arguments left after --tenant is taken out', () => {
+    const { rest } = takeTenantArg(['--tenant', 'academy', 'a@b.com', 'Some Name', '--role', 'admin']);
+    expect(parseCreateUserArgs(rest)).toMatchObject({ email: 'a@b.com', fullName: 'Some Name', role: 'admin' });
   });
 });
 

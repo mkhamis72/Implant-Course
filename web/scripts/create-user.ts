@@ -4,14 +4,16 @@ import { pgConfig } from './db';
 import { adminClient, ensureUser, setProfile } from './users';
 import { temporaryPassword } from '../src/lib/admin/passwords';
 import { parseCreateUserArgs, targetLabel } from './create-user-args';
+import { applyTenantArg } from './tenant-env';
 
 async function main() {
-  const args = parseCreateUserArgs(process.argv.slice(2));
+  const { argv, label } = await applyTenantArg(process.argv.slice(2), process.env);
+  const args = parseCreateUserArgs(argv);
   if ('error' in args) {
     console.error(args.error);
     process.exit(1);
   }
-  console.log(`Target project: ${targetLabel(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
+  console.log(`Target project: ${label ?? targetLabel(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
   const password = temporaryPassword();
   const userId = await ensureUser(adminClient(), { email: args.email, password });
   const pg = new Client(pgConfig());
