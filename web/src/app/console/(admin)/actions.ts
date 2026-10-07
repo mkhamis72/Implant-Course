@@ -97,7 +97,7 @@ export async function replaceCompanyKeys(_prev: FormState, formData: FormData): 
 export type FirstAdminState = FormState & { password?: string; email?: string; seq?: number };
 
 export async function firstAdmin(_prev: FirstAdminState, formData: FormData): Promise<FirstAdminState> {
-  await requireConsoleAdmin();
+  const admin = await requireConsoleAdmin();
   const parsed = firstAdminSchema.safeParse(fields(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const control = createConsoleServiceClient();
@@ -107,7 +107,19 @@ export async function firstAdmin(_prev: FirstAdminState, formData: FormData): Pr
   try {
     const db = createClient(company.supabase_url, key, { auth: { persistSession: false, autoRefreshToken: false } });
     const r = await createFirstAdmin(db, { email: parsed.data.email, fullName: parsed.data.fullName });
-    return { ok: r.created ? 'Admin login created.' : 'Password reset for the existing login.', password: r.password, email: parsed.data.email };
+    // The login exists now: a failed log entry must not hide the password. Never log the password.
+    const { error: logError } = await control.rpc('console_log', {
+      p_slug: parsed.data.slug,
+      p_action: r.created ? 'first_admin_created' : 'admin_password_reset',
+      p_detail: parsed.data.email,
+      p_actor: admin.email,
+    });
+    const ok = r.created ? 'Admin login created.' : 'Password reset for the existing login.';
+    return {
+      ok: logError ? `${ok} The change could not be recorded in the history.` : ok,
+      password: r.password,
+      email: parsed.data.email,
+    };
   } catch (e) {
     return failed((e as Error).message, formData);
   }

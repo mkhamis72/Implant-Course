@@ -68,7 +68,12 @@ test('a console admin signs in with password and sets up 2FA, then sees healthy 
   await page.getByRole('button', { name: 'Activate' }).click();
   // Activating the factor raises the session to aal2, so the guard goes straight to the companies page.
   await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
-  for (const slug of ['dev', 'dev2']) await expect(page.getByTestId(`company-${slug}`)).toContainText('OK');
+  for (const slug of ['dev', 'dev2']) {
+    const row = page.getByTestId(`company-${slug}`);
+    await expect(row).toContainText('OK');
+    await expect(row.locator('td[data-label="Users"]')).toHaveText(/^\d+$/);
+    await expect(row.locator('td[data-label="Patients"]')).toHaveText(/^\d+$/);
+  }
 });
 
 test('a signed-in control user who is not a console admin is refused', async ({ page }) => {

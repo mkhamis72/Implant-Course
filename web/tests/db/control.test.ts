@@ -8,6 +8,7 @@ import { listTenants, tenantSecrets } from '../../scripts/tenant-env';
 
 const CONTROL_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0001_control_registry.sql'), 'utf8');
 const CONSOLE_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0002_console.sql'), 'utf8');
+const LOG_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0003_console_log.sql'), 'utf8');
 const users = inject('testUsers');
 
 /** The control schema applied inside the test's own (rolled-back) transaction on the dev database. */
@@ -15,6 +16,7 @@ async function withControl(fn: (c: Client) => Promise<void>) {
   await withTx(async (c) => {
     await c.query(CONTROL_SQL);
     await c.query(CONSOLE_SQL);
+    await c.query(LOG_SQL);
     await fn(c);
   });
 }
@@ -208,6 +210,37 @@ describe('console (0002)', () => {
       expect((await c.query(`select supabase_url, anon_key from public.tenants where slug = 'zz-co'`)).rows[0]).toEqual({ supabase_url: 'http://127.0.0.1:54321', anon_key: 'anon2' });
       expect((await c.query(`select public.tenant_secret('zz-co', 'service_role_key') as v`)).rows[0].v).toBe('svc2');
       await refused(c, () => c.query(`update public.tenants set supabase_url = 'http://evil.example.com' where slug = 'zz-co'`), /tenants_supabase_url_check/);
+    });
+  });
+});
+
+describe('console_log (0003)', () => {
+  const log = (c: Client, slug: string, action: string) =>
+    c.query('select public.console_log($1, $2, $3, $4)', [slug, action, 'ann@example.com', 'owner@example.com']);
+
+  it('records who did what to whom, for service_role only', async () => {
+    await withControl(async (c) => {
+      await asPostgres(c);
+      await registerTenant(c, academy);
+      await c.query('set local role service_role');
+      await log(c, 'zz-academy', 'first_admin_created');
+      await asPostgres(c);
+      const row = (await c.query(`select actor, reason from public.tenant_audit where slug = 'zz-academy' and action = 'first_admin_created'`)).rows[0];
+      expect(row).toEqual({ actor: 'owner@example.com', reason: 'ann@example.com' });
+      await actAs(c, users.admin, { aal: 'aal2' });
+      await refused(c, () => log(c, 'zz-academy', 'first_admin_created'), /permission denied/);
+      await actAs(c, null);
+      await refused(c, () => log(c, 'zz-academy', 'first_admin_created'), /permission denied/);
+    });
+  });
+
+  it('refuses unknown actions and unknown companies', async () => {
+    await withControl(async (c) => {
+      await asPostgres(c);
+      await registerTenant(c, academy);
+      await c.query('set local role service_role');
+      await refused(c, () => log(c, 'zz-academy', 'delete_everything'), /Unknown action delete_everything/);
+      await refused(c, () => log(c, 'zz-nope', 'admin_password_reset'), /Unknown company zz-nope/);
     });
   });
 });

@@ -26,6 +26,7 @@ export async function updateConsoleSession(request: NextRequest): Promise<Respon
   const next = () => NextResponse.next({ request: { headers } });
   let response = next();
   const supabase = createServerClient(control.url, control.anonKey, {
+    cookieOptions: { secure: process.env.NODE_ENV === 'production' },
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll(cookiesToSet) {
@@ -41,7 +42,9 @@ export async function updateConsoleSession(request: NextRequest): Promise<Respon
   const path = request.nextUrl.pathname;
   if (user && !CONSOLE_PUBLIC_PATHS.includes(path)) {
     const raw = request.cookies.get(CONSOLE_LAST_SEEN_COOKIE)?.value;
-    if (isIdleExpired(raw ? Number(raw) : null, Date.now(), CONSOLE_IDLE_MINUTES)) {
+    // The last-seen cookie is a session cookie but the auth cookies persist: no (or a garbled) cookie means a new browser session, so sign in again.
+    const lastSeen = raw ? Number(raw) : NaN;
+    if (!Number.isFinite(lastSeen) || isIdleExpired(lastSeen, Date.now(), CONSOLE_IDLE_MINUTES)) {
       await supabase.auth.signOut({ scope: 'local' });
       const url = request.nextUrl.clone();
       url.pathname = '/console/login';

@@ -7,7 +7,13 @@ vi.mock('next/navigation', () => ({
     throw new Error(`REDIRECT ${to}`);
   },
 }));
-vi.mock('@/lib/console/session', () => ({ requireConsoleUser: async () => ({ userId: 'u1', email: 'a@b.c' }) }));
+const host = { ok: true };
+vi.mock('@/lib/console/session', () => ({
+  requireConsoleUser: async () => ({ userId: 'u1', email: 'a@b.c' }),
+  requireConsoleHost: async () => {
+    if (!host.ok) throw new Error('NOT_FOUND');
+  },
+}));
 
 type Factor = { id: string; factor_type: string; status: string };
 const state = { factors: [] as Factor[], listed: true };
@@ -29,15 +35,33 @@ vi.mock('@/lib/console/supabase', () => ({
   }),
 }));
 
-import { confirmConsoleEnroll, signInConsole, startConsoleEnroll } from './auth-actions';
+import { confirmConsoleEnroll, signInConsole, startConsoleEnroll, verifyConsoleMfa } from './auth-actions';
 
 beforeEach(() => {
   vi.clearAllMocks();
   state.factors = [];
   state.listed = true;
+  host.ok = true;
+});
+
+describe('console host', () => {
+  it('every auth action is a 404 off the console host', async () => {
+    host.ok = false;
+    const fd = new FormData();
+    await expect(signInConsole({}, fd)).rejects.toThrow('NOT_FOUND');
+    await expect(verifyConsoleMfa({}, fd)).rejects.toThrow('NOT_FOUND');
+    await expect(startConsoleEnroll()).rejects.toThrow('NOT_FOUND');
+    await expect(confirmConsoleEnroll('f', '1')).rejects.toThrow('NOT_FOUND');
+    expect(auth.signInWithPassword).not.toHaveBeenCalled();
+  });
 });
 
 describe('startConsoleEnroll', () => {
+  it('refuses when any factor type is already verified', async () => {
+    state.factors = [{ id: 'p1', factor_type: 'phone', status: 'verified' }];
+    expect(await startConsoleEnroll()).toEqual({ error: 'An authenticator is already set up.' });
+    expect(auth.mfa.enroll).not.toHaveBeenCalled();
+  });
   it('refuses when an authenticator is already verified', async () => {
     state.factors = [{ id: 'f1', factor_type: 'totp', status: 'verified' }];
     expect(await startConsoleEnroll()).toEqual({ error: 'An authenticator is already set up.' });

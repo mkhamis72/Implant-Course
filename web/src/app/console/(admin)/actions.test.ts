@@ -8,6 +8,8 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 vi.mock('@/lib/console/session', () => ({ requireConsoleAdmin: vi.fn(async () => ({ userId: 'u1', email: 'owner@example.com' })) }));
+vi.mock('@/lib/console/first-admin', () => ({ createFirstAdmin: vi.fn(async () => ({ password: 'Temp-Pass-123', created: true })) }));
+vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn(() => ({})) }));
 vi.mock('@/lib/tenant/check', () => ({ checkTenant: vi.fn() }));
 
 const rpc = vi.fn();
@@ -132,5 +134,30 @@ describe('firstAdmin', () => {
     const r = await firstAdmin({}, form({ slug: 'acme', email: 'a@b.com', fullName: 'Ann Admin' }));
     expect(r.error).toBe('Unknown company acme');
     expect(r.password).toBeUndefined();
+  });
+
+  const admin = { slug: 'acme', email: 'a@b.com', fullName: 'Ann Admin' };
+  const withKey = (logError: { message: string } | null = null) =>
+    rpc.mockImplementation(async (name: string) =>
+      name === 'tenant_secret' ? { data: 'svc-key', error: null } : { data: null, error: name === 'console_log' ? logError : null },
+    );
+
+  it('records who created the login and for whom, never the password', async () => {
+    existing = row;
+    withKey();
+    const r = await firstAdmin({}, form(admin));
+    expect(r.password).toBe('Temp-Pass-123');
+    expect(r.ok).toBe('Admin login created.');
+    const call = rpc.mock.calls.find(([name]) => name === 'console_log')!;
+    expect(call[1]).toEqual({ p_slug: 'acme', p_action: 'first_admin_created', p_detail: 'a@b.com', p_actor: 'owner@example.com' });
+    expect(JSON.stringify(call)).not.toContain('Temp-Pass-123');
+  });
+
+  it('still shows the password, with a warning, when the history entry fails', async () => {
+    existing = row;
+    withKey({ message: 'boom' });
+    const r = await firstAdmin({}, form(admin));
+    expect(r.password).toBe('Temp-Pass-123');
+    expect(r.ok).toContain('could not be recorded in the history');
   });
 });

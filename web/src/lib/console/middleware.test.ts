@@ -21,6 +21,7 @@ function request(path: string, cookie?: string) {
   return new NextRequest(`http://console.example.com${path}`, { headers });
 }
 
+const fresh = `${CONSOLE_LAST_SEEN_COOKIE}=${Date.now()}`;
 const stale = `${CONSOLE_LAST_SEEN_COOKIE}=${Date.now() - 16 * 60_000}`;
 
 beforeEach(() => {
@@ -33,12 +34,12 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe('updateConsoleSession', () => {
   it('does not forward a browser-sent x-tenant header', async () => {
-    const res = await updateConsoleSession(request('/console'));
+    const res = await updateConsoleSession(request('/console', fresh));
     expect(res.headers.get('x-middleware-request-x-tenant')).toBeNull();
   });
 
   it('allows only the control project in the CSP', async () => {
-    const res = await updateConsoleSession(request('/console'));
+    const res = await updateConsoleSession(request('/console', fresh));
     const csp = res.headers.get('content-security-policy') ?? '';
     expect(csp).toContain('https://control-ref.supabase.co');
     expect(csp).not.toContain('academy');
@@ -51,6 +52,26 @@ describe('updateConsoleSession', () => {
     expect(location.pathname + location.search).toBe('/console/login?reason=idle');
     expect(signOut).toHaveBeenCalledWith({ scope: 'local' });
     expect(res.headers.get('set-cookie')).toContain(`${CONSOLE_LAST_SEEN_COOKIE}=;`);
+  });
+
+  it('treats a missing last-seen cookie (new browser session) as idle', async () => {
+    const res = await updateConsoleSession(request('/console'));
+    expect(res.status).toBe(307);
+    const location = new URL(res.headers.get('location') ?? '');
+    expect(location.pathname + location.search).toBe('/console/login?reason=idle');
+    expect(signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
+  it('treats an unparseable last-seen cookie as idle', async () => {
+    const res = await updateConsoleSession(request('/console', `${CONSOLE_LAST_SEEN_COOKIE}=abc`));
+    expect(res.status).toBe(307);
+  });
+
+  it('does not redirect on the login page without a last-seen cookie', async () => {
+    const res = await updateConsoleSession(request('/console/login'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('location')).toBeNull();
+    expect(signOut).not.toHaveBeenCalled();
   });
 
   it('does not redirect on the login page itself', async () => {

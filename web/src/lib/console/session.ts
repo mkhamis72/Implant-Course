@@ -1,13 +1,23 @@
 import 'server-only';
 import { cache } from 'react';
-import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
+import { notFound, redirect } from 'next/navigation';
+import { normaliseHost } from '@/lib/tenant/host';
 import { verifiedAal } from '@/lib/auth/redirects';
 import { createConsoleClient, createConsoleServiceClient } from './supabase';
+import { consoleHost } from './env';
 import { consoleMfaStep } from './mfa-step';
 
 export type ConsoleAdmin = { userId: string; email: string };
 
+/** Server actions are POSTable on any host the app serves: console code runs on the console host only. */
+export async function requireConsoleHost(): Promise<void> {
+  const expected = consoleHost();
+  if (!expected || normaliseHost((await headers()).get('host')) !== expected) notFound();
+}
+
 async function signedInListed() {
+  await requireConsoleHost();
   const supabase = await createConsoleClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/console/login');

@@ -9,6 +9,7 @@ export async function createConsoleClient(): Promise<SupabaseClient> {
   const { url, anonKey } = controlConfig();
   const cookieStore = await cookies();
   return createServerClient(url, anonKey, {
+    cookieOptions: { secure: process.env.NODE_ENV === 'production' },
     cookies: {
       getAll: () => cookieStore.getAll(),
       setAll(cookiesToSet) {
