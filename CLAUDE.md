@@ -103,3 +103,4 @@ Runbook: `docs/operations.md` (provisioning, accounts, releases, backup/restore)
 - The full E2E run (~110 tests) exceeds the 10-minute foreground limit and background runs get killed under memory pressure: run it in parts (`npx playwright test <spec names…>`) and check free memory first.
 - Next.js renders a hidden `role="alert"` route announcer: filter alert locators by text (`getByRole('alert').filter({ hasText })`).
 - There is no Prettier config — don't run Prettier; it rewrites quotes and wrapping.
+- A migration that seeds rows must add its table to the restore `TRUNCATE` in `docs/operations.md` §D, or restoring the nightly data-only dump fails on the primary key (as `branding` would have).
