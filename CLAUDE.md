@@ -18,6 +18,8 @@ npm run db:start            # local Supabase stack (Docker Desktop must be runni
 npm run test:db             # DB tests against the local stack; APPLIES PENDING MIGRATIONS FIRST (see Gotchas)
 npm run test:db -- friction # single DB test file
 npm run test:e2e            # Playwright, 1 worker, starts/reuses the dev server (~12 min full run)
+npm run db:dev2:start         # second local stack (company B for the isolation E2E): writes web/.env.dev2 + web/tenants.local.json; then ENV_FILE=.env.dev2 npm run db:migrate once; db:dev2:stop
+TENANTS_FILE=tenants.local.json npx playwright test isolation --project=chromium   # needs both stacks, nothing on :3000; skips without TENANTS_FILE
 npx playwright test schedule -g "clash"   # single spec / test
 npm run db:migrate          # apply supabase/migrations/*.sql not yet in app_private.schema_migrations
 npm run create-user -- you@example.com "Name" [--role admin | --role delegate --delegate <id>]   # temporary password; ENV_FILE=.env.prod targets prod

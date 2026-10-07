@@ -52,3 +52,6 @@ catalog-*.csv
 
 # local multi-tenant registry (holds dev service keys)
 tenants.local.json
+
+# second local stack (npm run db:dev2:start)
+/.dev2/
