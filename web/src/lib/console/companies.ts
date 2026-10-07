@@ -57,6 +57,8 @@ export async function companyHealth(
         db.from('profiles').select('user_id', { count: 'exact', head: true }).eq('active', true),
         db.from('patients').select('id', { count: 'exact', head: true }),
       ]);
+      const failure = users.error ?? patients.error;
+      if (failure) return { problems: [`Couldn't count users or patients: ${failure.message}`], users: null, patients: null };
       return { problems: [], users: users.count ?? null, patients: patients.count ?? null };
     })(), opts.timeoutMs ?? 5000);
   } catch (e) {

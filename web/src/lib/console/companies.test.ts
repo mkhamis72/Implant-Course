@@ -29,6 +29,15 @@ describe('companyHealth', () => {
     expect(h).toEqual({ problems: [], users: 4, patients: 120 });
   });
 
+  it('does not report a healthy row when a count query fails', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    const broken = (() => ({
+      from: () => ({ select: () => Object.assign(Promise.resolve({ count: null, error: { message: 'permission denied' } }), { eq: () => Promise.resolve({ count: null, error: { message: 'permission denied' } }), limit: () => Promise.resolve({ data: [], error: null }) }) }),
+    })) as never;
+    const h = await companyHealth(controlWith(row), 'acme', { connect: broken, fetchImpl });
+    expect(h).toEqual({ problems: ["Couldn't count users or patients: permission denied"], users: null, patients: null });
+  });
+
   it('reports a missing company and a missing service key', async () => {
     expect((await companyHealth(controlWith(null), 'nope')).problems).toEqual(['Unknown company nope']);
     expect((await companyHealth(controlWith(row, null), 'acme')).problems).toEqual(['No service key in Vault']);
