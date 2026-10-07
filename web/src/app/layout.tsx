@@ -27,7 +27,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const css = brandingCss(await getBranding());
   return (
     <html lang="en" className={inter.variable}>
-      <head>{css && <style>{css}</style>}</head>
+      <head>{css ? <style>{css}</style> : null}</head>
       <body>{children}</body>
     </html>
   );
