@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { requireConsoleAdmin } from '@/lib/console/session';
 import { createConsoleServiceClient } from '@/lib/console/supabase';
-import { companyHealth, getCompany, serviceKeyOf, type CompanyHealth } from '@/lib/console/companies';
+import { getCompany, serviceKeyOf } from '@/lib/console/companies';
 import { createFirstAdmin } from '@/lib/console/first-admin';
 import { firstAdminSchema, registerSchema, secretsSchema, statusSchema, updateSchema } from '@/lib/console/schemas';
 import { checkTenant } from '@/lib/tenant/check';
@@ -29,11 +29,6 @@ async function checkProblem(t: Tenant): Promise<string | null> {
   } catch (e) {
     return `Not saved — couldn't reach the project: ${(e as Error).message}`;
   }
-}
-
-export async function checkCompany(slug: string): Promise<CompanyHealth> {
-  await requireConsoleAdmin();
-  return companyHealth(createConsoleServiceClient(), slug);
 }
 
 export async function registerCompany(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -87,6 +82,7 @@ export async function replaceCompanyKeys(_prev: FormState, formData: FormData): 
   const parsed = secretsSchema.safeParse(fields(formData));
   if (!parsed.success) return failedWithoutSecrets(parsed.error.issues[0].message, formData);
   const k = parsed.data;
+  if (!(await getCompany(createConsoleServiceClient(), k.slug))) return failedWithoutSecrets(`Unknown company ${k.slug}`, formData);
   const problem = await checkProblem({ supabaseUrl: k.supabaseUrl, anonKey: k.anonKey, serviceRoleKey: k.serviceRoleKey });
   if (problem) return failedWithoutSecrets(problem, formData);
   const { error } = await createConsoleServiceClient().rpc('console_replace_secrets', {
@@ -98,7 +94,7 @@ export async function replaceCompanyKeys(_prev: FormState, formData: FormData): 
   return { ok: 'Keys replaced.' };
 }
 
-export type FirstAdminState = FormState & { password?: string; email?: string };
+export type FirstAdminState = FormState & { password?: string; email?: string; seq?: number };
 
 export async function firstAdmin(_prev: FirstAdminState, formData: FormData): Promise<FirstAdminState> {
   await requireConsoleAdmin();

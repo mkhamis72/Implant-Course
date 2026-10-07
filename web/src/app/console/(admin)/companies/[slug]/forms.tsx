@@ -1,19 +1,17 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState } from 'react';
 import { valueOf, type FormState } from '@/lib/patients/form-state';
 import { TemporaryPassword } from '@/components/temporary-password';
 import { firstAdmin, replaceCompanyKeys, setCompanyStatus, updateCompany, type FirstAdminState } from '../../actions';
 
-/** useActionState plus a counter that changes on every result, so the form remounts (React 19 resets uncontrolled inputs). */
+/** useActionState plus a sequence number carried in each result, so the form remounts (React 19 resets uncontrolled inputs). */
 function useRemountingAction(action: (prev: FirstAdminState, formData: FormData) => Promise<FirstAdminState>) {
-  const [attempt, setAttempt] = useState(0);
-  const [state, formAction, pending] = useActionState(async (prev: FirstAdminState, formData: FormData) => {
-    const next = await action(prev, formData);
-    setAttempt((n) => n + 1);
-    return next;
-  }, {} as FirstAdminState);
-  return { state, formAction, pending, attempt };
+  const [state, formAction, pending] = useActionState(
+    async (prev: FirstAdminState, formData: FormData): Promise<FirstAdminState> => ({ ...(await action(prev, formData)), seq: (prev.seq ?? 0) + 1 }),
+    {} as FirstAdminState,
+  );
+  return { state, formAction, pending, attempt: state.seq ?? 0 };
 }
 
 function Messages({ state }: { state: FormState }) {

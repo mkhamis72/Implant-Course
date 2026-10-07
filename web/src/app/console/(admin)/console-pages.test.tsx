@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 vi.mock('./actions', () => ({
-  checkCompany: vi.fn().mockResolvedValue({ problems: [], users: 3, patients: 9 }),
   registerCompany: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
@@ -12,6 +11,7 @@ import { RegisterForm } from './companies/new/register-form';
 
 describe('CompaniesTable', () => {
   it('shows one row per company', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ problems: [], users: 3, patients: 9 }), { status: 200 })));
     render(
       <CompaniesTable
         companies={[

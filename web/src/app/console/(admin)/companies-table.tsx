@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { CompanyHealth } from '@/lib/console/companies';
-import { checkCompany } from './actions';
 
 type Company = { slug: string; name: string; hosts: string[]; status: 'active' | 'suspended' };
 
@@ -11,12 +10,16 @@ function useHealth(slug: string) {
   const [health, setHealth] = useState<CompanyHealth | null>(null);
   useEffect(() => {
     let live = true;
-    checkCompany(slug)
+    fetch(`/console/api/health?slug=${encodeURIComponent(slug)}`)
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as CompanyHealth;
+      })
       .then((h) => {
         if (live) setHealth(h);
       })
-      .catch(() => {
-        if (live) setHealth({ problems: ["Couldn't check"], users: null, patients: null });
+      .catch((e: Error) => {
+        if (live) setHealth({ problems: [`Couldn't check: ${e.message}`], users: null, patients: null });
       });
     return () => {
       live = false;
