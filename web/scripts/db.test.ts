@@ -17,4 +17,8 @@ describe('pgConfig', () => {
     expect(pgConfig({ DATABASE_URL: url, ALLOW_TEST_FIXTURES: '1' }).ssl).toEqual({ rejectUnauthorized: false });
     expect(() => pgConfig({ DATABASE_URL: url })).toThrow(/DATABASE_CA_CERT/);
   });
+  it('connects without TLS to a local Supabase stack', () => {
+    expect(pgConfig({ DATABASE_URL: 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' }).ssl).toBe(false);
+    expect(pgConfig({ DATABASE_URL: 'postgresql://postgres:postgres@localhost:54322/postgres' }).ssl).toBe(false);
+  });
 });

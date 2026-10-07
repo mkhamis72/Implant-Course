@@ -3,18 +3,18 @@
 Spec: `../docs/superpowers/specs/2026-10-01-implant-course-manager-design.md`
 
 ## First-time setup
-1. Create the Supabase project and auth settings described in
-   `../docs/superpowers/plans/2026-10-01-plan-1-foundation.md` → Task 2 (manual prerequisite).
-2. `cp .env.example .env.local` and fill it in. `DATABASE_URL` must be the **Session pooler**
-   URI (the direct `db.<ref>.supabase.co` host is IPv6-only).
-3. `npm install`
-4. `npm run db:migrate`
+Development and tests run on a **local Supabase stack** (Docker); only production is hosted.
+1. Install Docker Desktop (Windows: WSL2 backend, `wsl --install` first) and start it.
+2. `npm install`, then `npm run db:start` — starts the stack from `supabase/config.toml`
+   (auth, MFA and email templates as on prod; emails land in Mailpit at http://127.0.0.1:54324).
+3. `cp .env.example .env.local` and fill it in from `npm run db:status` (API URL, anon and service keys).
+4. `npm run db:migrate` — the stack's own migration runner is off; this script owns `supabase/migrations`, as on prod.
 5. `npm run create-user -- you@example.com "Your Name" --role admin` — prints a temporary password (re-run to reset it).
 6. `npm run dev` → http://localhost:3000
 
 ## Tests
 - `npm test` — unit tests
-- `npm run test:db` — database tests against the dev project (each test rolls back)
+- `npm run test:db` — database tests against the local stack (each test rolls back)
 - `npm run test:e2e` — browser tests (starts the dev server; creates `icm-test-*@example.com` users)
 
 ## Production notes

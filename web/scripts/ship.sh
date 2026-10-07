@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Verify a feature branch against dev, then ship it to production through the release workflow.
+# Verify a feature branch against the local Supabase stack, then ship it to production through the release workflow.
 #
-#   ./scripts/ship.sh verify [e2e specs…]   typecheck, lint, unit, DB tests (applies pending migrations to DEV), chosen E2E specs
+#   ./scripts/ship.sh verify [e2e specs…]   typecheck, lint, unit, DB tests (applies pending migrations to the LOCAL stack), chosen E2E specs
 #   ./scripts/ship.sh ship                  push, open a PR, merge it into master, watch release.yml (migrates PROD, then deploys)
 #
 # Run from web/ in Git Bash, with everything committed. Production only ever changes through the merge.
@@ -21,6 +21,7 @@ case "${1:-}" in
     npx tsc --noEmit
     npm run lint
     npm test
+    npx supabase status >/dev/null 2>&1 || { echo "The local Supabase stack is not running: start Docker Desktop, then npm run db:start." >&2; exit 1; }
     npm run test:db
     if [ $# -gt 0 ]; then npx playwright test "$@"; else echo "No E2E specs given: skipped (the full run is too long for one go)."; fi
     echo "Verified $branch."
