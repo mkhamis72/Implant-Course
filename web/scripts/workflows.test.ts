@@ -53,10 +53,11 @@ describe('secrets are cleaned of stray line endings before use', () => {
     expect(cleans(runOf(release, 'Migrate'), 'PROD_DATABASE_CA_CERT')).toBe(true);
     expect(cleans(runOf(release, 'Deploy'), 'HOOK')).toBe(true);
   });
-  it('backup and verify: passphrase, database URL, CA certificate and REST keys', () => {
+  it('backup and verify: passphrase, control database URL, CA certificate and control keep-awake keys', () => {
     const dump = runOf(backup.backup, 'Dump');
-    for (const n of ['PASSPHRASE', 'DATABASE_URL', 'CA']) expect(cleans(dump, n)).toBe(true);
-    for (const n of ['URL', 'ANON']) expect(cleans(runOf(backup.backup, 'Keep'), n)).toBe(true);
+    for (const n of ['PASSPHRASE', 'CONTROL_DATABASE_URL', 'CA']) expect(cleans(dump, n)).toBe(true);
+    for (const n of ['CONTROL_DATABASE_URL', 'CA']) expect(cleans(runOf(backup.backup, 'Export'), n)).toBe(true);
+    for (const n of ['CONTROL_SUPABASE_URL', 'CONTROL_ANON_KEY']) expect(cleans(runOf(backup.backup, 'Keep'), n)).toBe(true);
     expect(cleans(runOf(backup.verify, 'Decrypt'), 'PASSPHRASE')).toBe(true);
   });
 });
@@ -69,20 +70,49 @@ describe('backup.yml', () => {
     expect(dump.indexOf('BACKUP_PASSPHRASE secret is missing')).toBeGreaterThan(-1);
     expect(dump.indexOf('BACKUP_PASSPHRASE secret is missing')).toBeLessThan(dump.indexOf('pg_dump'));
   });
-  it('dumps the data a restore needs: app tables and sign-in accounts, without migration bookkeeping', () => {
+  it('dumps the data a restore needs for each company: app tables and sign-in accounts, without migration bookkeeping', () => {
     expect(dump).toContain('--data-only');
     expect(dump).toContain('--schema=auth');
     expect(dump).toContain('--exclude-table=app_private.schema_migrations');
     expect(dump).toContain('--exclude-table=auth.schema_migrations');
-    expect(dump).toMatch(/pg_dump[^|]*\\\s*\n\s*\| gpg/);
+    expect(dump).toContain('out/$SLUG-$day.dump.gpg');
+  });
+  it('encrypts every dump on the way out (the plain dump never touches disk)', () => {
+    expect(dump).toMatch(/encrypt\(\) \{ gpg [^}]*--symmetric --cipher-algo AES256/);
+    expect(dump.match(/\| encrypt /g)?.length).toBe(2);
+    expect(dump).not.toMatch(/pg_dump[^\n]*> /);
+  });
+  it('backs up every exported company, refusing an empty export', () => {
+    expect(runOf(jobs.backup, 'Export')).toContain('npm run tenants:export -- --dir "$RUNNER_TEMP/tenants"');
+    expect(dump).toContain('No companies were exported');
+  });
+  it('keeps going past a failed company but fails the run at the end, naming it', () => {
+    expect(dump).toContain('failed+=');
+    expect(runOf(jobs.backup, 'Fail')).toContain('exit 1');
+  });
+  it('backs up only the registry from the control project', () => {
+    expect(dump).toContain('--table=public.tenants --table=public.tenant_audit');
+    expect(dump).toContain('out/control-$day.dump.gpg');
+  });
+  it('uploads one artifact per night', () => {
+    const upload = jobs.backup.steps.find((s) => s.uses?.startsWith('actions/upload-artifact'));
+    expect(upload?.with).toMatchObject({ name: 'backups-${{ github.run_id }}', path: 'web/out/*.dump.gpg', 'retention-days': 14 });
   });
   it('uses the newest PostgreSQL client, never a pinned older one', () => {
     for (const job of Object.values(jobs)) expect(JSON.stringify(job)).not.toContain('postgresql/17');
   });
-  it('keeps the project awake with an endpoint the anon key may call', () => {
-    expect(runOf(jobs.backup, 'Keep')).toContain('/auth/v1/health');
+  it('keeps every company and the control project awake with an endpoint the anon key may call', () => {
+    const keep = runOf(jobs.backup, 'Keep');
+    expect(keep).toContain('/auth/v1/health');
+    expect(keep).toContain('"$RUNNER_TEMP"/tenants/*.env');
+    expect(keep).toContain('CONTROL_SUPABASE_URL');
   });
-  it('verify mode checks that sign-in accounts are in the backup', () => {
-    expect(runOf(jobs.verify, 'Decrypt')).toContain('TABLE DATA auth users');
+  it('verify mode checks every file: companies have patients and sign-in accounts, control has tenants', () => {
+    const verify = runOf(jobs.verify, 'Decrypt');
+    expect(verify).toContain('TABLE DATA public patients');
+    expect(verify).toContain('TABLE DATA auth users');
+    expect(verify).toContain('TABLE DATA public tenants');
+    expect(verify).toContain('for f in in/*.dump.gpg');
+    expect(runOf(jobs.verify, 'Download')).toContain('startswith("backups-")');
   });
 });
