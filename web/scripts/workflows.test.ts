@@ -28,6 +28,16 @@ describe('release.yml', () => {
     const names = deploy.steps.map((s) => s.name ?? '');
     expect(names.findIndex((n) => n.startsWith('Migrate'))).toBeLessThan(names.findIndex((n) => n.startsWith('Deploy')));
   });
+  it('migrates the control project, then every company, then deploys', () => {
+    const run = runOf(deploy, 'Migrate');
+    const control = run.indexOf('npm run db:migrate -- --control');
+    const all = run.indexOf('npm run db:migrate -- --all-tenants');
+    expect(control).toBeGreaterThan(-1);
+    expect(all).toBeGreaterThan(control);
+    expect(run).not.toContain('PROD_DATABASE_URL');
+    expect(run.indexOf('CONTROL_DATABASE_URL secret is missing')).toBeLessThan(control);
+    expect(run).toContain('set -euo pipefail');
+  });
 });
 
 // Secrets pasted on Windows can carry a trailing CR/LF; every step strips it before use
@@ -38,8 +48,8 @@ const cleans = (run: string, name: string) => run.includes(CLEAN) && run.include
 describe('secrets are cleaned of stray line endings before use', () => {
   const release = load('release.yml').jobs['migrate-and-deploy'];
   const backup = load('backup.yml').jobs;
-  it('release: database URL, CA certificate and deploy hook', () => {
-    expect(cleans(runOf(release, 'Migrate'), 'DATABASE_URL')).toBe(true);
+  it('release: control database URL, CA certificate and deploy hook', () => {
+    expect(cleans(runOf(release, 'Migrate'), 'CONTROL_DATABASE_URL')).toBe(true);
     expect(cleans(runOf(release, 'Migrate'), 'PROD_DATABASE_CA_CERT')).toBe(true);
     expect(cleans(runOf(release, 'Deploy'), 'HOOK')).toBe(true);
   });
