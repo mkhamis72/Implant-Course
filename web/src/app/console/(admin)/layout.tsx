@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { IdleTimer } from '@/components/idle-timer';
 import { CONSOLE_IDLE_MINUTES } from '@/lib/console/middleware';
 import { controlConfig } from '@/lib/console/env';
@@ -13,6 +14,7 @@ export default async function ConsoleAdminLayout({ children }: { children: React
         <span className="font-semibold">Console</span>
         <div className="flex items-center gap-3 text-sm">
           <span className="text-muted">{admin.email}</span>
+          <Link href="/console/account" className="text-accent hover:underline">Change password</Link>
           <form action={signOutConsole}>
             <button className="btn-secondary btn">Sign out</button>
           </form>
