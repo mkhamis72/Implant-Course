@@ -3,8 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
-import { cancelSlotSchema, slotSchema, slotStatusSchema, updateSlotSchema } from '@/lib/schedule/schemas';
-import type { FormState } from '@/lib/patients/form-state';
+import { cancelSlotSchema, slotSchema, slotStatusSchema, surgeryDaySchema, updateSlotSchema } from '@/lib/schedule/schemas';
+import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
 import { escapeLike } from '@/lib/like';
 
@@ -99,4 +99,19 @@ export async function cancelBooking(_prev: FormState, formData: FormData): Promi
   if (error) return { error: userMessage(error)! };
   revalidatePath('/schedule');
   return { ok: 'Booking cancelled.' };
+}
+
+export async function addSurgeryDay(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requirePermission('schedule', 'edit');
+  const parsed = surgeryDaySchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
+  const d = parsed.data;
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('add_surgery_session', {
+    p_course: d.course_id, p_date: d.date, p_title: d.title, p_start: d.start_time, p_end: d.end_time, p_room: d.room,
+  });
+  if (error) return failed(userMessage(error)!, formData);
+  revalidatePath('/schedule');
+  revalidatePath(`/courses/${d.course_id}`);
+  return { ok: 'Surgery day added.' };
 }

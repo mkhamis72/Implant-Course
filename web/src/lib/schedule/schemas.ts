@@ -23,21 +23,31 @@ export const courseSchema = z
   })
   .refine((c) => c.end_date >= c.start_date, { message: 'The course must end on or after its start date.' });
 
+const sessionFields = {
+  title: z.string().trim().min(2, { message: 'Enter the session title.' }).max(120),
+  date: date('Enter the session date.'),
+  start_time: time('Enter the start time (HH:MM).'),
+  end_time: time('Enter the end time (HH:MM).'),
+  room: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v ?? null),
+    z.string().trim().max(120, { message: 'Keep the room under 120 characters.' }).nullable(),
+  ),
+};
+const sessionEndsAfterStart = { message: 'The session must end after it starts.' };
+
 export const sessionSchema = z
   .object({
     course_id: requiredId('Course not found.'),
     type: z.enum(SESSION_TYPES, { message: 'Choose the session type.' }),
-    title: z.string().trim().min(2, { message: 'Enter the session title.' }).max(120),
-    date: date('Enter the session date.'),
-    start_time: time('Enter the start time (HH:MM).'),
-    end_time: time('Enter the end time (HH:MM).'),
     lead_organizer_id: optionalId,
-    room: z.preprocess(
-      (v) => (typeof v === 'string' && v.trim() === '' ? null : v ?? null),
-      z.string().trim().max(120, { message: 'Keep the room under 120 characters.' }).nullable(),
-    ),
+    ...sessionFields,
   })
-  .refine((s) => s.end_time > s.start_time, { message: 'The session must end after it starts.' });
+  .refine((s) => s.end_time > s.start_time, sessionEndsAfterStart);
+
+/** "Add surgery day" on the Schedule page: always a surgery session, saved by add_surgery_session. */
+export const surgeryDaySchema = z
+  .object({ course_id: requiredId('Choose a course.'), ...sessionFields })
+  .refine((s) => s.end_time > s.start_time, sessionEndsAfterStart);
 
 export const chairSchema = z.object({ name: z.string().trim().min(1, { message: 'Enter the chair name.' }).max(40) });
 export const supervisorSchema = z.object({

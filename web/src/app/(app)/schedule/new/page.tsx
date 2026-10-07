@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
-import { todayIso } from '@/lib/dates';
+import { isRealDate, todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
 import type { Option, Product } from '@/lib/inventory/types';
@@ -52,7 +52,7 @@ export default async function NewBookingPage({
         implants={((implants ?? []) as Product[]).sort((a, b) => productLabel(a).localeCompare(productLabel(b), undefined, { numeric: true }))}
         supervisors={(supervisors ?? []).map((s) => ({ id: s.id as string, label: s.full_name as string }))}
         me={me?.user_id ?? ''}
-        initial={{ sessionId: initialSession, chairId: q.chair, start: q.time || '09:00', fileNo: q.patient }}
+        initial={{ sessionId: initialSession, chairId: q.chair, start: q.time || '09:00', fileNo: q.patient, date: q.date && isRealDate(q.date) ? q.date : undefined }}
       />
     </div>
   );

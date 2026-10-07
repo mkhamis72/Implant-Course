@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   cancelSlotSchema, correctionSchema, courseSchema, lecturerSchema, sessionSchema, slotSchema, slotStatusSchema, supervisorSchema,
-  talkSchema, updateSlotSchema, updateTalkSchema,
+  surgeryDaySchema, talkSchema, updateSlotSchema, updateTalkSchema,
 } from './schemas';
 
 const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
@@ -27,6 +27,13 @@ describe('course and session schemas', () => {
     expect(sessionSchema.parse(s)).toMatchObject({ room: null });
     expect(sessionSchema.parse({ ...s, room: ' Hall A ' })).toMatchObject({ room: 'Hall A' });
     expect(err(sessionSchema.safeParse({ ...s, room: 'x'.repeat(121) }))).toBe('Keep the room under 120 characters.');
+  });
+  it('validates a surgery day from the Schedule page (no type, no lead organizer)', () => {
+    const s = { course_id: id, title: ' Surgery day ', date: '2030-03-02', start_time: '08:00', end_time: '17:00', room: '' };
+    expect(surgeryDaySchema.parse(s)).toEqual({ ...s, title: 'Surgery day', room: null });
+    expect(err(surgeryDaySchema.safeParse({ ...s, course_id: '' }))).toBe('Choose a course.');
+    expect(err(surgeryDaySchema.safeParse({ ...s, end_time: '08:00' }))).toBe('The session must end after it starts.');
+    expect(err(surgeryDaySchema.safeParse({ ...s, title: 'x' }))).toBe('Enter the session title.');
   });
 });
 
