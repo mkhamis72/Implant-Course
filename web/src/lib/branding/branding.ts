@@ -1,4 +1,4 @@
-/** A company's branding as the app uses it; blank values fall back to todays look. */
+/** A company's branding as the app uses it; blank values fall back to today's look. */
 export const DEFAULT_NAME = 'Implant Course Manager';
 
 export type Branding = { name: string; brandColor: string | null; navColor: string | null; logoUrl: string | null };

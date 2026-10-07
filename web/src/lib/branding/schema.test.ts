@@ -15,8 +15,8 @@ describe('brandingSchema', () => {
     });
   });
   it('refuses a bad name, a non-colour and unreadable colours', () => {
-    expect(err(brandingSchema.safeParse({ ...base, name: 'A' }))).toBe('Enter a name of 2-60 characters.');
-    expect(err(brandingSchema.safeParse({ ...base, name: 'x'.repeat(61) }))).toBe('Enter a name of 2-60 characters.');
+    expect(err(brandingSchema.safeParse({ ...base, name: 'A' }))).toBe('Enter a name of 2–60 characters.');
+    expect(err(brandingSchema.safeParse({ ...base, name: 'x'.repeat(61) }))).toBe('Enter a name of 2–60 characters.');
     expect(err(brandingSchema.safeParse({ ...base, brand_color: 'teal' }))).toBe('Enter a colour like #0f766e.');
     expect(err(brandingSchema.safeParse({ ...base, brand_color: '#fde68a' }))).toBe('This colour is too light to read on white. Choose a darker shade.');
     expect(err(brandingSchema.safeParse({ ...base, nav_color: '#777777' }))).toBe('Text can\'t be read on this navigation colour. Choose a lighter or darker shade.');

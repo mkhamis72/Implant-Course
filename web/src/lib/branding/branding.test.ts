@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { DEFAULT_BRANDING, toBranding } from './branding';
 
 describe('toBranding', () => {
-  it('falls back to todays look without a row', () => {
+  it('falls back to today’s look without a row', () => {
     expect(toBranding(null)).toEqual(DEFAULT_BRANDING);
     expect(DEFAULT_BRANDING).toEqual({ name: 'Implant Course Manager', brandColor: null, navColor: null, logoUrl: null });
   });

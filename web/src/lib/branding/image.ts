@@ -1,4 +1,4 @@
-/** Company logo upload rules: PNG, JPEG or WebP by signature (never by name or browser type), <= 200 KB. */
+/** Company logo upload rules: PNG, JPEG or WebP by signature (never by name or browser type), ≤ 200 KB. */
 export const MAX_LOGO_BYTES = 204800;
 export type LogoType = 'image/png' | 'image/jpeg' | 'image/webp';
 

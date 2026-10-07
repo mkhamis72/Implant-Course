@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { NAV_COLOR_UNREADABLE, brandColorProblem, navInk, normaliseHex } from './colors';
 
 const blankToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? null : v ?? null);
-const NAME_MESSAGE = 'Enter a name of 2-60 characters.';
+const NAME_MESSAGE = 'Enter a name of 2–60 characters.';
 
 const color = (problem: (hex: string) => string | null) =>
   z.preprocess(
@@ -26,7 +26,7 @@ const color = (problem: (hex: string) => string | null) =>
       }),
   );
 
-/** Admin -> Settings -> Branding. Null means "use the default". */
+/** Admin → Settings → Branding. Null means "use the default". */
 export const brandingSchema = z.object({
   name: z.preprocess(blankToNull, z.string().trim().min(2, { message: NAME_MESSAGE }).max(60, { message: NAME_MESSAGE }).nullable()),
   brand_color: color(brandColorProblem),
