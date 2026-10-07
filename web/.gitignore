@@ -49,3 +49,9 @@ next-env.d.ts
 # Catalog exports and database certificates (never commit)
 catalog-*.csv
 *.crt
+
+# local multi-tenant registry (holds dev service keys)
+tenants.local.json
+
+# second local stack (npm run db:dev2:start)
+/.dev2/

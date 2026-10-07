@@ -6,7 +6,7 @@ const { auth, profileUpdate, existing } = vi.hoisted(() => ({
   existing: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ auth: { admin: auth } }) }));
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn(async () => ({ auth: { admin: auth } })) }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     from: () => ({
@@ -15,7 +15,7 @@ vi.mock('@/lib/supabase/server', () => ({
     }),
   }),
 }));
-vi.mock('@/lib/env', () => ({ serverEnv: () => ({ siteUrl: 'http://localhost:3000' }) }));
+vi.mock('@/lib/tenant/current', () => ({ requestOrigin: async () => 'http://localhost:3000' }));
 import { createLogin } from './create-login';
 
 beforeEach(() => {
@@ -63,5 +63,13 @@ describe('createLogin', () => {
     const r = await createLogin({ email: 'x@example.com', full_name: 'X', role: 'organizer' });
     expect(auth.deleteUser).toHaveBeenCalledWith('u1');
     expect(r).toHaveProperty('error');
+  });
+
+  it('reports an unavailable admin connection without creating anything', async () => {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    vi.mocked(createAdminClient).mockRejectedValueOnce(new Error("This action isn't available right now. Please try again later."));
+    expect(await createLogin({ email: 'x@example.com', full_name: 'X', role: 'organizer' })).toEqual({
+      error: "This action isn't available right now. Please try again later.",
+    });
   });
 });

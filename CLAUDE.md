@@ -18,6 +18,8 @@ npm run db:start            # local Supabase stack (Docker Desktop must be runni
 npm run test:db             # DB tests against the local stack; APPLIES PENDING MIGRATIONS FIRST (see Gotchas)
 npm run test:db -- friction # single DB test file
 npm run test:e2e            # Playwright, 1 worker, starts/reuses the dev server (~12 min full run)
+npm run db:dev2:start         # second local stack (company B for the isolation E2E): writes web/.env.dev2 + web/tenants.local.json; then ENV_FILE=.env.dev2 npm run db:migrate once; db:dev2:stop
+TENANTS_FILE=tenants.local.json npx playwright test isolation --project=chromium   # needs both stacks, nothing on :3000; skips without TENANTS_FILE
 npx playwright test schedule -g "clash"   # single spec / test
 npm run db:migrate          # apply supabase/migrations/*.sql not yet in app_private.schema_migrations
 npm run create-user -- you@example.com "Name" [--role admin | --role delegate --delegate <id>]   # temporary password; ENV_FILE=.env.prod targets prod
@@ -30,6 +32,8 @@ Development, DB and E2E tests run on a **local Supabase stack** (Docker; `web/su
 ## Architecture
 
 **Stack:** Next.js 15 App Router (server components + server actions), React 19, Tailwind v4, Zod v4, Supabase (`@supabase/ssr`) with Postgres RLS.
+
+**Companies (multi-tenant, part 1):** one Supabase project per company behind one app. `src/lib/tenant/` routes by Host: middleware (Node runtime) → `routeHost()` → registry → sets the trusted `x-tenant` (any browser-sent one is dropped) and that company's CSP. Server code gets it with `currentTenant()`; `createClient()` / `createAdminClient()` (async) use it. Registry: none configured = today's env vars as tenant `default`; `TENANTS_FILE` = local list (dev/isolation E2E only); `CONTROL_SUPABASE_URL` = the control project (`tenants`, Vault `tenant/<slug>/…`, cache 60 s, stale ≤ 10 min). Control migrations: `supabase/control/migrations/`, `npm run db:migrate -- --control`. Unknown host 404, suspended 503.
 
 **The database is the source of truth for rules.** Every multi-table or integrity-sensitive operation (place implant, fit component, receive stock, corrections, booking, checklists) is a `public.*` plpgsql function called via `supabase.rpc(...)`. Conventions in those functions:
 - `security definer set search_path = ''`, first line `perform app_private.require_perm('<area>', 'edit');` (plain `require_active()` only for non-area helpers), explicit `revoke … from public, anon` / `grant … to authenticated`. Readers that should obey RLS are `security invoker`.

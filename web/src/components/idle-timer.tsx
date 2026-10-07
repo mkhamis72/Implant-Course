@@ -12,15 +12,30 @@ const BROADCAST_EVERY_MS = 5_000;
 // Lets the server-side idle check (middleware) see activity that makes no requests, e.g. typing.
 const HEARTBEAT_EVERY_MS = 60_000;
 
-async function signOutForIdle() {
+async function signOutForIdle(supabase: { url: string; anonKey: string }) {
   // 'local' ends only this browser's session; 'global' would also sign out other devices.
-  await createClient().auth.signOut({ scope: 'local' });
+  await createClient(supabase.url, supabase.anonKey).auth.signOut({ scope: 'local' });
   window.location.assign('/login?reason=idle');
 }
 
-export function IdleTimer({ timeoutMinutes, onIdle = signOutForIdle }: { timeoutMinutes: number; onIdle?: () => void }) {
+export function IdleTimer({
+  timeoutMinutes,
+  supabase,
+  onIdle,
+}: {
+  timeoutMinutes: number;
+  supabase?: { url: string; anonKey: string };
+  onIdle?: () => void;
+}) {
+  const url = supabase?.url;
+  const anonKey = supabase?.anonKey;
   useEffect(() => {
-    const timer = createIdleTimer(timeoutMinutes * 60_000, onIdle);
+    const handleIdle =
+      onIdle ??
+      (() => {
+        if (url && anonKey) void signOutForIdle({ url, anonKey });
+      });
+    const timer = createIdleTimer(timeoutMinutes * 60_000, handleIdle);
     let lastBroadcast = 0;
     let lastHeartbeat = 0;
 
@@ -51,6 +66,6 @@ export function IdleTimer({ timeoutMinutes, onIdle = signOutForIdle }: { timeout
       ACTIVITY_EVENTS.forEach((e) => window.removeEventListener(e, onLocalActivity));
       window.removeEventListener('storage', onStorage);
     };
-  }, [timeoutMinutes, onIdle]);
+  }, [timeoutMinutes, onIdle, url, anonKey]);
   return null;
 }

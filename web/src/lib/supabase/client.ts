@@ -1,6 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr';
-import { publicEnv } from '@/lib/env';
 
-export function createClient() {
-  return createBrowserClient(publicEnv.supabaseUrl, publicEnv.supabaseAnonKey);
+/** Browser client for the current company: its URL and public key come from the server-rendered layout. */
+export function createClient(url: string, anonKey: string) {
+  return createBrowserClient(url, anonKey);
 }

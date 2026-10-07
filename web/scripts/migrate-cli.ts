@@ -1,11 +1,12 @@
 import './load-env';
 import { migrate } from './migrate';
-import { targetLabel } from './create-user-args';
+import { migrateTarget } from './migrate-target';
 
+const target = migrateTarget(process.argv.slice(2), process.env);
 // Printed first so a migration against the wrong project (e.g. a leftover ENV_FILE) is visible.
-console.log(`Target project: ${targetLabel(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
+console.log(`Target project: ${target.label}`);
 
-migrate()
+migrate(target.dir, target.config)
   .then((applied) => {
     console.log(applied.length ? `Applied: ${applied.join(', ')}` : 'Database is up to date.');
   })

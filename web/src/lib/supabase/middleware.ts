@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { publicEnv } from '@/lib/env';
+import { routeHost } from '@/lib/tenant/route';
+import { blockedResponse, forwardHeaders } from '@/lib/tenant/responses';
+import { contentSecurityPolicy } from '@/lib/security-headers';
 import { classifyPath, decideRedirect, verifiedAal, type Aal } from '@/lib/auth/redirects';
 import { isIdleExpired } from '@/lib/idle';
 
@@ -25,15 +27,26 @@ function redirectTo(request: NextRequest, response: NextResponse, pathname: stri
 }
 
 export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({ request });
-  const supabase = createServerClient(publicEnv.supabaseUrl, publicEnv.supabaseAnonKey, {
+  const route = await routeHost(request.headers.get('host'));
+  if (route.kind !== 'tenant') return blockedResponse(route.kind);
+  const { tenant } = route;
+  const csp = contentSecurityPolicy(tenant.supabaseUrl, process.env.NODE_ENV !== 'production');
+  const withCsp = (r: NextResponse) => {
+    r.headers.set('Content-Security-Policy', csp);
+    return r;
+  };
+  // Rebuilt after cookie changes too, so server code always sees the routed company, never a browser-sent one.
+  const next = () => NextResponse.next({ request: { headers: forwardHeaders(request.headers, tenant.slug) } });
+
+  let response = next();
+  const supabase = createServerClient(tenant.supabaseUrl, tenant.anonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        response = next();
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
       },
     },
@@ -60,11 +73,11 @@ export async function updateSession(request: NextRequest) {
       await supabase.auth.signOut({ scope: 'local' });
       const redirect = redirectTo(request, response, '/login', '?reason=idle');
       redirect.cookies.delete(LAST_SEEN_COOKIE);
-      return redirect;
+      return withCsp(redirect);
     }
     response.cookies.set(LAST_SEEN_COOKIE, String(Date.now()), lastSeenCookieOptions);
   }
 
   const target = decideRedirect({ path, hasUser: !!user, aal });
-  return target ? redirectTo(request, response, target) : response;
+  return withCsp(target ? redirectTo(request, response, target) : response);
 }

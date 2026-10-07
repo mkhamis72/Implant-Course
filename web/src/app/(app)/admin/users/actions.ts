@@ -63,7 +63,13 @@ export async function setUserActive(_prev: ActionState, formData: FormData): Pro
   if (problem) return { error: problem };
 
   // Ban/unban in Auth so a deactivated user cannot sign in or refresh their session.
-  const { error: banError } = await createAdminClient().auth.admin.updateUserById(user_id, {
+  let admin;
+  try {
+    admin = await createAdminClient();
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
+  const { error: banError } = await admin.auth.admin.updateUserById(user_id, {
     ban_duration: active ? 'none' : '876000h',
   });
   if (banError) return { error: mapAuthError(banError) };
