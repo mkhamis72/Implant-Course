@@ -1,0 +1,36 @@
+// @vitest-environment node
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const maybeSingle = vi.fn();
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: async () => ({ rpc: () => ({ maybeSingle }) }),
+}));
+
+import { GET } from './route';
+
+const req = (url: string) => new Request(url);
+
+describe('GET /brand/logo', () => {
+  beforeEach(() => maybeSingle.mockReset());
+
+  it('serves the stored bytes with their type, cached long when versioned', async () => {
+    maybeSingle.mockResolvedValue({ data: { bytes: '\\x89504e47', content_type: 'image/png' }, error: null });
+    const res = await GET(req('http://localhost:3000/brand/logo?v=3'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+    expect(res.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect(Array.from(new Uint8Array(await res.arrayBuffer()))).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+
+  it('is not cached without a version', async () => {
+    maybeSingle.mockResolvedValue({ data: { bytes: '\\x89504e47', content_type: 'image/png' }, error: null });
+    expect((await GET(req('http://localhost:3000/brand/logo'))).headers.get('cache-control')).toBe('no-cache');
+  });
+
+  it('is 404 when there is no logo or the read fails', async () => {
+    maybeSingle.mockResolvedValue({ data: null, error: null });
+    expect((await GET(req('http://localhost:3000/brand/logo?v=1'))).status).toBe(404);
+    maybeSingle.mockResolvedValue({ data: null, error: { message: 'boom' } });
+    expect((await GET(req('http://localhost:3000/brand/logo?v=1'))).status).toBe(404);
+  });
+});
