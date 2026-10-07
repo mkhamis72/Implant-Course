@@ -54,6 +54,10 @@ export function companyLabel(t: TenantRow): string {
 }
 
 export function takeTenantArg(argv: string[]): { slug: string | null; rest: string[] } {
+  // Check for --tenant=<slug> syntax
+  if (argv.some((arg) => arg.startsWith('--tenant='))) throw new Error('Usage: --tenant <slug>');
+  // Check for repeated --tenant
+  if (argv.filter((arg) => arg === '--tenant').length > 1) throw new Error('Usage: --tenant <slug>');
   const i = argv.indexOf('--tenant');
   if (i === -1) return { slug: null, rest: argv };
   const slug = argv[i + 1];

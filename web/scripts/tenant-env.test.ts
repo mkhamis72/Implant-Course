@@ -20,6 +20,12 @@ describe('takeTenantArg', () => {
     expect(() => takeTenantArg(['--tenant'])).toThrow('Usage: --tenant <slug>');
     expect(() => takeTenantArg(['--tenant', '--role', 'admin'])).toThrow('Usage: --tenant <slug>');
   });
+  it('refuses --tenant=<slug>', () => {
+    expect(() => takeTenantArg(['--tenant=academy'])).toThrow('Usage: --tenant <slug>');
+  });
+  it('refuses a repeated --tenant', () => {
+    expect(() => takeTenantArg(['--tenant', 'academy', '--tenant', 'other'])).toThrow('Usage: --tenant <slug>');
+  });
 });
 
 describe('company env', () => {
