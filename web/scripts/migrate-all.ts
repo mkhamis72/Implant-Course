@@ -3,6 +3,13 @@ import type { ClientConfig } from 'pg';
 import { pgConfig } from './db';
 import { companyLabel, tenantEnvFrom, type Company } from './tenant-env';
 
+/** Throws if `--all-tenants` appears with any other flag. */
+export function checkAllTenantsArgs(argv: string[]): void {
+  if (argv.includes('--all-tenants') && argv.length > 1) {
+    throw new Error('Use --all-tenants on its own.');
+  }
+}
+
 /** Applies the app migrations to every company in turn; the first failure stops the run (nothing is deployed). */
 export async function migrateAllTenants(
   companies: Company[],
