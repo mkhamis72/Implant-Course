@@ -6,7 +6,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 60_000,
-  // Dev server compiles on first hit and every call goes to hosted Supabase.
+  // Dev server compiles on first hit; tuned when every call went to hosted Supabase (now the local stack).
   expect: { timeout: 15_000 },
   globalSetup: './tests/e2e/global-setup.ts',
   globalTeardown: './tests/e2e/global-teardown.ts',

@@ -8,7 +8,7 @@ export function securityHeaders(supabaseUrl: string, dev: boolean): Header[] {
   const supabase = new URL(supabaseUrl);
   const csp = [
     "default-src 'self'",
-    `connect-src 'self' ${supabase.origin} wss://${supabase.host}`,
+    `connect-src 'self' ${supabase.origin} ${supabase.protocol === 'http:' ? 'ws' : 'wss'}://${supabase.host}`,
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "style-src 'self' 'unsafe-inline'",

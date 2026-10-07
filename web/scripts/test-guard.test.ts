@@ -30,4 +30,23 @@ describe('assertSafeTestTarget', () => {
     expect(() => assertSafeTestTarget({ ...ok, TEST_SUPABASE_PROJECT_REF: '' })).toThrow(/TEST_SUPABASE_PROJECT_REF/);
     expect(() => assertSafeTestTarget({ ...ok, TEST_USER_PASSWORD: '' })).toThrow(/TEST_USER_PASSWORD/);
   });
+
+  const local = {
+    ...ok,
+    TEST_SUPABASE_PROJECT_REF: 'local',
+    NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
+    DATABASE_URL: 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
+  };
+  it('accepts a local Supabase stack', () => {
+    expect(() => assertSafeTestTarget(local)).not.toThrow();
+    expect(() =>
+      assertSafeTestTarget({ ...local, NEXT_PUBLIC_SUPABASE_URL: 'http://localhost:54321', DATABASE_URL: local.DATABASE_URL.replace('127.0.0.1', 'localhost') }),
+    ).not.toThrow();
+  });
+  it('refuses "local" when either URL points at a hosted project', () => {
+    expect(() => assertSafeTestTarget({ ...local, NEXT_PUBLIC_SUPABASE_URL: 'https://prodref999.supabase.co' })).toThrow(
+      /not the allow-listed test project/,
+    );
+    expect(() => assertSafeTestTarget({ ...local, DATABASE_URL: ok.DATABASE_URL })).toThrow(/not the allow-listed test project/);
+  });
 });
