@@ -23,6 +23,8 @@ TENANTS_FILE=tenants.local.json npx playwright test isolation --project=chromium
 npx playwright test schedule -g "clash"   # single spec / test
 npm run db:migrate          # apply supabase/migrations/*.sql not yet in app_private.schema_migrations
 npm run create-user -- you@example.com "Name" [--role admin | --role delegate --delegate <id>]   # temporary password; ENV_FILE=.env.prod targets prod
+npm run db:migrate -- --tenant academy      # one company from the control project (ENV_FILE=.env.prod); --all-tenants = every company, stops at the first failure
+npm run tenants:export -- --dir <dir>       # backup workflow: one env file per company (masked under GitHub Actions)
 ./scripts/ship.sh verify [e2e specs…]   # on a feature branch, all committed: tsc, lint, unit, test:db (local), named E2E specs
 ./scripts/ship.sh ship                  # push → PR → merge → watch release.yml (migrates PROD, then deploys) — the owner runs this
 ```
@@ -82,7 +84,7 @@ Runbook: `docs/operations.md` (provisioning, accounts, releases, backup/restore)
 - Pilot switches (Vercel env, `src/lib/flags.ts`): `EMAIL_ENABLED` — on in prod since 2026-10-06 (Supabase Auth SMTP via a dedicated Gmail account); `false` makes Create login show a one-time password instead of sending an invite. `NEXT_PUBLIC_PILOT=1` shows the pilot banner. The Supabase invite/reset email templates must link to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite|recovery` — the default `{{ .ConfirmationURL }}` doesn't work with `src/app/auth/confirm/route.ts` (`docs/operations.md` → Turning on email verification).
 - Supabase Free allows **2 active projects per account across all orgs**: prod and the control project use both (dev runs on the local stack since 2026-10-07; the old hosted dev project is paused).
 - Production routes through the **control project** `implant-course-control` (since 2026-10-07; runbook `docs/operations.md` §G): Vercel Production sets `CONTROL_SUPABASE_URL` + `CONTROL_SERVICE_ROLE_KEY`, and the control registry maps the company `academy` (host `implant-course.vercel.app`) to the prod project, with its service key in Vault. Any other host, including Vercel deployment URLs, gets 404. Rollback: remove both Vercel vars and run Release. `web/.env.prod` holds `CONTROL_SUPABASE_URL` / `CONTROL_DATABASE_URL` for `db:migrate -- --control` and `tenant:register` / `tenant:check`. Multi-tenant parts 2–5 (branding, operations, console, onboarding) are not started.
-- Scripts target prod with `ENV_FILE=.env.prod` (`scripts/env-file.ts`); every script prints `Target project: <host>` first. Never name a prod env file `.env.production*` — Next.js would load it automatically. `npm run catalog-export` writes the product catalog to CSV.
+- Scripts target a company with `--tenant <slug>` (read from the control project via `CONTROL_DATABASE_URL` in `.env.prod`); without it they use `ENV_FILE` as before (`scripts/env-file.ts`). Release migrates the control project then every company (`--all-tenants`) before deploying; Backup writes one encrypted file per company plus the control registry (`backups-*`). GitHub needs `CONTROL_DATABASE_URL`, `CONTROL_SUPABASE_URL`, `CONTROL_ANON_KEY` (production environment). Every script prints `Target project: <host>` first. Never name a prod env file `.env.production*` — Next.js would load it automatically. `npm run catalog-export` writes the product catalog to CSV.
 
 ## Tests
 
