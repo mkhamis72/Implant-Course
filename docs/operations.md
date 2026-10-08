@@ -185,7 +185,7 @@ ENV_FILE=.env.prod npm run tenant:register -- academy "Implant Course Academy" i
 ENV_FILE=.env.prod npm run tenant:check -- academy        # → Target project: control <host>; company academy (active): OK
 ```
 
-**GitHub secrets** (production environment): `CONTROL_DATABASE_URL` ⟨secret⟩ (session pooler URI of the control project), `CONTROL_SUPABASE_URL`, `CONTROL_ANON_KEY` (control project → Project Settings → API Keys → anon/public). Release and Backup read every company from the control project with them. `PROD_DATABASE_URL`, `PROD_SUPABASE_URL` and `PROD_SUPABASE_ANON_KEY` are no longer used by either and can be deleted after a restore rehearsal done this way. `PROD_DATABASE_CA_CERT`, `BACKUP_PASSPHRASE` and `VERCEL_DEPLOY_HOOK_URL` stay.
+**GitHub secrets** (production environment): `CONTROL_DATABASE_URL` ⟨secret⟩ (session pooler URI of the control project), `CONTROL_SUPABASE_URL`, `CONTROL_ANON_KEY` (control project → Project Settings → API Keys → anon/public). Release and Backup read every company from the control project with them. The old `PROD_DATABASE_URL`, `PROD_SUPABASE_URL` and `PROD_SUPABASE_ANON_KEY` were deleted on 2026-10-08, after the restore rehearsal. `PROD_DATABASE_CA_CERT`, `BACKUP_PASSPHRASE` and `VERCEL_DEPLOY_HOOK_URL` stay.
 
 **Switching to per-company releases (once):**
 1. Add `CONTROL_DATABASE_URL` ⟨secret⟩ (the control project's Session pooler URI), `CONTROL_SUPABASE_URL` and `CONTROL_ANON_KEY` (control project → Project Settings → API Keys → anon/public) to the GitHub `production` environment.
