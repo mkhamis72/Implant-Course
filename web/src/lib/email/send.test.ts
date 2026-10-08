@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 const sendMail = vi.fn(async () => ({ messageId: 'm1' }));
-const createTransport = vi.fn((_opts: unknown) => ({ sendMail }));
+const createTransport = vi.fn<(opts: unknown) => { sendMail: typeof sendMail }>(() => ({ sendMail }));
 vi.mock('nodemailer', () => ({ default: { createTransport: (o: unknown) => createTransport(o) } }));
 
 import { sendEmail, smtpConfig } from './send';
