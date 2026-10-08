@@ -116,13 +116,20 @@ One sender serves every company; the email names the company. Locally the emails
 **What a backup holds:** the data (not the schema) of the app tables plus Supabase's sign-in accounts (`auth` schema), encrypted. The schema comes from the migrations in this repo.
 
 - **Backup** runs nightly and writes one encrypted file per company, `<slug>-<date>.dump.gpg`, plus `_control-<date>.dump.gpg` (the company registry only), in the artifact `backups-*`, kept 14 days. A failure for one company doesn't stop the others; the run turns red and ends with "Backup failed for: …". The run also pings every company and the control project to keep them awake; a failed ping doesn't stop the others and is named in "Keep-awake failed for: …".
-- **Monthly:** Actions → Backup → Run workflow → mode `verify`. It must finish green with "Every backup is readable and complete." It also accepts the older `prod-backup-*` artifacts for their remaining days.
+- **Monthly:** Actions → Backup → Run workflow → mode `verify`. It must finish green with "Every backup is readable and complete." It also accepts the older `prod-backup-*` artifacts for their remaining days. Verify decrypts with the GitHub secret, so it proves GitHub can read the backups, not that **you** can: keep `BACKUP_PASSPHRASE` in your password manager (it was lost once and replaced on 2026-10-08; backups made before that can't be read).
+- **Restore rehearsal** (before go-live, then twice a year). There are no free Supabase slots for a scratch project, so use the local dev2 stack and wipe it afterwards. It holds patient data while you work, so never leave it.
+  1. `npx supabase stop --workdir .dev2 --no-backup`, then `npm run db:dev2:start` and `ENV_FILE=.env.dev2 npm run db:migrate`.
+  2. Download and decrypt the newest backup outside the repo (steps 1, 5 and 6 below). Run them with `docker exec supabase_db_implant-course-dev2 psql -U postgres -d postgres …` after `docker cp`-ing `data.sql` in. If your local `pg_restore` is older than the backup's, run it through `docker run --rm -v <dir>:/work postgres:18 pg_restore …`.
+  3. Compare the row count of every `COPY` block in `data.sql` with `select count(*)` of that table in dev2.
+  4. `npx supabase stop --workdir .dev2 --no-backup`, delete the downloaded and decrypted files, then rebuild dev2 for the tests (`npm run db:dev2:start`, `ENV_FILE=.env.dev2 npm run db:migrate`, `npm run console:local`).
+
+  Last rehearsal: 2026-10-08, backup run 37782802942. All 57 tables matched, all 5 accounts kept their passwords, and new writes continued the ID sequences.
 
 **Restore**, if a company's project or the control project is lost or damaged.
 
 You need:
 - **GnuPG:** included in Git for Windows (Git Bash), or install Gpg4win;
-- **PostgreSQL client tools** (`pg_restore`, `psql`) at least as new as the Supabase server, e.g. from the PostgreSQL Windows installer with "Command Line Tools" only.
+- **PostgreSQL client tools** (`pg_restore`, `psql`) at least as new as the `pg_dump` that made the backup. The Backup workflow installs the newest client (18 as of 2026-10), so use 18 or later, e.g. from the PostgreSQL Windows installer with "Command Line Tools" only. An older `pg_restore` stops with "unsupported version in file header".
 
 **Restore one company** (the others are untouched). Steps, in Git Bash from `web/`:
 1. Download the newest `backups-*` artifact, unzip it, and decrypt the company's file: `gpg --decrypt <slug>-<date>.dump.gpg > <slug>.dump`. It asks for the passphrase.
@@ -130,12 +137,12 @@ You need:
 3. Make an env file `.env.restore` with the new project's `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (session pooler) and `DATABASE_CA_CERT`, plus the `CONTROL_SUPABASE_URL` and `CONTROL_DATABASE_URL` lines copied from `.env.prod` (`tenant:register` reads the company from the first group and the control project from the second).
 4. Apply the schema to the new project directly: `ENV_FILE=.env.restore npm run db:migrate`. If the backup is older than the newest migrations, check out the commit the backup belongs to first: the newest migration it has is the newest migration file at that date. Then `git checkout master` again before the next steps.
 5. Turn the dump into SQL: `pg_restore --data-only --no-owner -f data.sql <slug>.dump`.
-6. Load it in one transaction, with triggers off so nothing is created twice. This is Supabase's documented restore method. The migrations seeded `settings`, `branding` and the sample `products`, so empty those first:
+6. Load it in one transaction, with triggers off so nothing is created twice. This is Supabase's documented restore method. The migrations seeded `settings`, `branding` and the sample `products`, and auditing those seeds wrote `audit_log` rows, so empty those four first. Without `audit_log`, the load stops with `duplicate key value violates unique constraint "audit_log_pkey"`:
 
    ```bash
    psql "<new session pooler URI>" --single-transaction -v ON_ERROR_STOP=1 \
      -c "SET session_replication_role = replica" \
-     -c "TRUNCATE public.settings, public.products, public.branding CASCADE" \
+     -c "TRUNCATE public.settings, public.products, public.branding, public.audit_log CASCADE" \
      -f data.sql
    ```
 
