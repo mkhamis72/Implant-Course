@@ -53,12 +53,31 @@ describe('BrandingForm', () => {
     const { unmount } = render(<BrandingForm branding={unbranded} />);
     expect(screen.getByRole('button', { name: 'Save branding' })).toHaveAttribute('name', 'intent');
     expect(screen.getByRole('button', { name: 'Save branding' })).toHaveAttribute('value', 'save');
-    expect(screen.getByRole('button', { name: 'Reset to defaults' })).toHaveAttribute('value', 'reset');
     expect(screen.queryByRole('button', { name: 'Remove logo' })).not.toBeInTheDocument();
     unmount();
     render(<BrandingForm branding={{ ...unbranded, logoUrl: '/brand/logo?v=1' }} />);
     expect(screen.getByRole('button', { name: 'Remove logo' })).toHaveAttribute('name', 'intent');
     expect(screen.getByRole('button', { name: 'Remove logo' })).toHaveAttribute('value', 'remove');
+  });
+
+  it('asks before resetting, naming the logo it deletes; Cancel goes back', () => {
+    render(<BrandingForm branding={{ ...unbranded, name: 'Cairo Academy', logoUrl: '/brand/logo?v=1' }} />);
+    const reset = screen.getByRole('button', { name: 'Reset to defaults' });
+    expect(reset).toHaveAttribute('type', 'button'); // asks first, never submits by itself
+    fireEvent.click(reset);
+    expect(screen.getByText(/name and colours go back to the defaults and the logo is deleted/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Yes, reset' })).toHaveAttribute('value', 'reset');
+    expect(screen.getByRole('button', { name: 'Yes, reset' })).toHaveAttribute('name', 'intent');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('button', { name: 'Yes, reset' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reset to defaults' })).toBeInTheDocument();
+  });
+
+  it('does not mention a logo in the reset question when there is none', () => {
+    render(<BrandingForm branding={unbranded} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to defaults' }));
+    expect(screen.getByText(/name and colours go back to the defaults\./)).toBeInTheDocument();
+    expect(screen.queryByText(/logo is deleted/)).not.toBeInTheDocument();
   });
 
   it('shows only one alert at a time', () => {

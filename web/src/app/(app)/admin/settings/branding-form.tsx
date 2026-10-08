@@ -44,6 +44,13 @@ export function BrandingForm({ branding }: { branding: Branding }) {
     setNav(branding.navColor ?? '');
   }
   const [fileError, setFileError] = useState<string | null>(null);
+  // Reset deletes the logo and every setting: ask first. Any result (saved, reset, error) closes the question.
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [answered, setAnswered] = useState(state);
+  if (answered !== state) {
+    setAnswered(state);
+    setConfirmingReset(false);
+  }
 
   const brandHex = normaliseHex(brand);
   const navHex = normaliseHex(nav);
@@ -95,8 +102,22 @@ export function BrandingForm({ branding }: { branding: Branding }) {
           {branding.logoUrl && (
             <button className="btn-secondary btn" name="intent" value="remove" disabled={pending}>Remove logo</button>
           )}
-          <button className="btn-secondary btn" name="intent" value="reset" disabled={pending}>Reset to defaults</button>
+          {!confirmingReset && (
+            <button type="button" className="btn-secondary btn" disabled={pending} onClick={() => setConfirmingReset(true)}>Reset to defaults</button>
+          )}
         </div>
+        {confirmingReset && (
+          <div className="space-y-2 rounded bg-bad-soft p-3 text-sm">
+            <p>
+              Reset branding? The name and colours go back to the defaults
+              {branding.logoUrl ? ' and the logo is deleted. This cannot be undone.' : '.'}
+            </p>
+            <div className="flex gap-2">
+              <button className="btn btn-danger" name="intent" value="reset" disabled={pending}>Yes, reset</button>
+              <button type="button" className="btn-secondary btn" onClick={() => setConfirmingReset(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );

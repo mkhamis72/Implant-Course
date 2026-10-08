@@ -55,7 +55,13 @@ test('Reset to defaults restores today’s look', async ({ page }) => {
   await login(page, TEST_USERS.admin.email);
   await page.goto('/admin/settings');
   await expect(page.locator('#main-nav')).toContainText('E2E Reset Me');
-  await page.getByRole('region', { name: 'Branding' }).getByRole('button', { name: 'Reset to defaults' }).click();
+  const branding = page.getByRole('region', { name: 'Branding' });
+  await branding.getByRole('button', { name: 'Reset to defaults' }).click();
+  await branding.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('#main-nav')).toContainText('E2E Reset Me');
+  await branding.getByRole('button', { name: 'Reset to defaults' }).click();
+  await branding.getByRole('button', { name: 'Yes, reset' }).click();
   await expect(page.locator('#main-nav')).toContainText('Implant Course Manager');
+  await expect(branding.getByRole('button', { name: 'Yes, reset' })).toHaveCount(0);
   await expect(page.locator('#main-nav')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
 });
