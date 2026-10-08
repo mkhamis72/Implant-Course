@@ -7,8 +7,9 @@ vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
 vi.mock('@/lib/auth/session', () => ({ requirePermission: async () => ({ user_id: ME, full_name: 'Dr Sara', email: 'sara@example.com' }) }));
 vi.mock('@/lib/branding/get', () => ({ getBranding: async () => ({ name: 'Cairo Implant Academy' }) }));
 vi.mock('@/lib/tenant/current', () => ({ requestOrigin: async () => 'https://academy.example' }));
-const sendEmail = vi.fn(async (_e: { to: string; subject: string; text: string; html: string }): Promise<'sent' | 'failed' | 'not-configured'> => 'sent');
-vi.mock('@/lib/email/send', () => ({ sendEmail: (e: { to: string; subject: string; text: string; html: string }) => sendEmail(e) }));
+type Mail = { to: string; subject: string; text: string; html: string };
+const sendEmail = vi.fn<(e: Mail) => Promise<'sent' | 'failed' | 'not-configured'>>(async () => 'sent');
+vi.mock('@/lib/email/send', () => ({ sendEmail: (e: Mail) => sendEmail(e) }));
 
 const ITEM = '00000000-0000-4000-8000-000000000001';
 const OTHER = '00000000-0000-4000-8000-000000000002';
