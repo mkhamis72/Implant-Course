@@ -104,6 +104,32 @@ jobs:
           path: web/out/*.dump.gpg
           retention-days: 14
           if-no-files-found: error
+      # A second copy outside GitHub, kept a year. The bucket's lifecycle rule deletes files after 365 days and its
+      # Bucket Lock rule refuses deleting or overwriting them before that, even with this key (docs/operations.md §D).
+      - name: Copy the encrypted files off-site (Cloudflare R2, kept a year)
+        id: offsite
+        continue-on-error: true # keep-awake still runs; the final step fails the run
+        env:
+          RUN_ID: ${{ github.run_id }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+          R2_ENDPOINT="$(clean "$R2_ENDPOINT")"
+          R2_BUCKET="$(clean "$R2_BUCKET")"
+          AWS_ACCESS_KEY_ID="$(clean "$AWS_ACCESS_KEY_ID")"
+          AWS_SECRET_ACCESS_KEY="$(clean "$AWS_SECRET_ACCESS_KEY")"
+          test -n "$R2_ENDPOINT" && test -n "$R2_BUCKET" && test -n "$AWS_ACCESS_KEY_ID" && test -n "$AWS_SECRET_ACCESS_KEY" \
+            || { echo "R2 secrets are missing"; exit 1; }
+          export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION=auto
+          # R2 doesn't take the newer AWS CLI's default request checksums.
+          export AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
+          prefix="$(date -u +%F)/$RUN_ID"
+          aws s3 cp out/ "s3://$R2_BUCKET/$prefix/" --recursive --exclude '*' --include '*.dump.gpg' \
+            --endpoint-url "$R2_ENDPOINT" --no-progress
       - name: Keep every company and the control project awake (auth health check)
         env:
           CONTROL_SUPABASE_URL: ${{ secrets.CONTROL_SUPABASE_URL }}
@@ -136,15 +162,18 @@ jobs:
         env:
           EXPORT_OUTCOME: ${{ steps.export.outcome }}
           DUMP_OUTCOME: ${{ steps.dump.outcome }}
+          OFFSITE_OUTCOME: ${{ steps.offsite.outcome }}
         run: |
           if [ "$EXPORT_OUTCOME" != "success" ]; then echo "Backup did not run: the export step failed."; exit 1; fi
           if [ "$DUMP_OUTCOME" != "success" ]; then echo "Backup did not run: the dump step failed."; exit 1; fi
-          failed=""; woke_failed=""
+          failed=""; woke_failed=""; offsite_failed=""
           [ -f "$RUNNER_TEMP/failed.txt" ] && failed=$(grep -v '^$' "$RUNNER_TEMP/failed.txt" || true)
           [ -f "$RUNNER_TEMP/keepawake-failed.txt" ] && woke_failed=$(grep -v '^$' "$RUNNER_TEMP/keepawake-failed.txt" || true)
+          [ "$OFFSITE_OUTCOME" = "success" ] || offsite_failed=1
           [ -z "$failed" ] || echo "Backup failed for: $(echo $failed)"
           [ -z "$woke_failed" ] || echo "Keep-awake failed for: $(echo $woke_failed)"
-          if [ -n "$failed$woke_failed" ]; then exit 1; fi
+          [ -z "$offsite_failed" ] || echo "Off-site copy failed or did not run ($OFFSITE_OUTCOME): see the 'Copy the encrypted files off-site' step."
+          if [ -n "$failed$woke_failed$offsite_failed" ]; then exit 1; fi
           echo "Every company and the control registry were backed up."
 
   verify:
@@ -172,7 +201,31 @@ jobs:
           test -n "${name:-}" && test "$name" != "null" || { echo "No backup artifact found"; exit 1; }
           echo "Verifying $name"
           gh run download "$run_id" --repo "${{ github.repository }}" --name "$name" --dir in
-      - name: Decrypt and list every file (fails if one is unreadable or missing patients, accounts or companies)
+      - name: Download the latest off-site set (Cloudflare R2)
+        env:
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+          R2_ENDPOINT="$(clean "$R2_ENDPOINT")"
+          R2_BUCKET="$(clean "$R2_BUCKET")"
+          AWS_ACCESS_KEY_ID="$(clean "$AWS_ACCESS_KEY_ID")"
+          AWS_SECRET_ACCESS_KEY="$(clean "$AWS_SECRET_ACCESS_KEY")"
+          test -n "$R2_ENDPOINT" && test -n "$R2_BUCKET" && test -n "$AWS_ACCESS_KEY_ID" && test -n "$AWS_SECRET_ACCESS_KEY" \
+            || { echo "R2 secrets are missing"; exit 1; }
+          export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION=auto
+          export AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
+          # Files are stored as <date>/<run id>/<file>; the newest file names the newest set.
+          newest=$(aws s3api list-objects-v2 --bucket "$R2_BUCKET" --endpoint-url "$R2_ENDPOINT" \
+            --query 'sort_by(Contents, &LastModified)[-1].Key' --output text)
+          test -n "$newest" && test "$newest" != "None" || { echo "No off-site backup found"; exit 1; }
+          prefix=$(dirname "$newest")
+          echo "Verifying off-site $prefix"
+          aws s3 cp "s3://$R2_BUCKET/$prefix/" offsite/ --recursive --endpoint-url "$R2_ENDPOINT" --no-progress
+      - name: Decrypt and list every file of both copies (fails if one is unreadable or missing patients, accounts or companies)
         env:
           PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
@@ -180,23 +233,27 @@ jobs:
           clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
           PASSPHRASE="$(clean "$PASSPHRASE")"
           bad=()
-          control_files=0; company_files=0
-          for f in in/*.dump.gpg; do
-            name=$(basename "$f" .dump.gpg)
-            case "$name" in _control-*) control_files=$((control_files + 1)) ;; *) company_files=$((company_files + 1)) ;; esac
-            if ! gpg --batch --pinentry-mode loopback --decrypt --passphrase-fd 3 3<<<"$PASSPHRASE" "$f" > "$RUNNER_TEMP/check.dump" \
-               || ! "$PG_BIN/pg_restore" --list "$RUNNER_TEMP/check.dump" > "$RUNNER_TEMP/list.txt"; then
-              bad+=("$name: unreadable"); continue
-            fi
-            echo "$name: $(grep -c 'TABLE DATA' "$RUNNER_TEMP/list.txt") tables with data"
-            case "$name" in
-              _control-*) grep -q "TABLE DATA public tenants" "$RUNNER_TEMP/list.txt" || bad+=("$name: companies missing") ;;
-              *) grep -q "TABLE DATA public patients" "$RUNNER_TEMP/list.txt" || bad+=("$name: patients missing")
-                 grep -q "TABLE DATA auth users" "$RUNNER_TEMP/list.txt" || bad+=("$name: sign-in accounts missing") ;;
-            esac
+          shopt -s nullglob
+          # in = the GitHub artifact, offsite = the R2 copy; each must be complete on its own.
+          for dir in in offsite; do
+            control_files=0; company_files=0
+            for f in "$dir"/*.dump.gpg; do
+              name="$dir/$(basename "$f" .dump.gpg)"
+              case "$(basename "$f")" in _control-*) control_files=$((control_files + 1)) ;; *) company_files=$((company_files + 1)) ;; esac
+              if ! gpg --batch --pinentry-mode loopback --decrypt --passphrase-fd 3 3<<<"$PASSPHRASE" "$f" > "$RUNNER_TEMP/check.dump" \
+                 || ! "$PG_BIN/pg_restore" --list "$RUNNER_TEMP/check.dump" > "$RUNNER_TEMP/list.txt"; then
+                bad+=("$name: unreadable"); continue
+              fi
+              echo "$name: $(grep -c 'TABLE DATA' "$RUNNER_TEMP/list.txt") tables with data"
+              case "$(basename "$f")" in
+                _control-*) grep -q "TABLE DATA public tenants" "$RUNNER_TEMP/list.txt" || bad+=("$name: companies missing") ;;
+                *) grep -q "TABLE DATA public patients" "$RUNNER_TEMP/list.txt" || bad+=("$name: patients missing")
+                   grep -q "TABLE DATA auth users" "$RUNNER_TEMP/list.txt" || bad+=("$name: sign-in accounts missing") ;;
+              esac
+            done
+            [ "$control_files" -gt 0 ] || bad+=("$dir: registry file missing")
+            [ "$company_files" -gt 0 ] || bad+=("$dir: no company files")
           done
           rm -f "$RUNNER_TEMP/check.dump"
-          [ "$control_files" -gt 0 ] || bad+=("registry file missing")
-          [ "$company_files" -gt 0 ] || bad+=("no company files")
           if [ ${#bad[@]} -gt 0 ]; then printf 'Backup problem: %s\n' "${bad[@]}"; exit 1; fi
-          echo "Every backup is readable and complete."
+          echo "Every backup is readable and complete, in GitHub and off-site."
