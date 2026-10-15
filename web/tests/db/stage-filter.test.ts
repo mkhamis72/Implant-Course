@@ -90,6 +90,27 @@ describe('implant stage filter', () => {
     });
   });
 
+  it('matches missing and to-be-extracted teeth, ORed with the implant stages', async () => {
+    await withTx(async (c) => {
+      await actAs(c, users.organizer);
+      const tooth = (patient: string, n: number, status: string) =>
+        c.query('insert into public.tooth_status (patient_id, tooth, status) values ($1, $2, $3)', [patient, n, status]);
+      const missing = await makePatient(c, 'Zz Teeth Missing');
+      await tooth(missing, 14, 'missing');
+      const extract = await makePatient(c, 'Zz Teeth Extract');
+      await tooth(extract, 47, 'extracted');
+      const present = await makePatient(c, 'Zz Teeth Present');
+      await tooth(present, 11, 'present');
+      const planned = await makePatient(c, 'Zz Teeth Planned');
+      await c.query('select public.plan_implant($1, 36::smallint)', [planned]);
+
+      expect(await search(c, 'Zz Teeth', ['missing'])).toEqual(['Zz Teeth Missing']);
+      expect(await search(c, 'Zz Teeth', ['extracted'])).toEqual(['Zz Teeth Extract']);
+      expect(await search(c, 'Zz Teeth', ['missing', 'extracted'])).toEqual(['Zz Teeth Extract', 'Zz Teeth Missing']);
+      expect(await search(c, 'Zz Teeth', ['missing', 'planned'])).toEqual(['Zz Teeth Missing', 'Zz Teeth Planned']);
+    });
+  });
+
   it('keeps the two-argument call working', async () => {
     await withTx(async (c) => {
       await actAs(c, users.organizer);
