@@ -154,6 +154,15 @@ describe('backup.yml', () => {
     expect(verify).toContain('no company files');
   });
 
+  it('backs up nightly and verifies on its own on the 1st of each month, never both from one schedule', () => {
+    const { on } = parse(readFileSync(path.join(__dirname, '..', '..', '.github', 'workflows', 'backup.yml'), 'utf8')) as {
+      on: { schedule: { cron: string }[] };
+    };
+    expect(on.schedule.map((s) => s.cron)).toEqual(['0 0 * * *', '0 6 1 * *']);
+    expect(jobs.backup.if).toBe("github.event.schedule == '0 0 * * *' || inputs.mode == 'backup'");
+    expect(jobs.verify.if).toBe("github.event.schedule == '0 6 1 * *' || inputs.mode == 'verify'");
+  });
+
   describe('off-site copy (Cloudflare R2)', () => {
     const copyStep = jobs.backup.steps.find((s) => s.name?.startsWith('Copy'));
     const copy = copyStep?.run ?? '';

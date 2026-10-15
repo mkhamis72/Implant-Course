@@ -24,7 +24,7 @@ Real courses and real patients start only when every line is ticked, dated and i
 ## Backups and accounts
 - [x] Restore rehearsal done once (docs/operations.md §D → Restore rehearsal), into the local dev2 stack since no Supabase slot is free; data checked, stack wiped. Date: 2026-10-08. It found and fixed a lost backup passphrase and a missing `audit_log` in the restore TRUNCATE.
 - [ ] `BACKUP_PASSPHRASE` is in the owner's password manager, and a second copy is kept offline.
-- [ ] Off-site backup copy on: R2 bucket with a 365-day lock, GitHub `R2_*` secrets set, a locked file refused deletion (docs/operations.md §D → Off-site copy). Date: ____
+- [x] Off-site backup copy on: R2 bucket with a 365-day lock, GitHub `R2_*` secrets set, a locked file refused deletion (docs/operations.md §D → Off-site copy). Date: 2026-10-15.
 - [ ] Monthly Backup `verify` run green in the month of go-live.
 - [ ] Console admin password changed from the temporary one (**Change password** in the console), and the console authenticator's recovery is known: who can delete the factor in the control project.
 
