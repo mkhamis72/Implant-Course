@@ -10,7 +10,8 @@ import {
   COMPONENT_LABELS, COMPONENT_TYPES, FOLLOWUP_OUTCOMES, OUTCOME_LABELS, TECHNIQUES, TECHNIQUE_LABELS,
   type ChartData, type ComponentType, type ImplantSite, type Technique,
 } from '@/lib/inventory/types';
-import { fitComponent, placeImplant, planImplant, recordFollowup } from './implant-actions';
+import { fitComponent, placeImplant, planImplant, receiveStockForPlacement, recordFollowup } from './implant-actions';
+import { ImplantPicker } from './implant-picker';
 
 type Result = { error?: string };
 
@@ -75,12 +76,90 @@ function keepIfUsable(data: ChartData, productId: string, lotId: string, usedOn:
   return availableLots(data.lots, productId, usedOn).some((l) => l.stock_lot_id === lotId) ? lotId : '';
 }
 
-/** Batches are offered by whether they were in date on the day of use, not on today's date. */
-function BatchSelect({ data, productId, usedOn, value, onChange }: {
-  data: ChartData; productId: string; usedOn: string; value: string; onChange: (v: string) => void;
+/**
+ * Receives a delivery without leaving the placement form (a <div>, since forms can't nest): Enter and
+ * the Receive button send only these fields, and the new batch is then selected.
+ */
+function ReceiveHere({ patientId, productId, today, onReceived }: {
+  patientId: string; productId: string; today: string; onReceived: (lotId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ quantity: '', lot_no: '', expiry: '', received_on: today });
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const field = (key: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((cur) => ({ ...cur, [key]: e.target.value }));
+  function receive() {
+    setError(null);
+    start(async () => {
+      const result = await receiveStockForPlacement(patientId, { product_id: productId, ...f });
+      if (result.error) setError(result.error);
+      else if (result.lotId) {
+        setOpen(false);
+        onReceived(result.lotId);
+      }
+    });
+  }
+  if (!open) {
+    return (
+      <button type="button" className="btn-secondary btn" onClick={() => setOpen(true)}>
+        Receive stock here
+      </button>
+    );
+  }
+  return (
+    <div
+      role="group"
+      aria-label="Receive stock"
+      className="space-y-2 rounded-lg border border-line-strong bg-sunken p-3"
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); receive(); } }}
+    >
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Field label="Quantity" required>
+          <input className="input" inputMode="numeric" aria-required="true" value={f.quantity} onChange={field('quantity')} />
+        </Field>
+        <Field label="Lot number (optional)">
+          <input className="input" value={f.lot_no} onChange={field('lot_no')} />
+        </Field>
+        <Field label="Expiry (optional)">
+          <input className="input" type="date" value={f.expiry} onChange={field('expiry')} />
+        </Field>
+        <Field label="Received on" required>
+          <input className="input" type="date" aria-required="true" value={f.received_on} onChange={field('received_on')} />
+        </Field>
+      </div>
+      {error && <p role="alert" className="text-sm text-bad">{error}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn" disabled={pending} onClick={receive}>Receive</button>
+        <button type="button" className="btn-secondary btn" onClick={() => setOpen(false)}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+type Receive = { patientId: string; canReceive: boolean; onReceived: (lotId: string) => void };
+
+/**
+ * Batches are offered by whether they were in date on the day of use, not on today's date. With
+ * `receive` (the placement form), missing stock is received in place; otherwise a link to Inventory.
+ */
+function BatchSelect({ data, productId, usedOn, value, onChange, receive }: {
+  data: ChartData; productId: string; usedOn: string; value: string; onChange: (v: string) => void; receive?: Receive;
 }) {
   const lots = productId ? availableLots(data.lots, productId, usedOn || data.today) : [];
   if (productId && lots.length === 0) {
+    if (receive) {
+      return (
+        <div className="space-y-2">
+          <p className="text-sm text-warn">
+            No usable stock for this product.
+            {!receive.canReceive && ' Ask someone with Inventory access to receive it.'}
+          </p>
+          {receive.canReceive && (
+            <ReceiveHere patientId={receive.patientId} productId={productId} today={data.today} onReceived={receive.onReceived} />
+          )}
+        </div>
+      );
+    }
     return (
       <p className="text-sm text-warn">
         No usable stock for this product.{' '}
@@ -184,12 +263,7 @@ export function PlanForm({ patientId, tooth, data, onDone }: Base) {
   const { error, pending, submit } = useSubmit(planImplant, onDone);
   return (
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, productId, technique, notes }); }}>
-      <Field label="Implant (optional)">
-        <select className="input" value={productId} onChange={(e) => setProductId(e.target.value)}>
-          <option value="">Not chosen yet</option>
-          {data.implants.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
-        </select>
-      </Field>
+      <ImplantPicker implants={data.implants} lots={data.lots} usedOn={data.today} value={productId} onChange={setProductId} inStockDefault={false} />
       <TechniqueField value={technique} onChange={setTechnique} />
       <Field label="Notes (optional)">
         <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -227,13 +301,24 @@ export function PlaceForm({
   return (
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, slotId: slot?.id ?? '', ...v }); }}>
       <p className="text-xs text-muted"><span aria-hidden="true" className="text-bad">*</span> Required</p>
-      <Field label="Implant" required>
-        <select className="input" aria-required="true" value={v.productId} onChange={(e) => set('productId')(e.target.value)}>
-          <option value="">Choose the implant…</option>
-          {data.implants.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
-        </select>
-      </Field>
-      <BatchSelect data={data} productId={v.productId} usedOn={v.placedOn} value={v.lotId} onChange={set('lotId')} />
+      <ImplantPicker
+        implants={data.implants}
+        lots={data.lots}
+        usedOn={v.placedOn}
+        value={v.productId}
+        onChange={set('productId')}
+        required
+        // A planned implant with no stock stays visible: the box starts unticked so it can be received.
+        inStockDefault={!plannedProductId || availableLots(data.lots, plannedProductId, data.today).length > 0}
+      />
+      <BatchSelect
+        data={data}
+        productId={v.productId}
+        usedOn={v.placedOn}
+        value={v.lotId}
+        onChange={set('lotId')}
+        receive={{ patientId, canReceive: data.canReceive, onReceived: set('lotId') }}
+      />
       <TechniqueField value={v.technique} onChange={set('technique')} />
       <Field label="Placement date" required>
         <input className="input" type="date" aria-required="true" value={v.placedOn} onChange={(e) => set('placedOn')(e.target.value)} />

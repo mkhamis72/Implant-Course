@@ -63,5 +63,6 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     today: todayIso(),
     me: me?.user_id ?? '',
     editable: me ? canEdit(me, 'patients') : false,
+    canReceive: me ? canEdit(me, 'inventory') : false,
   };
 }
