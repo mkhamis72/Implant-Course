@@ -145,4 +145,6 @@ export type ChartData = {
   me: string;
   /** Patients/edit: false shows the chart read-only. */
   editable: boolean;
+  /** Inventory/edit: may receive missing stock from inside the placement form. */
+  canReceive: boolean;
 };

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
-import { componentSchema, followupSchema, placeSchema, planSchema } from '@/lib/inventory/schemas';
+import { componentSchema, followupSchema, placeSchema, planSchema, receiveSchema } from '@/lib/inventory/schemas';
 import { TECHNIQUES, type Technique } from '@/lib/inventory/types';
 import { userMessage } from '@/lib/db-errors';
 import { correctionSchema, voidSchema } from '@/lib/schedule/schemas';
@@ -53,6 +53,24 @@ export async function placeImplant(input: Record<string, unknown>): Promise<Resu
     p_slot: p.slotId,
     p_technique: p.technique,
   });
+}
+
+/**
+ * Receives stock from inside the placement form, so nothing typed there is lost: no redirect (unlike
+ * Inventory → Receive), the chart refreshes and the form selects the returned batch.
+ */
+export async function receiveStockForPlacement(patientId: string, input: Record<string, unknown>): Promise<Result & { lotId?: string }> {
+  await requirePermission('inventory', 'edit');
+  const parsed = receiveSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const r = parsed.data;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('receive_stock', {
+    p_product: r.product_id, p_qty: r.quantity, p_lot_no: r.lot_no || null, p_expiry: r.expiry, p_received_on: r.received_on, p_notes: r.notes,
+  });
+  if (error) return { error: userMessage(error)! };
+  revalidatePath(`/patients/${patientId}`, 'layout');
+  return { lotId: data as string };
 }
 
 export async function setTechnique(input: { patientId: string; siteId: string; technique: string }): Promise<Result> {
