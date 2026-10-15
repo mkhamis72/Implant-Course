@@ -97,6 +97,11 @@ export const placeSchema = z.object({
   notes: text(1000),
 });
 
+/** Correcting a placed implant: the placement's date, people and clinical values (not the implant or batch). */
+export const correctPlacementSchema = placeSchema
+  .pick({ patientId: true, placedOn: true, placingDelegateId: true, assistingDelegateId: true, supervisorId: true, torque: true, isq: true, boneType: true, graft: true, notes: true })
+  .extend({ siteId: requiredId('Implant not found.') });
+
 export const componentSchema = z
   .object({
     siteId: requiredId('Implant not found.'),

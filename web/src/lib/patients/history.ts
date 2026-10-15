@@ -10,11 +10,19 @@ const FIELD_LABELS: Record<string, string> = {
   osteoporosis: 'osteoporosis', other_conditions: 'other conditions', notes: 'notes',
 };
 
-function changedFields(before: Record<string, unknown> | null, after: Record<string, unknown> | null): string[] {
+/** Placement details an implant correction can change (correct_placement, 0042). */
+const SITE_FIELD_LABELS: Record<string, string> = {
+  placed_on: 'placement date', placing_delegate_id: 'placed by', assisting_delegate_id: 'assisted by',
+  supervisor_id: 'supervisor', torque_ncm: 'torque', isq: 'ISQ', bone_type: 'bone type', graft: 'graft', notes: 'notes',
+};
+
+function changedFields(
+  before: Record<string, unknown> | null, after: Record<string, unknown> | null, labels: Record<string, string> = FIELD_LABELS,
+): string[] {
   if (!before || !after) return [];
-  return Object.keys(FIELD_LABELS)
+  return Object.keys(labels)
     .filter((key) => key in after && JSON.stringify(before[key]) !== JSON.stringify(after[key]))
-    .map((key) => FIELD_LABELS[key]);
+    .map((key) => labels[key]);
 }
 
 function stateLabel(value: unknown): string {
@@ -46,7 +54,10 @@ export function describeChange(e: HistoryEntry): string {
       const tooth = (e.after ?? e.before)?.tooth;
       const label = (v: unknown) => SITE_STATE_LABELS[v as SiteState] ?? String(v);
       if (e.action === 'INSERT' || !e.before) return `Implant on tooth ${tooth}: ${label(e.after?.state)}`;
-      if (e.before.state === e.after?.state) return `Implant on tooth ${tooth} updated`;
+      if (e.before.state === e.after?.state) {
+        const corrected = changedFields(e.before, e.after, SITE_FIELD_LABELS);
+        return corrected.length ? `Implant on tooth ${tooth} corrected: ${corrected.join(', ')}` : `Implant on tooth ${tooth} updated`;
+      }
       return `Implant on tooth ${tooth}: ${label(e.before.state)} → ${label(e.after?.state)}`;
     }
     case 'site_components': {

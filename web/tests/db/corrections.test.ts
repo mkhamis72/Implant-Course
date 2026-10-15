@@ -1,6 +1,6 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs } from './helpers';
+import { withTx, actAs, asPostgres } from './helpers';
 import { makeDelegate, makePatient, makeProduct, onHand, place, receive } from './fixtures';
 
 const users = inject('testUsers');
@@ -120,6 +120,83 @@ describe('undoing a component', () => {
       expect(current.rows).toEqual([{ id: haId }]);
       await c.query("select public.void_component($1, 'HA was never fitted')", [haId]);
       expect(await onHand(c, haLot)).toBe(1);
+    });
+  });
+});
+
+describe('correcting the placement details', () => {
+  const correct = (c: Client, site: string, f: Record<string, unknown>) =>
+    c.query(
+      `select public.correct_placement(p_site => $1, p_placed_on => $2::date, p_placing_delegate => $3,
+         p_assisting_delegate => $4, p_supervisor => $5, p_torque => $6, p_isq => $7, p_bone_type => $8,
+         p_graft => $9, p_notes => $10)`,
+      [site, f.placedOn, f.placing, f.assisting ?? null, f.supervisor, f.torque ?? null, f.isq ?? null, f.boneType ?? null,
+       f.graft ?? '', f.notes ?? ''],
+    );
+
+  it('corrects the date, people and clinical values, leaving stock alone', async () => {
+    await withTx(async (c) => {
+      const s = await placed(c);
+      const right = await makeDelegate(c, 'Zz Right Delegate');
+      const helper = await makeDelegate(c, 'Zz Helper');
+      await asPostgres(c);
+      const sup = (await c.query("insert into public.supervisors (full_name) values ('Zz Prof') returning id")).rows[0].id;
+      await actAs(c, users.organizer);
+      const before = await onHand(c, s.wrongLot);
+      await correct(c, s.site, {
+        placedOn: '2026-01-15', placing: right, assisting: helper, supervisor: sup, torque: 40, isq: 70, boneType: 'D3', graft: 'Bio-Oss', notes: 'fixed',
+      });
+      const { rows } = await c.query(
+        `select placed_on::text, placing_delegate_id, assisting_delegate_id, supervisor_id, torque_ncm::float as torque,
+                isq::float as isq, bone_type, graft, notes from public.implant_sites where id = $1`,
+        [s.site],
+      );
+      expect(rows[0]).toEqual({
+        placed_on: '2026-01-15', placing_delegate_id: right, assisting_delegate_id: helper, supervisor_id: sup,
+        torque: 40, isq: 70, bone_type: 'D3', graft: 'Bio-Oss', notes: 'fixed',
+      });
+      expect(await onHand(c, s.wrongLot)).toBe(before);
+    });
+  });
+
+  it('refuses a future date, a date after a follow-up, and a date past the batch expiry', async () => {
+    await withTx(async (c) => {
+      const s = await placed(c);
+      const base = { placing: s.delegate, supervisor: users.organizer };
+      await refused(c, () => correct(c, s.site, { ...base, placedOn: '2999-01-01' }), /today or earlier/);
+      await correct(c, s.site, { ...base, placedOn: '2026-01-10' });
+      await c.query("select public.record_followup($1, '2026-02-01', '1-week', 'ok', '')", [s.site]);
+      await refused(c, () => correct(c, s.site, { ...base, placedOn: '2026-03-01' }), /after its first component or follow-up/);
+      await correct(c, s.site, { ...base, placedOn: '2026-01-20' });
+
+      const expiring = await receive(c, s.implant, 1, 'EXP', '2026-06-01');
+      const p2 = await makePatient(c, 'Zz Expiry Patient');
+      const site2 = await place(c, { patient: p2, tooth: 11, product: s.implant, lot: expiring, delegate: s.delegate, supervisor: users.organizer, placedOn: '2026-05-01' });
+      await refused(c, () => correct(c, site2, { ...base, placedOn: '2026-07-01' }), /expired on 2026-06-01/);
+    });
+  });
+
+  it('refuses the same assisting delegate, a new inactive delegate and a planned implant; keeps an inactive one already recorded', async () => {
+    await withTx(async (c) => {
+      const s = await placed(c);
+      const base = { placedOn: '2026-01-10', supervisor: users.organizer };
+      await refused(c, () => correct(c, s.site, { ...base, placing: s.delegate, assisting: s.delegate }), /someone other than the placing delegate/);
+      const gone = await makeDelegate(c, 'Zz Gone');
+      await c.query('update public.delegates set active = false where id = any($1)', [[gone, s.delegate]]);
+      await refused(c, () => correct(c, s.site, { ...base, placing: gone }), /Choose the delegate who placed the implant/);
+      await correct(c, s.site, { ...base, placing: s.delegate }); // still recorded, so still allowed
+
+      const p2 = await makePatient(c, 'Zz Planned Patient');
+      const planned = (await c.query('select public.plan_implant($1, 21::smallint) as id', [p2])).rows[0].id;
+      await refused(c, () => correct(c, planned, { ...base, placing: s.delegate }), /Only a placed implant/);
+    });
+  });
+
+  it('needs Edit on Patients', async () => {
+    await withTx(async (c) => {
+      const s = await placed(c);
+      await actAs(c, users.viewer);
+      await refused(c, () => correct(c, s.site, { placedOn: '2026-01-10', placing: s.delegate, supervisor: users.organizer }), /permission to edit Patients/);
     });
   });
 });

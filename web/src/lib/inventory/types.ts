@@ -117,6 +117,9 @@ export type ImplantSite = {
   notes: string;
   product: Product | null;
   lot: { lot_no: string | null; expiry: string | null } | null;
+  placing_delegate_id: string | null;
+  assisting_delegate_id: string | null;
+  supervisor_id: string | null;
   placing: Person;
   assisting: Person;
   supervisor: { full_name: string } | null;
