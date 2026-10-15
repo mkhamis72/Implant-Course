@@ -9,6 +9,7 @@ import type { ToothState } from '@/lib/patients/types';
 
 export const SITE_SELECT = `
   id, tooth, state, technique, placed_on, torque_ncm, isq, bone_type, graft, notes, created_at, stock_lot_id,
+  placing_delegate_id, assisting_delegate_id, supervisor_id,
   product:products(*),
   lot:stock_lots(lot_no, expiry),
   placing:delegates!implant_sites_placing_delegate_id_fkey(full_name),

@@ -43,6 +43,25 @@ test('corrects the batch used for an implant; stock and recall follow', async ({
   await expect(page.getByTestId('usage-row')).toHaveCount(1);
 });
 
+test('corrects the placement date and delegate; History names the change', async ({ page }) => {
+  const s = await placedImplant(page);
+  const rightName = uniqueName('Dr Right');
+  const right = await seedDelegate(s.api, rightName);
+  await page.goto(`/patients/${s.patientId}?tooth=36`);
+  await panel(page).getByText('Corrections').click();
+  const details = page.getByRole('group', { name: 'Placement details' });
+  await details.getByLabel('Placement date').fill('2026-01-15');
+  await details.getByRole('combobox', { name: 'Placed by' }).selectOption(right);
+  await details.getByRole('button', { name: 'Save details' }).click();
+  await expect(panel(page).getByRole('status')).toHaveText('Correction saved.');
+  await expect(panel(page).getByTestId('site-details')).toContainText(rightName);
+
+  const { data } = await s.api.from('implant_sites').select('placed_on, placing_delegate_id').eq('id', s.siteId).single();
+  expect(data).toEqual({ placed_on: '2026-01-15', placing_delegate_id: right });
+  await page.goto(`/patients/${s.patientId}/history`);
+  await expect(page.getByRole('main')).toContainText('Implant on tooth 36 corrected: placement date, placed by');
+});
+
 test('voids a mistaken failure and the tooth goes back to "implant placed"', async ({ page }) => {
   const s = await placedImplant(page);
   const { error } = await s.api.rpc('record_followup', {

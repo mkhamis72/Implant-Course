@@ -46,6 +46,14 @@ describe('describeChange — implants', () => {
       describeChange(entry({ table_name: 'implant_sites', before: { tooth: 36, state: 'planned' }, after: { tooth: 36, state: 'placed' } })),
     ).toBe('Implant on tooth 36: Planned → Placed');
   });
+  it('names the corrected placement details', () => {
+    const before = { tooth: 36, state: 'placed', placed_on: '2026-05-02', placing_delegate_id: 'a', supervisor_id: 's', torque_ncm: 35 };
+    const after = { ...before, placed_on: '2026-05-01', placing_delegate_id: 'b' };
+    expect(describeChange(entry({ table_name: 'implant_sites', before, after }))).toBe(
+      'Implant on tooth 36 corrected: placement date, placed by',
+    );
+    expect(describeChange(entry({ table_name: 'implant_sites', before, after: { ...before } }))).toBe('Implant on tooth 36 updated');
+  });
 });
 
 describe('describeChange for implant follow-up records', () => {

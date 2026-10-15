@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
-import { componentSchema, followupSchema, placeSchema, planSchema, receiveSchema } from '@/lib/inventory/schemas';
+import { componentSchema, correctPlacementSchema, followupSchema, placeSchema, planSchema, receiveSchema } from '@/lib/inventory/schemas';
 import { TECHNIQUES, type Technique } from '@/lib/inventory/types';
 import { userMessage } from '@/lib/db-errors';
 import { correctionSchema, voidSchema } from '@/lib/schedule/schemas';
@@ -107,6 +107,25 @@ export async function recordFollowup(input: Record<string, unknown>): Promise<Re
     p_check_type: f.checkType,
     p_outcome: f.outcome,
     p_notes: f.notes,
+  });
+}
+
+export async function correctPlacement(input: Record<string, unknown>): Promise<Result> {
+  await requirePermission('patients', 'edit');
+  const parsed = correctPlacementSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const p = parsed.data;
+  return run(p.patientId, 'correct_placement', {
+    p_site: p.siteId,
+    p_placed_on: p.placedOn,
+    p_placing_delegate: p.placingDelegateId,
+    p_assisting_delegate: p.assistingDelegateId,
+    p_supervisor: p.supervisorId,
+    p_torque: p.torque,
+    p_isq: p.isq,
+    p_bone_type: p.boneType,
+    p_graft: p.graft,
+    p_notes: p.notes,
   });
 }
 

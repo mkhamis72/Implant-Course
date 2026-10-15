@@ -5,7 +5,8 @@ import { acceptsProduct, currentComponent } from '@/lib/inventory/components';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, OUTCOME_LABELS, type ChartData, type ImplantSite, type LotOnHand } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
-import { correctBatch, voidComponent, voidFollowup } from './implant-actions';
+import { BONE_TYPES } from '@/lib/inventory/schemas';
+import { correctBatch, correctPlacement, voidComponent, voidFollowup } from './implant-actions';
 
 type Result = { error?: string };
 
@@ -29,6 +30,102 @@ function useRun() {
 function correctionLots(lots: readonly LotOnHand[], productId: string, currentLotId: string | null, usedOn: string | null): LotOnHand[] {
   return lots.filter(
     (l) => l.product_id === productId && l.on_hand > 0 && l.stock_lot_id !== currentLotId && !(l.expiry && usedOn && l.expiry < usedOn),
+  );
+}
+
+type Option = { id: string; label: string };
+
+/** The active options, plus the one already recorded if it has since become inactive. */
+function withRecorded(options: Option[], id: string | null, name: string | null | undefined): Option[] {
+  if (!id || options.some((o) => o.id === id)) return options;
+  return [...options, { id, label: `${name ?? 'Unknown'} (inactive)` }];
+}
+
+/** Date, people and clinical values of a placed implant, prefilled from what was recorded. */
+function PlacementDetails({ patientId, site, data, run, pending }: {
+  patientId: string; site: ImplantSite; data: ChartData; run: (fn: () => Promise<Result>) => void; pending: boolean;
+}) {
+  const [v, setV] = useState({
+    placedOn: site.placed_on ?? '',
+    placingDelegateId: site.placing_delegate_id ?? '',
+    assistingDelegateId: site.assisting_delegate_id ?? '',
+    supervisorId: site.supervisor_id ?? '',
+    torque: site.torque_ncm?.toString() ?? '',
+    isq: site.isq?.toString() ?? '',
+    boneType: site.bone_type ?? '',
+    graft: site.graft ?? '',
+    notes: site.notes ?? '',
+  });
+  const set = (key: keyof typeof v) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setV((cur) => ({ ...cur, [key]: e.target.value }));
+  const delegates = withRecorded(
+    withRecorded(data.delegates, site.placing_delegate_id, site.placing?.full_name),
+    site.assisting_delegate_id,
+    site.assisting?.full_name,
+  );
+  const supervisors = withRecorded(data.supervisors, site.supervisor_id, site.supervisor?.full_name);
+  return (
+    <div className="space-y-2" role="group" aria-label="Placement details">
+      <p className="font-medium">Placement details</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="block">
+          <span className="label">Placement date</span>
+          <input className="input" type="date" value={v.placedOn} onChange={set('placedOn')} />
+        </label>
+        <label className="block">
+          <span className="label">Placed by</span>
+          <select className="input" value={v.placingDelegateId} onChange={set('placingDelegateId')}>
+            <option value="">Choose the delegate…</option>
+            {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="label">Assisted by</span>
+          <select className="input" value={v.assistingDelegateId} onChange={set('assistingDelegateId')}>
+            <option value="">Nobody</option>
+            {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="label">Supervisor</span>
+          <select className="input" value={v.supervisorId} onChange={set('supervisorId')}>
+            <option value="">Choose the supervisor…</option>
+            {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="label">Insertion torque (Ncm)</span>
+          <input className="input" inputMode="decimal" value={v.torque} onChange={set('torque')} />
+        </label>
+        <label className="block">
+          <span className="label">ISQ</span>
+          <input className="input" inputMode="decimal" value={v.isq} onChange={set('isq')} />
+        </label>
+        <label className="block">
+          <span className="label">Bone type</span>
+          <select className="input" value={v.boneType} onChange={set('boneType')}>
+            <option value="">—</option>
+            {BONE_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="label">Graft</span>
+          <input className="input" value={v.graft} onChange={set('graft')} />
+        </label>
+      </div>
+      <label className="block">
+        <span className="label">Notes</span>
+        <input className="input" value={v.notes} onChange={set('notes')} />
+      </label>
+      <button
+        type="button"
+        className="btn-secondary btn"
+        disabled={pending}
+        onClick={() => run(() => correctPlacement({ siteId: site.id, patientId, ...v }))}
+      >
+        Save details
+      </button>
+    </div>
   );
 }
 
@@ -70,6 +167,7 @@ export function Corrections({ patientId, site, data }: { patientId: string; site
     <details className="rounded border border-line p-2 text-sm">
       <summary className="cursor-pointer font-medium">Corrections</summary>
       <div className="mt-3 space-y-4">
+        <PlacementDetails patientId={patientId} site={site} data={data} run={run} pending={pending} />
         {site.product && (
           <div className="space-y-2">
             <label className="block">
