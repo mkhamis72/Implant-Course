@@ -221,4 +221,32 @@ Unknown hosts get 404; a suspended company gets 503. If the control project is d
 
 *Using it:* the Companies page shows each company's health (a live check of its project) and counts. A company's page lets you suspend it (reason, and type the slug to confirm) and reactivate it, edit its name and addresses, replace its keys (checked before saving), and create its first admin login (a one-time password, shown once). **Add company** needs an existing, migrated project: the keys and database URL are checked before anything is saved, and an existing slug is refused. Every change, including creating or resetting a first admin login (the target email, never the password), is recorded in the company's History table with the admin's email. `tenant:register` / `tenant:check` still work and are recorded as `script`.
 
+**Add a company on another Supabase account.**
+
+The app doesn't care which Supabase account a company's project lives in. The control registry stores each company's project URL, and its keys in Vault. Release, Backup, keep-awake and the console all work from there.
+
+Who should own the account:
+- **The company's own account (recommended for a paying company):** they own their data and pay their own Supabase bill. They invite you as a project member so you can set it up and support it.
+- **A second account of your own, only to get two more free projects:** check Supabase's terms first, because several accounts used to get around the free-plan limit may break their fair-use rules. A Free project isn't meant for real patient data anyway: put a real company on Pro.
+
+Steps (Git Bash, from `web/`):
+1. **Project:** in that account, create the project, region **Central EU (Frankfurt)**. Then:
+   - Apply the Authentication settings from §A.1 (sign-ups off, confirm email on, TOTP, minimum password length 10).
+   - URL Configuration: Site URL and Redirect URLs use **the company's address** (`https://<host>`, `https://<host>/**`).
+   - Email templates: invite and recovery must link to `/auth/confirm` (§B → Turning on email verification).
+   - SMTP: its own sender (the pilot Gmail account or Resend).
+2. **Env file** for this company, `web/.env.<slug>`. It is git-ignored like every `.env*` file; never name it `.env.production…`. It holds:
+   - its `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` ⟨secret⟩, and `DATABASE_URL` ⟨secret⟩ (Connect → **Session pooler**);
+   - `DATABASE_CA_CERT=prod-ca.crt` (the Supabase CA certificate is the same for every project, on any account);
+   - `ALLOW_TEST_FIXTURES=0`;
+   - the `CONTROL_SUPABASE_URL` and `CONTROL_DATABASE_URL` lines copied from `.env.prod`.
+3. **Schema:** `ENV_FILE=.env.<slug> npm run db:migrate`. The first line must name the **new** project's host.
+4. **Register:** `ENV_FILE=.env.<slug> npm run tenant:register -- <slug> "<Company name>" <host>`. Or use **Add company** in the console, which checks the keys and database URL before saving.
+5. **Check:** `ENV_FILE=.env.prod npm run tenant:check -- <slug>` must end with `OK`. A certificate error here means the project uses a different CA. Then paste both certificates, one after the other, into `web/prod-ca.crt` and into the GitHub secret `PROD_DATABASE_CA_CERT`, which Release and Backup use for every company.
+6. **Address:** Vercel → Domains → add `<host>`, and point the company's DNS at Vercel as Vercel shows. A host that isn't registered gets 404.
+7. **First admin:** console → the company → create first admin (a one-time password, shown once). Or `ENV_FILE=.env.prod npm run create-user -- --tenant <slug> admin@company.com "Name" --role admin`.
+8. **Clean up:** delete `web/.env.<slug>`, because Vault now holds its keys. If the company owns the account, they can also rotate the service key later: replace it from the console (**Replace keys**).
+
+From then on, every Release migrates the company, every Backup run saves it (`<slug>-<date>.dump.gpg`, also copied to R2), and its health shows on the console's Companies page. App emails (checklist notices) still go through the one `SMTP_*` sender set in Vercel.
+
 *Locally:* `npm run db:dev2:start`, `ENV_FILE=.env.dev2 npm run db:migrate`, `npm run console:local` (refuses non-local stacks; writes `.env.console`), then `set -a; source .env.console; set +a; npm run dev` and open `http://console.localhost:3000/console`. The console E2E (`npx playwright test console --project=chromium`, with the same env loaded and nothing on :3000) skips without `CONSOLE_HOST`; `npm run console:admin` is for real projects.
