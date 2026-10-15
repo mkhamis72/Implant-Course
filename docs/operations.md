@@ -44,6 +44,7 @@ Always end with `Remove-Item Env:ENV_FILE`: a leftover `ENV_FILE` would point ev
      - `VERCEL_DEPLOY_HOOK_URL`.
      - `BACKUP_PASSPHRASE`: a long random passphrase. **Also store it in your password manager: without it, backups cannot be read.**
      - `CONTROL_SUPABASE_URL` and `CONTROL_ANON_KEY`.
+     - `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`: the off-site backup bucket (§D → Off-site copy). Without them, every Backup run turns red.
      - The three `CONTROL_*` secrets exist only once the control project does (step 5): add them to GitHub after creating it. `CONTROL_ANON_KEY` is the control project's anon/public key (Project Settings → API Keys).
 5. **Control project and first company:** a release migrates only the control project and registered companies, so do §G first (it creates the `CONTROL_*` values that step 4 needs, so finish the three `CONTROL_*` secrets in step 4 after this one): create the control project, migrate it, and register the first company. Migrate that company directly before registering (`tenant:register` checks its schema): `ENV_FILE=.env.prod npm run db:migrate`.
 6. **First release:** Actions → **Release** → Run workflow (branch `master`). It builds, migrates the control project and every company (already up to date), then deploys.
@@ -115,8 +116,8 @@ One sender serves every company; the email names the company. Locally the emails
 
 **What a backup holds:** the data (not the schema) of the app tables plus Supabase's sign-in accounts (`auth` schema), encrypted. The schema comes from the migrations in this repo.
 
-- **Backup** runs nightly and writes one encrypted file per company, `<slug>-<date>.dump.gpg`, plus `_control-<date>.dump.gpg` (the company registry only), in the artifact `backups-*`, kept 14 days. A failure for one company doesn't stop the others; the run turns red and ends with "Backup failed for: …". The run also pings every company and the control project to keep them awake; a failed ping doesn't stop the others and is named in "Keep-awake failed for: …".
-- **Monthly:** Actions → Backup → Run workflow → mode `verify`. It must finish green with "Every backup is readable and complete." It also accepts the older `prod-backup-*` artifacts for their remaining days. Verify decrypts with the GitHub secret, so it proves GitHub can read the backups, not that **you** can: keep `BACKUP_PASSPHRASE` in your password manager (it was lost once and replaced on 2026-10-08; backups made before that can't be read).
+- **Backup** runs nightly and writes one encrypted file per company, `<slug>-<date>.dump.gpg`, plus `_control-<date>.dump.gpg` (the company registry only), in the artifact `backups-*`, kept 14 days, and copies the same encrypted files to the Cloudflare R2 bucket under `<date>/<run id>/`, kept and locked for a year (see Off-site copy below). A failure for one company doesn't stop the others; the run turns red and ends with "Backup failed for: …". The run also pings every company and the control project to keep them awake; a failed ping doesn't stop the others and is named in "Keep-awake failed for: …". A failed off-site copy also turns the run red ("Off-site copy failed or did not run").
+- **Monthly:** Actions → Backup → Run workflow → mode `verify`. It checks the newest artifact **and** the newest off-site set, and must finish green with "Every backup is readable and complete, in GitHub and off-site." It also accepts the older `prod-backup-*` artifacts for their remaining days. Verify decrypts with the GitHub secret, so it proves GitHub can read the backups, not that **you** can: keep `BACKUP_PASSPHRASE` in your password manager (it was lost once and replaced on 2026-10-08; backups made before that can't be read).
 - **Restore rehearsal** (before go-live, then twice a year). There are no free Supabase slots for a scratch project, so use the local dev2 stack and wipe it afterwards. It holds patient data while you work, so never leave it.
   1. `npx supabase stop --workdir .dev2 --no-backup`, then `npm run db:dev2:start` and `ENV_FILE=.env.dev2 npm run db:migrate`.
   2. Download and decrypt the newest backup outside the repo (steps 1, 5 and 6 below). Run them with `docker exec supabase_db_implant-course-dev2 psql -U postgres -d postgres …` after `docker cp`-ing `data.sql` in. If your local `pg_restore` is older than the backup's, run it through `docker run --rm -v <dir>:/work postgres:18 pg_restore …`.
@@ -125,6 +126,15 @@ One sender serves every company; the email names the company. Locally the emails
 
   Last rehearsal: 2026-10-08, backup run 37782802942. All 57 tables matched, all 5 accounts kept their passwords, and new writes continued the ID sequences.
 
+**Off-site copy (Cloudflare R2).** GitHub keeps artifacts only 14 days, so every run also copies its encrypted files to an R2 bucket that keeps them a year and refuses deleting or overwriting them before then, even with the workflow's own key. The files are encrypted before they leave the runner; Cloudflare never sees patient data. Set it up once, before merging the workflow change (otherwise the nightly run turns red):
+1. Cloudflare dashboard → **R2 Object Storage**. Enabling R2 asks for a payment method; the backups stay well inside the free 10 GB.
+2. **Create bucket** `implant-course-backups`, location: **Specify jurisdiction → European Union**.
+3. Bucket → Settings → **Bucket lock rules** → Add rule: all objects (no prefix), retain **365 days**.
+4. Bucket → Settings → **Object lifecycle rules** → Add rule: all objects, delete after **366 days** (a day after the lock ends, so the lock never blocks it).
+5. R2 → **Manage API tokens** → Create API token: permission **Object Read & Write**, applied to `implant-course-backups` only. Copy the Access Key ID, the Secret Access Key (shown once) and the S3 endpoint that matches the bucket's location (`https://<account id>.r2.cloudflarestorage.com`; an EU-jurisdiction bucket answers only on `https://<account id>.eu.r2.cloudflarestorage.com`). The production bucket (2026-10-15) uses the default location and endpoint.
+6. GitHub → Environments → `production` → add the secrets `R2_ENDPOINT` (that endpoint), `R2_BUCKET` (`implant-course-backups`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`. Keep the Cloudflare login in your password manager: it is the way in if GitHub is lost.
+7. Run Backup by hand, then Backup with mode `verify`: both copies must pass. In the bucket, try to delete one file: R2 must refuse it.
+
 **Restore**, if a company's project or the control project is lost or damaged.
 
 You need:
@@ -132,7 +142,7 @@ You need:
 - **PostgreSQL client tools** (`pg_restore`, `psql`) at least as new as the `pg_dump` that made the backup. The Backup workflow installs the newest client (18 as of 2026-10), so use 18 or later, e.g. from the PostgreSQL Windows installer with "Command Line Tools" only. An older `pg_restore` stops with "unsupported version in file header".
 
 **Restore one company** (the others are untouched). Steps, in Git Bash from `web/`:
-1. Download the newest `backups-*` artifact, unzip it, and decrypt the company's file: `gpg --decrypt <slug>-<date>.dump.gpg > <slug>.dump`. It asks for the passphrase.
+1. Download the newest `backups-*` artifact and unzip it. If it has expired (14 days) or GitHub is unavailable, download the file from the R2 bucket instead: Cloudflare dashboard → R2 → `implant-course-backups` → the date and run folder → the company's file → Download. Then decrypt the company's file: `gpg --decrypt <slug>-<date>.dump.gpg > <slug>.dump`. It asks for the passphrase.
 2. Create a new Supabase project (Frankfurt), with the same auth settings as §A.1.
 3. Make an env file `.env.restore` with the new project's `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (session pooler) and `DATABASE_CA_CERT`, plus the `CONTROL_SUPABASE_URL` and `CONTROL_DATABASE_URL` lines copied from `.env.prod` (`tenant:register` reads the company from the first group and the control project from the second).
 4. Apply the schema to the new project directly: `ENV_FILE=.env.restore npm run db:migrate`. If the backup is older than the newest migrations, check out the commit the backup belongs to first: the newest migration it has is the newest migration file at that date. Then `git checkout master` again before the next steps.

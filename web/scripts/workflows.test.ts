@@ -67,6 +67,10 @@ describe('secrets are cleaned of stray line endings before use', () => {
     for (const n of ['CONTROL_SUPABASE_URL', 'CONTROL_ANON_KEY']) expect(cleans(runOf(backup.backup, 'Keep'), n)).toBe(true);
     expect(cleans(runOf(backup.verify, 'Decrypt'), 'PASSPHRASE')).toBe(true);
   });
+  it('backup and verify: the off-site (R2) endpoint, bucket and keys', () => {
+    for (const step of [runOf(backup.backup, 'Copy'), runOf(backup.verify, 'Download the latest off-site')])
+      for (const n of ['R2_ENDPOINT', 'R2_BUCKET', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) expect(cleans(step, n)).toBe(true);
+  });
 });
 
 describe('backup.yml', () => {
@@ -143,10 +147,43 @@ describe('backup.yml', () => {
     expect(verify).toContain('TABLE DATA public patients');
     expect(verify).toContain('TABLE DATA auth users');
     expect(verify).toContain('TABLE DATA public tenants');
-    expect(verify).toContain('for f in in/*.dump.gpg');
-    expect(runOf(jobs.verify, 'Download')).toContain('startswith("backups-")');
+    expect(verify).toContain('for f in "$dir"/*.dump.gpg');
+    expect(runOf(jobs.verify, 'Download the latest backup')).toContain('startswith("backups-")');
     expect(verify).toContain('Backup problem');
     expect(verify).toContain('registry file missing');
     expect(verify).toContain('no company files');
+  });
+
+  describe('off-site copy (Cloudflare R2)', () => {
+    const copyStep = jobs.backup.steps.find((s) => s.name?.startsWith('Copy'));
+    const copy = copyStep?.run ?? '';
+    const names = jobs.backup.steps.map((s) => s.name ?? '');
+    const fail = jobs.backup.steps.find((s) => s.name?.startsWith('Fail'));
+
+    it('copies only the encrypted files, after the artifact and before keep-awake', () => {
+      expect(copy).toContain("--exclude '*' --include '*.dump.gpg'");
+      expect(copy).toContain('aws s3 cp out/');
+      const artifact = jobs.backup.steps.findIndex((s) => s.uses?.startsWith('actions/upload-artifact'));
+      expect(artifact).toBeLessThan(names.findIndex((n) => n.startsWith('Copy')));
+      expect(names.findIndex((n) => n.startsWith('Copy'))).toBeLessThan(names.findIndex((n) => n.startsWith('Keep')));
+    });
+    it('stores each run under its own date and run id (locked files cannot be overwritten)', () => {
+      expect(copyStep?.env?.RUN_ID).toBe('${{ github.run_id }}');
+      expect(copy).toContain('prefix="$(date -u +%F)/$RUN_ID"');
+      expect(copy).toContain('s3://$R2_BUCKET/$prefix/');
+    });
+    it('a failed or unconfigured copy still lets keep-awake run, then fails the run by name', () => {
+      expect(copyStep).toMatchObject({ id: 'offsite', 'continue-on-error': true });
+      expect(copy).toContain('R2 secrets are missing');
+      expect(copy.indexOf('R2 secrets are missing')).toBeLessThan(copy.indexOf('aws s3'));
+      expect(fail?.env?.OFFSITE_OUTCOME).toContain('steps.offsite.outcome');
+      expect(fail?.run).toContain('Off-site copy failed');
+      expect(fail!.run!.indexOf('Off-site copy failed')).toBeLessThan(fail!.run!.indexOf('were backed up'));
+    });
+    it('verify checks the newest off-site set as well as the artifact', () => {
+      const download = runOf(jobs.verify, 'Download the latest off-site');
+      expect(download).toContain('aws s3 cp "s3://$R2_BUCKET/$prefix/" offsite/ --recursive');
+      expect(runOf(jobs.verify, 'Decrypt')).toContain('for dir in in offsite');
+    });
   });
 });
