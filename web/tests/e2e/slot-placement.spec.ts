@@ -33,7 +33,7 @@ test('placing a booked implant is pre-filled and closes the booking', async ({ p
   await expect(panel).toContainText(chair);
   await panel.getByRole('button', { name: 'Place implant' }).click();
   await expect(page.getByLabel('Placed by (delegate)')).toHaveValue(placing);
-  await expect(page.getByRole('combobox', { name: 'Implant', exact: true })).toHaveValue(stock.productId);
+  await expect(page.getByRole('combobox', { name: 'Implant size' })).toHaveValue(stock.productId);
   await expect(page.getByRole('combobox', { name: 'Technique' })).toHaveValue('guided');
   await page.getByRole('radiogroup', { name: 'Stock batch' }).getByRole('radio').first().check();
   await page.getByRole('button', { name: 'Save placement' }).click();

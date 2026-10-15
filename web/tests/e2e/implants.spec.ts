@@ -80,6 +80,7 @@ test('missing fields are explained and nothing is saved', async ({ page }) => {
 test('receives a missing size inside the placement form without losing what was typed', async ({ page }) => {
   const s = await setup(page);
   const productId = await seedProduct(s.api, { type: 'implant', brand: s.brand, diameter_mm: 5, length_mm: 13 });
+  await page.reload(); // the chart was loaded before this product existed
   await page.getByRole('button', { name: 'Tooth 37, Present' }).click();
   await panel(page).getByRole('button', { name: 'Place implant' }).click();
   await page.getByLabel('Placed by (delegate)').selectOption({ label: s.delegate });
