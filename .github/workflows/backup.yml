@@ -1,7 +1,8 @@
 name: Backup
 on:
   schedule:
-    - cron: '0 0 * * *' # 00:00 UTC = 02:00/03:00 Cairo
+    - cron: '0 0 * * *' # 00:00 UTC = 02:00/03:00 Cairo: backup
+    - cron: '0 6 1 * *' # 06:00 UTC on the 1st: verify (after that night's backup); a failure turns the run red
   workflow_dispatch:
     inputs:
       mode:
@@ -21,7 +22,7 @@ permissions:
 
 jobs:
   backup:
-    if: github.event_name == 'schedule' || inputs.mode == 'backup'
+    if: github.event.schedule == '0 0 * * *' || inputs.mode == 'backup'
     runs-on: ubuntu-latest
     environment: production
     defaults: { run: { working-directory: web } }
@@ -177,7 +178,7 @@ jobs:
           echo "Every company and the control registry were backed up."
 
   verify:
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify'
+    if: github.event.schedule == '0 6 1 * *' || inputs.mode == 'verify'
     runs-on: ubuntu-latest
     environment: production
     steps:
