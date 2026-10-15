@@ -131,7 +131,7 @@ One sender serves every company; the email names the company. Locally the emails
 2. **Create bucket** `implant-course-backups`, location: **Specify jurisdiction → European Union**.
 3. Bucket → Settings → **Bucket lock rules** → Add rule: all objects (no prefix), retain **365 days**.
 4. Bucket → Settings → **Object lifecycle rules** → Add rule: all objects, delete after **366 days** (a day after the lock ends, so the lock never blocks it).
-5. R2 → **Manage API tokens** → Create API token: permission **Object Read & Write**, applied to `implant-course-backups` only. Copy the Access Key ID, the Secret Access Key (shown once) and the **EU** S3 endpoint (`https://<account id>.eu.r2.cloudflarestorage.com`).
+5. R2 → **Manage API tokens** → Create API token: permission **Object Read & Write**, applied to `implant-course-backups` only. Copy the Access Key ID, the Secret Access Key (shown once) and the S3 endpoint that matches the bucket's location (`https://<account id>.r2.cloudflarestorage.com`; an EU-jurisdiction bucket answers only on `https://<account id>.eu.r2.cloudflarestorage.com`). The production bucket (2026-10-15) uses the default location and endpoint.
 6. GitHub → Environments → `production` → add the secrets `R2_ENDPOINT` (that endpoint), `R2_BUCKET` (`implant-course-backups`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`. Keep the Cloudflare login in your password manager: it is the way in if GitHub is lost.
 7. Run Backup by hand, then Backup with mode `verify`: both copies must pass. In the bucket, try to delete one file: R2 must refuse it.
 
