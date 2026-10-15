@@ -52,3 +52,33 @@ test('filters patients by implant stage and shows the matching teeth', async ({ 
   await expect(page).toHaveURL(/stage=cover_screw/);
   await expect(rows).toHaveCount(2);
 });
+
+test('filters patients by missing and to-be-extracted teeth, ORed with the other boxes', async ({ page }) => {
+  const api = await apiAs(TEST_USERS.organizer.email);
+  const tag = uniqueName('Teeth');
+  const missing = await seedPatient(api, `${tag} Missing`);
+  const extract = await seedPatient(api, `${tag} Extract`);
+  await seedPatient(api, `${tag} Healthy`);
+  const states = await api.from('tooth_status').insert([
+    { patient_id: missing, tooth: 14, status: 'missing' },
+    { patient_id: extract, tooth: 47, status: 'extracted' },
+  ]);
+  expect(states.error).toBeNull();
+
+  await login(page, TEST_USERS.organizer.email);
+  await page.goto('/patients');
+  await expect(page.getByLabel('Prosthetic stage')).toHaveCount(0);
+  await page.getByLabel('Search patients').fill(tag);
+  await page.getByLabel('Missing').check();
+  await page.getByRole('button', { name: 'Search' }).click();
+  await expect(page).toHaveURL(/stage=missing/);
+  const rows = page.getByRole('row').filter({ hasText: tag });
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('14 Missing');
+
+  await page.getByLabel('To be extracted').check();
+  await page.getByRole('button', { name: 'Search' }).click();
+  await expect(page).toHaveURL(/stage=extracted/);
+  await expect(rows).toHaveCount(2);
+  await expect(rows.filter({ hasText: `${tag} Extract` })).toContainText('47 To extract');
+});
