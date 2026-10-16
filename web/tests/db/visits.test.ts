@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
-import { makeDelegate, makePatient, makeProduct, place, receive } from './fixtures';
+import { makeDelegate, makePatient, makeProduct, place, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -149,6 +149,115 @@ describe('record_visit', () => {
         { visit_key: 'year_3', label: 'Year-3 review', target_day: 1095, window_start: 1035, window_end: 1155 },
       ]);
       expect((await c.query('select count(*)::int as n from public.visit_schedule(1)')).rows[0].n).toBe(4);
+    });
+  });
+});
+
+const visits = async (c: Client, patient: string) =>
+  (await c.query('select visit_key, status, followup_id from public.implant_visits($1)', [patient])).rows as
+    { visit_key: string; status: string; followup_id: string | null }[];
+const statusOf = async (c: Client, patient: string, key: string) => (await visits(c, patient)).find((v) => v.visit_key === key)?.status;
+
+describe('implant_visits', () => {
+  it.each([
+    [6, 'upcoming'], [7, 'due'], [10, 'due'], [11, 'overdue'], [21, 'overdue'], [22, 'missed'],
+  ])('early review %i days after placement is %s', async (days, status) => {
+    await withTx(async (c) => {
+      const { patient } = await placedSite(c, days);
+      expect(await statusOf(c, patient, 'early_review')).toBe(status);
+    });
+  });
+
+  it('lists the fixed visits for a new implant and annual visits as time passes', async () => {
+    await withTx(async (c) => {
+      const fresh = await placedSite(c, 0, 'Zz Visit Fresh');
+      expect((await visits(c, fresh.patient)).map((v) => v.visit_key)).toEqual(['early_review', 'osseointegration', 'month_6', 'month_12']);
+      const old = await placedSite(c, 700, 'Zz Visit Old');
+      const keys = (await visits(c, old.patient)).map((v) => v.visit_key);
+      expect(keys).toContain('year_2');
+      expect(keys).toContain('year_3');
+      expect(keys).not.toContain('year_4');
+      expect(await statusOf(c, old.patient, 'year_2')).toBe('due'); // window 670–790, target 730
+      expect(await statusOf(c, old.patient, 'year_3')).toBe('upcoming');
+    });
+  });
+
+  it('takes done / did not attend / not needed from the record; a voided record no longer counts', async () => {
+    await withTx(async (c) => {
+      const { patient, site } = await placedSite(c, 200);
+      const done = await recordVisit(c, site, { key: 'early_review' });
+      await recordVisit(c, site, { key: 'osseointegration', attendance: 'did_not_attend', outcome: null });
+      await recordVisit(c, site, { key: 'month_6', attendance: 'not_needed', outcome: null, notes: 'Moved away' });
+      const v = await visits(c, patient);
+      expect(v.find((x) => x.visit_key === 'early_review')).toMatchObject({ status: 'done', followup_id: done });
+      expect(await statusOf(c, patient, 'osseointegration')).toBe('did_not_attend');
+      expect(await statusOf(c, patient, 'month_6')).toBe('not_needed');
+      await c.query(`select public.void_followup($1, 'Entered on the wrong tooth')`, [done]);
+      expect(await statusOf(c, patient, 'early_review')).toBe('missed');
+    });
+  });
+
+  it('expects no further visits for a failed implant, but keeps the visits already recorded', async () => {
+    await withTx(async (c) => {
+      const { patient, site } = await placedSite(c, 200);
+      await recordVisit(c, site, { key: 'early_review' });
+      await recordVisit(c, site, { key: null, check: 'Mobile implant', outcome: 'failed' });
+      expect(await visits(c, patient)).toEqual([expect.objectContaining({ visit_key: 'early_review', status: 'done' })]);
+    });
+  });
+
+  it('a Schedule-only user and a delegate get no visit statuses', async () => {
+    await withTx(async (c) => {
+      const { patient } = await placedSite(c, 30);
+      await setPerms(c, users.target, { schedule: 'view' });
+      await actAs(c, users.target);
+      expect(await visits(c, patient)).toEqual([]);
+      await actAs(c, users.delegate);
+      expect(await visits(c, patient)).toEqual([]);
+    });
+  });
+});
+
+describe('recall_list', () => {
+  const recall = async (c: Client, patient: string) =>
+    (await c.query('select visit_key, status, phone from public.recall_list() where patient_id = $1', [patient])).rows;
+
+  it('lists due and overdue visits, and visits missed in the last 60 days', async () => {
+    await withTx(async (c) => {
+      const overdue = await placedSite(c, 11, 'Zz Recall Overdue');
+      expect(await recall(c, overdue.patient)).toEqual([{ visit_key: 'early_review', status: 'overdue', phone: '' }]);
+      const missedRecently = await placedSite(c, 30, 'Zz Recall Missed');
+      expect(await recall(c, missedRecently.patient)).toEqual([{ visit_key: 'early_review', status: 'missed', phone: '' }]);
+      const later = await placedSite(c, 200, 'Zz Recall Later');
+      // Early review closed 179 days ago and osseointegration 88 days ago (beyond 60); the 6-month review is overdue.
+      expect(await recall(c, later.patient)).toEqual([{ visit_key: 'month_6', status: 'overdue', phone: '' }]);
+    });
+  });
+
+  it('leaves out recorded visits, failed implants and archived patients', async () => {
+    await withTx(async (c) => {
+      const recorded = await placedSite(c, 11, 'Zz Recall Recorded');
+      await recordVisit(c, recorded.site, { key: 'early_review' });
+      expect(await recall(c, recorded.patient)).toEqual([]);
+      const failed = await placedSite(c, 11, 'Zz Recall Failed');
+      await recordVisit(c, failed.site, { key: null, check: 'Lost', outcome: 'failed' });
+      expect(await recall(c, failed.patient)).toEqual([]);
+      const archived = await placedSite(c, 11, 'Zz Recall Archived');
+      await c.query('update public.patients set archived = true where id = $1', [archived.patient]);
+      expect(await recall(c, archived.patient)).toEqual([]);
+    });
+  });
+});
+
+describe('last follow-up in reports', () => {
+  it('delegate_report keeps the last real outcome after a did-not-attend visit', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedSite(c, 200);
+      await recordVisit(c, site, { key: 'early_review', outcome: 'integrated' });
+      await recordVisit(c, site, { key: 'osseointegration', attendance: 'did_not_attend', outcome: null });
+      const delegate = (await c.query('select placing_delegate_id as d from public.implant_sites where id = $1', [site])).rows[0].d;
+      const { rows } = await c.query('select last_outcome from public.delegate_report($1) where site_id = $2', [delegate, site]);
+      expect(rows).toEqual([{ last_outcome: 'integrated' }]);
     });
   });
 });
