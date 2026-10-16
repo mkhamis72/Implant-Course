@@ -2,7 +2,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
-import { uniqueName } from './patients';
+import { createPatientViaUi, uniqueName } from './patients';
 
 // The narrowest common phone width, stricter than the Pixel 7 default.
 test.use({ viewport: { width: 360, height: 780 } });
@@ -54,4 +54,12 @@ test('the menu takes keyboard focus while open and gives it back on close', asyn
   await page.keyboard.press('Escape');
   await expect(menu).toBeFocused();
   await expect(page.locator('main')).not.toHaveAttribute('inert', '');
+});
+
+test('the medical history risk factors fit a phone screen', async ({ page }) => {
+  await login(page, TEST_USERS.organizer.email);
+  const id = await createPatientViaUi(page, { full_name: uniqueName('Phone history') });
+  await page.goto(`/patients/${id}/overview`);
+  await expect(page.getByRole('radiogroup', { name: 'Previous implant failure' })).toBeVisible();
+  await expectNoSideways(page);
 });

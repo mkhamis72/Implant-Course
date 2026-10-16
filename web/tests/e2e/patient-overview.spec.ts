@@ -14,7 +14,7 @@ test('header shows age and medical alerts; tabs are present', async ({ page }) =
 
   await page.getByRole('link', { name: 'Overview' }).click();
   await page.getByLabel('Allergies').fill('Penicillin');
-  await page.getByLabel('Bisphosphonates').check();
+  await page.getByRole('radiogroup', { name: 'Bisphosphonates' }).getByLabel('Yes', { exact: true }).check();
   await page.getByRole('button', { name: 'Save medical history' }).click();
   await expect(page.getByText('Medical history saved.')).toBeVisible();
   await expect(header.getByTestId('medical-alert')).toHaveText(['Allergy: Penicillin', 'Bisphosphonates']);
@@ -81,13 +81,16 @@ test('saving twice in a row is not mistaken for a conflict', async ({ page }) =>
   await saved(page, 'Save patient');
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
   await expect(page.getByText('Patient details saved.')).toBeVisible();
-  await page.getByLabel('Diabetes').check();
+  await page.getByRole('radiogroup', { name: 'Diabetes' }).getByLabel('Yes', { exact: true }).check();
   await saved(page, 'Save medical history');
   await expect(page.getByText('Medical history saved.')).toBeVisible();
-  await page.getByLabel('Smoker').check();
+  await page.getByRole('radiogroup', { name: 'Smoking' }).getByLabel('Current').check();
+  await page.getByLabel('Cigarettes per day').fill('10');
   await saved(page, 'Save medical history');
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
   await page.reload();
   await expect(page.getByLabel('Phone')).toHaveValue('0100 222 2222');
-  await expect(page.getByLabel('Smoker')).toBeChecked();
+  await expect(page.getByRole('radiogroup', { name: 'Smoking' }).getByLabel('Current')).toBeChecked();
+  await expect(page.getByLabel('Cigarettes per day')).toHaveValue('10');
+  await expect(page.getByRole('radiogroup', { name: 'Bruxism / parafunction' }).getByLabel('Not assessed')).toBeChecked();
 });
