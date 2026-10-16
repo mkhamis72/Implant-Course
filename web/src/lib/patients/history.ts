@@ -1,6 +1,7 @@
 import {
   COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, type ComponentType, type FollowupOutcome, type SiteState,
 } from '@/lib/inventory/types';
+import { GRAFT_PROCEDURE_LABELS, SURGERY_FIELD_LABELS, type GraftProcedure } from '@/lib/implants/surgery';
 import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
 
 const FIELD_LABELS: Record<string, string> = {
@@ -77,6 +78,19 @@ export function describeChange(e: HistoryEntry): string {
       if (e.after?.voided_at && !e.before?.voided_at) return `Follow-up removed from the record: ${row?.check_type} (${e.after.voided_reason})`;
       const outcome = OUTCOME_LABELS[row?.outcome as FollowupOutcome] ?? String(row?.outcome);
       return e.action === 'INSERT' ? `Follow-up (${row?.check_type}): ${outcome}` : `Follow-up updated (${row?.check_type})`;
+    }
+    case 'implant_surgery': {
+      if (e.action === 'INSERT') return 'Surgical details recorded';
+      if (e.action === 'DELETE') return 'Surgical details deleted';
+      const changed = changedFields(e.before, e.after, SURGERY_FIELD_LABELS);
+      return changed.length ? `Surgical details changed: ${changed.join(', ')}` : 'Surgical details saved (no changes)';
+    }
+    case 'implant_grafts': {
+      const procedure = (e.after ?? e.before)?.procedure as GraftProcedure;
+      const label = GRAFT_PROCEDURE_LABELS[procedure] ?? String(procedure);
+      if (e.action === 'INSERT') return `Graft added: ${label}`;
+      if (e.action === 'DELETE') return `Graft deleted: ${label}`;
+      return `Graft changed: ${label}`;
     }
     default:
       return `${e.table_name} ${e.action.toLowerCase()}`;

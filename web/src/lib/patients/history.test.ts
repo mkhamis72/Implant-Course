@@ -84,3 +84,23 @@ describe('describeChange: tri-state medical history', () => {
     })).toBe('Medical history changed: smoking, HbA1c, bruxism');
   });
 });
+
+describe('describeChange: surgical details and grafts', () => {
+  const base = { id: 1, at: '2026-10-17T10:00:00Z', actor: 'A' };
+  it('describes surgical details', () => {
+    expect(describeChange({ ...base, table_name: 'implant_surgery', action: 'INSERT', before: null, after: { flap: 'crestal' } }))
+      .toBe('Surgical details recorded');
+    expect(describeChange({
+      ...base, table_name: 'implant_surgery', action: 'UPDATE',
+      before: { flap: 'crestal', healing: null, updated_at: 'a' }, after: { flap: 'flapless', healing: 'submerged', updated_at: 'b' },
+    })).toBe('Surgical details changed: flap, healing');
+  });
+  it('describes grafts', () => {
+    expect(describeChange({ ...base, table_name: 'implant_grafts', action: 'INSERT', before: null, after: { procedure: 'gbr' } }))
+      .toBe('Graft added: GBR');
+    expect(describeChange({ ...base, table_name: 'implant_grafts', action: 'UPDATE', before: { procedure: 'gbr' }, after: { procedure: 'sinus_lateral' } }))
+      .toBe('Graft changed: Sinus lift, lateral window');
+    expect(describeChange({ ...base, table_name: 'implant_grafts', action: 'DELETE', before: { procedure: 'ridge_split' }, after: null }))
+      .toBe('Graft deleted: Ridge split');
+  });
+});

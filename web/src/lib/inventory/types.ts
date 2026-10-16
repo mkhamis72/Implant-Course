@@ -1,4 +1,5 @@
 import type { ToothState } from '@/lib/patients/types';
+import type { ImplantGraft, ImplantSurgery } from '@/lib/implants/surgery';
 
 export const PRODUCT_TYPES = [
   'implant', 'cover_screw', 'healing_abutment', 'graft', 'membrane', 'ti_base', 'multi_unit',
@@ -125,6 +126,8 @@ export type ImplantSite = {
   supervisor: { full_name: string } | null;
   components: SiteComponent[];
   followups: Followup[];
+  surgery: ImplantSurgery | null;
+  grafts: ImplantGraft[];
   slot: {
     id: string;
     starts_at: string;
