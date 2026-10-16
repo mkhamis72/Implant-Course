@@ -97,6 +97,19 @@ describe('medical history: tri-state risk factors', () => {
     });
   });
 
+  it('release window: an old-version untick of smoker clears the cigarettes count', async () => {
+    await withTx(async (c) => {
+      await actAs(c, users.organizer);
+      const p = await makePatient(c, 'Zz Tristate Untick');
+      const set = (sql: string) => c.query(`update public.medical_history set ${sql} where patient_id = $1`, [p]);
+      await set('smoker = true');
+      await set('cigarettes_per_day = 10');
+      expect((await history(c, p)).cigarettes_per_day).toBe(10);
+      await set('smoker = false');
+      expect(await history(c, p)).toMatchObject({ smoking: 'never', cigarettes_per_day: null });
+    });
+  });
+
   it('restore safety: inserting a row with a stale boolean keeps its tri-state value', async () => {
     await withTx(async (c) => {
       await actAs(c, users.organizer);

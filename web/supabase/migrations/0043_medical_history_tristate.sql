@@ -24,7 +24,8 @@ update public.medical_history set
   bisphosphonates_status = case when bisphosphonates then 'yes' end,
   anticoagulants_status = case when anticoagulants then 'yes' end,
   radiotherapy_status = case when radiotherapy_head_neck then 'yes' end,
-  osteoporosis_status = case when osteoporosis then 'yes' end;
+  osteoporosis_status = case when osteoporosis then 'yes' end
+where smoker or diabetes or bisphosphonates or anticoagulants or radiotherapy_head_neck or osteoporosis;
 
 -- Release window: the previous version writes the booleans. On insert only a true counts (and a value already
 -- present wins, so restoring a dump keeps the tri-state answers); on update only a changed boolean counts.
@@ -46,6 +47,7 @@ begin
   end if;
   if new.smoker is distinct from old.smoker then
     new.smoking := case when new.smoker then 'current' else 'never' end;
+    if not new.smoker then new.cigarettes_per_day := null; end if;
   end if;
   if new.diabetes is distinct from old.diabetes then
     new.diabetes_status := case when new.diabetes then 'yes' else 'no' end;
