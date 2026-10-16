@@ -71,6 +71,15 @@ describe('<SurgicalDetails>', () => {
     expect(await screen.findByRole('button', { name: 'Edit surgical details' })).toBeInTheDocument();
   });
 
+  it('sends the version the form was opened on even if the page refreshes with a newer one meanwhile', () => {
+    const { rerender } = render(<SurgicalDetails site={site()} patientId="pt" editable />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit surgical details' }));
+    const newer = { ...surgery, updated_at: '2026-10-17T11:00:00+00:00' } as ImplantSurgery;
+    rerender(<SurgicalDetails site={site({ surgery: newer })} patientId="pt" editable />);
+    fireEvent.click(screen.getByRole('button', { name: 'Save surgical details' }));
+    expect(vi.mocked(saveSurgery)).toHaveBeenCalledWith(expect.objectContaining({ expectedUpdatedAt: '2026-10-17T10:00:00.5+00:00' }));
+  });
+
   it('keeps the form and shows the error when saving fails', async () => {
     vi.mocked(saveSurgery).mockResolvedValue({ error: 'These surgical details were changed by someone else. Reload to see them.' });
     render(<SurgicalDetails site={site()} patientId="pt" editable />);

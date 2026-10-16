@@ -62,6 +62,8 @@ export function SurgicalDetails({ site, patientId, editable, startOpen = false }
 
 function SurgeryForm({ site, patientId, onDone }: { site: ImplantSite; patientId: string; onDone: () => void }) {
   const s = site.surgery;
+  // The version the form was opened on: a refresh while it is open must not turn a stale save into a silent overwrite.
+  const [version] = useState(s?.updated_at ?? '');
   const [v, setV] = useState({
     extractionDate: s?.extraction_date ?? '', placementTiming: s?.placement_timing ?? '', softTissuePhenotype: s?.soft_tissue_phenotype ?? '',
     keratinizedMucosaMm: s?.keratinized_mucosa_mm === null || s?.keratinized_mucosa_mm === undefined ? '' : String(s.keratinized_mucosa_mm),
@@ -75,7 +77,7 @@ function SurgeryForm({ site, patientId, onDone }: { site: ImplantSite; patientId
   return (
     <form className="space-y-3" onSubmit={(e) => {
       e.preventDefault();
-      submit({ siteId: site.id, patientId, expectedUpdatedAt: s?.updated_at ?? '', ...v });
+      submit({ siteId: site.id, patientId, expectedUpdatedAt: version, ...v });
     }}>
       <div className="grid gap-3 sm:grid-cols-2">
         <Choice label="Placement timing" value={v.placementTiming} onChange={set('placementTiming')} values={PLACEMENT_TIMINGS} labels={PLACEMENT_TIMING_LABELS} />

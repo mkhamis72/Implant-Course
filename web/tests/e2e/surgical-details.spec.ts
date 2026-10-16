@@ -11,7 +11,7 @@ async function placedImplant(page: Page) {
   await login(page, TEST_USERS.organizer.email);
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Surgery patient') });
   const me = (await api.auth.getUser()).data.user!.id;
-  const { error } = await api.rpc('place_implant', {
+  const { error } = await api.rpc('place_implant_v2', {
     p_patient: patientId, p_tooth: 36, p_product: stock.productId, p_lot: stock.lotId,
     p_placed_on: new Date().toISOString().slice(0, 10), p_placing_delegate: delegate, p_supervisor: me,
   });
