@@ -124,3 +124,10 @@ describe('<PlaceForm> booked supervisor', () => {
     expect(vi.mocked(placeImplant).mock.calls.at(-1)?.[0]).toMatchObject({ isq: '72', boneType: 'D2' });
   });
 });
+
+describe('<PlaceForm> graft', () => {
+  it('no longer asks for a free-text graft (grafts go in Surgical details)', () => {
+    render(<PlaceForm patientId="pt" tooth={36} data={data} onDone={() => {}} plannedProductId={null} />);
+    expect(screen.queryByLabelText('Graft (optional)')).not.toBeInTheDocument();
+  });
+});

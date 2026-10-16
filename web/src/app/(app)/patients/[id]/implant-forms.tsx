@@ -15,7 +15,7 @@ import { ImplantPicker } from './implant-picker';
 
 type Result = { error?: string };
 
-function useSubmit(action: (input: Record<string, unknown>) => Promise<Result>, onDone: () => void) {
+export function useSubmit(action: (input: Record<string, unknown>) => Promise<Result>, onDone: () => void) {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   function submit(input: Record<string, unknown>) {
@@ -30,7 +30,7 @@ function useSubmit(action: (input: Record<string, unknown>) => Promise<Result>, 
 }
 
 /** A labelled field; required fields carry a visual mark (screen readers get aria-required on the control). */
-function Field({ label, required = false, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+export function Field({ label, required = false, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="label">
@@ -54,7 +54,7 @@ export function TechniqueField({ value, onChange }: { value: string; onChange: (
   );
 }
 
-function Footer({ error, pending, saveLabel, onCancel }: { error: string | null; pending: boolean; saveLabel: string; onCancel: () => void }) {
+export function Footer({ error, pending, saveLabel, onCancel }: { error: string | null; pending: boolean; saveLabel: string; onCancel: () => void }) {
   return (
     <>
       {error && <p role="alert" className="text-sm text-bad">{error}</p>}
@@ -281,7 +281,8 @@ export function PlaceForm({
   plannedProductId,
   plannedTechnique = null,
   slot = null,
-}: Base & { plannedProductId: string | null; plannedTechnique?: Technique | null; slot?: ImplantSite['slot'] }) {
+  onPlaced,
+}: Base & { plannedProductId: string | null; plannedTechnique?: Technique | null; slot?: ImplantSite['slot']; onPlaced?: () => void }) {
   // A booked implant starts with the booking's delegates and supervisor.
   const placingFromSlot = slot?.delegates.find((d) => d.role === 'placing')?.delegate_id ?? '';
   const assistingFromSlot = slot?.delegates.find((d) => d.role === 'assisting')?.delegate_id ?? '';
@@ -297,7 +298,7 @@ export function PlaceForm({
       ...(key === 'productId' ? { lotId: '' } : {}),
       ...(key === 'placedOn' ? { lotId: keepIfUsable(data, cur.productId, cur.lotId, value) } : {}),
     }));
-  const { error, pending, submit } = useSubmit(placeImplant, onDone);
+  const { error, pending, submit } = useSubmit(placeImplant, () => { onPlaced?.(); onDone(); });
   return (
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, slotId: slot?.id ?? '', ...v }); }}>
       <p className="text-xs text-muted"><span aria-hidden="true" className="text-bad">*</span> Required</p>
@@ -362,9 +363,6 @@ export function PlaceForm({
           </select>
         </Field>
       </div>
-      <Field label="Graft (optional)">
-        <input className="input" value={v.graft} onChange={(e) => set('graft')(e.target.value)} />
-      </Field>
       <Field label="Notes (optional)">
         <input className="input" value={v.notes} onChange={(e) => set('notes')(e.target.value)} />
       </Field>

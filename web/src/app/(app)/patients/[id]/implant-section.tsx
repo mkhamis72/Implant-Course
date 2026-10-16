@@ -12,6 +12,7 @@ import { isManualState, type ToothState } from '@/lib/patients/types';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { cancelPlan, setTechnique } from './implant-actions';
 import { Corrections } from './corrections';
+import { SurgicalDetails } from './surgical-details';
 import { ComponentForm, FollowupForm, PlaceForm, PlanForm } from './implant-forms';
 
 type Mode = 'none' | 'plan' | 'place' | 'component' | 'followup';
@@ -98,14 +99,14 @@ function TechniqueControl({ site, patientId, editable }: { site: ImplantSite; pa
   );
 }
 
-function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: string; data: ChartData }) {
+function SiteDetails({ site, patientId, data, justPlaced = false }: { site: ImplantSite; patientId: string; data: ChartData; justPlaced?: boolean }) {
   const facts = [
     site.lot ? (site.lot.lot_no ? `Lot ${site.lot.lot_no}` : 'No lot') : null,
     site.placed_on ? formatDate(site.placed_on) : null,
     site.torque_ncm !== null ? `${site.torque_ncm} Ncm` : null,
     site.isq !== null && site.isq !== undefined ? `ISQ ${site.isq}` : null,
     site.bone_type ? `Bone ${site.bone_type}` : null,
-    site.graft ? `Graft: ${site.graft}` : null,
+    site.graft ? `Graft (old note): ${site.graft}` : null,
   ].filter(Boolean) as string[];
   const people = [
     site.placing?.full_name ? `Placed by ${site.placing.full_name}` : null,
@@ -128,6 +129,9 @@ function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: 
         {site.state !== 'removed' && <TechniqueControl site={site} patientId={patientId} editable={data.editable} />}
         {(site.state === 'placed' || site.state === 'restored') && <ComponentTimeline site={site} />}
       </div>
+      {site.state !== 'removed' && (
+        <SurgicalDetails site={site} patientId={patientId} editable={data.editable} startOpen={justPlaced} />
+      )}
       {site.components.length > 0 && (
         <div>
           <h4 className="font-medium">Component history</h4>
@@ -162,6 +166,7 @@ function SiteDetails({ site, patientId, data }: { site: ImplantSite; patientId: 
 
 export function ImplantSection({ patientId, tooth, status, data }: { patientId: string; tooth: number; status: ToothState; data: ChartData }) {
   const [mode, setMode] = useState<Mode>('none');
+  const [justPlaced, setJustPlaced] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const site = activeSite(data.sites, tooth);
@@ -195,7 +200,7 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
           {site.slot.chair ? ` · ${site.slot.chair.name}` : ''}
         </p>
       )}
-      {site && site.state !== 'planned' && <SiteDetails site={site} patientId={patientId} data={data} />}
+      {site && site.state !== 'planned' && <SiteDetails site={site} patientId={patientId} data={data} justPlaced={justPlaced} />}
 
       {data.editable && mode === 'none' && actions.primary && (
         // One obvious next step per state; the alternatives stay quiet beside it.
@@ -216,7 +221,7 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
       {mode === 'plan' && <PlanForm patientId={patientId} tooth={tooth} data={data} onDone={done} />}
       {mode === 'place' && (
         <PlaceForm patientId={patientId} tooth={tooth} data={data} onDone={done} plannedProductId={site?.product?.id ?? null}
-          plannedTechnique={site?.technique ?? null} slot={site?.slot ?? null} />
+          plannedTechnique={site?.technique ?? null} slot={site?.slot ?? null} onPlaced={() => setJustPlaced(true)} />
       )}
       {mode === 'component' && site && <ComponentForm patientId={patientId} site={site} data={data} onDone={done} />}
       {mode === 'followup' && site && <FollowupForm patientId={patientId} site={site} data={data} onDone={done} />}
