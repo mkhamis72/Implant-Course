@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isRealDate, todayIso } from '@/lib/dates';
 import { isFdiTooth, parseTeeth } from './fdi';
+import { SMOKING, YES_NO } from './risk-factors';
 import { MANUAL_STATES } from './types';
 
 const text = (max: number) => z.string().trim().max(max).default('');
@@ -44,20 +45,41 @@ export function toPatientRow(p: PatientInput): Record<string, string | null> {
   return row;
 }
 
-const checkbox = z.preprocess((v) => v === 'on' || v === 'true' || v === true, z.boolean());
+const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
+const yesNo = z.preprocess(blankToNull, z.enum(YES_NO, { message: 'Choose yes, no or not assessed.' }).nullable());
+const number = (message: string, check: (n: number) => boolean) =>
+  z.preprocess((v) => (blankToNull(v) === null ? null : Number(v)), z.number({ message }).refine(check, { message }).nullable());
 
-export const medicalHistorySchema = z.object({
-  allergies: text(1000),
-  medications: text(1000),
-  diabetes: checkbox,
-  smoker: checkbox,
-  bisphosphonates: checkbox,
-  anticoagulants: checkbox,
-  radiotherapy_head_neck: checkbox,
-  osteoporosis: checkbox,
-  other_conditions: text(1000),
-  notes: text(2000),
-});
+export const medicalHistorySchema = z
+  .object({
+    allergies: text(1000),
+    medications: text(1000),
+    smoking: z.preprocess(blankToNull, z.enum(SMOKING, { message: 'Choose never, former, current or not assessed.' }).nullable()),
+    cigarettes_per_day: number('Enter cigarettes per day as a whole number from 1 to 100.', (n) => Number.isInteger(n) && n >= 1 && n <= 100),
+    diabetes_status: yesNo,
+    hba1c: number('Enter an HbA1c between 4 and 20 %.', (n) => n >= 4 && n <= 20),
+    hba1c_date: z.preprocess(
+      blankToNull,
+      z.string().refine((v) => isRealDate(v) && v <= todayIso(), { message: 'Enter the HbA1c date (today or earlier).' }).nullable(),
+    ),
+    bisphosphonates_status: yesNo,
+    anticoagulants_status: yesNo,
+    radiotherapy_status: yesNo,
+    osteoporosis_status: yesNo,
+    periodontitis_history: yesNo,
+    bruxism: yesNo,
+    previous_implant_failure: yesNo,
+    other_conditions: text(1000),
+    notes: text(2000),
+  })
+  .superRefine((h, ctx) => {
+    if (h.cigarettes_per_day !== null && h.smoking !== 'current') {
+      ctx.addIssue({ code: 'custom', path: ['cigarettes_per_day'], message: 'Cigarettes per day only applies to a current smoker.' });
+    }
+    if ((h.hba1c === null) !== (h.hba1c_date === null)) {
+      ctx.addIssue({ code: 'custom', path: ['hba1c'], message: 'Enter the HbA1c value and the date it was measured.' });
+    }
+  });
 
 export const noteSchema = z.object({
   visit_date: z.string().refine((v) => isRealDate(v) && v <= todayIso(), {

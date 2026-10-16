@@ -18,7 +18,7 @@ describe('describeChange', () => {
   it('describes medical history changes', () => {
     expect(
       describeChange(entry({ table_name: 'medical_history', before: { diabetes: false, smoker: false }, after: { diabetes: true, smoker: true } })),
-    ).toBe('Medical history changed: diabetes, smoker');
+    ).toBe('Medical history changed: diabetes, smoking');
     expect(describeChange(entry({ table_name: 'medical_history', action: 'INSERT', after: {} }))).toBe('Medical history started');
   });
   it('describes tooth status changes', () => {
@@ -72,5 +72,15 @@ describe('describeChange for implant follow-up records', () => {
       table_name: 'implant_followups', before: { check_type: 'Review', outcome: 'failed', voided_at: null },
       after: { check_type: 'Review', outcome: 'failed', voided_at: '2026-10-01', voided_reason: 'Typo' },
     }))).toBe('Follow-up removed from the record: Review (Typo)');
+  });
+});
+
+describe('describeChange: tri-state medical history', () => {
+  it('names the new risk-factor fields once, even when the old boolean changed with them', () => {
+    expect(describeChange({
+      id: 1, at: '2026-10-17T10:00:00Z', table_name: 'medical_history', action: 'UPDATE', actor: 'A',
+      before: { smoker: false, smoking: null, bruxism: null, hba1c: null },
+      after: { smoker: true, smoking: 'current', bruxism: 'no', hba1c: 6.5 },
+    })).toBe('Medical history changed: smoking, HbA1c, bruxism');
   });
 });

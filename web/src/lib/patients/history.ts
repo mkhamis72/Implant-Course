@@ -5,9 +5,13 @@ import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
 
 const FIELD_LABELS: Record<string, string> = {
   full_name: 'name', file_no: 'file number', dob: 'date of birth', sex: 'sex', phone: 'phone', email: 'email',
-  address: 'address', allergies: 'allergies', medications: 'medications', diabetes: 'diabetes', smoker: 'smoker',
+  address: 'address', allergies: 'allergies', medications: 'medications', diabetes: 'diabetes', smoker: 'smoking',
   bisphosphonates: 'bisphosphonates', anticoagulants: 'anticoagulants', radiotherapy_head_neck: 'head/neck radiotherapy',
   osteoporosis: 'osteoporosis', other_conditions: 'other conditions', notes: 'notes',
+  smoking: 'smoking', cigarettes_per_day: 'cigarettes per day', diabetes_status: 'diabetes', hba1c: 'HbA1c', hba1c_date: 'HbA1c date',
+  bisphosphonates_status: 'bisphosphonates', anticoagulants_status: 'anticoagulants', radiotherapy_status: 'head/neck radiotherapy',
+  osteoporosis_status: 'osteoporosis', periodontitis_history: 'periodontitis history', bruxism: 'bruxism',
+  previous_implant_failure: 'previous implant failure',
 };
 
 /** Placement details an implant correction can change (correct_placement, 0042). */
@@ -20,9 +24,11 @@ function changedFields(
   before: Record<string, unknown> | null, after: Record<string, unknown> | null, labels: Record<string, string> = FIELD_LABELS,
 ): string[] {
   if (!before || !after) return [];
-  return Object.keys(labels)
-    .filter((key) => key in after && JSON.stringify(before[key]) !== JSON.stringify(after[key]))
-    .map((key) => labels[key]);
+  return [...new Set(
+    Object.keys(labels)
+      .filter((key) => key in after && JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+      .map((key) => labels[key]),
+  )];
 }
 
 function stateLabel(value: unknown): string {
