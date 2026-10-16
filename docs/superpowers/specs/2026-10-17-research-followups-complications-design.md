@@ -26,7 +26,7 @@ Part 2 makes follow-up research-grade:
 | Visit records | Not editable (as today); mistakes are voided with a reason and re-entered. |
 | Complications | Own events at any time, optionally linked to the visit where found; editable (treatment, resolution); voided, never deleted. |
 | Peri-implantitis / mucositis | Recorded by the clinician; the form shows the 2017 World Workshop case definitions as guidance. No automatic diagnosis. |
-| Failure | Columns on `implant_sites`; early vs late derived, not entered. Old failures are not back-filled. |
+| Failure | Columns on `implant_sites`; early vs late derived, not entered. Old failures are not back-filled. Recorded details are editable (`correct_failure`), audited. |
 | Release safety | Additive migrations; `record_followup` stays for the release window and is dropped in a later PR. |
 | Out of scope | Booking recall visits into the Schedule, editable schedules, loading-relative visits (part 3), bone-level measurements (part 4), automatic case definitions and data-quality checks (part 5). |
 
@@ -118,7 +118,8 @@ Plus `created_at`, `created_by`, `updated_at`; audited; RLS select for active st
 | `failure_reason` | `no_osseointegration` / `peri_implantitis` / `fracture` / `malposition` / `other` |
 | `failure_notes` | text ≤ 1000 |
 
-- **`record_failure(p_site, p_failed_on, p_type, p_reason, p_notes)`** — sets the columns, marks the implant `failed` and the tooth failed, and ends expected visits from that date. Refuses a date before placement or in the future, and refuses a site whose failure details are already recorded (correcting them is a void-and-redo through a later correction feature, out of scope). Allowed on an implant already `failed` without details.
+- **`record_failure(p_site, p_failed_on, p_type, p_reason, p_notes)`** — sets the columns, marks the implant `failed` and the tooth failed, and ends expected visits from that date. Refuses a date before placement or in the future, and refuses a site whose failure details are already recorded (use `correct_failure`). Allowed on an implant already `failed` without details.
+- **`correct_failure(p_site, p_failed_on, p_type, p_reason, p_notes, p_expected_updated_at)`** — edits recorded failure details (same validation), optimistic on `implant_sites.updated_at` (a stale edit is refused with "changed by someone else"). Refuses a site with no failure details recorded. The implant stays failed; the audit trigger records the change, and History shows "Failure details corrected: <fields>". Moving `failed_on` re-derives early/late and the end of expected visits.
 - **`record_visit`** with outcome `failed` requires the failure fields in `p_findings` (`failed_on` defaults to the visit date) and calls `record_failure` in the same transaction.
 - **Early vs late** (derived in TS and SQL readers): early when `failed_on` is before the first non-voided abutment / Ti-base / multi-unit / final-restoration component; late otherwise. Part 3 switches this to the loading date.
 - `patient_history` and `audit_log_area_read` (latest definitions) include `implant_complications`; `implant_sites` changes already appear.
@@ -127,13 +128,13 @@ Plus `created_at`, `created_by`, `updated_at`; audited; RLS select for active st
 
 - **Implant on the chart:** a **Complications** block under Visits — open complications first (bad badge), resolved ones muted; **Add complication**, per item **Edit** (add treatment, resolve) and **Remove from record** (reason).
 - **Complication form:** category → type (filtered) → other fields; peri-implantitis / mucositis show the case definitions.
-- **Failure box** on a failed implant: date, type, reason, early/late, notes; old failures show **Add failure details**. The Record visit form reveals the failure fields when the outcome is "failed".
+- **Failure box** on a failed implant: date, type, reason, early/late, notes; old failures show **Add failure details**; recorded ones have **Edit failure details** (editors only). The Record visit form reveals the failure fields when the outcome is "failed".
 - **Odontogram:** a small warning dot on a tooth whose implant has an open complication. **Implants tab:** an **Open complications** count column.
 - **History:** "Complication recorded: Peri-implantitis", "Complication resolved", "Failure recorded: removed (peri-implantitis)".
 
 ### Testing
 
-- **DB:** each refusal (type not in category, other without text, dates, site state), update with stale version refused, void, failed visit writes visit and failure in one transaction (and rolls both back on a failure-field error), failure details added to an old failure, re-recording refused, permissions, history.
+- **DB:** each refusal (type not in category, other without text, dates, site state), update with stale version refused, void, failed visit writes visit and failure in one transaction (and rolls both back on a failure-field error), failure details added to an old failure, re-recording refused, `correct_failure` (edits, stale version refused, refused without recorded details, visits end at the new date), permissions, history.
 - **Unit/component:** type list filtered by category, case-definition help, failure fields shown on "failed", early/late derivation.
 - **E2E:** add a complication, then resolve it; record a failed visit with failure details; warning dot, Implants tab column and History reflect them.
 
