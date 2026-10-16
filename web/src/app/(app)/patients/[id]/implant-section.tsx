@@ -4,12 +4,13 @@ import { useState, useTransition } from 'react';
 import { activeSite, currentComponent } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
 import {
-  COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUES, TECHNIQUE_LABELS,
+  COMPONENT_LABELS, SITE_STATE_LABELS, TECHNIQUES, TECHNIQUE_LABELS,
   type ChartData, type ComponentType, type ImplantSite,
 } from '@/lib/inventory/types';
 import { nextActions, type PanelAction } from '@/lib/patients/tooth-panel';
 import { isManualState, type ToothState } from '@/lib/patients/types';
 import { formatDate, formatDateTime } from '@/lib/format';
+import { visitResult } from '@/lib/visits/visits';
 import { cancelPlan, setTechnique } from './implant-actions';
 import { Corrections } from './corrections';
 import { SurgicalDetails } from './surgical-details';
@@ -151,7 +152,7 @@ function SiteDetails({ site, patientId, data, justPlaced = false }: { site: Impl
           <ul data-testid="followups">
             {site.followups.map((f) => (
               <li key={f.id} className={f.voided_at ? 'text-muted line-through' : ''}>
-                {formatDate(f.date)} · {f.check_type} · {OUTCOME_LABELS[f.outcome]}
+                {formatDate(f.date)} · {f.check_type} · {visitResult(f)}
                 {f.notes ? ` — ${f.notes}` : ''}
                 {f.voided_at ? ` — removed: ${f.voided_reason}` : ''}
               </li>

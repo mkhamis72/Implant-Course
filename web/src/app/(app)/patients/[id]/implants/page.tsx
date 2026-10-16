@@ -3,8 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { currentComponent, lastFollowup } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
-import { COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type ImplantSite } from '@/lib/inventory/types';
+import { COMPONENT_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type ImplantSite } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
+import { visitResult } from '@/lib/visits/visits';
 import { surgeryCompleteness } from '@/lib/implants/surgery';
 import { SITE_SELECT, sortSite } from '../chart-data';
 
@@ -62,7 +63,7 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
                   <td data-label="Placed by">{s.placing?.full_name ?? '—'}</td>
                   <td data-label="Supervisor">{s.supervisor?.full_name || '—'}</td>
                   <td data-label="Component">{current ? COMPONENT_LABELS[current.component_type] : '—'}</td>
-                  <td data-label="Last follow-up">{last ? `${OUTCOME_LABELS[last.outcome]} (${last.check_type})` : '—'}</td>
+                  <td data-label="Last follow-up">{last ? `${visitResult(last)} (${last.check_type})` : '—'}</td>
                   <td data-label="Details" data-testid="details-completeness">
                     {s.state === 'placed' || s.state === 'restored' || s.state === 'failed' ? `${details.recorded}/${details.total}` : '—'}
                   </td>
