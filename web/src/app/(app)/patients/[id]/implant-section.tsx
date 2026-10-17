@@ -15,6 +15,8 @@ import { Corrections } from './corrections';
 import { SurgicalDetails } from './surgical-details';
 import { ComponentForm, PlaceForm, PlanForm } from './implant-forms';
 import { RecordVisitForm, Visits } from './visits';
+import { Complications } from './complications';
+import { FailureBox } from './failure-box';
 
 type Mode = 'none' | 'plan' | 'place' | 'component' | 'followup';
 
@@ -147,6 +149,8 @@ function SiteDetails({ site, patientId, data, justPlaced = false }: { site: Impl
         </div>
       )}
       <Visits site={site} visits={data.visits} />
+      <FailureBox site={site} patientId={patientId} editable={data.editable} />
+      <Complications site={site} patientId={patientId} editable={data.editable} />
       {data.editable && site.state !== 'planned' && site.state !== 'removed' && <Corrections patientId={patientId} site={site} data={data} />}
     </div>
   );

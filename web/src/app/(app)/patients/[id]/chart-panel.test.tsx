@@ -5,6 +5,7 @@ import type { ChartData } from '@/lib/inventory/types';
 vi.mock('./chart-actions', () => ({ setToothStatus: vi.fn() }));
 vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), deleteGraft: vi.fn() }));
 vi.mock('./visit-actions', () => ({ recordVisit: vi.fn() }));
+vi.mock('./outcome-actions', () => ({ saveComplication: vi.fn(), voidComplication: vi.fn(), saveFailure: vi.fn() }));
 vi.mock('./implant-actions', () => ({
   planImplant: vi.fn(), placeImplant: vi.fn(), cancelPlan: vi.fn(), setTechnique: vi.fn(), fitComponent: vi.fn(),
   correctBatch: vi.fn(), voidFollowup: vi.fn(), voidComponent: vi.fn(),
