@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { isRealDate, todayIso } from '@/lib/dates';
 import { isFdiTooth } from '@/lib/patients/fdi';
-import { COMPONENT_TYPES, FOLLOWUP_OUTCOMES, PRODUCT_TYPES, TECHNIQUES } from './types';
+import { COMPONENT_TYPES, PRODUCT_TYPES, TECHNIQUES } from './types';
 
 const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
 const optionalId = z.preprocess(blankToNull, z.string().uuid().nullable());
@@ -116,12 +116,3 @@ export const componentSchema = z
   })
   .refine((c) => c.productId === null || c.lotId !== null, { message: 'Choose the stock batch used.' })
   .refine((c) => c.byDelegateId !== null || c.byOrganizerId !== null, { message: 'Choose who fitted the component.' });
-
-export const followupSchema = z.object({
-  siteId: requiredId('Implant not found.'),
-  patientId: requiredId('Patient not found.'),
-  date: pastDate('Enter the follow-up date (today or earlier).'),
-  checkType: z.string().trim().min(1, { message: 'Enter the check (e.g. 3-month).' }).max(60),
-  outcome: z.enum(FOLLOWUP_OUTCOMES, { message: 'Choose the outcome.' }),
-  notes: text(1000),
-});

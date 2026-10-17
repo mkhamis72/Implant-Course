@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
-import { componentSchema, correctPlacementSchema, followupSchema, placeSchema, planSchema, receiveSchema } from '@/lib/inventory/schemas';
+import { componentSchema, correctPlacementSchema, placeSchema, planSchema, receiveSchema } from '@/lib/inventory/schemas';
 import { TECHNIQUES, type Technique } from '@/lib/inventory/types';
 import { userMessage } from '@/lib/db-errors';
 import { correctionSchema, voidSchema } from '@/lib/schedule/schemas';
@@ -93,20 +93,6 @@ export async function fitComponent(input: Record<string, unknown>): Promise<Resu
     p_by_delegate: c.byDelegateId,
     p_by_organizer: c.byOrganizerId,
     p_notes: c.notes,
-  });
-}
-
-export async function recordFollowup(input: Record<string, unknown>): Promise<Result> {
-  await requirePermission('patients', 'edit');
-  const parsed = followupSchema.safeParse(input);
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const f = parsed.data;
-  return run(f.patientId, 'record_followup', {
-    p_site: f.siteId,
-    p_date: f.date,
-    p_check_type: f.checkType,
-    p_outcome: f.outcome,
-    p_notes: f.notes,
   });
 }
 

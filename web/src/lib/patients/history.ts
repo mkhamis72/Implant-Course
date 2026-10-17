@@ -1,7 +1,8 @@
 import {
-  COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, type ComponentType, type FollowupOutcome, type SiteState,
+  COMPONENT_LABELS, SITE_STATE_LABELS, type ComponentType, type FollowupOutcome, type SiteState,
 } from '@/lib/inventory/types';
 import { GRAFT_PROCEDURE_LABELS, SURGERY_FIELD_LABELS, type GraftProcedure } from '@/lib/implants/surgery';
+import { visitResult, type Attendance } from '@/lib/visits/visits';
 import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
 
 const FIELD_LABELS: Record<string, string> = {
@@ -76,7 +77,7 @@ export function describeChange(e: HistoryEntry): string {
     case 'implant_followups': {
       const row = e.after ?? e.before;
       if (e.after?.voided_at && !e.before?.voided_at) return `Follow-up removed from the record: ${row?.check_type} (${e.after.voided_reason})`;
-      const outcome = OUTCOME_LABELS[row?.outcome as FollowupOutcome] ?? String(row?.outcome);
+      const outcome = visitResult({ outcome: (row?.outcome ?? null) as FollowupOutcome | null, attendance: (row?.attendance ?? null) as Attendance | null });
       return e.action === 'INSERT' ? `Follow-up (${row?.check_type}): ${outcome}` : `Follow-up updated (${row?.check_type})`;
     }
     case 'implant_surgery': {

@@ -104,3 +104,15 @@ describe('describeChange: surgical details and grafts', () => {
       .toBe('Graft deleted: Ridge split');
   });
 });
+
+describe('describeChange: visits', () => {
+  const base = { id: 1, at: '2026-10-17T10:00:00Z', actor: 'A', before: null };
+  it('names the result of a scheduled visit, or the attendance when there is no outcome', () => {
+    expect(describeChange({ ...base, table_name: 'implant_followups', action: 'INSERT',
+      after: { check_type: '6-month review', outcome: null, attendance: 'did_not_attend' } }))
+      .toBe('Follow-up (6-month review): Did not attend');
+    expect(describeChange({ ...base, table_name: 'implant_followups', action: 'INSERT',
+      after: { check_type: 'Early review (suture removal)', outcome: 'ok', attendance: 'attended' } }))
+      .toBe('Follow-up (Early review (suture removal)): OK');
+  });
+});

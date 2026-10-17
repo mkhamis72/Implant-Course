@@ -3,8 +3,9 @@
 import { useState, useTransition } from 'react';
 import { acceptsProduct, currentComponent } from '@/lib/inventory/components';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
-import { COMPONENT_LABELS, OUTCOME_LABELS, type ChartData, type ImplantSite, type LotOnHand } from '@/lib/inventory/types';
+import { COMPONENT_LABELS, type ChartData, type ImplantSite, type LotOnHand } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
+import { visitResult } from '@/lib/visits/visits';
 import { BONE_TYPES } from '@/lib/inventory/schemas';
 import { correctBatch, correctPlacement, voidComponent, voidFollowup } from './implant-actions';
 
@@ -235,7 +236,7 @@ export function Corrections({ patientId, site, data }: { patientId: string; site
         {latest && (
           <div className="space-y-2">
             <p>
-              Latest follow-up: {formatDate(latest.date)} · {latest.check_type} · {OUTCOME_LABELS[latest.outcome]}
+              Latest follow-up: {formatDate(latest.date)} · {latest.check_type} · {visitResult(latest)}
             </p>
             <label className="block">
               <span className="label">Reason for removing the follow-up</span>

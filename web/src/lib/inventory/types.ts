@@ -1,5 +1,6 @@
 import type { ToothState } from '@/lib/patients/types';
 import type { ImplantGraft, ImplantSurgery } from '@/lib/implants/surgery';
+import type { Attendance, VisitFindings, VisitRow } from '@/lib/visits/visits';
 
 export const PRODUCT_TYPES = [
   'implant', 'cover_screw', 'healing_abutment', 'graft', 'membrane', 'ti_base', 'multi_unit',
@@ -94,14 +95,16 @@ export type SiteComponent = {
   voided_reason: string;
 };
 
-export type Followup = {
+export type Followup = VisitFindings & {
   id: string;
   date: string;
   check_type: string;
-  outcome: FollowupOutcome;
+  outcome: FollowupOutcome | null;
   notes: string;
   voided_at: string | null;
   voided_reason: string;
+  visit_key: string | null;
+  attendance: Attendance | null;
 };
 
 export type ImplantSite = {
@@ -141,6 +144,7 @@ export type ImplantSite = {
 export type ChartData = {
   statuses: Partial<Record<number, ToothState>>;
   sites: ImplantSite[];
+  visits: VisitRow[];
   implants: Product[];
   componentProducts: Product[];
   lots: LotOnHand[];

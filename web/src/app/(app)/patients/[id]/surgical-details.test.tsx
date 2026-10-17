@@ -5,7 +5,7 @@ import type { ImplantGraft, ImplantSurgery } from '@/lib/implants/surgery';
 
 vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), deleteGraft: vi.fn() }));
 vi.mock('./implant-actions', () => ({
-  fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), recordFollowup: vi.fn(), receiveStockForPlacement: vi.fn(),
+  fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), receiveStockForPlacement: vi.fn(),
 }));
 import { SurgicalDetails } from './surgical-details';
 import { deleteGraft, saveGraft, saveSurgery } from './surgery-actions';
