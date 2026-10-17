@@ -7,6 +7,7 @@ vi.mock('./visit-actions', () => ({ recordVisit: vi.fn() }));
 vi.mock('./implant-actions', () => ({
   fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), receiveStockForPlacement: vi.fn(),
 }));
+import { formatDate } from '@/lib/format';
 import { RecordVisitForm, Visits } from './visits';
 import { recordVisit } from './visit-actions';
 
@@ -43,17 +44,27 @@ describe('<Visits>', () => {
   });
 });
 
+describe('<Visits> done rows', () => {
+  it('shows the date of the record, not the target date', () => {
+    const done = [{ ...visits[0], status: 'done', followup_id: 'f1' } as VisitRow];
+    render(<Visits site={site} visits={done} />);
+    const row = screen.getByTestId('visit-row');
+    expect(row.textContent).toContain(formatDate('2026-03-25'));
+    expect(row.textContent).not.toContain(formatDate('2026-03-20'));
+  });
+});
+
 describe('<RecordVisitForm>', () => {
-  it('pre-picks the earliest missed or due visit and records an attended visit with probing and bleeding', async () => {
+  it('pre-picks the due visit over an older missed one and records an attended visit with probing and bleeding', async () => {
     render(<RecordVisitForm patientId="pt" site={site} data={data} onDone={() => {}} />);
-    expect(screen.getByRole('combobox', { name: 'Visit' })).toHaveValue('early_review');
+    expect(screen.getByRole('combobox', { name: 'Visit' })).toHaveValue('osseointegration');
     fireEvent.change(screen.getByRole('combobox', { name: 'Outcome' }), { target: { value: 'ok' } });
     fireEvent.change(screen.getByLabelText('Pain (0–10)'), { target: { value: '1' } });
     fireEvent.change(screen.getByLabelText('Probing depth buccal'), { target: { value: '4' } });
     fireEvent.click(screen.getByLabelText('Bleeding buccal'));
     fireEvent.click(screen.getByRole('button', { name: 'Save visit' }));
     expect(vi.mocked(recordVisit)).toHaveBeenCalledWith(expect.objectContaining({
-      siteId: 's1', patientId: 'pt', date: '2026-06-01', visitKey: 'early_review', attendance: 'attended', outcome: 'ok',
+      siteId: 's1', patientId: 'pt', date: '2026-06-01', visitKey: 'osseointegration', attendance: 'attended', outcome: 'ok',
       painScore: '1', probingBuccal: '4', bopBuccal: 'yes', probingMesial: '', bopMesial: '',
     }));
   });

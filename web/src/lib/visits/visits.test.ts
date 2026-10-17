@@ -30,8 +30,12 @@ describe('visit helpers', () => {
     expect(nextVisit([row('month_6', 'upcoming', '2026-07-01'), row('month_12', 'upcoming', '2026-12-31')], 's1')?.visit_key).toBe('month_6');
     expect(nextVisit([row('early_review', 'done', '2026-01-11')], 's1')).toBeNull();
   });
-  it('pre-picks the earliest due, overdue or missed visit, then the earliest upcoming, else unscheduled', () => {
-    expect(prepickVisit(rows, 's1')).toBe('early_review');
+  it('pre-picks the earliest due or overdue visit, else the latest missed, else the earliest upcoming, else unscheduled', () => {
+    expect(prepickVisit(rows, 's1')).toBe('osseointegration');
+    expect(prepickVisit([
+      row('early_review', 'missed', '2026-01-11'), row('osseointegration', 'missed', '2026-03-31'), row('month_6', 'missed', '2026-07-01'),
+      row('month_12', 'upcoming', '2026-12-31'),
+    ], 's1')).toBe('month_6');
     expect(prepickVisit([row('month_6', 'upcoming', '2026-07-01')], 's1')).toBe('month_6');
     expect(prepickVisit([row('early_review', 'done', '2026-01-11')], 's1')).toBe('');
   });
@@ -51,6 +55,9 @@ describe('visit helpers', () => {
       ...noFindings, pain_score: 2, probing_mesial: 3, probing_buccal: 4.5, probing_distal: null, probing_lingual: 2,
       bop_buccal: 'yes', bop_mesial: 'no', isq: 72, mobility: 'no', suppuration: 'yes',
     })).toBe('Pain 2/10 · PD M 3 · B 4.5 · L 2 mm · BOP B · ISQ 72 · Suppuration · No mobility');
+    expect(summarizeFindings({ ...noFindings, radiograph_taken: 'yes', patient_concerns: 'Sore', recommended_treatment: 'Crown' }))
+      .toBe('X-ray · Concerns: Sore · Plan: Crown');
+    expect(summarizeFindings({ ...noFindings, radiograph_taken: 'no' })).toBe('');
   });
 });
 
@@ -60,6 +67,9 @@ describe('visitSchema', () => {
     expect(visitSchema.parse({ ...attended, painScore: '2', swelling: '', probingMesial: '3', bopMesial: 'yes', isq: '' })).toMatchObject({
       ...attended, painScore: 2, swelling: null, probingMesial: 3, bopMesial: 'yes', isq: null,
     });
+  });
+  it('treats whitespace-only numbers as not assessed', () => {
+    expect(visitSchema.parse({ ...attended, painScore: '  ', probingMesial: ' ' })).toMatchObject({ painScore: null, probingMesial: null });
   });
   it('stores bleeding as "no" for a probed site without a tick, and not assessed for an unprobed site', () => {
     const v = visitSchema.parse({ ...attended, probingMesial: '3', bopMesial: '', bopBuccal: '' });

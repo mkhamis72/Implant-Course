@@ -84,7 +84,9 @@ export function recordableVisits(rows: VisitRow[], siteId: string): VisitRow[] {
 
 export function prepickVisit(rows: VisitRow[], siteId: string): string {
   const open = recordableVisits(rows, siteId);
-  return (open.find((r) => r.status === 'due' || r.status === 'overdue' || r.status === 'missed') ?? open.find((r) => r.status === 'upcoming'))
+  // Due or overdue first; visits missed long ago come after (the latest one, so old implants don't pre-pick a stale early review).
+  const missed = open.filter((r) => r.status === 'missed');
+  return (open.find((r) => r.status === 'due' || r.status === 'overdue') ?? missed[missed.length - 1] ?? open.find((r) => r.status === 'upcoming'))
     ?.visit_key ?? '';
 }
 
@@ -101,10 +103,16 @@ export function summarizeFindings(f: VisitFindings): string {
     f.plaque === 'yes' ? 'Plaque' : null,
     f.mobility ? (f.mobility === 'yes' ? 'Mobile' : 'No mobility') : null,
     f.prosthesis_status ? PROSTHESIS_LABELS[f.prosthesis_status] : null,
+    f.radiograph_taken === 'yes' ? 'X-ray' : null,
+    f.patient_concerns.trim() ? `Concerns: ${f.patient_concerns.trim()}` : null,
+    f.recommended_treatment.trim() ? `Plan: ${f.recommended_treatment.trim()}` : null,
   ].filter((x): x is string => x !== null).join(' · ');
 }
 
-const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
+const blankToNull = (v: unknown) => {
+  const t = typeof v === 'string' ? v.trim() : v;
+  return t === '' || t === undefined || t === null ? null : t;
+};
 const number = (message: string, check: (n: number) => boolean) =>
   z.preprocess((v) => (blankToNull(v) === null ? null : Number(v)), z.number({ message }).refine(check, { message }).nullable());
 const choice = <T extends readonly [string, ...string[]]>(values: T, message: string) =>

@@ -19,7 +19,7 @@ Part 2 makes follow-up research-grade:
 | Topic | Decision |
 |---|---|
 | Missing data | Empty means not assessed / not recorded, never "no". A missed visit (window passed, nothing recorded) is distinct from "did not attend" (recorded) and from a negative finding. |
-| Schedule | Fixed in SQL (`app_private.visit_schedule()`), counted from the placement date. Not editable in the app for now. |
+| Schedule | Fixed in SQL (`public.visit_schedule(p_through int)`), counted from the placement date. Not editable in the app for now. |
 | Status | Calculated, never stored, in the database; the UI only renders it. |
 | Visit storage | Extend `implant_followups`; existing rows become unscheduled visits. |
 | Probing | Four sites (mesial, buccal, distal, lingual/palatal) with bleeding per site. |
@@ -67,7 +67,7 @@ Annual visits are generated up to the one whose window contains today (plus the 
 ### Functions
 
 - **`record_visit(p_site uuid, p_date date, p_visit_key text, p_check_type text, p_attendance text, p_outcome public.followup_outcome, p_findings jsonb, p_notes text) returns uuid`** — `security definer`, `require_perm('patients','edit')`. Findings travel as one JSON object (keys = the column names above) and are validated field by field, so adding a finding later doesn't change the signature. Refuses: a site not placed/restored/failed; a date before placement or after `cairo_today()`; an unknown visit key; a scheduled visit already recorded (live); `not_needed` without a reason in notes; a missing outcome when attended; any finding when not attended; out-of-range or unknown values; an unscheduled visit without a check name. A `failed` outcome marks the implant and tooth failed as `record_followup` does (2b adds the failure details).
-- **`app_private.visit_schedule()`** — the schedule table above (key, label, target, window start, window end), generating `year_N` rows.
+- **`public.visit_schedule(p_through int)`** (immutable; public because the security-invoker readers can't call `app_private`) — the schedule table above (key, label, target, window start, window end), generating `year_N` rows.
 - **`public.implant_visits(p_patient uuid)`** — `security invoker`. For every implant of the patient, each expected visit with target date, window, status and the live record (if any), plus the unscheduled visits. Implants failed or removed expect no visits after the failure date. Status: `upcoming` (before the window), `due` (window open, target not passed), `overdue` (window open, target passed), `missed` (window closed, nothing recorded), `done` / `did_not_attend` / `not_needed` (from the record).
 - **`public.recall_list()`** — `security invoker`, built on the same calculation across non-archived patients: visits `due`, `overdue`, or `missed` with a window that closed in the last 60 days; patient, phone, tooth, visit, target date, window end, status; sorted by target date.
 - Reads need View on Patients (the recall list shows phone numbers); delegates read nothing.

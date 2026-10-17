@@ -15,6 +15,7 @@ const YES_NO_LABELS = { yes: 'Yes', no: 'No' } as const;
 
 export function Visits({ site, visits }: { site: ImplantSite; visits: VisitRow[] }) {
   const schedule = visits.filter((v) => v.site_id === site.id);
+  const doneDate = (v: VisitRow) => (v.followup_id ? site.followups.find((f) => f.id === v.followup_id)?.date : undefined) ?? v.target_date;
   return (
     <div className="space-y-3">
       {schedule.length > 0 && (
@@ -24,7 +25,7 @@ export function Visits({ site, visits }: { site: ImplantSite; visits: VisitRow[]
             {schedule.map((v) => (
               <li key={v.visit_key} data-testid="visit-row" className="flex flex-wrap items-center gap-x-2">
                 <span>{v.label}</span>
-                <span className="text-muted">{formatDate(v.target_date)}</span>
+                <span className="text-muted">{formatDate(doneDate(v))}</span>
                 <span className={VISIT_STATUS_BADGE[v.status]}>{VISIT_STATUS_LABELS[v.status]}</span>
               </li>
             ))}
