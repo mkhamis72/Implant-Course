@@ -116,3 +116,26 @@ describe('describeChange: visits', () => {
       .toBe('Follow-up (Early review (suture removal)): OK');
   });
 });
+
+describe('describeChange: complications and failure', () => {
+  const base = { id: 1, at: '2026-10-17T10:00:00Z', actor: 'A' };
+  it('describes complications', () => {
+    expect(describeChange({ ...base, table_name: 'implant_complications', action: 'INSERT', before: null, after: { type: 'peri_implantitis', resolved_on: null } }))
+      .toBe('Complication recorded: Peri-implantitis');
+    expect(describeChange({ ...base, table_name: 'implant_complications', action: 'UPDATE',
+      before: { type: 'peri_implantitis', resolved_on: null, voided_at: null }, after: { type: 'peri_implantitis', resolved_on: '2026-10-01', voided_at: null } }))
+      .toBe('Complication resolved: Peri-implantitis');
+    expect(describeChange({ ...base, table_name: 'implant_complications', action: 'UPDATE',
+      before: { type: 'infection', voided_at: null }, after: { type: 'infection', voided_at: '2026-10-02', voided_reason: 'Wrong tooth' } }))
+      .toBe('Complication removed from the record: Infection (Wrong tooth)');
+  });
+  it('describes failure details on the implant', () => {
+    expect(describeChange({ ...base, table_name: 'implant_sites', action: 'UPDATE',
+      before: { tooth: 46, state: 'placed', failure_type: null }, after: { tooth: 46, state: 'failed', failure_type: 'removed', failure_reason: 'peri_implantitis' } }))
+      .toBe('Implant on tooth 46: failure recorded — Removed (Peri-implantitis)');
+    expect(describeChange({ ...base, table_name: 'implant_sites', action: 'UPDATE',
+      before: { tooth: 46, state: 'failed', failure_type: 'removed', failed_on: '2026-05-01', failure_reason: 'fracture' },
+      after: { tooth: 46, state: 'failed', failure_type: 'lost', failed_on: '2026-05-01', failure_reason: 'fracture' } }))
+      .toBe('Implant on tooth 46: failure details corrected: failure type');
+  });
+});
