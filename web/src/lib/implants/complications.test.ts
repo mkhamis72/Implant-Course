@@ -27,9 +27,14 @@ describe('complications', () => {
   });
   it('finds the teeth with an open complication', () => {
     const sites = [
-      { tooth: 46, complications: [base] }, { tooth: 36, complications: [{ ...base, resolved_on: '2026-09-02' }] }, { tooth: 11, complications: [] },
+      { tooth: 46, state: 'placed', complications: [base] },
+      { tooth: 36, state: 'restored', complications: [{ ...base, resolved_on: '2026-09-02' }] },
+      { tooth: 11, state: 'restored', complications: [] },
+      { tooth: 21, state: 'restored', complications: [base] },
+      // A failed implant with an open complication is not flagged on the chart.
+      { tooth: 16, state: 'failed', complications: [base] },
     ];
-    expect(openComplicationTeeth(sites)).toEqual({ 46: true });
+    expect(openComplicationTeeth(sites)).toEqual({ 46: true, 21: true });
   });
 });
 

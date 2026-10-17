@@ -65,9 +65,14 @@ export function describeComplication(c: ImplantComplication): string {
   ].filter(Boolean).join(' · ');
 }
 
-export function openComplicationTeeth(sites: readonly { tooth: number; complications: readonly ImplantComplication[] }[]): Partial<Record<number, boolean>> {
+/** Teeth whose implant in place (placed or restored) has an open complication; a failed implant is not flagged. */
+export function openComplicationTeeth(
+  sites: readonly { tooth: number; state: string; complications: readonly ImplantComplication[] }[],
+): Partial<Record<number, boolean>> {
   const teeth: Partial<Record<number, boolean>> = {};
-  for (const s of sites) if (s.complications.some(isOpen)) teeth[s.tooth] = true;
+  for (const s of sites) {
+    if ((s.state === 'placed' || s.state === 'restored') && s.complications.some(isOpen)) teeth[s.tooth] = true;
+  }
   return teeth;
 }
 

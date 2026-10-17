@@ -169,6 +169,9 @@ export const visitSchema = z
     if (v.attendance === 'attended' && v.outcome === 'failed' && v.needsFailure) {
       if (!v.failureType) ctx.addIssue({ code: 'custom', path: ['failureType'], message: 'Choose the failure type.' });
       else if (!v.failureReason) ctx.addIssue({ code: 'custom', path: ['failureReason'], message: 'Choose the failure reason.' });
+      if (v.failedOn && v.failedOn > v.date) {
+        ctx.addIssue({ code: 'custom', path: ['failedOn'], message: "The failure date can't be after the visit date." });
+      }
     }
   })
   .transform((input) => {

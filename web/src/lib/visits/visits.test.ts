@@ -111,6 +111,11 @@ describe('visitSchema: failure', () => {
     const ok = visitSchema.parse({ ...failedVisit, outcome: 'ok', failureType: 'lost', failureReason: 'fracture' });
     expect(toFindings(ok)).toEqual({});
   });
+  it('refuses a failure date after the visit date', () => {
+    const late = { ...failedVisit, failureType: 'lost', failureReason: 'fracture', failedOn: '2026-05-02' };
+    expect(visitSchema.safeParse(late).error?.issues[0].message).toBe("The failure date can't be after the visit date.");
+    expect(visitSchema.safeParse({ ...late, failedOn: '2026-05-01' }).success).toBe(true);
+  });
   it('asks for nothing when the implant has already failed', () => {
     expect(visitSchema.safeParse({ ...failedVisit, needsFailure: '' }).success).toBe(true);
   });

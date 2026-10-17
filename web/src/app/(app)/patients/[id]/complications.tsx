@@ -67,7 +67,7 @@ function ComplicationRow({ c, patientId, editable, onEdit }: { c: ImplantComplic
         <div className="flex flex-wrap items-end gap-2">
           <label className="block">
             <span className="label">Reason for removing</span>
-            <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+            <input className="input" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
           </label>
           <button type="button" className="btn-danger btn" disabled={pending} onClick={remove}>Remove complication</button>
           <button type="button" className="btn-secondary btn" onClick={() => setRemoving(false)}>Keep</button>
