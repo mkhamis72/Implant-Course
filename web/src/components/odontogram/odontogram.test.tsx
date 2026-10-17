@@ -62,3 +62,11 @@ describe('<Odontogram> badges', () => {
     expect(screen.getByRole('button', { name: 'Tooth 46, Present' }).querySelector('[data-badge]')).toBeNull();
   });
 });
+
+describe('<Odontogram> alerts', () => {
+  it('marks a tooth with an open complication, in its name and with a marker', () => {
+    const { container } = render(<Odontogram statuses={{ 46: 'implant_placed' }} selected={[]} onSelect={vi.fn()} alerts={{ 46: true }} />);
+    expect(screen.getByRole('button', { name: 'Tooth 46, Implant placed, open complication' })).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-alert]')).toHaveLength(1);
+  });
+});
