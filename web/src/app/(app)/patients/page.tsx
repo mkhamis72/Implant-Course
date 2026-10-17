@@ -41,11 +41,14 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
     <div className="space-y-6">
       <div className="page-header">
         <h1>Patients</h1>
-        {editable && (
-          <Link href="/patients/new" className="btn">
-            New patient
-          </Link>
-        )}
+        <div className="flex flex-wrap gap-2">
+          <Link href="/patients/recall" className="btn-secondary btn">Recall list</Link>
+          {editable && (
+            <Link href="/patients/new" className="btn">
+              New patient
+            </Link>
+          )}
+        </div>
       </div>
       <form className="card flex flex-wrap items-end gap-4" role="search">
         <label className="block min-w-64 flex-1">

@@ -11,6 +11,7 @@ import { SLOT_SELECT } from '@/lib/schedule/queries';
 import { groupByChair } from '@/lib/dashboard/by-chair';
 import type { PullRow, SlotRow } from '@/lib/schedule/types';
 import { dashboardShortages } from '@/lib/dashboard/shortages';
+import { recallCounts, type RecallRow } from '@/lib/visits/recall';
 
 type StockRow = Product & { on_hand: number; nearest_expiry: string | null };
 
@@ -54,7 +55,7 @@ export default async function DashboardPage() {
   const settings = await getSettings();
   const today = todayIso();
   const tomorrow = addDays(today, 1);
-  const [slots, pullToday, pullTomorrow, stock, mine] = await Promise.all([
+  const [slots, pullToday, pullTomorrow, stock, mine, recall] = await Promise.all([
     supabase.rpc('slots_on', { p_date: today }).select(SLOT_SELECT),
     supabase.rpc('pull_list', { p_date: today }),
     supabase.rpc('pull_list', { p_date: tomorrow }),
@@ -66,6 +67,7 @@ export default async function DashboardPage() {
       .is('done_at', null)
       .order('due_date', { ascending: true, nullsFirst: false })
       .limit(20),
+    show.patients ? supabase.rpc('recall_list') : Promise.resolve({ data: [], error: null }),
   ]);
 
   const surgeries = ((slots.data ?? []) as unknown as SlotRow[]).filter((s) => s.status !== 'cancelled');
@@ -75,6 +77,8 @@ export default async function DashboardPage() {
   const flagged = stockRows.map((r) => ({ r, f: stockFlags(r, today, settings.expiry_alert_days) }));
   const low = flagged.filter((x) => x.f.low).map((x) => x.r);
   const expiring = flagged.filter((x) => x.f.expiring).map((x) => x.r);
+  const recallRows = (recall.data ?? []) as RecallRow[];
+  const due = recallCounts(recallRows);
   const myItems = (mine.data ?? []) as unknown as { id: string; text: string; due_date: string | null; checklist: { id: string; title: string } }[];
 
   return (
@@ -135,6 +139,15 @@ export default async function DashboardPage() {
               ))}
             </ul>
           )}
+        </Card>
+        )}
+
+        {show.patients && (
+        <Card title="Recall" failed={Boolean(recall.error)} count={due.overdue} tone="warn">
+          <p data-testid="dash-recall" className="text-sm">
+            {due.overdue} overdue · {due.due} due{due.missed ? ` · ${due.missed} missed recently` : ''}
+          </p>
+          <Link href="/patients/recall" className="text-sm text-accent hover:underline">Open the recall list</Link>
         </Card>
         )}
 
