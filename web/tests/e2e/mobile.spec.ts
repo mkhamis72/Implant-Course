@@ -3,6 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
+import { apiAs, seedDelegate, seedImplantStock } from './api';
 
 // The narrowest common phone width, stricter than the Pixel 7 default.
 test.use({ viewport: { width: 360, height: 780 } });
@@ -61,5 +62,23 @@ test('the medical history risk factors fit a phone screen', async ({ page }) => 
   const id = await createPatientViaUi(page, { full_name: uniqueName('Phone history') });
   await page.goto(`/patients/${id}/overview`);
   await expect(page.getByRole('radiogroup', { name: 'Previous implant failure' })).toBeVisible();
+  await expectNoSideways(page);
+});
+
+test('the visit form and its probing grid fit a phone screen', async ({ page }) => {
+  const api = await apiAs(TEST_USERS.organizer.email);
+  const stock = await seedImplantStock(api, { brand: uniqueName('Phone visit'), qty: 1, lot: `E2E-PV${Date.now()}`, expiry: null });
+  const delegate = await seedDelegate(api, uniqueName('Dr Phone'));
+  await login(page, TEST_USERS.organizer.email);
+  const id = await createPatientViaUi(page, { full_name: uniqueName('Phone visit') });
+  const me = (await api.auth.getUser()).data.user!.id;
+  const { error } = await api.rpc('place_implant_v2', {
+    p_patient: id, p_tooth: 36, p_product: stock.productId, p_lot: stock.lotId,
+    p_placed_on: new Date().toISOString().slice(0, 10), p_placing_delegate: delegate, p_supervisor: me, p_technique: 'guided',
+  });
+  expect(error).toBeNull();
+  await page.goto(`/patients/${id}?tooth=36`);
+  await page.getByRole('button', { name: 'Record visit' }).click();
+  await expect(page.getByLabel('Probing depth lingual')).toBeVisible();
   await expectNoSideways(page);
 });
