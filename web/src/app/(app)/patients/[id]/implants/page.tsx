@@ -5,6 +5,7 @@ import { currentComponent, lastFollowup } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type ImplantSite } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
+import { surgeryCompleteness } from '@/lib/implants/surgery';
 import { SITE_SELECT, sortSite } from '../chart-data';
 
 export default async function ImplantsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -38,12 +39,14 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
               <th>Supervisor</th>
               <th>Component</th>
               <th>Last follow-up</th>
+              <th>Details</th>
             </tr>
           </thead>
           <tbody>
             {sites.map((s) => {
               const current = currentComponent(s);
               const last = lastFollowup(s);
+              const details = surgeryCompleteness(s.surgery);
               return (
                 <tr key={s.id} data-testid="implant-row">
                   <td data-label="Tooth">
@@ -60,6 +63,9 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
                   <td data-label="Supervisor">{s.supervisor?.full_name || '—'}</td>
                   <td data-label="Component">{current ? COMPONENT_LABELS[current.component_type] : '—'}</td>
                   <td data-label="Last follow-up">{last ? `${OUTCOME_LABELS[last.outcome]} (${last.check_type})` : '—'}</td>
+                  <td data-label="Details" data-testid="details-completeness">
+                    {s.state === 'placed' || s.state === 'restored' || s.state === 'failed' ? `${details.recorded}/${details.total}` : '—'}
+                  </td>
                 </tr>
               );
             })}

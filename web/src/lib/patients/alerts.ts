@@ -2,7 +2,7 @@ import type { MedicalHistory } from './types';
 
 type AlertInput = Pick<
   MedicalHistory,
-  'allergies' | 'bisphosphonates' | 'anticoagulants' | 'radiotherapy_head_neck' | 'diabetes' | 'osteoporosis' | 'smoker'
+  'allergies' | 'bisphosphonates_status' | 'anticoagulants_status' | 'radiotherapy_status' | 'diabetes_status' | 'osteoporosis_status' | 'smoking'
 >;
 
 const NO_ALLERGY = /^(none|nil|no|nkda|n\/a|-)$/i;
@@ -16,11 +16,11 @@ export function medicalAlerts(h: AlertInput | null): string[] {
   if (allergies && !NO_ALLERGY.test(allergies)) {
     alerts.push(`Allergy: ${allergies.length > MAX_ALLERGY ? `${allergies.slice(0, MAX_ALLERGY - 1)}…` : allergies}`);
   }
-  if (h.bisphosphonates) alerts.push('Bisphosphonates');
-  if (h.anticoagulants) alerts.push('Anticoagulants');
-  if (h.radiotherapy_head_neck) alerts.push('Head/neck radiotherapy');
-  if (h.diabetes) alerts.push('Diabetes');
-  if (h.osteoporosis) alerts.push('Osteoporosis');
-  if (h.smoker) alerts.push('Smoker');
+  if (h.bisphosphonates_status === 'yes') alerts.push('Bisphosphonates');
+  if (h.anticoagulants_status === 'yes') alerts.push('Anticoagulants');
+  if (h.radiotherapy_status === 'yes') alerts.push('Head/neck radiotherapy');
+  if (h.diabetes_status === 'yes') alerts.push('Diabetes');
+  if (h.osteoporosis_status === 'yes') alerts.push('Osteoporosis');
+  if (h.smoking === 'current') alerts.push('Smoker');
   return alerts;
 }

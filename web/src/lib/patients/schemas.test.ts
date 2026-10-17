@@ -30,9 +30,32 @@ describe('patientSchema', () => {
 });
 
 describe('medicalHistorySchema', () => {
-  it('reads checkboxes ("on" or missing) as booleans', () => {
-    const parsed = medicalHistorySchema.parse({ diabetes: 'on', allergies: ' Latex ' });
-    expect(parsed).toMatchObject({ diabetes: true, smoker: false, allergies: 'Latex' });
+  const valid = { allergies: ' Latex ', smoking: 'current', cigarettes_per_day: '10', diabetes_status: 'yes', hba1c: '7.2', hba1c_date: '2026-01-10' };
+  it('reads radios ("" = not assessed) and numbers', () => {
+    expect(medicalHistorySchema.parse({ ...valid, bruxism: '', osteoporosis_status: 'no' })).toMatchObject({
+      allergies: 'Latex', smoking: 'current', cigarettes_per_day: 10, diabetes_status: 'yes', hba1c: 7.2, hba1c_date: '2026-01-10',
+      bruxism: null, osteoporosis_status: 'no', periodontitis_history: null,
+    });
+  });
+  it('writes only the new columns, never the old booleans', () => {
+    const keys = Object.keys(medicalHistorySchema.parse({}));
+    expect(keys).not.toContain('smoker');
+    expect(keys).not.toContain('diabetes');
+    expect(keys).toContain('smoking');
+  });
+  it('refuses cigarettes without current smoking, half an HbA1c, out-of-range values and a future date', () => {
+    expect(firstError(medicalHistorySchema.safeParse({ smoking: 'former', cigarettes_per_day: '5' }))).toBe(
+      'Cigarettes per day only applies to a current smoker.',
+    );
+    expect(firstError(medicalHistorySchema.safeParse({ hba1c: '6.5' }))).toBe('Enter the HbA1c value and the date it was measured.');
+    expect(firstError(medicalHistorySchema.safeParse({ hba1c: '25', hba1c_date: '2026-01-10' }))).toBe('Enter an HbA1c between 4 and 20 %.');
+    expect(firstError(medicalHistorySchema.safeParse({ smoking: 'current', cigarettes_per_day: '0' }))).toBe(
+      'Enter cigarettes per day as a whole number from 1 to 100.',
+    );
+    expect(firstError(medicalHistorySchema.safeParse({ hba1c: '6.5', hba1c_date: '2999-01-01' }))).toBe(
+      'Enter the HbA1c date (today or earlier).',
+    );
+    expect(firstError(medicalHistorySchema.safeParse({ diabetes_status: 'maybe' }))).toBe('Choose yes, no or not assessed.');
   });
 });
 

@@ -1,13 +1,18 @@
 import {
   COMPONENT_LABELS, OUTCOME_LABELS, SITE_STATE_LABELS, type ComponentType, type FollowupOutcome, type SiteState,
 } from '@/lib/inventory/types';
+import { GRAFT_PROCEDURE_LABELS, SURGERY_FIELD_LABELS, type GraftProcedure } from '@/lib/implants/surgery';
 import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
 
 const FIELD_LABELS: Record<string, string> = {
   full_name: 'name', file_no: 'file number', dob: 'date of birth', sex: 'sex', phone: 'phone', email: 'email',
-  address: 'address', allergies: 'allergies', medications: 'medications', diabetes: 'diabetes', smoker: 'smoker',
+  address: 'address', allergies: 'allergies', medications: 'medications', diabetes: 'diabetes', smoker: 'smoking',
   bisphosphonates: 'bisphosphonates', anticoagulants: 'anticoagulants', radiotherapy_head_neck: 'head/neck radiotherapy',
   osteoporosis: 'osteoporosis', other_conditions: 'other conditions', notes: 'notes',
+  smoking: 'smoking', cigarettes_per_day: 'cigarettes per day', diabetes_status: 'diabetes', hba1c: 'HbA1c', hba1c_date: 'HbA1c date',
+  bisphosphonates_status: 'bisphosphonates', anticoagulants_status: 'anticoagulants', radiotherapy_status: 'head/neck radiotherapy',
+  osteoporosis_status: 'osteoporosis', periodontitis_history: 'periodontitis history', bruxism: 'bruxism',
+  previous_implant_failure: 'previous implant failure',
 };
 
 /** Placement details an implant correction can change (correct_placement, 0042). */
@@ -20,9 +25,11 @@ function changedFields(
   before: Record<string, unknown> | null, after: Record<string, unknown> | null, labels: Record<string, string> = FIELD_LABELS,
 ): string[] {
   if (!before || !after) return [];
-  return Object.keys(labels)
-    .filter((key) => key in after && JSON.stringify(before[key]) !== JSON.stringify(after[key]))
-    .map((key) => labels[key]);
+  return [...new Set(
+    Object.keys(labels)
+      .filter((key) => key in after && JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+      .map((key) => labels[key]),
+  )];
 }
 
 function stateLabel(value: unknown): string {
@@ -71,6 +78,19 @@ export function describeChange(e: HistoryEntry): string {
       if (e.after?.voided_at && !e.before?.voided_at) return `Follow-up removed from the record: ${row?.check_type} (${e.after.voided_reason})`;
       const outcome = OUTCOME_LABELS[row?.outcome as FollowupOutcome] ?? String(row?.outcome);
       return e.action === 'INSERT' ? `Follow-up (${row?.check_type}): ${outcome}` : `Follow-up updated (${row?.check_type})`;
+    }
+    case 'implant_surgery': {
+      if (e.action === 'INSERT') return 'Surgical details recorded';
+      if (e.action === 'DELETE') return 'Surgical details deleted';
+      const changed = changedFields(e.before, e.after, SURGERY_FIELD_LABELS);
+      return changed.length ? `Surgical details changed: ${changed.join(', ')}` : 'Surgical details saved (no changes)';
+    }
+    case 'implant_grafts': {
+      const procedure = (e.after ?? e.before)?.procedure as GraftProcedure;
+      const label = GRAFT_PROCEDURE_LABELS[procedure] ?? String(procedure);
+      if (e.action === 'INSERT') return `Graft added: ${label}`;
+      if (e.action === 'DELETE') return `Graft deleted: ${label}`;
+      return `Graft changed: ${label}`;
     }
     default:
       return `${e.table_name} ${e.action.toLowerCase()}`;

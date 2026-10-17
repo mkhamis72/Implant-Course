@@ -108,10 +108,6 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
             {BONE_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
         </label>
-        <label className="block">
-          <span className="label">Graft</span>
-          <input className="input" value={v.graft} onChange={set('graft')} />
-        </label>
       </div>
       <label className="block">
         <span className="label">Notes</span>

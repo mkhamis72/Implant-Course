@@ -1,3 +1,4 @@
+import type { Smoking, YesNo } from './risk-factors';
 export const TOOTH_STATES = [
   'present', 'missing', 'extracted', 'implant_planned', 'implant_placed', 'restored', 'failed',
 ] as const;
@@ -43,12 +44,18 @@ export type MedicalHistory = {
   patient_id: string;
   allergies: string;
   medications: string;
-  diabetes: boolean;
-  smoker: boolean;
-  bisphosphonates: boolean;
-  anticoagulants: boolean;
-  radiotherapy_head_neck: boolean;
-  osteoporosis: boolean;
+  smoking: Smoking | null;
+  cigarettes_per_day: number | null;
+  diabetes_status: YesNo | null;
+  hba1c: number | null;
+  hba1c_date: string | null;
+  bisphosphonates_status: YesNo | null;
+  anticoagulants_status: YesNo | null;
+  radiotherapy_status: YesNo | null;
+  osteoporosis_status: YesNo | null;
+  periodontitis_history: YesNo | null;
+  bruxism: YesNo | null;
+  previous_implant_failure: YesNo | null;
   other_conditions: string;
   notes: string;
   updated_at: string;

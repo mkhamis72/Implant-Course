@@ -22,14 +22,19 @@ export const SITE_SELECT = `
     fitted_by_organizer:profiles!site_components_fitted_by_organizer_id_fkey(full_name, email)
   ),
   followups:implant_followups(id, date, check_type, outcome, notes, voided_at, voided_reason),
+  surgery:implant_surgery(*),
+  grafts:implant_grafts(*),
   slot:surgery_slots(id, starts_at, supervisor_id, chair:chairs(name), delegates:slot_delegates(delegate_id, role))
 `;
 
 export function sortSite(site: ImplantSite): ImplantSite {
+  const surgery = site.surgery as ImplantSite['surgery'] | ImplantSite['surgery'][] | undefined;
   return {
     ...site,
     components: [...site.components].sort((a, b) => (a.fitted_on < b.fitted_on ? -1 : a.fitted_on > b.fitted_on ? 1 : 0)),
     followups: [...site.followups].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
+    surgery: Array.isArray(surgery) ? surgery[0] ?? null : surgery ?? null,
+    grafts: [...(site.grafts ?? [])].sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0)),
   };
 }
 
