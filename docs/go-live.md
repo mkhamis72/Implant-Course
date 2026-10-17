@@ -5,13 +5,15 @@ Real courses and real patients start only when every line is ticked, dated and i
 ## Plans and hosting
 - [ ] Vercel plan upgraded to **Pro** (Hobby is for non-commercial use only). Date: ____
 - [ ] Supabase plan upgraded to **Pro** for **both** projects: `implant-course-prod` (the academy's data) and `implant-course-control` (the company registry and console sign-in). Daily backups on; point-in-time recovery decision recorded: ____
-- [ ] Domain chosen or bought: ____
-- [ ] (Optional) Custom domain added on Vercel, with the Supabase Site URL and Redirect URLs updated to match. The app sends HSTS with `includeSubDomains`: put it on a subdomain (e.g. `app.yourdomain.com`), or first make sure every subdomain of the apex works over HTTPS. A new host must also be added to the academy's hosts in the control registry (`tenant:register`), or it gets 404. Do the same for the console (`CONSOLE_HOST`) if it moves to the domain.
+- [x] Domain chosen or bought: `imploid.net` (GoDaddy). Date: 2026-10-17
+- [x] Custom domain added on Vercel, with the Supabase Site URL and Redirect URLs updated to match: the academy at `kaleidoscope.imploid.net`, the console at `console.imploid.net` (`CONSOLE_HOST`), both CNAMEs at GoDaddy. The bare `imploid.net` is unused. `implant-course.vercel.app` still serves the academy until it is removed from Vercel, the registry and the Redirect URLs. Date: 2026-10-17
+  - The app sends HSTS with `includeSubDomains`, so it lives on subdomains. A new host must also be added to the company's addresses in the control registry (console → the company → addresses), or it gets 404.
 
 ## Email (moves from the pilot Gmail account to Resend on the domain)
-- [ ] Resend: domain verified (SPF, DKIM).
-- [ ] Sign-in emails: Supabase → Authentication → SMTP set to Resend. Invite and password-recovery templates still link to `/auth/confirm` (docs/operations.md → Turning on email verification). One invite tested end to end: email received, password set, dashboard reached.
-- [ ] App emails (checklist assignments): Vercel `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` set to Resend's SMTP, with a sender on the domain; Release re-run; one assignment email received.
+- [x] Resend: domain `imploid.net` verified (DKIM `resend._domainkey`, `send` CNAME for bounces and SPF). Date: 2026-10-17
+- [ ] DMARC: GoDaddy's default `_dmarc` record (`p=quarantine`, reports to GoDaddy) replaced with one whose reports reach us, e.g. `v=DMARC1; p=none; rua=mailto:<owner>`. Keep a single `_dmarc` record.
+- [ ] Sign-in emails: Supabase → Authentication → SMTP set to Resend (set 2026-10-17). Invite and password-recovery templates still link to `/auth/confirm` (docs/operations.md → Turning on email verification). One invite tested end to end: email received, password set, dashboard reached.
+- [ ] App emails (checklist assignments): Vercel `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` set to Resend's SMTP, with a sender on the domain; Release re-run (both done 2026-10-17); one assignment email received.
 - [ ] Both Gmail app passwords for `implantcourseapp@gmail.com` revoked (Supabase Auth and app emails) once Resend works.
 
 ## Legal and data
