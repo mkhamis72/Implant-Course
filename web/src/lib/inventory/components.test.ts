@@ -10,7 +10,8 @@ const comp = (type: SiteComponent['component_type'], removed_on: string | null):
 const site = (tooth: number, state: ImplantSite['state'], components: SiteComponent[] = []): ImplantSite => ({
   id: `${tooth}-${state}`, tooth, state, technique: null, placed_on: '2026-01-01', stock_lot_id: null, torque_ncm: null, isq: null, bone_type: null, graft: '', notes: '', product: null,
   lot: null, placing_delegate_id: null, assisting_delegate_id: null, supervisor_id: null,
-  placing: null, assisting: null, supervisor: null, components, followups: [], surgery: null, grafts: [], slot: null, created_at: '2026-01-01T00:00:00Z',
+  placing: null, assisting: null, supervisor: null, components, followups: [], surgery: null, grafts: [], complications: [], updated_at: '2026-01-01T00:00:00Z', failed_on: null, failure_type: null, failure_reason: null, failure_notes: '',
+  slot: null, created_at: '2026-01-01T00:00:00Z',
 });
 
 const noFindings = {

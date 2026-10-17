@@ -1,5 +1,7 @@
 import type { ToothState } from '@/lib/patients/types';
 import type { ImplantGraft, ImplantSurgery } from '@/lib/implants/surgery';
+import type { ImplantComplication } from '@/lib/implants/complications';
+import type { FailureReason, FailureType } from '@/lib/implants/failure';
 import type { Attendance, VisitFindings, VisitRow } from '@/lib/visits/visits';
 
 export const PRODUCT_TYPES = [
@@ -131,6 +133,12 @@ export type ImplantSite = {
   followups: Followup[];
   surgery: ImplantSurgery | null;
   grafts: ImplantGraft[];
+  updated_at: string;
+  failed_on: string | null;
+  failure_type: FailureType | null;
+  failure_reason: FailureReason | null;
+  failure_notes: string;
+  complications: ImplantComplication[];
   slot: {
     id: string;
     starts_at: string;

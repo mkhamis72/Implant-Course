@@ -97,3 +97,26 @@ describe('visitSchema', () => {
     expect(toFindings(v)).toEqual({ pain_score: 0, patient_concerns: 'sore', probing_buccal: 4, bop_buccal: 'yes', prosthesis_status: 'stable' });
   });
 });
+
+describe('visitSchema: failure', () => {
+  const failedVisit = { siteId: '00000000-0000-4000-8000-000000000001', patientId: '00000000-0000-4000-8000-000000000002',
+    date: '2026-05-01', visitKey: '', checkType: 'Mobile', attendance: 'attended', outcome: 'failed', needsFailure: '1' };
+  it('needs the failure type and reason when a working implant fails', () => {
+    expect(visitSchema.safeParse({ ...failedVisit, failureReason: 'fracture' }).error?.issues[0].message).toBe('Choose the failure type.');
+    expect(visitSchema.safeParse({ ...failedVisit, failureType: 'lost' }).error?.issues[0].message).toBe('Choose the failure reason.');
+  });
+  it('sends the failure with the findings, and nothing when the outcome is not failed', () => {
+    const v = visitSchema.parse({ ...failedVisit, failureType: 'lost', failureReason: 'fracture', failedOn: '2026-04-30', failureNotes: ' cracked ' });
+    expect(toFindings(v)).toEqual({ failed_on: '2026-04-30', failure_type: 'lost', failure_reason: 'fracture', failure_notes: 'cracked' });
+    const ok = visitSchema.parse({ ...failedVisit, outcome: 'ok', failureType: 'lost', failureReason: 'fracture' });
+    expect(toFindings(ok)).toEqual({});
+  });
+  it('refuses a failure date after the visit date', () => {
+    const late = { ...failedVisit, failureType: 'lost', failureReason: 'fracture', failedOn: '2026-05-02' };
+    expect(visitSchema.safeParse(late).error?.issues[0].message).toBe("The failure date can't be after the visit date.");
+    expect(visitSchema.safeParse({ ...late, failedOn: '2026-05-01' }).success).toBe(true);
+  });
+  it('asks for nothing when the implant has already failed', () => {
+    expect(visitSchema.safeParse({ ...failedVisit, needsFailure: '' }).success).toBe(true);
+  });
+});

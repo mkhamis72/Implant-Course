@@ -162,9 +162,11 @@ test('a failed follow-up marks the tooth as a failed implant', async ({ page }) 
   await placeOn(page, s, 26);
   await panel(page).getByRole('button', { name: 'Record visit' }).click();
   await panel(page).getByRole('combobox', { name: 'Outcome' }).selectOption('failed');
+  await panel(page).getByRole('combobox', { name: 'Failure type' }).selectOption('removed');
+  await panel(page).getByRole('combobox', { name: 'Failure reason' }).selectOption('other');
   // the surgical details block above also has a Notes field
   const visitForm = panel(page).locator('form').filter({ has: page.getByRole('button', { name: 'Save visit' }) });
-  await visitForm.getByLabel('Notes').fill('Mobile, removed');
+  await visitForm.getByLabel('Notes', { exact: true }).fill('Mobile, removed');
   await panel(page).getByRole('button', { name: 'Save visit' }).click();
   await expect(page.getByRole('button', { name: 'Tooth 26, Failed implant' })).toBeVisible();
   await expect(panel(page).getByRole('button', { name: 'Place implant' })).toBeVisible();

@@ -166,13 +166,29 @@ describe('correcting the placement details', () => {
       await refused(c, () => correct(c, s.site, { ...base, placedOn: '2999-01-01' }), /today or earlier/);
       await correct(c, s.site, { ...base, placedOn: '2026-01-10' });
       await c.query("select public.record_followup($1, '2026-02-01', '1-week', 'ok', '')", [s.site]);
-      await refused(c, () => correct(c, s.site, { ...base, placedOn: '2026-03-01' }), /after its first component or follow-up/);
+      await refused(c, () => correct(c, s.site, { ...base, placedOn: '2026-03-01' }), /after its first component, follow-up, complication or failure/);
       await correct(c, s.site, { ...base, placedOn: '2026-01-20' });
 
       const expiring = await receive(c, s.implant, 1, 'EXP', '2026-06-01');
       const p2 = await makePatient(c, 'Zz Expiry Patient');
       const site2 = await place(c, { patient: p2, tooth: 11, product: s.implant, lot: expiring, delegate: s.delegate, supervisor: users.organizer, placedOn: '2026-05-01' });
       await refused(c, () => correct(c, site2, { ...base, placedOn: '2026-07-01' }), /expired on 2026-06-01/);
+    });
+  });
+
+  it('refuses a date after the failure or a complication; allows one before them', async () => {
+    await withTx(async (c) => {
+      const s = await placed(c);
+      const base = { placing: s.delegate, supervisor: users.organizer };
+      await correct(c, s.site, { ...base, placedOn: '2026-01-10' });
+      await c.query('select public.record_complication($1, $2::jsonb)',
+        [s.site, JSON.stringify({ category: 'biological', type: 'mucositis', noticed_on: '2026-03-01' })]);
+      await refused(c, () => correct(c, s.site, { ...base, placedOn: '2026-03-02' }), /complication or failure \(2026-03-01\)/);
+      await correct(c, s.site, { ...base, placedOn: '2026-03-01' });
+      await correct(c, s.site, { ...base, placedOn: '2026-01-10' });
+      await c.query("select public.record_failure($1, '2026-02-15', 'lost', 'fracture', '')", [s.site]);
+      await refused(c, () => correct(c, s.site, { ...base, placedOn: '2026-02-16' }), /complication or failure \(2026-02-15\)/);
+      await correct(c, s.site, { ...base, placedOn: '2026-02-15' });
     });
   });
 

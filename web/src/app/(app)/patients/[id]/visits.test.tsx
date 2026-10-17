@@ -4,6 +4,7 @@ import type { ChartData, ImplantSite } from '@/lib/inventory/types';
 import type { VisitRow } from '@/lib/visits/visits';
 
 vi.mock('./visit-actions', () => ({ recordVisit: vi.fn() }));
+vi.mock('./outcome-actions', () => ({ saveComplication: vi.fn(), voidComplication: vi.fn(), saveFailure: vi.fn() }));
 vi.mock('./implant-actions', () => ({
   fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), receiveStockForPlacement: vi.fn(),
 }));
@@ -91,5 +92,27 @@ describe('<RecordVisitForm>', () => {
     render(<RecordVisitForm patientId="pt" site={site} data={data} onDone={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Save visit' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Choose the outcome.');
+  });
+});
+
+describe('<RecordVisitForm> failure', () => {
+  it('asks for failure details when a working implant fails, defaulting the date to the visit date', () => {
+    render(<RecordVisitForm patientId="pt" site={site} data={data} onDone={() => {}} />);
+    expect(screen.queryByRole('combobox', { name: 'Failure type' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Outcome' }), { target: { value: 'failed' } });
+    expect(screen.getByLabelText(/^Failure date/)).toHaveValue('2026-06-01');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Failure type' }), { target: { value: 'removed' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Failure reason' }), { target: { value: 'fracture' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save visit' }));
+    expect(vi.mocked(recordVisit)).toHaveBeenCalledWith(expect.objectContaining({
+      outcome: 'failed', needsFailure: '1', failedOn: '2026-06-01', failureType: 'removed', failureReason: 'fracture',
+    }));
+  });
+
+  it('asks for nothing more when the implant has already failed', () => {
+    const failedSite = { ...site, state: 'failed' } as unknown as ImplantSite;
+    render(<RecordVisitForm patientId="pt" site={failedSite} data={data} onDone={() => {}} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Outcome' }), { target: { value: 'failed' } });
+    expect(screen.queryByRole('combobox', { name: 'Failure type' })).not.toBeInTheDocument();
   });
 });

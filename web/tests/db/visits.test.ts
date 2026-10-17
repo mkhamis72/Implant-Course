@@ -118,7 +118,7 @@ describe('record_visit', () => {
       const { site, patient } = await placedSite(c);
       const first = await recordVisit(c, site);
       await c.query(`select public.void_followup($1, 'Wrong patient')`, [first]);
-      await recordVisit(c, site, { outcome: 'failed' });
+      await recordVisit(c, site, { outcome: 'failed', findings: { failure_type: 'lost', failure_reason: 'no_osseointegration' } });
       expect((await c.query('select state from public.implant_sites where id = $1', [site])).rows[0].state).toBe('failed');
       expect((await c.query('select status from public.tooth_status where patient_id = $1 and tooth = 36', [patient])).rows[0].status).toBe('failed');
     });
@@ -201,8 +201,12 @@ describe('implant_visits', () => {
     await withTx(async (c) => {
       const { patient, site } = await placedSite(c, 200);
       await recordVisit(c, site, { key: 'early_review' });
-      await recordVisit(c, site, { key: null, check: 'Mobile implant', outcome: 'failed' });
-      expect(await visits(c, patient)).toEqual([expect.objectContaining({ visit_key: 'early_review', status: 'done' })]);
+      await recordVisit(c, site, { key: null, check: 'Mobile implant', outcome: 'failed', findings: { failure_type: 'lost', failure_reason: 'no_osseointegration' } });
+      // Failed today (day 200): the osseointegration window closed before the failure, so it stays as missed (0048).
+      expect(await visits(c, patient)).toEqual([
+        expect.objectContaining({ visit_key: 'early_review', status: 'done' }),
+        expect.objectContaining({ visit_key: 'osseointegration', status: 'missed' }),
+      ]);
     });
   });
 
@@ -240,7 +244,7 @@ describe('recall_list', () => {
       await recordVisit(c, recorded.site, { key: 'early_review' });
       expect(await recall(c, recorded.patient)).toEqual([]);
       const failed = await placedSite(c, 11, 'Zz Recall Failed');
-      await recordVisit(c, failed.site, { key: null, check: 'Lost', outcome: 'failed' });
+      await recordVisit(c, failed.site, { key: null, check: 'Lost', outcome: 'failed', findings: { failure_type: 'lost', failure_reason: 'no_osseointegration' } });
       expect(await recall(c, failed.patient)).toEqual([]);
       const archived = await placedSite(c, 11, 'Zz Recall Archived');
       await c.query('update public.patients set archived = true where id = $1', [archived.patient]);

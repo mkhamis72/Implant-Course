@@ -7,6 +7,7 @@ import { COMPONENT_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type ImplantSite
 import { formatDate } from '@/lib/format';
 import { nextVisit, visitResult, VISIT_STATUS_LABELS, type VisitRow } from '@/lib/visits/visits';
 import { surgeryCompleteness } from '@/lib/implants/surgery';
+import { isOpen } from '@/lib/implants/complications';
 import { SITE_SELECT, sortSite } from '../chart-data';
 
 export default async function ImplantsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -44,6 +45,7 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
               <th>Component</th>
               <th>Last follow-up</th>
               <th>Next visit</th>
+              <th>Open complications</th>
               <th>Details</th>
             </tr>
           </thead>
@@ -74,6 +76,7 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
                       return next ? `${next.label} · ${formatDate(next.target_date)} · ${VISIT_STATUS_LABELS[next.status]}` : '—';
                     })()}
                   </td>
+                  <td data-label="Open complications" data-testid="open-complications">{(s.complications ?? []).filter(isOpen).length || '—'}</td>
                   <td data-label="Details" data-testid="details-completeness">
                     {s.state === 'placed' || s.state === 'restored' || s.state === 'failed' ? `${details.recorded}/${details.total}` : '—'}
                   </td>

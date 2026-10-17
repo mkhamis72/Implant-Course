@@ -2,8 +2,12 @@ import {
   COMPONENT_LABELS, SITE_STATE_LABELS, type ComponentType, type FollowupOutcome, type SiteState,
 } from '@/lib/inventory/types';
 import { GRAFT_PROCEDURE_LABELS, SURGERY_FIELD_LABELS, type GraftProcedure } from '@/lib/implants/surgery';
+import { TYPE_LABELS } from '@/lib/implants/complications';
+import { FAILURE_REASON_LABELS, FAILURE_TYPE_LABELS, type FailureReason, type FailureType } from '@/lib/implants/failure';
 import { visitResult, type Attendance } from '@/lib/visits/visits';
 import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
+
+const FAILURE_FIELD_LABELS: Record<string, string> = { failed_on: 'failure date', failure_type: 'failure type', failure_reason: 'failure reason', failure_notes: 'failure notes' };
 
 const FIELD_LABELS: Record<string, string> = {
   full_name: 'name', file_no: 'file number', dob: 'date of birth', sex: 'sex', phone: 'phone', email: 'email',
@@ -62,6 +66,15 @@ export function describeChange(e: HistoryEntry): string {
       const tooth = (e.after ?? e.before)?.tooth;
       const label = (v: unknown) => SITE_STATE_LABELS[v as SiteState] ?? String(v);
       if (e.action === 'INSERT' || !e.before) return `Implant on tooth ${tooth}: ${label(e.after?.state)}`;
+      if (e.after?.failure_type && !e.before.failure_type) {
+        const type = FAILURE_TYPE_LABELS[e.after.failure_type as FailureType] ?? String(e.after.failure_type);
+        const reason = FAILURE_REASON_LABELS[e.after.failure_reason as FailureReason] ?? String(e.after.failure_reason);
+        return `Implant on tooth ${tooth}: failure recorded — ${type} (${reason})`;
+      }
+      if (e.after?.failure_type && e.before.failure_type) {
+        const corrected = changedFields(e.before, e.after, FAILURE_FIELD_LABELS);
+        if (corrected.length) return `Implant on tooth ${tooth}: failure details corrected: ${corrected.join(', ')}`;
+      }
       if (e.before.state === e.after?.state) {
         const corrected = changedFields(e.before, e.after, SITE_FIELD_LABELS);
         return corrected.length ? `Implant on tooth ${tooth} corrected: ${corrected.join(', ')}` : `Implant on tooth ${tooth} updated`;
@@ -92,6 +105,14 @@ export function describeChange(e: HistoryEntry): string {
       if (e.action === 'INSERT') return `Graft added: ${label}`;
       if (e.action === 'DELETE') return `Graft deleted: ${label}`;
       return `Graft changed: ${label}`;
+    }
+    case 'implant_complications': {
+      const row = e.after ?? e.before;
+      const label = row?.type === 'other' && row?.other_type ? `Other: ${row.other_type}` : TYPE_LABELS[row?.type as string] ?? String(row?.type);
+      if (e.action === 'INSERT') return `Complication recorded: ${label}`;
+      if (e.after?.voided_at && !e.before?.voided_at) return `Complication removed from the record: ${label} (${e.after.voided_reason})`;
+      if (e.after?.resolved_on && !e.before?.resolved_on) return `Complication resolved: ${label}`;
+      return `Complication updated: ${label}`;
     }
     default:
       return `${e.table_name} ${e.action.toLowerCase()}`;

@@ -9,7 +9,7 @@ import type { ToothState } from '@/lib/patients/types';
 import type { VisitRow } from '@/lib/visits/visits';
 
 export const SITE_SELECT = `
-  id, tooth, state, technique, placed_on, torque_ncm, isq, bone_type, graft, notes, created_at, stock_lot_id,
+  id, tooth, state, technique, placed_on, torque_ncm, isq, bone_type, graft, notes, created_at, updated_at, failed_on, failure_type, failure_reason, failure_notes, stock_lot_id,
   placing_delegate_id, assisting_delegate_id, supervisor_id,
   product:products(*),
   lot:stock_lots(lot_no, expiry),
@@ -29,6 +29,7 @@ export const SITE_SELECT = `
   ),
   surgery:implant_surgery(*),
   grafts:implant_grafts(*),
+  complications:implant_complications(*),
   slot:surgery_slots(id, starts_at, supervisor_id, chair:chairs(name), delegates:slot_delegates(delegate_id, role))
 `;
 
@@ -40,6 +41,7 @@ export function sortSite(site: ImplantSite): ImplantSite {
     followups: [...site.followups].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
     surgery: Array.isArray(surgery) ? surgery[0] ?? null : surgery ?? null,
     grafts: [...(site.grafts ?? [])].sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0)),
+    complications: [...(site.complications ?? [])].sort((a, b) => (a.noticed_on < b.noticed_on ? 1 : a.noticed_on > b.noticed_on ? -1 : 0)),
   };
 }
 

@@ -9,6 +9,7 @@ import {
   prepickVisit, recordableVisits, summarizeFindings, visitResult, type VisitRow,
 } from '@/lib/visits/visits';
 import { Field, Footer, useSubmit } from './implant-forms';
+import { FailureFields } from './failure-box';
 import { recordVisit } from './visit-actions';
 
 const YES_NO_LABELS = { yes: 'Yes', no: 'No' } as const;
@@ -59,6 +60,7 @@ const BLANK = {
   probingMesial: '', probingBuccal: '', probingDistal: '', probingLingual: '',
   bopMesial: '', bopBuccal: '', bopDistal: '', bopLingual: '',
   isq: '', prosthesisStatus: '', radiographTaken: '', recommendedTreatment: '',
+  failedOn: '', failureType: '', failureReason: '', failureNotes: '',
 };
 
 export function RecordVisitForm({ patientId, site, data, onDone }: {
@@ -71,6 +73,7 @@ export function RecordVisitForm({ patientId, site, data, onDone }: {
   const set = (key: keyof typeof v) => (value: string) => setV((cur) => ({ ...cur, [key]: value }));
   const { error, pending, submit } = useSubmit(recordVisit, onDone);
   const attended = v.attendance === 'attended';
+  const needsFailure = attended && v.outcome === 'failed' && site.state !== 'failed';
   const yesNo = (key: 'swelling' | 'suppuration' | 'plaque' | 'mobility' | 'radiographTaken', label: string) => (
     <Field label={label}>
       <select className="input" value={v[key]} onChange={(e) => set(key)(e.target.value)}>
@@ -80,7 +83,7 @@ export function RecordVisitForm({ patientId, site, data, onDone }: {
     </Field>
   );
   return (
-    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, siteId: site.id, ...v }); }}>
+    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, siteId: site.id, ...v, failedOn: needsFailure ? v.failedOn || v.date : '', needsFailure: needsFailure ? '1' : '' }); }}>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Visit">
           <select className="input" value={v.visitKey} onChange={(e) => set('visitKey')(e.target.value)}>
@@ -126,6 +129,9 @@ export function RecordVisitForm({ patientId, site, data, onDone }: {
             {yesNo('plaque', 'Plaque')}
             {yesNo('mobility', 'Mobility')}
           </div>
+          {needsFailure && (
+            <FailureFields values={{ ...v, failedOn: v.failedOn || v.date }} set={(k) => set(k)} />
+          )}
           <fieldset>
             <legend className="label">Probing depth (mm) and bleeding</legend>
             <div className="grid grid-cols-4 gap-2">

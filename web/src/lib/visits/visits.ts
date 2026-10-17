@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isRealDate, todayIso } from '@/lib/dates';
+import { FAILURE_REASONS, FAILURE_TYPES } from '@/lib/implants/failure';
 import { FOLLOWUP_OUTCOMES, OUTCOME_LABELS, type FollowupOutcome } from '@/lib/inventory/types';
 import { YES_NO, type YesNo } from '@/lib/patients/risk-factors';
 
@@ -151,6 +152,11 @@ export const visitSchema = z
     radiographTaken: yesNo,
     recommendedTreatment: text(1000),
     notes: text(1000),
+    needsFailure: z.preprocess((v) => v === '1' || v === true, z.boolean()).default(false),
+    failedOn: z.preprocess(blankToNull, z.string().refine((v) => isRealDate(v) && v <= todayIso(), { message: 'Enter the failure date (today or earlier).' }).nullable()),
+    failureType: choice(FAILURE_TYPES, 'Choose the failure type.'),
+    failureReason: choice(FAILURE_REASONS, 'Choose the failure reason.'),
+    failureNotes: text(1000),
   })
   .superRefine((v, ctx) => {
     if (!v.visitKey && !v.checkType) {
@@ -160,8 +166,18 @@ export const visitSchema = z
     if (v.attendance === 'not_needed' && !v.notes) {
       ctx.addIssue({ code: 'custom', path: ['notes'], message: 'Say why the visit was not needed.' });
     }
+    if (v.attendance === 'attended' && v.outcome === 'failed' && v.needsFailure) {
+      if (!v.failureType) ctx.addIssue({ code: 'custom', path: ['failureType'], message: 'Choose the failure type.' });
+      else if (!v.failureReason) ctx.addIssue({ code: 'custom', path: ['failureReason'], message: 'Choose the failure reason.' });
+      if (v.failedOn && v.failedOn > v.date) {
+        ctx.addIssue({ code: 'custom', path: ['failedOn'], message: "The failure date can't be after the visit date." });
+      }
+    }
   })
-  .transform((v) => {
+  .transform((input) => {
+    let v = input;
+    const failing = v.attendance === 'attended' && v.outcome === 'failed' && v.needsFailure;
+    if (!failing) v = { ...v, failedOn: null, failureType: null, failureReason: null, failureNotes: '' };
     if (v.attendance !== 'attended') {
       // Values typed before switching to "did not attend" / "not needed" are not findings.
       return {
@@ -192,6 +208,7 @@ export function toFindings(v: VisitInput): Record<string, string | number> {
     probing_distal: v.probingDistal, probing_lingual: v.probingLingual, bop_mesial: v.bopMesial, bop_buccal: v.bopBuccal,
     bop_distal: v.bopDistal, bop_lingual: v.bopLingual, isq: v.isq, prosthesis_status: v.prosthesisStatus,
     radiograph_taken: v.radiographTaken, recommended_treatment: v.recommendedTreatment,
+    failed_on: v.failedOn, failure_type: v.failureType, failure_reason: v.failureReason, failure_notes: v.failureNotes,
   };
   return Object.fromEntries(Object.entries(all).filter(([, x]) => x !== null && x !== '')) as Record<string, string | number>;
 }
