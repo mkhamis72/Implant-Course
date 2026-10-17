@@ -11,6 +11,7 @@ describe('classifyPath', () => {
     ['/brand/logo', 'public'],
     ['/auth/confirm', 'public'],
     ['/auth/error', 'public'],
+    ['/login/forgot', 'public'],
     ['/login/mfa', 'mfa'],
     ['/', 'protected'],
     ['/admin/users', 'protected'],

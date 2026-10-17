@@ -79,7 +79,7 @@ All commands are run with `ENV_FILE=.env.prod` (see the top of this page).
 1. In Supabase → Authentication → SMTP Settings, enter the SMTP provider's host, port, user and password, and a sender address on your domain.
 2. In Authentication → Email Templates, point the links at the app's `/auth/confirm` route. The default `{{ .ConfirmationURL }}` link does not work with it.
    - **Invite user:** `<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite">Accept the invitation and set your password</a>`
-   - **Reset password:** the same link with `type=recovery`.
+   - **Reset password:** the same link with `type=recovery`. The login page's **Forgot password?** sends it (shown only while `EMAIL_ENABLED` is on); users with 2FA enter their code before setting the new password. Reset links also last `86400` seconds (step 3).
 3. In Authentication → Sign In / Providers → Email, set **Email OTP Expiration** to `86400` so invitation links last 24 hours (the default is 1 hour).
 4. In Authentication → URL Configuration, set the Site URL to the production URL and add `https://<site>/auth/confirm` to the redirect URLs.
 5. In Vercel → Settings → Environment Variables (Production), set `EMAIL_ENABLED=true`, then redeploy: Actions → **Release** → Run workflow (branch `master`).

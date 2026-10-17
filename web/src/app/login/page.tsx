@@ -1,4 +1,6 @@
+import Link from 'next/link';
 import { BrandMark } from '@/components/brand-mark';
+import { emailEnabled } from '@/lib/flags';
 import { getBranding } from '@/lib/branding/get';
 import { LoginForm } from './login-form';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
@@ -17,6 +19,11 @@ export default async function LoginPage({ searchParams }: { searchParams: PageSe
           <p className="rounded bg-warn-soft p-3 text-sm text-warn">You were signed out after a period of inactivity.</p>
         )}
         <LoginForm />
+        {emailEnabled() && (
+          <Link href="/login/forgot" className="block text-center text-sm hover:underline">
+            Forgot password?
+          </Link>
+        )}
       </div>
     </main>
   );

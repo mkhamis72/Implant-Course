@@ -1,8 +1,10 @@
 'use server';
 
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { mapAuthError } from '@/lib/auth/errors';
+import { afterMfaPath, RESET_COOKIE } from '@/lib/auth/password-reset';
 
 export type MfaState = { error?: string };
 
@@ -15,5 +17,5 @@ export async function verifyMfa(_prev: MfaState, formData: FormData): Promise<Mf
   if (!factor) redirect('/');
   const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
   if (error) return { error: mapAuthError(error) };
-  redirect('/');
+  redirect(afterMfaPath((await cookies()).get(RESET_COOKIE)?.value));
 }

@@ -1,9 +1,11 @@
 'use server';
 
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { mapAuthError } from '@/lib/auth/errors';
 import { requireSignedIn } from '@/lib/auth/session';
+import { RESET_COOKIE } from '@/lib/auth/password-reset';
 
 export type SetPasswordState = { error?: string };
 
@@ -16,5 +18,6 @@ export async function setPassword(_prev: SetPasswordState, formData: FormData): 
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password });
   if (error) return { error: mapAuthError(error) };
+  (await cookies()).delete(RESET_COOKIE);
   redirect('/');
 }

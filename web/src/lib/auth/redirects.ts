@@ -2,7 +2,7 @@ export type PathKind = 'public' | 'mfa' | 'protected';
 export type Aal = { current: string | null; next: string | null } | null;
 
 // /brand/logo: the company logo, shown on the login page before anyone signs in.
-const PUBLIC_PATHS = new Set(['/login', '/auth/confirm', '/auth/error', '/brand/logo']);
+const PUBLIC_PATHS = new Set(['/login', '/login/forgot', '/auth/confirm', '/auth/error', '/brand/logo']);
 
 export function classifyPath(path: string): PathKind {
   if (PUBLIC_PATHS.has(path)) return 'public';
