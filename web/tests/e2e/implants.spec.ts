@@ -160,11 +160,12 @@ test('fits a healing abutment then a Ti-base: badges change and stock is deducte
 test('a failed follow-up marks the tooth as a failed implant', async ({ page }) => {
   const s = await setup(page);
   await placeOn(page, s, 26);
-  await panel(page).getByRole('button', { name: 'Add follow-up' }).click();
-  await page.getByLabel('Check').fill('3-month');
-  await page.getByLabel('Outcome').selectOption('failed');
-  await page.getByLabel('Notes (optional)').fill('Mobile, removed');
-  await page.getByRole('button', { name: 'Save follow-up' }).click();
+  await panel(page).getByRole('button', { name: 'Record visit' }).click();
+  await panel(page).getByRole('combobox', { name: 'Outcome' }).selectOption('failed');
+  // the surgical details block above also has a Notes field
+  const visitForm = panel(page).locator('form').filter({ has: page.getByRole('button', { name: 'Save visit' }) });
+  await visitForm.getByLabel('Notes').fill('Mobile, removed');
+  await panel(page).getByRole('button', { name: 'Save visit' }).click();
   await expect(page.getByRole('button', { name: 'Tooth 26, Failed implant' })).toBeVisible();
   await expect(panel(page).getByRole('button', { name: 'Place implant' })).toBeVisible();
   await expect(panel(page).getByText('Earlier implants on this tooth (1)')).toBeVisible();

@@ -3,7 +3,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import type { ChartData } from '@/lib/inventory/types';
 
 vi.mock('./implant-actions', () => ({
-  fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), recordFollowup: vi.fn(), receiveStockForPlacement: vi.fn(),
+  fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), receiveStockForPlacement: vi.fn(),
 }));
 import { PlaceForm } from './implant-forms';
 

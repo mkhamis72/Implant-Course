@@ -10,16 +10,16 @@ import {
 import { nextActions, type PanelAction } from '@/lib/patients/tooth-panel';
 import { isManualState, type ToothState } from '@/lib/patients/types';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { visitResult } from '@/lib/visits/visits';
 import { cancelPlan, setTechnique } from './implant-actions';
 import { Corrections } from './corrections';
 import { SurgicalDetails } from './surgical-details';
-import { ComponentForm, FollowupForm, PlaceForm, PlanForm } from './implant-forms';
+import { ComponentForm, PlaceForm, PlanForm } from './implant-forms';
+import { RecordVisitForm, Visits } from './visits';
 
 type Mode = 'none' | 'plan' | 'place' | 'component' | 'followup';
 
 const ACTION_LABELS: Record<Exclude<PanelAction, 'cancel'>, string> = {
-  plan: 'Plan implant', place: 'Place implant', component: 'Add component', followup: 'Add follow-up',
+  plan: 'Plan implant', place: 'Place implant', component: 'Add component', followup: 'Record visit',
 };
 
 // The restorative sequence on an implant; the connection stage covers Ti-base, multi-unit or abutment.
@@ -146,20 +146,7 @@ function SiteDetails({ site, patientId, data, justPlaced = false }: { site: Impl
           </ol>
         </div>
       )}
-      {site.followups.length > 0 && (
-        <div>
-          <h4 className="font-medium">Follow-ups</h4>
-          <ul data-testid="followups">
-            {site.followups.map((f) => (
-              <li key={f.id} className={f.voided_at ? 'text-muted line-through' : ''}>
-                {formatDate(f.date)} · {f.check_type} · {visitResult(f)}
-                {f.notes ? ` — ${f.notes}` : ''}
-                {f.voided_at ? ` — removed: ${f.voided_reason}` : ''}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <Visits site={site} visits={data.visits} />
       {data.editable && site.state !== 'planned' && site.state !== 'removed' && <Corrections patientId={patientId} site={site} data={data} />}
     </div>
   );
@@ -225,7 +212,7 @@ export function ImplantSection({ patientId, tooth, status, data }: { patientId: 
           plannedTechnique={site?.technique ?? null} slot={site?.slot ?? null} onPlaced={() => setJustPlaced(true)} />
       )}
       {mode === 'component' && site && <ComponentForm patientId={patientId} site={site} data={data} onDone={done} />}
-      {mode === 'followup' && site && <FollowupForm patientId={patientId} site={site} data={data} onDone={done} />}
+      {mode === 'followup' && site && <RecordVisitForm patientId={patientId} site={site} data={data} onDone={done} />}
 
       {earlier.length > 0 && (
         <details className="text-sm">

@@ -4,15 +4,16 @@ import type { ChartData } from '@/lib/inventory/types';
 
 vi.mock('./chart-actions', () => ({ setToothStatus: vi.fn() }));
 vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), deleteGraft: vi.fn() }));
+vi.mock('./visit-actions', () => ({ recordVisit: vi.fn() }));
 vi.mock('./implant-actions', () => ({
   planImplant: vi.fn(), placeImplant: vi.fn(), cancelPlan: vi.fn(), setTechnique: vi.fn(), fitComponent: vi.fn(),
-  recordFollowup: vi.fn(), correctBatch: vi.fn(), voidFollowup: vi.fn(), voidComponent: vi.fn(),
+  correctBatch: vi.fn(), voidFollowup: vi.fn(), voidComponent: vi.fn(),
 }));
 import { ChartPanel } from './chart-panel';
 
 const data = (editable: boolean) =>
   ({
-    statuses: {}, sites: [], implants: [], componentProducts: [], lots: [], delegates: [], organizers: [], supervisors: [],
+    statuses: {}, sites: [], visits: [], implants: [], componentProducts: [], lots: [], delegates: [], organizers: [], supervisors: [],
     today: '2030-06-10', me: 'u1', editable,
   }) as unknown as ChartData;
 

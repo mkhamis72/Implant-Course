@@ -7,10 +7,10 @@ import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { acceptsProduct } from '@/lib/inventory/components';
 import { BONE_TYPES } from '@/lib/inventory/schemas';
 import {
-  COMPONENT_LABELS, COMPONENT_TYPES, FOLLOWUP_OUTCOMES, OUTCOME_LABELS, TECHNIQUES, TECHNIQUE_LABELS,
+  COMPONENT_LABELS, COMPONENT_TYPES, TECHNIQUES, TECHNIQUE_LABELS,
   type ChartData, type ComponentType, type ImplantSite, type Technique,
 } from '@/lib/inventory/types';
-import { fitComponent, placeImplant, planImplant, receiveStockForPlacement, recordFollowup } from './implant-actions';
+import { fitComponent, placeImplant, planImplant, receiveStockForPlacement } from './implant-actions';
 import { ImplantPicker } from './implant-picker';
 
 type Result = { error?: string };
@@ -419,34 +419,6 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
         <input className="input" value={v.notes} onChange={(e) => set('notes')(e.target.value)} />
       </Field>
       <Footer error={error} pending={pending} saveLabel="Save component" onCancel={onDone} />
-    </form>
-  );
-}
-
-export function FollowupForm({ patientId, site, data, onDone }: { patientId: string; site: ImplantSite; data: ChartData; onDone: () => void }) {
-  const [v, setV] = useState({ date: data.today, checkType: '', outcome: 'ok', notes: '' });
-  const set = (key: keyof typeof v) => (value: string) => setV((cur) => ({ ...cur, [key]: value }));
-  const { error, pending, submit } = useSubmit(recordFollowup, onDone);
-  return (
-    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, siteId: site.id, ...v }); }}>
-      <Field label="Date">
-        <input className="input" type="date" value={v.date} onChange={(e) => set('date')(e.target.value)} />
-      </Field>
-      <Field label="Check">
-        <input className="input" list="check-types" value={v.checkType} onChange={(e) => set('checkType')(e.target.value)} />
-        <datalist id="check-types">
-          {['2-week', '6-week', '3-month', '6-month', '1-year'].map((c) => <option key={c} value={c} />)}
-        </datalist>
-      </Field>
-      <Field label="Outcome">
-        <select className="input" value={v.outcome} onChange={(e) => set('outcome')(e.target.value)}>
-          {FOLLOWUP_OUTCOMES.map((o) => <option key={o} value={o}>{OUTCOME_LABELS[o]}</option>)}
-        </select>
-      </Field>
-      <Field label="Notes (optional)">
-        <input className="input" value={v.notes} onChange={(e) => set('notes')(e.target.value)} />
-      </Field>
-      <Footer error={error} pending={pending} saveLabel="Save follow-up" onCancel={onDone} />
     </form>
   );
 }
