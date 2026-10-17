@@ -12,8 +12,8 @@ Real courses and real patients start only when every line is ticked, dated and i
 ## Email (moves from the pilot Gmail account to Resend on the domain)
 - [x] Resend: domain `imploid.net` verified (DKIM `resend._domainkey`, `send` CNAME for bounces and SPF). Date: 2026-10-17
 - [ ] DMARC: GoDaddy's default `_dmarc` record (`p=quarantine`, reports to GoDaddy) replaced with one whose reports reach us, e.g. `v=DMARC1; p=none; rua=mailto:<owner>`. Keep a single `_dmarc` record.
-- [ ] Sign-in emails: Supabase → Authentication → SMTP set to Resend (set 2026-10-17). Invite and password-recovery templates still link to `/auth/confirm` (docs/operations.md → Turning on email verification). One invite tested end to end: email received, password set, dashboard reached.
-- [ ] App emails (checklist assignments): Vercel `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` set to Resend's SMTP, with a sender on the domain; Release re-run (both done 2026-10-17); one assignment email received.
+- [x] Sign-in emails: Supabase → Authentication → SMTP set to Resend (set 2026-10-17); Site URL `https://kaleidoscope.imploid.net`. Invite and password-recovery templates still link to `/auth/confirm` (docs/operations.md → Turning on email verification). Invite email received, and a self-service password reset tested end to end (email from `noreply@imploid.net`, link to kaleidoscope.imploid.net, new password set). Date: 2026-10-18
+- [x] App emails (checklist assignments): Vercel `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` set to Resend's SMTP, with a sender on the domain; Release re-run (both done 2026-10-17); one assignment email received. Date: 2026-10-18
 - [ ] Both Gmail app passwords for `implantcourseapp@gmail.com` revoked (Supabase Auth and app emails) once Resend works.
 
 ## Legal and data
