@@ -85,17 +85,19 @@ All commands are run with `ENV_FILE=.env.prod` (see the top of this page).
 5. In Vercel → Settings → Environment Variables (Production), set `EMAIL_ENABLED=true`, then redeploy: Actions → **Release** → Run workflow (branch `master`).
 6. Check it: create a login for a test address you own. The email should arrive, its link should open "Set a password", and the new user should reach the app. If nothing arrives, look in Supabase → Logs → Auth for SMTP errors.
 
-**Pilot: Gmail SMTP** (free, about 500 emails a day, may land in spam; switch to Resend on your domain before go-live, see `docs/go-live.md`):
-- Use a **dedicated** Gmail account, not a personal one: its app password can read and send all of that account's mail.
-- Turn on 2-Step Verification for it, then create an app password at https://myaccount.google.com/apppasswords ⟨secret⟩.
-- SMTP settings: host `smtp.gmail.com`, port `465`, username and sender = the Gmail address, password = the app password without spaces.
+**Resend on imploid.net** (since 2026-10-17; free plan: 100 emails a day, 3,000 a month):
+- Resend → Domains: `imploid.net`, region EU (Ireland). Its records are at GoDaddy (imploid.net → DNS): TXT `resend._domainkey` (DKIM) and CNAME `send` (bounce MX and SPF). Keep one `_dmarc` TXT record. Copy values from Resend: the DKIM key is different in every Resend account.
+- API key: Resend → API Keys, **Sending access**, domain `imploid.net` ⟨secret⟩. It is the SMTP password both here and for the app emails below. Type it straight into Supabase and Vercel.
+- SMTP settings: host `smtp.resend.com`, port `465`, username `resend`, password = the API key, sender `noreply@imploid.net`.
 - To turn email off again, set `EMAIL_ENABLED=false` and re-run Release: logins go back to temporary passwords.
+
+*Until 2026-10-17 the pilot used Gmail SMTP* (a dedicated Gmail account with 2-Step Verification and an app password; host `smtp.gmail.com`, port `465`, username and sender = the Gmail address). Revoke its app passwords once Resend works.
 
 ### Checklist assignment emails
 
 The app emails an organizer when a checklist item is assigned to them, and when the text or due date of an item assigned to them changes. Nothing is sent when you assign an item to yourself. These emails come from the app itself, not from Supabase Auth, so they need their own SMTP settings. They are off until `SMTP_HOST` is set, and also off while `EMAIL_ENABLED=false`.
-1. Create a second app password for the same dedicated Gmail account at https://myaccount.google.com/apppasswords ⟨secret⟩. A separate one can be revoked without breaking invites.
-2. In Vercel → Settings → Environment Variables (Production), add `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_USER=<the Gmail address>`, `SMTP_PASS=<the app password, no spaces>` (mark it Sensitive) and `SMTP_FROM=Implant Course <the Gmail address>`.
+1. Use the Resend API key from above ⟨secret⟩, or a second one for the same domain so it can be revoked without breaking invites.
+2. In Vercel → Settings → Environment Variables (Production), add `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=465`, `SMTP_USER=resend`, `SMTP_PASS=<the API key>` (mark it Sensitive) and `SMTP_FROM=Implant Course Academy <noreply@imploid.net>`.
 3. Re-run **Release** (branch `master`).
 4. Check it: assign a checklist item to another organizer login whose mailbox you can read. If saving shows "Saved, but the email … couldn't be sent.", look in Vercel → Logs for `sendEmail failed`.
 
@@ -191,7 +193,7 @@ The app serves each company from its own Supabase project. Without `CONTROL_SUPA
 **Register a company** (its project's keys come from the loaded env file; for the academy that's `.env.prod`):
 
 ```bash
-ENV_FILE=.env.prod npm run tenant:register -- academy "Implant Course Academy" implant-course.vercel.app
+ENV_FILE=.env.prod npm run tenant:register -- academy "Implant Course Academy" kaleidoscope.imploid.net implant-course.vercel.app
 ENV_FILE=.env.prod npm run tenant:check -- academy        # → Target project: control <host>; company academy (active): OK
 ```
 
@@ -213,7 +215,7 @@ Unknown hosts get 404; a suspended company gets 503. If the control project is d
 
 *Setting it up (once, after merging part 4):*
 1. Control project → Authentication → Sign In / Providers: disable new sign-ups. Multi-Factor: enable TOTP. Authentication → Rate Limits: keep the MFA verification limits at their defaults or stricter. Do this **before** the next step, which exposes the console.
-2. Vercel → Domains: add the console address to the project. Environment Variables (Production): `CONSOLE_HOST` = the host name only, for example `implant-console.vercel.app` (no `https://`, no path), `NEXT_PUBLIC_CONTROL_ANON_KEY` = the control project's anon key. Re-run Release.
+2. Vercel → Domains: add the console address to the project. Environment Variables (Production): `CONSOLE_HOST` = the host name only, `console.imploid.net` since 2026-10-17 (no `https://`, no path; before that `implant-console.vercel.app`, which now gets 404), `NEXT_PUBLIC_CONTROL_ANON_KEY` = the control project's anon key. Re-run Release.
 3. Add `CONTROL_SUPABASE_URL` (already there) and `CONTROL_SERVICE_ROLE_KEY` to `.env.prod` just for this step, run `ENV_FILE=.env.prod npm run console:admin -- you@example.com` (it prints a temporary password), then remove the service key line again. Running it again for an existing admin sets a new temporary password and keeps their authenticators.
 4. **Sign in straight away and set up 2FA.** Until you do, anyone who has the temporary password could enrol their own authenticator first. Then replace the temporary password under **Change password** (top bar) and check that the academy row shows OK.
 
@@ -234,7 +236,7 @@ Steps (Git Bash, from `web/`):
    - Apply the Authentication settings from §A.1 (sign-ups off, confirm email on, TOTP, minimum password length 10).
    - URL Configuration: Site URL and Redirect URLs use **the company's address** (`https://<host>`, `https://<host>/**`).
    - Email templates: invite and recovery must link to `/auth/confirm` (§B → Turning on email verification).
-   - SMTP: its own sender (the pilot Gmail account or Resend).
+   - SMTP: Resend on `imploid.net` (settings in §B → Turning on email verification), or the company's own sender.
 2. **Env file** for this company, `web/.env.<slug>`. It is git-ignored like every `.env*` file; never name it `.env.production…`. It holds:
    - its `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` ⟨secret⟩, and `DATABASE_URL` ⟨secret⟩ (Connect → **Session pooler**);
    - `DATABASE_CA_CERT=prod-ca.crt` (the Supabase CA certificate is the same for every project, on any account);
@@ -243,7 +245,7 @@ Steps (Git Bash, from `web/`):
 3. **Schema:** `ENV_FILE=.env.<slug> npm run db:migrate`. The first line must name the **new** project's host.
 4. **Register:** `ENV_FILE=.env.<slug> npm run tenant:register -- <slug> "<Company name>" <host>`. Or use **Add company** in the console, which checks the keys and database URL before saving.
 5. **Check:** `ENV_FILE=.env.prod npm run tenant:check -- <slug>` must end with `OK`. A certificate error here means the project uses a different CA. Then paste both certificates, one after the other, into `web/prod-ca.crt` and into the GitHub secret `PROD_DATABASE_CA_CERT`, which Release and Backup use for every company.
-6. **Address:** Vercel → Domains → add `<host>`, and point the company's DNS at Vercel as Vercel shows. A host that isn't registered gets 404.
+6. **Address:** normally `<name>.imploid.net`. Vercel → Domains → **Add Existing** `<host>` on the `implant-course` project (Production). At GoDaddy (imploid.net → DNS) add a CNAME, name `<name>`, value as Vercel shows (`….vercel-dns-017.com`), and save. Wait for **Valid Configuration**. A host that isn't in the company's registered addresses gets 404.
 7. **First admin:** console → the company → create first admin (a one-time password, shown once). Or `ENV_FILE=.env.prod npm run create-user -- --tenant <slug> admin@company.com "Name" --role admin`.
 8. **Clean up:** delete `web/.env.<slug>`, because Vault now holds its keys. If the company owns the account, they can also rotate the service key later: replace it from the console (**Replace keys**).
 
