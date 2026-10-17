@@ -14,7 +14,7 @@ async function placedSite(c: Client, daysAgo = 60, name = 'Zz Failure Patient') 
   const lot = await receive(c, implant, 2, 'FLR');
   const delegate = await makeDelegate(c, 'Zz Failure Delegate');
   const site = await place(c, { patient, tooth: 46, product: implant, lot, delegate, supervisor: users.organizer, placedOn });
-  return { patient, site, placedOn };
+  return { patient, site, placedOn, implant, lot, delegate };
 }
 
 async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp) {
@@ -88,7 +88,61 @@ describe('correct_failure', () => {
   });
 });
 
+describe('failure details on an earlier implant of a re-implanted tooth', () => {
+  const placeAgain = async (c: Client, s: Awaited<ReturnType<typeof placedSite>>) =>
+    place(c, { patient: s.patient, tooth: 46, product: s.implant, lot: s.lot, delegate: s.delegate, supervisor: users.organizer, placedOn: await daysAgo(c, 2) });
+
+  it('correct_failure keeps the tooth as the newer implant left it', async () => {
+    await withTx(async (c) => {
+      const s = await placedSite(c);
+      await recordFailure(c, s.site, await daysAgo(c, 10), 'lost', 'no_osseointegration');
+      await placeAgain(c, s);
+      expect(await toothStatus(c, s.patient)).toBe('implant_placed');
+      await c.query('select public.correct_failure($1, $2::date, $3, $4, $5, $6::timestamptz)',
+        [s.site, await daysAgo(c, 9), 'removed', 'fracture', '', (await site(c, s.site)).updated_at]);
+      expect(await site(c, s.site)).toMatchObject({ failure_type: 'removed', failure_reason: 'fracture' });
+      expect(await toothStatus(c, s.patient)).toBe('implant_placed');
+    });
+  });
+
+  it('record_failure on an old detail-less failure keeps the tooth as the newer implant left it', async () => {
+    await withTx(async (c) => {
+      const s = await placedSite(c);
+      await c.query(`select public.record_followup($1, $2::date, '3-month', 'failed', '')`, [s.site, await daysAgo(c, 10)]);
+      await placeAgain(c, s);
+      await recordFailure(c, s.site, await daysAgo(c, 10), 'lost', 'no_osseointegration');
+      expect(await site(c, s.site)).toMatchObject({ state: 'failed', failure_type: 'lost' });
+      expect(await toothStatus(c, s.patient)).toBe('implant_placed');
+    });
+  });
+});
+
 describe('failure through a visit', () => {
+  const visitOn = (c: Client, id: string, date: string, findings: Record<string, unknown>) =>
+    c.query(`select public.record_visit($1, $2::date, null, 'Review', 'attended', 'failed', $3::jsonb, '') as id`,
+      [id, date, JSON.stringify(findings)]);
+
+  it('refuses a failure date after the visit date', async () => {
+    await withTx(async (c) => {
+      const s = await placedSite(c);
+      await refused(c, async () => visitOn(c, s.site, await daysAgo(c, 5),
+        { failed_on: await daysAgo(c, 2), failure_type: 'lost', failure_reason: 'fracture' }), /can't be after the visit date/);
+      expect((await site(c, s.site)).state).toBe('placed');
+    });
+  });
+
+  it('fills in the details of an implant that failed without them', async () => {
+    await withTx(async (c) => {
+      const s = await placedSite(c);
+      await c.query(`select public.record_followup($1, $2::date, '3-month', 'failed', '')`, [s.site, await daysAgo(c, 6)]);
+      expect((await site(c, s.site)).failure_type).toBeNull();
+      const on = await daysAgo(c, 6);
+      await visitOn(c, s.site, await daysAgo(c, 1), { failed_on: on, failure_type: 'removed', failure_reason: 'peri_implantitis' });
+      expect(await site(c, s.site)).toMatchObject({ state: 'failed', failed_on: on, failure_type: 'removed', failure_reason: 'peri_implantitis' });
+      expect(await toothStatus(c, s.patient)).toBe('failed');
+    });
+  });
+
   it('a failed visit records visit and failure together; failed_on defaults to the visit date', async () => {
     await withTx(async (c) => {
       const s = await placedSite(c);

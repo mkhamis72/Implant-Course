@@ -122,6 +122,15 @@ describe('update_complication and void_complication', () => {
       await refused(c, () => c.query(`select public.void_complication($1, 'Again please')`, [id]), /Complication not found/);
     });
   });
+
+  it('caps the reason for removing at 300 characters', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedSite(c);
+      const id = await record(c, site, { category: 'mechanical', type: 'screw_loosening', noticed_on: await daysAgo(c, 3) });
+      await refused(c, () => c.query('select public.void_complication($1, $2)', [id, 'x'.repeat(301)]), /voided_reason_length/);
+      await c.query('select public.void_complication($1, $2)', [id, 'x'.repeat(300)]);
+    });
+  });
 });
 
 describe('complications: access and history', () => {
