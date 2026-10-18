@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import { getBranding } from '@/lib/branding/get';
 import { brandingCss } from '@/lib/branding/css';
 import { DEFAULT_ACCENT } from '@/lib/branding/colors';
+import { PressFeedback } from '@/components/press-feedback';
 import './globals.css';
 
 // Self-hosted at build time; no request to Google at runtime.
@@ -28,7 +29,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={inter.variable}>
       <head>{css ? <style>{css}</style> : null}</head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <PressFeedback />
+      </body>
     </html>
   );
 }
