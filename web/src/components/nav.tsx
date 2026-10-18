@@ -18,7 +18,8 @@ function Wordmark({ brand }: { brand: { name: string; logoUrl: string | null } }
 }
 
 /**
- * One set of links: a fixed sidebar from 1024px, a slide-over panel opened from the top bar below that.
+ * One set of links: a fixed sidebar from 1024px, a slide-over panel opened from the top bar below that. Menu sits
+ * on the left, where the panel slides in from (.nav-panel in globals.css).
  */
 export function Nav({ role, permissions, name, brand }: { role: Role; permissions: Permissions; name: string; brand: { name: string; logoUrl: string | null } }) {
   const pathname = usePathname();
@@ -49,8 +50,7 @@ export function Nav({ role, permissions, name, brand }: { role: Role; permission
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-nav-line bg-nav px-4 py-2.5 lg:hidden print:hidden">
-        <Wordmark brand={brand} />
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-nav-line bg-nav px-4 py-2.5 lg:hidden print:hidden">
         <button
           ref={menuButton}
           type="button"
@@ -61,14 +61,16 @@ export function Nav({ role, permissions, name, brand }: { role: Role; permission
         >
           Menu
         </button>
+        <Wordmark brand={brand} />
       </header>
 
-      {open && <div className="fixed inset-0 z-40 bg-ink/30 lg:hidden" onClick={() => setOpen(false)} aria-hidden="true" />}
+      <div className="nav-scrim lg:hidden" data-open={open || undefined} onClick={() => setOpen(false)} aria-hidden="true" />
 
       <aside
         ref={panel}
         id="main-nav"
-        className={`${open ? 'fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] shadow-xl' : 'hidden'} flex-col border-r border-nav-line bg-nav p-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:shadow-none print:hidden`}
+        data-open={open || undefined}
+        className="nav-panel flex-col border-r border-nav-line bg-nav p-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 print:hidden"
       >
         <div className="mb-6 flex items-center justify-between gap-2">
           <Wordmark brand={brand} />

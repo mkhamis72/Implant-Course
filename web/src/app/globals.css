@@ -153,6 +153,26 @@
     color: #fff;
     font-weight: 550;
     white-space: nowrap;
+    /* Feedback on the press itself, not on release. */
+    transition: transform 100ms ease-out, background-color 120ms ease-out, border-color 120ms ease-out;
+  }
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  /* The button whose save is running (src/lib/ui/press-feedback.ts): a spinner, and it doesn't look unavailable. */
+  .btn[data-pressed]:disabled {
+    opacity: 0.85;
+    cursor: progress;
+  }
+  .btn[data-pressed]:disabled::before {
+    content: "";
+    width: 0.9em;
+    height: 0.9em;
+    flex-shrink: 0;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 999px;
+    animation: btn-spin 700ms linear infinite;
   }
   .btn:hover {
     background: var(--color-accent-strong);
@@ -319,6 +339,104 @@
   input[type="checkbox"] {
     min-width: 1.25rem;
     min-height: 1.25rem;
+  }
+}
+
+@keyframes btn-spin {
+  to { rotate: 360deg; }
+}
+
+/*
+ * Loading placeholder while a server-rendered page arrives (PageSkeleton, loading.tsx). It appears only after
+ * 150 ms, so quick navigations don't flash it.
+ */
+.skeleton {
+  opacity: 0;
+  animation: skeleton-in 200ms ease-out 150ms forwards;
+}
+.skeleton-bar {
+  border-radius: var(--radius-control);
+  background: var(--color-sunken);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-in {
+  to { opacity: 1; }
+}
+@keyframes skeleton-pulse {
+  50% { opacity: 0.55; }
+}
+
+/*
+ * Phone navigation (nav.tsx, below 1024px): the panel slides in from the left, where Menu is, and leaves the
+ * same way; the scrim fades. From 1024px the same element is the fixed sidebar (utility classes).
+ */
+@media (max-width: 1023.98px) {
+  .nav-panel {
+    position: fixed;
+    inset-block: 0;
+    left: 0;
+    z-index: 50;
+    width: 18rem;
+    max-width: 85vw;
+    display: none;
+    translate: -100% 0;
+    transition: translate 240ms cubic-bezier(0.32, 0.72, 0, 1), display 240ms allow-discrete;
+  }
+  .nav-panel[data-open] {
+    display: flex;
+    translate: 0 0;
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  }
+  .nav-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: none;
+    opacity: 0;
+    background: color-mix(in srgb, var(--color-ink) 30%, transparent);
+    transition: opacity 240ms ease-out, display 240ms allow-discrete;
+  }
+  .nav-scrim[data-open] {
+    display: block;
+    opacity: 1;
+  }
+  @starting-style {
+    .nav-panel[data-open] { translate: -100% 0; }
+    .nav-scrim[data-open] { opacity: 0; }
+  }
+}
+
+/* Reduced motion: no scaling, spinning, pulsing or sliding; the panel cross-fades instead. */
+@media (prefers-reduced-motion: reduce) {
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+  .btn[data-pressed]:disabled::before {
+    animation: none;
+    border-right-color: currentColor;
+    opacity: 0.6;
+  }
+  .skeleton {
+    animation-duration: 1ms;
+  }
+  .skeleton-bar {
+    animation: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) and (max-width: 1023.98px) {
+  .nav-panel,
+  .nav-panel[data-open] {
+    translate: 0 0;
+  }
+  .nav-panel {
+    opacity: 0;
+    transition: opacity 150ms ease-out, display 150ms allow-discrete;
+  }
+  .nav-panel[data-open] {
+    opacity: 1;
+  }
+  @starting-style {
+    .nav-panel[data-open] { translate: 0 0; opacity: 0; }
   }
 }
 
