@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import type { ChartData } from '@/lib/inventory/types';
 
 vi.mock('./chart-actions', () => ({ setToothStatus: vi.fn() }));
@@ -30,5 +30,21 @@ describe('ChartPanel', () => {
     expect(screen.queryByRole('group', { name: 'Tooth status' })).toBeNull();
     expect(screen.getByRole('region', { name: 'Implant record' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Plan|Place/ })).toBeNull();
+  });
+
+  it('a placed implant shows its record in tabs; Record visit and Add component show the tab they add to', () => {
+    const site = {
+      id: 's1', tooth: 36, state: 'placed', placed_on: '2030-03-10', technique: 'guided', torque_ncm: null, isq: null, bone_type: null,
+      graft: '', product: null, lot: null, stock_lot_id: null, placing: null, assisting: null, supervisor: null, slot: null,
+      components: [], followups: [], complications: [], surgery: null, grafts: [],
+    };
+    const placed = { ...data(true), statuses: { 36: 'implant_placed' }, sites: [site] } as unknown as ChartData;
+    render(<ChartPanel patientId="pt" data={placed} initialTooth={36} />);
+    expect(screen.getByRole('tab', { name: 'Implant' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Record visit' }));
+    expect(screen.getByRole('tab', { name: 'Visits' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add component' }));
+    expect(screen.getByRole('tab', { name: 'Implant' })).toHaveAttribute('aria-selected', 'true');
   });
 });

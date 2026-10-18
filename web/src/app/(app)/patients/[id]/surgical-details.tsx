@@ -13,7 +13,8 @@ import { YES_NO } from '@/lib/patients/risk-factors';
 import { Field, Footer, useSubmit } from './implant-forms';
 import { deleteGraft, saveGraft, saveSurgery } from './surgery-actions';
 
-type Props = { site: ImplantSite; patientId: string; editable: boolean; startOpen?: boolean };
+// bare: inside the Surgical details tab, which already shows the count (no collapsible wrapper).
+type Props = { site: ImplantSite; patientId: string; editable: boolean; startOpen?: boolean; bare?: boolean };
 
 function Choice<T extends string>({ label, value, onChange, values, labels }: {
   label: string; value: string; onChange: (v: string) => void; values: readonly T[]; labels: Record<T, string>;
@@ -28,34 +29,38 @@ function Choice<T extends string>({ label, value, onChange, values, labels }: {
   );
 }
 
-export function SurgicalDetails({ site, patientId, editable, startOpen = false }: Props) {
+export function SurgicalDetails({ site, patientId, editable, startOpen = false, bare = false }: Props) {
   const [editing, setEditing] = useState(false);
   const { recorded, total } = surgeryCompleteness(site.surgery);
   const parts = describeSurgery(site.surgery, site.placed_on);
   const grafts = site.grafts ?? [];
   const missingGraft = site.surgery?.grafting_performed === 'yes' && grafts.length === 0;
+  const body = (
+    <div className={bare ? 'space-y-3' : 'mt-2 space-y-3'}>
+      {startOpen && <p className="text-muted">Add surgical details now or later.</p>}
+      {editing ? (
+        <SurgeryForm site={site} patientId={patientId} onDone={() => setEditing(false)} />
+      ) : (
+        <>
+          {parts.length > 0 ? <p>{parts.join(' · ')}</p> : <p className="text-muted">Nothing recorded yet.</p>}
+          {editable && (
+            <button type="button" className="btn-secondary btn" onClick={() => setEditing(true)}>Edit surgical details</button>
+          )}
+        </>
+      )}
+      {missingGraft && <p className="text-warn">Grafting is marked as performed, but no graft is recorded. Add it below.</p>}
+      <Grafts site={site} patientId={patientId} grafts={grafts}
+        editable={editable} canAdd={editable && site.surgery?.grafting_performed !== 'no'} />
+    </div>
+  );
+  if (bare) return <div data-testid="surgical-details">{body}</div>;
   return (
     <details open={startOpen} data-testid="surgical-details" className="rounded-lg border border-line px-3 py-2.5">
       <summary className="cursor-pointer font-medium">
         Surgical details{' '}
         <span className={recorded === total ? 'badge badge-ok' : 'badge badge-warn'}>{recorded} of {total} recorded</span>
       </summary>
-      <div className="mt-2 space-y-3">
-        {startOpen && <p className="text-muted">Add surgical details now or later.</p>}
-        {editing ? (
-          <SurgeryForm site={site} patientId={patientId} onDone={() => setEditing(false)} />
-        ) : (
-          <>
-            {parts.length > 0 ? <p>{parts.join(' · ')}</p> : <p className="text-muted">Nothing recorded yet.</p>}
-            {editable && (
-              <button type="button" className="btn-secondary btn" onClick={() => setEditing(true)}>Edit surgical details</button>
-            )}
-          </>
-        )}
-        {missingGraft && <p className="text-warn">Grafting is marked as performed, but no graft is recorded. Add it below.</p>}
-        <Grafts site={site} patientId={patientId} grafts={grafts}
-          editable={editable} canAdd={editable && site.surgery?.grafting_performed !== 'no'} />
-      </div>
+      {body}
     </details>
   );
 }
