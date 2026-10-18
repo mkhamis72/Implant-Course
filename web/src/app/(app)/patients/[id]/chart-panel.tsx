@@ -31,10 +31,14 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
 
   function onSelect(fdi: number, additive: boolean) {
     setError(null);
-    // Below the side-by-side layout the panel sits under the chart: bring it into view after a tap.
-    if (!additive && window.matchMedia('(max-width: 1279.98px)').matches) {
+    // The panel sits under the chart. When its heading would be off-screen (phones, short windows), bring it into
+    // view after a tap; otherwise leave the chart where it is, so the next tooth stays in reach.
+    if (!additive) {
       const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-      requestAnimationFrame(() => panelRef.current?.scrollIntoView({ behavior, block: 'start' }));
+      requestAnimationFrame(() => {
+        const panel = panelRef.current;
+        if (panel && panel.getBoundingClientRect().top > window.innerHeight - 120) panel.scrollIntoView({ behavior, block: 'start' });
+      });
     }
     setSelected((current) => {
       if (additive) {
@@ -55,8 +59,8 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
   const locked = selected.filter((t) => !canSetByHand(statusOf(t)));
 
   return (
-    <div className="flex flex-col gap-4 xl:flex-row">
-      <div className="card flex-1 space-y-4">
+    <div className="space-y-4">
+      <div className="card space-y-4">
         {/* Touch screens keep teeth at a fingertip size (about 44px each); the chart scrolls sideways inside its panel. */}
         <div className="-mx-2 overflow-x-auto px-2">
           <div className="min-w-[36rem] sm:min-w-0 pointer-coarse:min-w-[46rem]">
@@ -72,7 +76,7 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
       </div>
       <aside
         ref={panelRef}
-        className="card w-full scroll-mt-20 space-y-4 xl:w-80"
+        className="card scroll-mt-20 space-y-4"
         aria-label="Tooth details"
       >
         {selected.length === 0 ? (
