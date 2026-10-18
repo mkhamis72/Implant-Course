@@ -1,4 +1,5 @@
 import type { Client } from 'pg';
+import { actAs, asPostgres } from './helpers';
 
 export async function makePatient(c: Client, name = 'Inventory Patient'): Promise<string> {
   const { rows } = await c.query('insert into public.patients (full_name) values ($1) returning id', [name]);
@@ -130,4 +131,16 @@ export async function addTalk(
     [a.session, a.start ?? '09:00', a.end ?? '10:00', a.lecturer, a.topic ?? 'Sinus lift basics'],
   );
   return rows[0].id;
+}
+
+/**
+ * A failure recorded before failure details existed (the removed record_followup): a failed follow-up and a
+ * failed implant and tooth, no details. Writes as postgres, then acts as `user` again.
+ */
+export async function legacyFailure(c: Client, site: string, date: string, user: string): Promise<void> {
+  await asPostgres(c);
+  await c.query(`insert into public.implant_followups (site_id, date, check_type, outcome) values ($1, $2::date, '3-month', 'failed')`, [site, date]);
+  const { rows } = await c.query(`update public.implant_sites set state = 'failed' where id = $1 returning patient_id, tooth`, [site]);
+  await c.query(`select app_private.set_tooth($1, $2::smallint, 'failed')`, [rows[0].patient_id, rows[0].tooth]);
+  await actAs(c, user);
 }

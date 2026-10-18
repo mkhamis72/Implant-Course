@@ -93,7 +93,7 @@ describe('failed teeth', () => {
       const lot = await receive(c, product, 1);
       const [patient, delegate] = [await makePatient(c), await makeDelegate(c)];
       const site = await place(c, { patient, tooth: 36, product, lot, delegate, supervisor: users.organizer });
-      await c.query("select public.record_followup($1, public.cairo_today(), 'Review', 'failed')", [site]);
+      await c.query(`select public.record_visit($1, public.cairo_today(), null, 'Review', 'attended', 'failed', '{"failure_type":"lost","failure_reason":"no_osseointegration"}'::jsonb, '')`, [site]);
       const upd = await c.query(
         "update public.tooth_status set status = 'missing' where patient_id = $1 and tooth = 36 returning status",
         [patient],
@@ -137,7 +137,7 @@ describe('recall and history', () => {
       const [patient, delegate] = [await makePatient(c), await makeDelegate(c)];
       const site = await place(c, { patient, tooth: 36, product: implant, lot, delegate, supervisor: users.organizer });
       await c.query("select public.fit_component(p_site => $1, p_type => 'cover_screw', p_fitted_on => public.cairo_today(), p_by_delegate => $2)", [site, delegate]);
-      await c.query("select public.record_followup($1, public.cairo_today(), 'Review', 'integrated')", [site]);
+      await c.query("select public.record_visit($1, public.cairo_today(), null, 'Review', 'attended', 'integrated', '{}'::jsonb, '')", [site]);
       const { rows } = await c.query('select distinct table_name from public.patient_history($1) order by 1', [patient]);
       expect(rows.map((r) => r.table_name)).toEqual(expect.arrayContaining(['implant_followups', 'site_components']));
     });

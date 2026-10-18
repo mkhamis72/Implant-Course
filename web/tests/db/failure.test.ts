@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs } from './helpers';
-import { makeDelegate, makePatient, makeProduct, place, receive } from './fixtures';
+import { legacyFailure, makeDelegate, makePatient, makeProduct, place, receive } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -54,8 +54,8 @@ describe('record_failure', () => {
       await refused(c, () => recordFailure(c, s.site, null, 'lost', 'fracture'), /Enter the failure date/);
       await refused(c, async () => recordFailure(c, s.site, await daysAgo(c, 1), 'gone', 'fracture'), /Choose the failure type/);
       await refused(c, async () => recordFailure(c, s.site, await daysAgo(c, 1), 'lost', 'bad luck'), /Choose the failure reason/);
-      // An old failure: failed through record_followup, no details yet.
-      await c.query(`select public.record_followup($1, public.cairo_today(), '3-month', 'failed', '')`, [s.site]);
+      // An old failure, recorded before failure details existed.
+      await legacyFailure(c, s.site, await daysAgo(c, 0), users.organizer);
       expect((await site(c, s.site)).failure_type).toBeNull();
       await recordFailure(c, s.site, await daysAgo(c, 1), 'lost', 'no_osseointegration');
       await refused(c, async () => recordFailure(c, s.site, await daysAgo(c, 1), 'lost', 'other'), /failure is already recorded/);
@@ -108,7 +108,7 @@ describe('failure details on an earlier implant of a re-implanted tooth', () => 
   it('record_failure on an old detail-less failure keeps the tooth as the newer implant left it', async () => {
     await withTx(async (c) => {
       const s = await placedSite(c);
-      await c.query(`select public.record_followup($1, $2::date, '3-month', 'failed', '')`, [s.site, await daysAgo(c, 10)]);
+      await legacyFailure(c, s.site, await daysAgo(c, 10), users.organizer);
       await placeAgain(c, s);
       await recordFailure(c, s.site, await daysAgo(c, 10), 'lost', 'no_osseointegration');
       expect(await site(c, s.site)).toMatchObject({ state: 'failed', failure_type: 'lost' });
@@ -134,7 +134,7 @@ describe('failure through a visit', () => {
   it('fills in the details of an implant that failed without them', async () => {
     await withTx(async (c) => {
       const s = await placedSite(c);
-      await c.query(`select public.record_followup($1, $2::date, '3-month', 'failed', '')`, [s.site, await daysAgo(c, 6)]);
+      await legacyFailure(c, s.site, await daysAgo(c, 6), users.organizer);
       expect((await site(c, s.site)).failure_type).toBeNull();
       const on = await daysAgo(c, 6);
       await visitOn(c, s.site, await daysAgo(c, 1), { failed_on: on, failure_type: 'removed', failure_reason: 'peri_implantitis' });

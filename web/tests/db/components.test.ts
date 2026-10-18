@@ -90,8 +90,11 @@ describe('follow-ups', () => {
   it('a failed follow-up marks the implant and tooth failed and frees the tooth', async () => {
     await withTx(async (c) => {
       const s = await placed(c);
-      await c.query("select public.record_followup($1, current_date, '2-week', 'ok')", [s.site]);
-      await c.query("select public.record_followup($1, current_date, '3-month', 'failed', 'Mobile')", [s.site]);
+      await c.query("select public.record_visit($1, public.cairo_today(), null, '2-week', 'attended', 'ok', '{}'::jsonb, '')", [s.site]);
+      await c.query(
+        `select public.record_visit($1, public.cairo_today(), null, '3-month', 'attended', 'failed', '{"failure_type":"lost","failure_reason":"no_osseointegration"}'::jsonb, 'Mobile')`,
+        [s.site],
+      );
       const site = await c.query('select state from public.implant_sites where id = $1', [s.site]);
       expect(site.rows[0].state).toBe('failed');
       const tooth = await c.query('select status from public.tooth_status where patient_id = $1 and tooth = 36', [s.patient]);
@@ -106,11 +109,15 @@ describe('follow-ups', () => {
       const s = await placed(c);
       await refused(
         c,
-        () => c.query("select public.record_followup($1, current_date - 30, '2-week', 'ok')", [s.site]),
+        () => c.query("select public.record_visit($1, public.cairo_today() - 30, null, '2-week', 'attended', 'ok', '{}'::jsonb, '')", [s.site]),
         /cannot be before the implant was placed/,
       );
       const planned = (await c.query('select public.plan_implant($1, 11::smallint) as id', [s.patient])).rows[0].id;
-      await refused(c, () => c.query("select public.record_followup($1, current_date, 'x', 'ok')", [planned]), /placed implants/);
+      await refused(
+        c,
+        () => c.query("select public.record_visit($1, public.cairo_today(), null, 'x', 'attended', 'ok', '{}'::jsonb, '')", [planned]),
+        /recorded for placed implants/,
+      );
     });
   });
 });

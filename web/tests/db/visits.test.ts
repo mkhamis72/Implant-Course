@@ -124,15 +124,13 @@ describe('record_visit', () => {
     });
   });
 
-  it('needs Edit on Patients; record_followup still works for the previous app version', async () => {
+  it('needs Edit on Patients; record_followup is gone (0051)', async () => {
     await withTx(async (c) => {
       const { site } = await placedSite(c);
       await actAs(c, users.viewer);
       await refused(c, () => recordVisit(c, site), /permission to edit Patients/);
-      await actAs(c, users.organizer);
-      await c.query(`select public.record_followup($1, public.cairo_today(), '3-month', 'ok', '')`, [site]);
-      const { rows } = await c.query('select visit_key, attendance, outcome from public.implant_followups where site_id = $1', [site]);
-      expect(rows).toEqual([{ visit_key: null, attendance: null, outcome: 'ok' }]);
+      await asPostgres(c);
+      expect((await c.query(`select to_regproc('public.record_followup') as f`)).rows[0].f).toBeNull();
     });
   });
 

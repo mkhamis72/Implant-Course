@@ -21,7 +21,7 @@ test('filters patients by implant stage and shows the matching teeth', async ({ 
 
   const placeWith = async (name: string, tooth: number, component: string) => {
     const patient = await seedPatient(api, name);
-    const { data: site, error } = await api.rpc('place_implant', {
+    const { data: site, error } = await api.rpc('place_implant_v2', {
       p_patient: patient, p_tooth: tooth, p_product: stock.productId, p_lot: stock.lotId,
       p_placed_on: today, p_placing_delegate: delegate, p_supervisor: me,
     });

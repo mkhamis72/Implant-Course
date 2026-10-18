@@ -50,17 +50,18 @@ describe('ISQ and bone type at placement', () => {
     });
   });
 
-  it('the old 13-argument place_implant call still works and stores no ISQ', async () => {
+  it('a call without ISQ and bone type stores neither; the old 13-argument place_implant is gone (0052)', async () => {
     await withTx(async (c) => {
       const w = await world(c);
       const patient = await makePatient(c, 'Zz Report Old Call');
       const { rows } = await c.query(
-        `select public.place_implant(p_patient => $1, p_tooth => 36::smallint, p_product => $2, p_lot => $3,
+        `select public.place_implant_v2(p_patient => $1, p_tooth => 36::smallint, p_product => $2, p_lot => $3,
            p_placed_on => '2026-01-10', p_placing_delegate => $4, p_supervisor => $5, p_torque => 30, p_technique => 'free_hand') as id`,
         [patient, w.product, w.lot, w.d1, users.organizer],
       );
       const s = await c.query('select torque_ncm::float as t, isq, bone_type from public.implant_sites where id = $1', [rows[0].id]);
       expect(s.rows[0]).toEqual({ t: 30, isq: null, bone_type: null });
+      expect((await c.query(`select to_regproc('public.place_implant') as f`)).rows[0].f).toBeNull();
     });
   });
 });

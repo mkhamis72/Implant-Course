@@ -9,6 +9,8 @@ import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
 
 const FAILURE_FIELD_LABELS: Record<string, string> = { failed_on: 'failure date', failure_type: 'failure type', failure_reason: 'failure reason', failure_notes: 'failure notes' };
 
+// diabetes, smoker, bisphosphonates, anticoagulants, radiotherapy_head_neck and osteoporosis were dropped in 0050;
+// their labels stay so older History entries still name the change.
 const FIELD_LABELS: Record<string, string> = {
   full_name: 'name', file_no: 'file number', dob: 'date of birth', sex: 'sex', phone: 'phone', email: 'email',
   address: 'address', allergies: 'allergies', medications: 'medications', diabetes: 'diabetes', smoker: 'smoking',
