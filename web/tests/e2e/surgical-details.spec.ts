@@ -24,8 +24,9 @@ test('records surgical details and a graft; Implants tab and History follow', as
   await page.goto(`/patients/${patientId}?tooth=36`);
   const panel = page.getByRole('complementary', { name: 'Tooth details' });
   const box = panel.getByTestId('surgical-details');
-  await box.locator('summary').click();
-  await expect(box.getByText('0 of 9 recorded')).toBeVisible();
+  const tab = panel.getByRole('tab', { name: /Surgical details/ });
+  await expect(tab).toHaveAccessibleName('Surgical details 0 of 9 recorded');
+  await tab.click();
 
   await box.getByRole('button', { name: 'Edit surgical details' }).click();
   await box.getByRole('combobox', { name: 'Placement timing' }).selectOption('delayed');
@@ -38,7 +39,7 @@ test('records surgical details and a graft; Implants tab and History follow', as
   await box.getByRole('combobox', { name: 'Primary closure' }).selectOption('yes');
   await box.getByRole('combobox', { name: 'Grafting performed' }).selectOption('yes');
   await box.getByRole('button', { name: 'Save surgical details' }).click();
-  await expect(box.getByText('9 of 9 recorded')).toBeVisible();
+  await expect(tab).toHaveAccessibleName('Surgical details 9 of 9 recorded');
   await expect(box).toContainText('Grafting is marked as performed, but no graft is recorded.');
 
   await box.getByRole('button', { name: 'Add graft' }).click();

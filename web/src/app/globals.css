@@ -251,7 +251,8 @@
   .tab:hover {
     color: var(--color-ink);
   }
-  .tab[aria-current="page"] {
+  .tab[aria-current="page"],
+  .tab[aria-selected="true"] {
     border-bottom-color: var(--color-accent);
     color: var(--color-accent-strong);
     font-weight: 600;

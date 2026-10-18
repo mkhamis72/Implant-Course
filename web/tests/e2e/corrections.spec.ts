@@ -30,7 +30,7 @@ function panel(page: Page) {
 test('corrects the batch used for an implant; stock and recall follow', async ({ page }) => {
   const s = await placedImplant(page);
   await page.goto(`/patients/${s.patientId}?tooth=36`);
-  await panel(page).getByText('Corrections').click();
+  await panel(page).getByRole('tab', { name: 'Corrections' }).click();
   await page.getByLabel('Correct batch').selectOption({ label: `Lot ${s.right} · 2 left` });
   await page.getByLabel('Reason for correction').fill('Wrong sticker scanned');
   await page.getByRole('button', { name: 'Correct batch' }).click();
@@ -48,7 +48,7 @@ test('corrects the placement date and delegate; History names the change', async
   const rightName = uniqueName('Dr Right');
   const right = await seedDelegate(s.api, rightName);
   await page.goto(`/patients/${s.patientId}?tooth=36`);
-  await panel(page).getByText('Corrections').click();
+  await panel(page).getByRole('tab', { name: 'Corrections' }).click();
   const details = page.getByRole('group', { name: 'Placement details' });
   await details.getByLabel('Placement date').fill('2026-01-15');
   await details.getByRole('combobox', { name: 'Placed by' }).selectOption(right);
@@ -94,7 +94,7 @@ test('corrects the batch of a component (I7)', async ({ page }) => {
   });
   expect(error).toBeNull();
   await page.goto(`/patients/${s.patientId}?tooth=36`);
-  await panel(page).getByText('Corrections').click();
+  await panel(page).getByRole('tab', { name: 'Corrections' }).click();
   const what = page.getByLabel('What to correct');
   const value = await what.locator('option', { hasText: 'Healing abutment' }).getAttribute('value');
   await what.selectOption(value!);

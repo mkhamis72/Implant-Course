@@ -10,15 +10,16 @@ import {
 import { Field, Footer, useSubmit } from './implant-forms';
 import { saveComplication, voidComplication } from './outcome-actions';
 
-type Props = { site: ImplantSite; patientId: string; editable: boolean };
+// bare: inside the Complications tab, which names the section (no heading).
+type Props = { site: ImplantSite; patientId: string; editable: boolean; bare?: boolean };
 
-export function Complications({ site, patientId, editable }: Props) {
+export function Complications({ site, patientId, editable, bare = false }: Props) {
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const live = (site.complications ?? []).filter((c) => !c.voided_at);
   const ordered = [...live.filter(isOpen), ...live.filter((c) => !isOpen(c))];
   return (
     <div data-testid="complications" className="space-y-2">
-      <h4 className="font-medium">Complications</h4>
+      {!bare && <h4 className="font-medium">Complications</h4>}
       {ordered.length === 0 && editing !== 'new' && <p className="text-muted">None recorded.</p>}
       <ul className="space-y-1">
         {ordered.map((c) => (

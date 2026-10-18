@@ -126,7 +126,18 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
   );
 }
 
-export function Corrections({ patientId, site, data }: { patientId: string; site: ImplantSite; data: ChartData }) {
+/** bare: inside the Corrections tab (no collapsible wrapper). */
+function Shell({ bare, children }: { bare: boolean; children: React.ReactNode }) {
+  if (bare) return <div className="text-sm">{children}</div>;
+  return (
+    <details className="rounded border border-line p-2 text-sm">
+      <summary className="cursor-pointer font-medium">Corrections</summary>
+      <div className="mt-3">{children}</div>
+    </details>
+  );
+}
+
+export function Corrections({ patientId, site, data, bare = false }: { patientId: string; site: ImplantSite; data: ChartData; bare?: boolean }) {
   const { error, ok, pending, run } = useRun();
   const stockComponents = site.components.filter((c) => !c.voided_at && c.stock_lot_id && c.product);
   const [target, setTarget] = useState('implant');
@@ -161,9 +172,8 @@ export function Corrections({ patientId, site, data }: { patientId: string; site
   }
 
   return (
-    <details className="rounded border border-line p-2 text-sm">
-      <summary className="cursor-pointer font-medium">Corrections</summary>
-      <div className="mt-3 space-y-4">
+    <Shell bare={bare}>
+      <div className="space-y-4">
         <PlacementDetails patientId={patientId} site={site} data={data} run={run} pending={pending} />
         {site.product && (
           <div className="space-y-2">
@@ -255,6 +265,6 @@ export function Corrections({ patientId, site, data }: { patientId: string; site
         {error && <p role="alert" className="text-bad">{error}</p>}
         {ok && <p role="status" className="text-ok">{ok}</p>}
       </div>
-    </details>
+    </Shell>
   );
 }

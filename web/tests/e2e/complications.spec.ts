@@ -25,6 +25,7 @@ const panel = (page: Page) => page.getByRole('complementary', { name: 'Tooth det
 test('adds and resolves a complication; the chart, Implants tab and History follow', async ({ page }) => {
   const { patientId } = await placedImplant(page);
   await page.goto(`/patients/${patientId}?tooth=36`);
+  await panel(page).getByRole('tab', { name: /Complications/ }).click();
   const box = panel(page).getByTestId('complications');
   await box.getByRole('button', { name: 'Add complication' }).click();
   await box.getByRole('combobox', { name: 'Category' }).selectOption('biological');
@@ -38,6 +39,7 @@ test('adds and resolves a complication; the chart, Implants tab and History foll
   await expect(page.getByTestId('open-complications')).toHaveText('1');
 
   await page.goto(`/patients/${patientId}?tooth=36`);
+  await panel(page).getByRole('tab', { name: /Complications/ }).click();
   await box.getByRole('button', { name: 'Edit complication' }).click();
   await box.getByLabel('Resolved on').fill(today());
   await box.getByRole('button', { name: 'Save complication' }).click();
