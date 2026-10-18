@@ -96,7 +96,7 @@ describe('delegate report', () => {
         patient: b.patient, product: b.product, lot: b.lot, delegate: b.delegate, supervisor: users.organizer,
         tooth: 36, slot: b.slot, assistant,
       });
-      await c.query("select public.record_followup($1, current_date, '2-week', 'ok')", [site]);
+      await c.query("select public.record_visit($1, public.cairo_today(), null, '2-week', 'attended', 'ok', '{}'::jsonb, '')", [site]);
       const mine = await c.query('select role, course_name, tooth, state, lot_no, last_outcome from public.delegate_report($1)', [b.delegate]);
       expect(mine.rows).toEqual([{ role: 'placing', course_name: 'Test Course', tooth: 36, state: 'placed', lot_no: 'PL-1', last_outcome: 'ok' }]);
       const theirs = await c.query('select role from public.delegate_report($1)', [assistant]);

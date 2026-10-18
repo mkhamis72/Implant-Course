@@ -17,7 +17,7 @@ test('shows placed and assisted implants with totals, and exports CSV', async ({
   const me = (await api.auth.getUser()).data.user!.id;
   const today = new Date().toISOString().slice(0, 10);
   for (const [tooth, placing, assisting, technique] of [[36, delegate, helper, 'guided'], [46, helper, delegate, 'free_hand']] as const) {
-    const { error } = await api.rpc('place_implant', {
+    const { error } = await api.rpc('place_implant_v2', {
       p_patient: patientId, p_tooth: tooth, p_product: stock.productId, p_lot: stock.lotId, p_placed_on: today,
       p_placing_delegate: placing, p_assisting_delegate: assisting, p_supervisor: me, p_technique: technique,
     });

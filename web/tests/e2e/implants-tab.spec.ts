@@ -12,7 +12,7 @@ test('lists the patient’s implants with who placed them, linking back to the c
   await login(page, TEST_USERS.organizer.email);
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Tab patient') });
   const me = (await api.auth.getUser()).data.user!.id;
-  const { error } = await api.rpc('place_implant', {
+  const { error } = await api.rpc('place_implant_v2', {
     p_patient: patientId, p_tooth: 45, p_product: stock.productId, p_lot: stock.lotId,
     p_placed_on: new Date().toISOString().slice(0, 10), p_placing_delegate: delegate, p_supervisor: me,
   });

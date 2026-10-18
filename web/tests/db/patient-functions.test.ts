@@ -69,7 +69,7 @@ describe('patient_history', () => {
       const id = await add(c, 'Zz History Patient');
       const other = await add(c, 'Zz Other Patient');
       await c.query("update public.patients set phone = '0100' where id = $1", [id]);
-      await c.query("update public.medical_history set diabetes = true where patient_id = $1", [id]);
+      await c.query("update public.medical_history set diabetes_status = 'yes' where patient_id = $1", [id]);
       await c.query("insert into public.tooth_status (patient_id, tooth, status) values ($1, 36, 'missing')", [id]);
       await c.query("insert into public.visit_notes (patient_id, text) values ($1, 'Reviewed')", [id]);
       await c.query("insert into public.tooth_status (patient_id, tooth, status) values ($1, 11, 'missing')", [other]);

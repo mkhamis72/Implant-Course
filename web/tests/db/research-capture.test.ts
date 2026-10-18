@@ -78,49 +78,33 @@ describe('medical history: tri-state risk factors', () => {
     });
   });
 
-  it('release window: an old-version boolean write reaches the new column; other saves leave it alone', async () => {
+  it('the old booleans and their sync trigger are gone (0050)', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.organizer);
-      const p = await makePatient(c, 'Zz Tristate Sync');
-      const set = (sql: string) => c.query(`update public.medical_history set ${sql} where patient_id = $1`, [p]);
-      await set('smoker = true, diabetes = true, bisphosphonates = true, anticoagulants = true, radiotherapy_head_neck = true, osteoporosis = true');
-      expect(await history(c, p)).toMatchObject({
-        smoking: 'current', diabetes_status: 'yes', bisphosphonates_status: 'yes', anticoagulants_status: 'yes',
-        radiotherapy_status: 'yes', osteoporosis_status: 'yes',
-      });
-      await set('smoker = false, diabetes = false');
-      expect(await history(c, p)).toMatchObject({ smoking: 'never', diabetes_status: 'no' });
-      // The new app sets a value; an old-version save that doesn't change the boolean leaves it.
-      await set(`smoking = 'former'`);
-      await set(`smoker = false, notes = 'old version save'`);
-      expect((await history(c, p)).smoking).toBe('former');
+      await asPostgres(c);
+      const cols = await c.query(
+        `select column_name from information_schema.columns where table_schema = 'public' and table_name = 'medical_history'
+           and column_name in ('diabetes', 'smoker', 'bisphosphonates', 'anticoagulants', 'radiotherapy_head_neck', 'osteoporosis')`,
+      );
+      expect(cols.rows).toEqual([]);
+      const sync = await c.query(`select 1 from pg_trigger where tgrelid = 'public.medical_history'::regclass and tgname = 'medical_history_sync'`);
+      expect(sync.rows).toEqual([]);
+      expect((await c.query(`select to_regprocedure('app_private.medical_history_sync()') as f`)).rows[0].f).toBeNull();
     });
   });
 
-  it('release window: an old-version untick of smoker clears the cigarettes count', async () => {
-    await withTx(async (c) => {
-      await actAs(c, users.organizer);
-      const p = await makePatient(c, 'Zz Tristate Untick');
-      const set = (sql: string) => c.query(`update public.medical_history set ${sql} where patient_id = $1`, [p]);
-      await set('smoker = true');
-      await set('cigarettes_per_day = 10');
-      expect((await history(c, p)).cigarettes_per_day).toBe(10);
-      await set('smoker = false');
-      expect(await history(c, p)).toMatchObject({ smoking: 'never', cigarettes_per_day: null });
-    });
-  });
-
-  it('restore safety: inserting a row with a stale boolean keeps its tri-state value', async () => {
+  it('a future HbA1c date is refused on insert too (restoring a dump)', async () => {
     await withTx(async (c) => {
       await actAs(c, users.organizer);
       const p = await makePatient(c, 'Zz Tristate Restore');
       await asPostgres(c);
       await c.query('delete from public.medical_history where patient_id = $1', [p]);
-      await c.query(
-        `insert into public.medical_history (patient_id, smoker, smoking, diabetes, diabetes_status) values ($1, true, 'never', true, null)`,
-        [p],
+      await refused(
+        c,
+        () => c.query(`insert into public.medical_history (patient_id, hba1c, hba1c_date) values ($1, 6.5, '2999-01-01')`, [p]),
+        /HbA1c date/,
       );
-      expect(await history(c, p)).toMatchObject({ smoking: 'never', diabetes_status: 'yes' });
+      await c.query(`insert into public.medical_history (patient_id, smoking, hba1c, hba1c_date) values ($1, 'never', 6.5, '2026-01-10')`, [p]);
+      expect(await history(c, p)).toMatchObject({ smoking: 'never', hba1c: 6.5, hba1c_date: '2026-01-10' });
     });
   });
 });

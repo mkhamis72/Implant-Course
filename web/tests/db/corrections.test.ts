@@ -73,11 +73,14 @@ describe('correcting the batch used', () => {
   });
 });
 
+const failedVisit = `select public.record_visit($1, public.cairo_today(), null, '3-month', 'attended', 'failed',
+  '{"failure_type":"lost","failure_reason":"no_osseointegration"}'::jsonb, '') as id`;
+
 describe('voiding follow-ups', () => {
   it('voiding the failure restores the implant and tooth', async () => {
     await withTx(async (c) => {
       const s = await placed(c);
-      const f = (await c.query("select public.record_followup($1, current_date, '3-month', 'failed') as id", [s.site])).rows[0].id;
+      const f = (await c.query(failedVisit, [s.site])).rows[0].id;
       await c.query("select public.void_followup($1, 'Wrong patient clicked')", [f]);
       expect((await c.query('select state from public.implant_sites where id = $1', [s.site])).rows[0].state).toBe('placed');
       const tooth = await c.query('select status from public.tooth_status where patient_id = $1 and tooth = 36', [s.patient]);
@@ -90,7 +93,7 @@ describe('voiding follow-ups', () => {
   it('refuses to undo a failure once the tooth was re-planned', async () => {
     await withTx(async (c) => {
       const s = await placed(c);
-      const f = (await c.query("select public.record_followup($1, current_date, '3-month', 'failed') as id", [s.site])).rows[0].id;
+      const f = (await c.query(failedVisit, [s.site])).rows[0].id;
       await c.query('select public.plan_implant($1, 36::smallint)', [s.patient]);
       await refused(c, () => c.query("select public.void_followup($1, 'Oops oops')", [f]), /new implant is already recorded/);
     });
@@ -165,7 +168,7 @@ describe('correcting the placement details', () => {
       const base = { placing: s.delegate, supervisor: users.organizer };
       await refused(c, () => correct(c, s.site, { ...base, placedOn: '2999-01-01' }), /today or earlier/);
       await correct(c, s.site, { ...base, placedOn: '2026-01-10' });
-      await c.query("select public.record_followup($1, '2026-02-01', '1-week', 'ok', '')", [s.site]);
+      await c.query("select public.record_visit($1, '2026-02-01', null, '1-week', 'attended', 'ok', '{}'::jsonb, '')", [s.site]);
       await refused(c, () => correct(c, s.site, { ...base, placedOn: '2026-03-01' }), /after its first component, follow-up, complication or failure/);
       await correct(c, s.site, { ...base, placedOn: '2026-01-20' });
 

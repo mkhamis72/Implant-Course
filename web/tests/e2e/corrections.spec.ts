@@ -15,7 +15,7 @@ async function placedImplant(page: Page) {
   await login(page, TEST_USERS.organizer.email);
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Fix patient') });
   const me = (await api.auth.getUser()).data.user!.id;
-  const { data: siteId, error } = await api.rpc('place_implant', {
+  const { data: siteId, error } = await api.rpc('place_implant_v2', {
     p_patient: patientId, p_tooth: 36, p_product: stock.productId, p_lot: stock.lotId,
     p_placed_on: new Date().toISOString().slice(0, 10), p_placing_delegate: delegate, p_supervisor: me,
   });
@@ -62,12 +62,17 @@ test('corrects the placement date and delegate; History names the change', async
   await expect(page.getByRole('main')).toContainText('Implant on tooth 36 corrected: placement date, placed by');
 });
 
-test('voids a mistaken failure and the tooth goes back to "implant placed"', async ({ page }) => {
-  const s = await placedImplant(page);
-  const { error } = await s.api.rpc('record_followup', {
-    p_site: s.siteId, p_date: new Date().toISOString().slice(0, 10), p_check_type: '3-month', p_outcome: 'failed',
+async function failedVisit(api: Awaited<ReturnType<typeof placedImplant>>['api'], site: string) {
+  const { error } = await api.rpc('record_visit', {
+    p_site: site, p_date: new Date().toISOString().slice(0, 10), p_visit_key: null, p_check_type: '3-month', p_attendance: 'attended',
+    p_outcome: 'failed', p_findings: { failure_type: 'lost', failure_reason: 'no_osseointegration' }, p_notes: '',
   });
   expect(error).toBeNull();
+}
+
+test('voids a mistaken failure and the tooth goes back to "implant placed"', async ({ page }) => {
+  const s = await placedImplant(page);
+  await failedVisit(s.api, s.siteId);
   await page.goto(`/patients/${s.patientId}?tooth=36`);
   await panel(page).getByText('Earlier implants on this tooth (1)').click();
   await panel(page).getByText('Corrections').click();
@@ -105,9 +110,7 @@ test('corrects the batch of a component (I7)', async ({ page }) => {
 
 test('corrects the batch of a failed implant (I7)', async ({ page }) => {
   const s = await placedImplant(page);
-  await s.api.rpc('record_followup', {
-    p_site: s.siteId, p_date: new Date().toISOString().slice(0, 10), p_check_type: '3-month', p_outcome: 'failed',
-  });
+  await failedVisit(s.api, s.siteId);
   await page.goto(`/patients/${s.patientId}?tooth=36`);
   await panel(page).getByText('Earlier implants on this tooth (1)').click();
   await panel(page).getByText('Corrections').click();

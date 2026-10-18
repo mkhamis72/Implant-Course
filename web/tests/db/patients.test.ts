@@ -17,8 +17,8 @@ describe('patients', () => {
       const { rows } = await c.query('select file_no, created_by from public.patients where id = $1', [id]);
       expect(rows[0].file_no).toMatch(/^P\d{5,}$/);
       expect(rows[0].created_by).toBe(users.organizer);
-      const mh = await c.query('select diabetes, allergies from public.medical_history where patient_id = $1', [id]);
-      expect(mh.rows).toEqual([{ diabetes: false, allergies: '' }]);
+      const mh = await c.query('select diabetes_status, allergies from public.medical_history where patient_id = $1', [id]);
+      expect(mh.rows).toEqual([{ diabetes_status: null, allergies: '' }]);
     });
   });
 

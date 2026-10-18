@@ -31,7 +31,7 @@ test('refuses to delete a patient with a placed implant', async ({ page }) => {
   const name = uniqueName('Keep me');
   const patientId = await createPatientViaUi(page, { full_name: name });
   const me = (await api.auth.getUser()).data.user!.id;
-  const { error } = await api.rpc('place_implant', {
+  const { error } = await api.rpc('place_implant_v2', {
     p_patient: patientId, p_tooth: 36, p_product: stock.productId, p_lot: stock.lotId,
     p_placed_on: new Date().toISOString().slice(0, 10), p_placing_delegate: delegate, p_supervisor: me,
   });
