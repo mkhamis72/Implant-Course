@@ -84,5 +84,9 @@ describe('ChartPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Tooth 35, / }));
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('34');
     expect(screen.getByRole('tab', { name: /^Restoration/ })).toHaveAttribute('aria-selected', 'true');
+    // A second tap on the pontic, with its restoration open, selects the tooth itself (touch has no Shift).
+    fireEvent.click(screen.getByRole('button', { name: /^Tooth 35, / }));
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('35');
+    expect(screen.queryByRole('tab', { name: /^Restoration/ })).toBeNull();
   });
 });

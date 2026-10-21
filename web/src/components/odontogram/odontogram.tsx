@@ -19,6 +19,8 @@ type Props = {
   alerts?: Partial<Record<number, boolean>>;
   /** Current restorations, one bar each. */
   spans?: readonly Span[];
+  /** The restoration whose panel is open: its covered teeth then click like any tooth (touch has no Shift). */
+  openSpan?: string | null;
 };
 
 const BOXES = toothLayout();
@@ -33,6 +35,7 @@ function Tooth({
   badge,
   alert,
   span,
+  spanOpen,
 }: {
   box: ToothBox;
   status: ToothState;
@@ -41,15 +44,17 @@ function Tooth({
   badge: string | undefined;
   alert: boolean;
   span: Span | undefined;
+  spanOpen: boolean;
 }) {
   const transform =
     box.jaw === 'upper' ? `translate(${box.x} ${box.y})` : `translate(${box.x} ${box.y + TOOTH_H}) scale(1 -1)`;
   const numberY = box.jaw === 'upper' ? TOOTH_H + 18 : box.y - 9;
   // A pontic or cantilever: covered by a restoration but without an implant of its own.
   const pontic = span !== undefined && !span.implantTeeth.includes(box.fdi);
-  // A covered tooth opens its restoration (a pontic through the first implant); Shift/Ctrl keeps plain multi-select.
+  // A covered tooth opens its restoration (a pontic through the first implant). Shift/Ctrl, or a second click while
+  // that restoration is open, selects the tooth itself like any other.
   const select = (e: MouseEvent | KeyboardEvent) => {
-    if (span && !additive(e)) onSelect(pontic ? span.implantTeeth[0] : box.fdi, false, 'restoration');
+    if (span && !spanOpen && !additive(e)) onSelect(pontic ? span.implantTeeth[0] : box.fdi, false, 'restoration');
     else onSelect(box.fdi, additive(e));
   };
   const outline = selected ? 'var(--color-accent)' : pontic ? 'var(--color-line-strong)' : 'transparent';
@@ -115,13 +120,16 @@ function Tooth({
 function SpanBar({ span, onSelect }: { span: Span; onSelect: Props['onSelect'] }) {
   const { x, y, width } = spanBox(span.teeth);
   const open = () => onSelect(span.implantTeeth[0], false, 'restoration');
+  // A temporary is drawn lighter: a soft fill with an outline; the label keeps full contrast.
+  const [fill, stroke, ink] = span.temporary
+    ? ['var(--color-accent-soft)', 'var(--color-accent)', 'var(--color-accent-strong)']
+    : ['var(--color-accent)', 'transparent', 'var(--color-surface)'];
   return (
     <g
       role="button"
       tabIndex={0}
       aria-label={span.temporary ? `${span.label}, temporary` : span.label}
       data-span={span.id}
-      opacity={span.temporary ? 0.5 : undefined}
       className="cursor-pointer outline-none [&:focus-visible>rect]:stroke-ink"
       onClick={open}
       onKeyDown={(e) => {
@@ -131,16 +139,16 @@ function SpanBar({ span, onSelect }: { span: Span; onSelect: Props['onSelect'] }
         }
       }}
     >
-      <rect x={x + 2} y={y} width={width - 4} height={SPAN_H} rx={SPAN_H / 2} stroke="transparent" strokeWidth={2}
-        style={{ fill: 'var(--color-accent)' }} />
-      <text x={x + width / 2} y={y + SPAN_H - 3} textAnchor="middle" fontSize={9} fontWeight={600} style={{ fill: 'var(--color-surface)' }}>
+      <rect x={x + 2} y={y} width={width - 4} height={SPAN_H} rx={SPAN_H / 2} stroke={stroke} strokeWidth={1.5}
+        style={{ fill }} />
+      <text x={x + width / 2} y={y + SPAN_H - 3} textAnchor="middle" fontSize={9} fontWeight={600} style={{ fill: ink }}>
         {span.label}
       </text>
     </g>
   );
 }
 
-export function Odontogram({ statuses, selected, onSelect, badges, alerts, spans = [] }: Props) {
+export function Odontogram({ statuses, selected, onSelect, badges, alerts, spans = [], openSpan = null }: Props) {
   const spanOf = new Map(spans.flatMap((s) => s.teeth.map((t) => [t, s] as const)));
   return (
     <svg
@@ -160,6 +168,7 @@ export function Odontogram({ statuses, selected, onSelect, badges, alerts, spans
           badge={badges?.[box.fdi]}
           alert={alerts?.[box.fdi] ?? false}
           span={spanOf.get(box.fdi)}
+          spanOpen={openSpan !== null && spanOf.get(box.fdi)?.id === openSpan}
           onSelect={onSelect}
         />
       ))}

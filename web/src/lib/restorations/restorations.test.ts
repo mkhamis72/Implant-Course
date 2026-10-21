@@ -128,7 +128,7 @@ describe('problem schemas', () => {
 });
 
 describe('restorationSpans (odontogram bars)', () => {
-  const sites = [{ id: 's15', tooth: 15 }, { id: 's12', tooth: 12 }, { id: 's22', tooth: 22 }, { id: 's25', tooth: 25 }, { id: 's34', tooth: 34 }, { id: 's36', tooth: 36 }, { id: 's46', tooth: 46 }];
+  const sites = [15, 12, 22, 25, 34, 36, 46].map((t) => ({ id: `s${t}`, tooth: t, state: 'restored' as const }));
   it('one span per current restoration, implants in arch order, labelled by type', () => {
     const spans = restorationSpans([
       r({ id: 'a', type: 'bridge', teeth: [34, 35, 36], site_ids: ['s36', 's34'] }),
@@ -141,6 +141,13 @@ describe('restorationSpans (odontogram bars)', () => {
       { id: 'b', teeth: [15, 14, 13, 12, 11, 21, 22, 23, 24, 25], implantTeeth: [15, 12, 22, 25], label: 'Full arch · 15, 12, 22, 25', temporary: true },
       { id: 'c', teeth: [46], implantTeeth: [46], label: 'Crown', temporary: false },
     ]);
+  });
+  it('leaves out failed and removed implants, and a restoration with no active implant left', () => {
+    const withLost = [...sites, { id: 's35', tooth: 35, state: 'failed' as const }, { id: 's44', tooth: 44, state: 'removed' as const }];
+    expect(restorationSpans([
+      r({ id: 'a', type: 'bridge', teeth: [34, 35, 36], site_ids: ['s34', 's35', 's36'] }),
+      r({ id: 'b', teeth: [44], site_ids: ['s44'] }),
+    ], withLost)).toEqual([{ id: 'a', teeth: [34, 35, 36], implantTeeth: [34, 36], label: 'Bridge 34–36', temporary: false }]);
   });
   it('labels an overdenture by its implants', () => {
     expect(restorationSpans([r({ type: 'overdenture', teeth: [34, 35, 36], site_ids: ['s34', 's36'] })], sites)[0].label).toBe('Overdenture · 34, 36');

@@ -103,9 +103,14 @@ export function currentRestoration(siteId: string, all: Restoration[]): Restorat
 /** A current restoration as the odontogram draws it: one bar under `teeth`. */
 export type RestorationSpan = { id: string; teeth: number[]; implantTeeth: number[]; label: string; temporary: boolean };
 
-/** One span per current restoration; implant teeth in arch order (the first one opens for a pontic). */
-export function restorationSpans(all: Restoration[], sites: readonly { id: string; tooth: number }[]): RestorationSpan[] {
-  const toothOf = new Map(sites.map((s) => [s.id, s.tooth]));
+/**
+ * One span per current restoration; implant teeth in arch order (the first one opens for a pontic). Failed and removed
+ * implants are left out, and a restoration with no active implant left isn't drawn: a bar always opens an implant.
+ */
+export function restorationSpans(
+  all: Restoration[], sites: readonly { id: string; tooth: number; state: string }[],
+): RestorationSpan[] {
+  const toothOf = new Map(sites.filter((s) => s.state === 'placed' || s.state === 'restored').map((s) => [s.id, s.tooth]));
   return all.filter(isCurrent).flatMap((r) => {
     if (r.teeth.length === 0) return [];
     const arch = ARCH_ORDER[jawOf(r.teeth[0])];
