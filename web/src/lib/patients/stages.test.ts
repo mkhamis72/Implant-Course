@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PATIENT_FILTERS, PATIENT_FILTER_LABELS, parseStages, teethByPatient } from './stages';
+import { PATIENT_FILTERS, PATIENT_FILTER_LABELS, parseStages, teethByPatient, toothBoundFilters } from './stages';
 
 describe('parseStages', () => {
   it('keeps known filters once, in list order', () => {
@@ -11,6 +11,16 @@ describe('parseStages', () => {
   it('no longer offers the prosthetic stage (an old link is ignored)', () => {
     expect(PATIENT_FILTERS).not.toContain('prosthetic');
     expect(parseStages('prosthetic')).toEqual([]);
+  });
+  it('accepts the scan / impression filters and labels them', () => {
+    expect(parseStages(['digital_scan', 'impression_pending', 'bogus'])).toEqual(['digital_scan', 'impression_pending']);
+    expect(PATIENT_FILTER_LABELS.digital_scan).toBe('Digital scan');
+    expect(PATIENT_FILTER_LABELS.conventional).toBe('Conventional impression');
+    expect(PATIENT_FILTER_LABELS.impression_pending).toBe('Scan / impression not yet taken');
+  });
+  it('splits tooth-bound filters from the scan filters', () => {
+    expect(toothBoundFilters(['planned', 'digital_scan', 'conventional'])).toEqual(['planned']);
+    expect(toothBoundFilters(['impression_pending'])).toEqual([]);
   });
   it('labels the chart states as the chart does', () => {
     expect(PATIENT_FILTER_LABELS.missing).toBe('Missing');

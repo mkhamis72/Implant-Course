@@ -6,7 +6,17 @@
 export const PATIENT_FILTERS = ['missing', 'extracted', 'planned', 'cover_screw', 'healing_abutment', 'restored', 'failed'] as const;
 export type PatientFilter = (typeof PATIENT_FILTERS)[number];
 
-export const PATIENT_FILTER_LABELS: Record<PatientFilter, string> = {
+/** The scan / impression filters (0054): they match patients, not teeth, so they never add to the Teeth column. */
+export const SCAN_FILTERS = ['digital_scan', 'conventional', 'impression_pending'] as const;
+export type ScanFilter = (typeof SCAN_FILTERS)[number];
+export type ListFilter = PatientFilter | ScanFilter;
+
+export const SCAN_FILTER_LABELS: Record<ScanFilter, string> = {
+  digital_scan: 'Digital scan', conventional: 'Conventional impression', impression_pending: 'Scan / impression not yet taken',
+};
+
+export const PATIENT_FILTER_LABELS: Record<ListFilter, string> = {
+  ...SCAN_FILTER_LABELS,
   missing: 'Missing', extracted: 'To be extracted',
   planned: 'Planned', cover_screw: 'Placed · cover screw', healing_abutment: 'Placed · healing abutment',
   restored: 'Restored', failed: 'Failed / cancelled',
@@ -22,9 +32,14 @@ const SHORT_LABELS: Record<PatientFilter, string> = {
 export const TOOTH_FILTERS: readonly PatientFilter[] = ['missing', 'extracted'];
 
 /** The known filters in a (possibly repeated) query parameter, once each, in list order. */
-export function parseStages(value: string | string[] | undefined): PatientFilter[] {
+export function parseStages(value: string | string[] | undefined): ListFilter[] {
   const given = new Set(Array.isArray(value) ? value : value ? [value] : []);
-  return PATIENT_FILTERS.filter((s) => given.has(s));
+  return [...PATIENT_FILTERS, ...SCAN_FILTERS].filter((s) => given.has(s));
+}
+
+/** The filters that refer to teeth (everything but the scan / impression ones). */
+export function toothBoundFilters(stages: readonly ListFilter[]): PatientFilter[] {
+  return stages.filter((s): s is PatientFilter => !(SCAN_FILTERS as readonly string[]).includes(s));
 }
 
 export type StageSite = { patient_id: string; tooth: number; stage: string };
