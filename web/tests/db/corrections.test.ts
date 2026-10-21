@@ -137,7 +137,7 @@ describe('correcting the placement details', () => {
        f.graft ?? '', f.notes ?? ''],
     );
 
-  it('corrects the date, people and clinical values, leaving stock alone', async () => {
+  it('corrects the date and people (stability values are ignored), leaving stock alone', async () => {
     await withTx(async (c) => {
       const s = await placed(c);
       const right = await makeDelegate(c, 'Zz Right Delegate');
@@ -156,7 +156,7 @@ describe('correcting the placement details', () => {
       );
       expect(rows[0]).toEqual({
         placed_on: '2026-01-15', placing_delegate_id: right, assisting_delegate_id: helper, supervisor_id: sup,
-        torque: 40, isq: 70, bone_type: 'D3', graft: 'Bio-Oss', notes: 'fixed',
+        torque: null, isq: null, bone_type: null, graft: 'Bio-Oss', notes: 'fixed',
       });
       expect(await onHand(c, s.wrongLot)).toBe(before);
     });
