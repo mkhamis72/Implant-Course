@@ -6,6 +6,8 @@ import { requirePermission } from '@/lib/auth/session';
 import { componentSchema, correctPlacementSchema, placeSchema, planSchema, receiveSchema } from '@/lib/inventory/schemas';
 import { TECHNIQUES, type Technique } from '@/lib/inventory/types';
 import { userMessage } from '@/lib/db-errors';
+import { impressionSchema } from '@/lib/implants/impression';
+import { failed, type FormState } from '@/lib/patients/form-state';
 import { correctionSchema, voidSchema } from '@/lib/schedule/schemas';
 
 type Result = { error?: string };
@@ -77,6 +79,17 @@ export async function setTechnique(input: { patientId: string; siteId: string; t
   await requirePermission('patients', 'edit');
   if (!(TECHNIQUES as readonly string[]).includes(input.technique)) return { error: 'Choose Guided or Free hand.' };
   return run(input.patientId, 'set_implant_technique', { p_site: input.siteId, p_technique: input.technique as Technique });
+}
+
+export async function recordImpression(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requirePermission('patients', 'edit');
+  const parsed = impressionSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
+  const p = parsed.data;
+  const result = await run(p.patientId, 'record_impression', {
+    p_site: p.siteId, p_type: p.type, p_taken_on: p.takenOn, p_expected_updated_at: p.expectedUpdatedAt,
+  });
+  return result.error ? failed(result.error, formData) : { ok: 'Saved.' };
 }
 
 export async function fitComponent(input: Record<string, unknown>): Promise<Result> {

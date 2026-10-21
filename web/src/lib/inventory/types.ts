@@ -114,6 +114,8 @@ export type ImplantSite = {
   tooth: number;
   state: SiteState;
   technique: Technique | null;
+  impression_type: 'digital_scan' | 'conventional' | null;
+  impression_taken_on: string | null;
   placed_on: string | null;
   stock_lot_id: string | null;
   torque_ncm: number | null;

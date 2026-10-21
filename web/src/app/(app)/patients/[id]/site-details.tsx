@@ -14,6 +14,7 @@ import { SurgicalDetails } from './surgical-details';
 import { Visits } from './visits';
 import { Complications } from './complications';
 import { FailureBox } from './failure-box';
+import { ImpressionControl } from './impression-control';
 
 // The restorative sequence on an implant; the connection stage covers Ti-base, multi-unit or abutment.
 const STAGES: { label: string; types: ComponentType[] }[] = [
@@ -122,6 +123,9 @@ export function ImplantFacts({ site, patientId, data }: { site: ImplantSite; pat
         )}
         {people.length > 0 && <p className="text-muted">{people.join(', ')}</p>}
         {site.state !== 'removed' && <TechniqueControl site={site} patientId={patientId} editable={data.editable} />}
+        {(site.state === 'placed' || site.state === 'restored') && (
+          <ImpressionControl site={site} patientId={patientId} editable={data.editable} />
+        )}
         {(site.state === 'placed' || site.state === 'restored') && <ComponentTimeline site={site} />}
       </div>
       <FailureBox site={site} patientId={patientId} editable={data.editable} />
