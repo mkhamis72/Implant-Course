@@ -54,6 +54,18 @@ describe('describeChange — implants', () => {
     );
     expect(describeChange(entry({ table_name: 'implant_sites', before, after: { ...before } }))).toBe('Implant on tooth 36 updated');
   });
+  it('labels scan / impression and stability changes', () => {
+    const before = { tooth: 36, state: 'placed', impression_type: null, impression_taken_on: null, torque_ncm: null, isq: null, bone_type: null };
+    expect(describeChange(entry({ table_name: 'implant_sites', before, after: { ...before, impression_type: 'digital_scan', impression_taken_on: '2026-03-10' } }))).toBe(
+      'Implant on tooth 36: scan / impression recorded — Digital scan · 10 Mar 2026',
+    );
+    expect(describeChange(entry({ table_name: 'implant_sites', before: { ...before, impression_type: 'conventional' }, after: before }))).toBe(
+      'Implant on tooth 36: scan / impression cleared',
+    );
+    expect(describeChange(entry({ table_name: 'implant_sites', before, after: { ...before, torque_ncm: 35, isq: 70 } }))).toBe(
+      'Implant on tooth 36: stability recorded — torque, ISQ',
+    );
+  });
 });
 
 describe('describeChange for implant follow-up records', () => {

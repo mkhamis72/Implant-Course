@@ -1,6 +1,6 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs } from './helpers';
+import { withTx, actAs, asPostgres } from './helpers';
 import { makeDelegate, makePatient, makeProduct, place, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
@@ -60,6 +60,24 @@ describe('save_implant_surgery_v2: torque, ISQ and bone type', () => {
       const { site } = await placedSite(c, { torque: 40 });
       await save(c, site, { torque: 45 });
       expect((await stability(c, site)).torque_ncm).toBe(45);
+    });
+  });
+
+  it('leaves the implant row alone when the stability values are unchanged', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedSite(c);
+      await save(c, site, { torque: 35, isq: 72, bone: 'D2' });
+      const audits = async () => {
+        await asPostgres(c);
+        const n = Number((await c.query(`select count(*) as n from public.audit_log where table_name = 'implant_sites' and row_id = $1`, [site])).rows[0].n);
+        await actAs(c, users.organizer);
+        return n;
+      };
+      const before = await audits();
+      await save(c, site, { torque: 35, isq: 72, bone: 'D2', expected: await updatedAt(c, site) });
+      expect(await audits()).toBe(before);
+      await save(c, site, { torque: 36, isq: 72, bone: 'D2', expected: await updatedAt(c, site) });
+      expect(await audits()).toBe(before + 1);
     });
   });
 

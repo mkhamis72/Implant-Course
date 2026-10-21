@@ -64,7 +64,7 @@ describe('record_impression', () => {
     });
   });
 
-  it('refuses a bad date, a planned implant and a stale version', async () => {
+  it('refuses a bad date, a planned or removed implant and a stale version', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
       const patient = await makePatient(c, 'Zz Impression Refuse');
@@ -77,6 +77,11 @@ describe('record_impression', () => {
       await refused(c, () => record(c, site, 'digital_scan', '2026-03-12', '2026-01-01T00:00:00Z'), /changed by someone else/);
       const planned = (await c.query('select public.plan_implant($1, 11::smallint) as id', [patient])).rows[0].id;
       await refused(c, () => record(c, planned, 'digital_scan', '2026-03-12'), /placed implant/);
+      const gone = await s.placeOn(patient, 47);
+      await asPostgres(c);
+      await c.query(`update public.implant_sites set state = 'removed' where id = $1`, [gone]);
+      await actAs(c, users.organizer);
+      await refused(c, () => record(c, gone, 'digital_scan', '2026-03-12'), /placed implant/);
     });
   });
 
