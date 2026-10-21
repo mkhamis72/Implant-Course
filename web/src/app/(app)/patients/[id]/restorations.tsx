@@ -5,12 +5,14 @@ import type { ChartData, ImplantSite, Option } from '@/lib/inventory/types';
 import { todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
 import {
-  ARCH_ORDER, LOADING_LABELS, MATERIALS, MATERIAL_LABELS, PROBLEM_ACTION_LABELS, PROBLEM_TYPE_LABELS, RESTORATION_STAGES,
+  ARCH_ORDER, LOADING_LABELS, MATERIALS, MATERIAL_LABELS, PROBLEM_ACTIONS, PROBLEM_ACTION_LABELS, PROBLEM_TYPES, PROBLEM_TYPE_LABELS, RESTORATION_STAGES,
   RESTORATION_TYPES, RESTORATION_TYPE_LABELS, RETENTIONS, RETENTION_LABELS, STAGE_LABELS,
-  coursesForDate, describeTeeth, isCurrent, jawOf, loadingOf, type CourseOption, type Restoration,
+  coursesForDate, describeTeeth, isCurrent, jawOf, loadingOf, type CourseOption, type Restoration, type RestorationProblem,
 } from '@/lib/restorations/restorations';
 import { Field, Footer, useSubmit } from './implant-forms';
-import { addRestoration, updateRestoration, voidRestoration } from './restoration-actions';
+import {
+  addRestoration, recordRestorationProblem, updateRestoration, updateRestorationProblem, voidRestoration, voidRestorationProblem,
+} from './restoration-actions';
 
 const IN_PLACE = ['placed', 'restored'];
 
@@ -54,6 +56,7 @@ function nameOf(options: Option[], id: string | null, recorded: string | null | 
 export function RestorationCard({ r, patientId, data, editable }: { r: Restoration; patientId: string; data: ChartData; editable: boolean }) {
   const [mode, setMode] = useState<'view' | 'edit' | 'undo'>('view');
   const [reason, setReason] = useState('');
+  const [addingProblem, setAddingProblem] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const current = isCurrent(r);
@@ -96,16 +99,15 @@ export function RestorationCard({ r, patientId, data, editable }: { r: Restorati
       {r.problems.length > 0 && (
         <div>
           <p className="font-medium">Problems</p>
-          <ul className="list-inside list-disc">
-            {r.problems.map((p) => (
-              <li key={p.id}>
-                {PROBLEM_TYPE_LABELS[p.type]} · {formatDate(p.noticed_on)} · {PROBLEM_ACTION_LABELS[p.action]}
-                {p.notes && ` · ${p.notes}`}
-              </li>
-            ))}
+          <ul className="space-y-1">
+            {r.problems.map((p) => <ProblemItem key={p.id} r={r} p={p} patientId={patientId} editable={data.editable} />)}
           </ul>
         </div>
       )}
+      {data.editable && !addingProblem && (
+        <button type="button" className="btn-secondary btn" onClick={() => setAddingProblem(true)}>Record a problem</button>
+      )}
+      {addingProblem && <ProblemForm r={r} patientId={patientId} onDone={() => setAddingProblem(false)} />}
       {editable && mode === 'view' && (
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn-secondary btn" onClick={() => setMode('edit')}>Edit details</button>
@@ -124,6 +126,86 @@ export function RestorationCard({ r, patientId, data, editable }: { r: Restorati
       )}
       {error && <p role="alert" className="text-bad">{error}</p>}
     </div>
+  );
+}
+
+/** One problem line; editors can change it or remove it from the record with a reason. */
+function ProblemItem({ r, p, patientId, editable }: { r: Restoration; p: RestorationProblem; patientId: string; editable: boolean }) {
+  const [mode, setMode] = useState<'view' | 'edit' | 'remove'>('view');
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  function remove() {
+    setError(null);
+    start(async () => {
+      const result = await voidRestorationProblem({ patientId, problemId: p.id, reason });
+      if (result.error) setError(result.error);
+    });
+  }
+  if (mode === 'edit') return <li><ProblemForm r={r} p={p} patientId={patientId} onDone={() => setMode('view')} /></li>;
+  return (
+    <li className="space-y-1">
+      <span>
+        {PROBLEM_TYPE_LABELS[p.type]} · {formatDate(p.noticed_on)} · {PROBLEM_ACTION_LABELS[p.action]}
+        {p.notes && ` · ${p.notes}`}
+      </span>
+      {editable && mode === 'view' && (
+        <span className="ml-2 inline-flex gap-2">
+          <button type="button" className="btn-secondary btn" onClick={() => setMode('edit')}>Edit problem</button>
+          <button type="button" className="btn-secondary btn" onClick={() => setMode('remove')}>Remove problem</button>
+        </span>
+      )}
+      {mode === 'remove' && (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="block">
+            <span className="label">Reason for removing</span>
+            <input className="input" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </label>
+          <button type="button" className="btn-danger btn" disabled={pending} onClick={remove}>Remove from record</button>
+          <button type="button" className="btn-secondary btn" onClick={() => setMode('view')}>Keep</button>
+        </div>
+      )}
+      {error && <p role="alert" className="text-bad">{error}</p>}
+    </li>
+  );
+}
+
+/** Records a problem on a restoration, or edits one (with the version it opened with). */
+function ProblemForm({ r, p, patientId, onDone }: { r: Restoration; p?: RestorationProblem; patientId: string; onDone: () => void }) {
+  const [version] = useState(p?.updated_at ?? '');
+  const today = todayIso();
+  const [v, setV] = useState({
+    type: p?.type ?? '', noticedOn: p?.noticed_on ?? (r.ended_on && r.ended_on < today ? r.ended_on : today),
+    action: p?.action ?? '', notes: p?.notes ?? '',
+  });
+  const { error, pending, submit } = useSubmit(p ? updateRestorationProblem : recordRestorationProblem, onDone);
+  return (
+    <form className="space-y-3 rounded-lg border border-line bg-surface p-3 text-ink" onSubmit={(e) => {
+      e.preventDefault();
+      submit({ patientId, restorationId: r.id, ...(p ? { problemId: p.id, expectedUpdatedAt: version } : {}), ...v });
+    }}>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="Problem" required>
+          <select className="input" aria-required="true" value={v.type} onChange={(e) => setV({ ...v, type: e.target.value })}>
+            <option value="">Choose…</option>
+            {PROBLEM_TYPES.map((t) => <option key={t} value={t}>{PROBLEM_TYPE_LABELS[t]}</option>)}
+          </select>
+        </Field>
+        <Field label="Noticed on" required>
+          <input className="input" type="date" aria-required="true" value={v.noticedOn} onChange={(e) => setV({ ...v, noticedOn: e.target.value })} />
+        </Field>
+        <Field label="Action taken" required>
+          <select className="input" aria-required="true" value={v.action} onChange={(e) => setV({ ...v, action: e.target.value })}>
+            <option value="">Choose…</option>
+            {PROBLEM_ACTIONS.map((a) => <option key={a} value={a}>{PROBLEM_ACTION_LABELS[a]}</option>)}
+          </select>
+        </Field>
+      </div>
+      <Field label="Notes">
+        <input className="input" value={v.notes} maxLength={1000} onChange={(e) => setV({ ...v, notes: e.target.value })} />
+      </Field>
+      <Footer error={error} pending={pending} saveLabel="Save problem" onCancel={onDone} />
+    </form>
   );
 }
 

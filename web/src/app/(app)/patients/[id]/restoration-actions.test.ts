@@ -4,7 +4,9 @@ const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc }) }));
 vi.mock('@/lib/auth/session', () => ({ requirePermission: vi.fn(async () => ({})) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-import { addRestoration, updateRestoration, voidRestoration } from './restoration-actions';
+import {
+  addRestoration, recordRestorationProblem, updateRestoration, updateRestorationProblem, voidRestoration, voidRestorationProblem,
+} from './restoration-actions';
 import { requirePermission } from '@/lib/auth/session';
 
 const uuid = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
@@ -42,6 +44,24 @@ describe('restoration actions', () => {
   it('undoes a restoration with a reason', async () => {
     await voidRestoration({ patientId: uuid(1), restorationId: uuid(4), reason: 'Wrong patient' });
     expect(rpc).toHaveBeenCalledWith('void_restoration', { p_restoration: uuid(4), p_reason: 'Wrong patient' });
+  });
+
+  it('records, updates and removes a problem', async () => {
+    const rec = { patientId: uuid(1), restorationId: uuid(4), noticedOn: '2026-03-01', type: 'debonding', action: 'recemented', notes: 'n' };
+    expect(await recordRestorationProblem(rec)).toEqual({});
+    expect(rpc).toHaveBeenCalledWith('record_restoration_problem', {
+      p_restoration: uuid(4), p_noticed_on: '2026-03-01', p_type: 'debonding', p_action: 'recemented', p_notes: 'n',
+    });
+    await updateRestorationProblem({ ...rec, problemId: uuid(5), expectedUpdatedAt: '2026-03-01T10:00:00.5+00:00' });
+    expect(rpc).toHaveBeenCalledWith('update_restoration_problem', {
+      p_problem: uuid(5), p_noticed_on: '2026-03-01', p_type: 'debonding', p_action: 'recemented', p_notes: 'n',
+      p_expected_updated_at: '2026-03-01T10:00:00.5+00:00',
+    });
+    await voidRestorationProblem({ patientId: uuid(1), problemId: uuid(5), reason: 'Duplicate' });
+    expect(rpc).toHaveBeenCalledWith('void_restoration_problem', { p_problem: uuid(5), p_reason: 'Duplicate' });
+    rpc.mockClear();
+    expect(await recordRestorationProblem({ ...rec, type: '' })).toEqual({ error: 'Choose the problem type.' });
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it('shows business errors verbatim and validates before calling the database', async () => {

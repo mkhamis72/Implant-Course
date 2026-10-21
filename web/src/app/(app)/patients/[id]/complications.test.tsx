@@ -39,11 +39,12 @@ describe('<Complications>', () => {
     expect(screen.getByText(/increased probing depth compared with previous examinations/)).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox', { name: 'Category' }), { target: { value: 'mechanical' } });
     expect(screen.getByRole('combobox', { name: 'Type' })).toHaveValue('');
-    fireEvent.change(screen.getByRole('combobox', { name: 'Type' }), { target: { value: 'screw_loosening' } });
+    expect(within(screen.getByRole('combobox', { name: 'Type' })).queryByRole('option', { name: 'Screw loosening' })).toBeNull();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Type' }), { target: { value: 'implant_fracture' } });
     fireEvent.change(screen.getByLabelText(/^Noticed on/), { target: { value: '2026-09-10' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save complication' }));
     expect(vi.mocked(saveComplication)).toHaveBeenCalledWith(expect.objectContaining({
-      complicationId: '', expectedUpdatedAt: '', siteId: 's1', patientId: 'pt', category: 'mechanical', type: 'screw_loosening', noticedOn: '2026-09-10',
+      complicationId: '', expectedUpdatedAt: '', siteId: 's1', patientId: 'pt', category: 'mechanical', type: 'implant_fracture', noticedOn: '2026-09-10',
     }));
   });
 

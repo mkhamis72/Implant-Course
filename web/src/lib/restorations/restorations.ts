@@ -164,3 +164,20 @@ export const restorationEditSchema = z.object({
   restorationId: z.string().uuid({ message: 'Restoration not found.' }),
   expectedUpdatedAt: z.string().min(1, { message: 'This restoration was changed by someone else. Reload to see it.' }),
 });
+
+const problemDetails = {
+  patientId: z.string().uuid({ message: 'Patient not found.' }),
+  restorationId: z.string().uuid({ message: 'Restoration not found.' }),
+  type: z.enum(PROBLEM_TYPES, { message: 'Choose the problem type.' }),
+  action: z.enum(PROBLEM_ACTIONS, { message: 'Choose the action taken.' }),
+  noticedOn: z.string().refine((v) => isRealDate(v) && v <= todayIso(), { message: 'Enter when the problem was noticed (from the date fitted to today).' }),
+  notes: z.string().trim().max(1000, { message: 'Keep the notes under 1000 characters.' }).default(''),
+};
+
+export const problemSchema = z.object(problemDetails);
+
+export const problemEditSchema = z.object({
+  ...problemDetails,
+  problemId: z.string().uuid({ message: 'Problem not found.' }),
+  expectedUpdatedAt: z.string().min(1, { message: 'This problem was changed by someone else. Reload to see it.' }),
+});

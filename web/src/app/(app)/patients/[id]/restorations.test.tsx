@@ -4,9 +4,13 @@ import type { ChartData, ImplantSite } from '@/lib/inventory/types';
 import type { Restoration } from '@/lib/restorations/restorations';
 
 vi.mock('./implant-actions', () => ({ fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), receiveStockForPlacement: vi.fn() }));
-vi.mock('./restoration-actions', () => ({ addRestoration: vi.fn(), updateRestoration: vi.fn(), voidRestoration: vi.fn() }));
+vi.mock('./restoration-actions', () => ({ addRestoration: vi.fn(), updateRestoration: vi.fn(), voidRestoration: vi.fn(),
+  recordRestorationProblem: vi.fn(), updateRestorationProblem: vi.fn(), voidRestorationProblem: vi.fn(),
+}));
 import { Restorations } from './restorations';
-import { addRestoration, updateRestoration, voidRestoration } from './restoration-actions';
+import {
+  addRestoration, recordRestorationProblem, updateRestoration, updateRestorationProblem, voidRestoration, voidRestorationProblem,
+} from './restoration-actions';
 
 const s36 = { id: 's36', tooth: 36, state: 'placed', placed_on: '2026-01-10' } as unknown as ImplantSite;
 const s34 = { id: 's34', tooth: 34, state: 'placed', placed_on: '2026-01-10' } as unknown as ImplantSite;
@@ -31,6 +35,9 @@ beforeEach(() => {
   vi.mocked(addRestoration).mockReset().mockResolvedValue({});
   vi.mocked(updateRestoration).mockReset().mockResolvedValue({});
   vi.mocked(voidRestoration).mockReset().mockResolvedValue({});
+  vi.mocked(recordRestorationProblem).mockReset().mockResolvedValue({});
+  vi.mocked(updateRestorationProblem).mockReset().mockResolvedValue({});
+  vi.mocked(voidRestorationProblem).mockReset().mockResolvedValue({});
 });
 
 describe('<Restorations>', () => {
@@ -94,5 +101,38 @@ describe('<Restorations>', () => {
     fireEvent.change(screen.getByLabelText('Reason for undoing'), { target: { value: 'Wrong tooth' } });
     fireEvent.click(screen.getByRole('button', { name: 'Undo restoration' }));
     expect(vi.mocked(voidRestoration)).toHaveBeenCalledWith({ patientId: 'pt', restorationId: 'r2', reason: 'Wrong tooth' });
+  });
+
+  it('records a problem with type, date, action and notes', () => {
+    render(<Restorations site={s36} patientId="pt" data={data([final])} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Record a problem' }));
+    fireEvent.change(screen.getByRole('combobox', { name: /Problem/ }), { target: { value: 'debonding' } });
+    fireEvent.change(screen.getByLabelText(/^Noticed on/), { target: { value: '2026-06-01' } });
+    fireEvent.change(screen.getByRole('combobox', { name: /Action taken/ }), { target: { value: 'recemented' } });
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Loose after a month' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save problem' }));
+    expect(vi.mocked(recordRestorationProblem)).toHaveBeenCalledWith({
+      patientId: 'pt', restorationId: 'r2', type: 'debonding', noticedOn: '2026-06-01', action: 'recemented', notes: 'Loose after a month',
+    });
+  });
+
+  it('edits a problem with the version it opened with, and removes it with a reason; viewers get neither', async () => {
+    const withProblem: Restoration = { ...final, problems: [{ id: 'p1', noticed_on: '2026-06-01', type: 'chipping', action: 'none', notes: '', updated_at: '2026-06-01T10:00:00+00:00' }] };
+    const { unmount } = render(<Restorations site={s36} patientId="pt" data={data([withProblem], false)} />);
+    expect(screen.queryByRole('button', { name: 'Record a problem' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit problem' })).toBeNull();
+    unmount();
+    render(<Restorations site={s36} patientId="pt" data={data([withProblem])} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit problem' }));
+    fireEvent.change(screen.getByRole('combobox', { name: /Action taken/ }), { target: { value: 'repaired' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save problem' }));
+    expect(vi.mocked(updateRestorationProblem)).toHaveBeenCalledWith({
+      patientId: 'pt', restorationId: 'r2', problemId: 'p1', expectedUpdatedAt: '2026-06-01T10:00:00+00:00',
+      type: 'chipping', noticedOn: '2026-06-01', action: 'repaired', notes: '',
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove problem' }));
+    fireEvent.change(screen.getByLabelText('Reason for removing'), { target: { value: 'Duplicate' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from record' }));
+    expect(vi.mocked(voidRestorationProblem)).toHaveBeenCalledWith({ patientId: 'pt', problemId: 'p1', reason: 'Duplicate' });
   });
 });

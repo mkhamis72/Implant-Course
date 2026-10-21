@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  coursesForDate, currentRestoration, defaultTeeth, describeTeeth, jawOf, loadingOf, restorationEditSchema, restorationSchema,
+  coursesForDate, currentRestoration, defaultTeeth, describeTeeth, jawOf, loadingOf, problemEditSchema, problemSchema, restorationEditSchema, restorationSchema,
   type Restoration,
 } from './restorations';
 
@@ -105,5 +105,23 @@ describe('restorationEditSchema', () => {
   it('maps blanks to null and rejects unknown values', () => {
     expect(restorationEditSchema.parse(edit)).toMatchObject({ retention: 'screw', material: null, supervisorId: uuid(5), notes: 'ok' });
     expect(restorationEditSchema.safeParse({ ...edit, material: 'gold' }).success).toBe(false);
+  });
+});
+
+describe('problem schemas', () => {
+  const rec = { patientId: uuid(1), restorationId: uuid(4), noticedOn: '2026-03-01', type: 'debonding', action: 'recemented', notes: ' loose ' };
+  it('saves type, date, action and trimmed notes', () => {
+    expect(problemSchema.parse(rec)).toMatchObject({ noticedOn: '2026-03-01', type: 'debonding', action: 'recemented', notes: 'loose' });
+  });
+  it('rejects an unknown type, a missing date and a future date', () => {
+    expect(problemSchema.safeParse({ ...rec, type: 'gold' }).error?.issues[0].message).toBe('Choose the problem type.');
+    expect(problemSchema.safeParse({ ...rec, action: '' }).error?.issues[0].message).toBe('Choose the action taken.');
+    expect(problemSchema.safeParse({ ...rec, noticedOn: '' }).success).toBe(false);
+    expect(problemSchema.safeParse({ ...rec, noticedOn: '2999-01-01' }).success).toBe(false);
+  });
+  it('the edit schema also needs the problem and its version', () => {
+    const edit = { ...rec, problemId: uuid(5), expectedUpdatedAt: '2026-03-01T10:00:00+00:00' };
+    expect(problemEditSchema.parse(edit)).toMatchObject({ problemId: uuid(5) });
+    expect(problemEditSchema.safeParse({ ...edit, expectedUpdatedAt: '' }).success).toBe(false);
   });
 });

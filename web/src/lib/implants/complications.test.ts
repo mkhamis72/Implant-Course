@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  COMPLICATION_TYPES, complicationSchema, describeComplication, isOpen, openComplicationTeeth, toDetails, type ImplantComplication,
+  COMPLICATION_TYPES, IMPLANT_FORM_TYPES, TYPE_LABELS, complicationSchema, describeComplication, isOpen, openComplicationTeeth, toDetails, type ImplantComplication,
 } from './complications';
 
 const base: ImplantComplication = {
@@ -15,6 +15,12 @@ describe('complications', () => {
     expect(COMPLICATION_TYPES.biological).toEqual(['mucositis', 'peri_implantitis', 'progressive_bone_loss', 'suppuration', 'persistent_pain', 'soft_tissue_recession', 'other']);
     expect(COMPLICATION_TYPES.surgical.at(-1)).toBe('other');
     expect(COMPLICATION_TYPES.mechanical).toContain('screw_loosening');
+  });
+  it('offers only the implant types for mechanical complications; old crown types still resolve', () => {
+    expect(IMPLANT_FORM_TYPES.mechanical).toEqual(['implant_fracture', 'abutment_fracture', 'other']);
+    expect(IMPLANT_FORM_TYPES.surgical).toEqual(COMPLICATION_TYPES.surgical);
+    expect(TYPE_LABELS.screw_loosening).toBe('Screw loosening');
+    expect(complicationSchema.safeParse({ ...ids, complicationId: '', expectedUpdatedAt: '', category: 'mechanical', type: 'screw_loosening', otherType: '', noticedOn: '2026-09-01' }).success).toBe(true);
   });
   it('is open until resolved; voided ones are neither open nor counted', () => {
     expect(isOpen(base)).toBe(true);

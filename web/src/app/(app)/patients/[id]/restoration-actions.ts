@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { userMessage } from '@/lib/db-errors';
-import { restorationEditSchema, restorationSchema } from '@/lib/restorations/restorations';
+import { problemEditSchema, problemSchema, restorationEditSchema, restorationSchema } from '@/lib/restorations/restorations';
 
 type Result = { error?: string };
 
@@ -42,4 +42,30 @@ export async function updateRestoration(input: Record<string, unknown>): Promise
 export async function voidRestoration(input: { patientId: string; restorationId: string; reason: string }): Promise<Result> {
   await requirePermission('patients', 'edit');
   return run(input.patientId, 'void_restoration', { p_restoration: input.restorationId, p_reason: input.reason });
+}
+
+export async function recordRestorationProblem(input: Record<string, unknown>): Promise<Result> {
+  await requirePermission('patients', 'edit');
+  const parsed = problemSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const v = parsed.data;
+  return run(v.patientId, 'record_restoration_problem', {
+    p_restoration: v.restorationId, p_noticed_on: v.noticedOn, p_type: v.type, p_action: v.action, p_notes: v.notes,
+  });
+}
+
+export async function updateRestorationProblem(input: Record<string, unknown>): Promise<Result> {
+  await requirePermission('patients', 'edit');
+  const parsed = problemEditSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const v = parsed.data;
+  return run(v.patientId, 'update_restoration_problem', {
+    p_problem: v.problemId, p_noticed_on: v.noticedOn, p_type: v.type, p_action: v.action, p_notes: v.notes,
+    p_expected_updated_at: v.expectedUpdatedAt,
+  });
+}
+
+export async function voidRestorationProblem(input: { patientId: string; problemId: string; reason: string }): Promise<Result> {
+  await requirePermission('patients', 'edit');
+  return run(input.patientId, 'void_restoration_problem', { p_problem: input.problemId, p_reason: input.reason });
 }
