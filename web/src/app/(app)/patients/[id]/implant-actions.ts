@@ -6,6 +6,8 @@ import { requirePermission } from '@/lib/auth/session';
 import { componentSchema, correctPlacementSchema, placeSchema, planSchema, receiveSchema } from '@/lib/inventory/schemas';
 import { TECHNIQUES, type Technique } from '@/lib/inventory/types';
 import { userMessage } from '@/lib/db-errors';
+import { impressionSchema } from '@/lib/implants/impression';
+import { failed, type FormState } from '@/lib/patients/form-state';
 import { correctionSchema, voidSchema } from '@/lib/schedule/schemas';
 
 type Result = { error?: string };
@@ -45,9 +47,9 @@ export async function placeImplant(input: Record<string, unknown>): Promise<Resu
     p_placing_delegate: p.placingDelegateId,
     p_supervisor: p.supervisorId,
     p_assisting_delegate: p.assistingDelegateId,
-    p_torque: p.torque,
-    p_isq: p.isq,
-    p_bone_type: p.boneType,
+    p_torque: null,
+    p_isq: null,
+    p_bone_type: null,
     p_graft: p.graft,
     p_notes: p.notes,
     p_slot: p.slotId,
@@ -79,6 +81,17 @@ export async function setTechnique(input: { patientId: string; siteId: string; t
   return run(input.patientId, 'set_implant_technique', { p_site: input.siteId, p_technique: input.technique as Technique });
 }
 
+export async function recordImpression(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requirePermission('patients', 'edit');
+  const parsed = impressionSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
+  const p = parsed.data;
+  const result = await run(p.patientId, 'record_impression', {
+    p_site: p.siteId, p_type: p.type, p_taken_on: p.takenOn, p_expected_updated_at: p.expectedUpdatedAt,
+  });
+  return result.error ? failed(result.error, formData) : { ok: 'Saved.' };
+}
+
 export async function fitComponent(input: Record<string, unknown>): Promise<Result> {
   await requirePermission('patients', 'edit');
   const parsed = componentSchema.safeParse(input);
@@ -107,9 +120,9 @@ export async function correctPlacement(input: Record<string, unknown>): Promise<
     p_placing_delegate: p.placingDelegateId,
     p_assisting_delegate: p.assistingDelegateId,
     p_supervisor: p.supervisorId,
-    p_torque: p.torque,
-    p_isq: p.isq,
-    p_bone_type: p.boneType,
+    p_torque: null,
+    p_isq: null,
+    p_bone_type: null,
     p_graft: p.graft,
     p_notes: p.notes,
   });

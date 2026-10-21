@@ -7,7 +7,7 @@ vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), 
 vi.mock('./visit-actions', () => ({ recordVisit: vi.fn() }));
 vi.mock('./outcome-actions', () => ({ saveComplication: vi.fn(), voidComplication: vi.fn(), saveFailure: vi.fn() }));
 vi.mock('./implant-actions', () => ({
-  planImplant: vi.fn(), placeImplant: vi.fn(), cancelPlan: vi.fn(), setTechnique: vi.fn(), fitComponent: vi.fn(),
+  planImplant: vi.fn(), placeImplant: vi.fn(), cancelPlan: vi.fn(), setTechnique: vi.fn(), recordImpression: vi.fn(), fitComponent: vi.fn(),
   correctBatch: vi.fn(), voidFollowup: vi.fn(), voidComponent: vi.fn(),
 }));
 import { ChartPanel } from './chart-panel';
@@ -46,5 +46,16 @@ describe('ChartPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add component' }));
     expect(screen.getByRole('tab', { name: 'Implant' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('a failed implant still offers the scan / impression control', () => {
+    const site = {
+      id: 's2', tooth: 36, state: 'failed', placed_on: '2030-03-10', technique: 'guided', torque_ncm: null, isq: null, bone_type: null,
+      graft: '', product: null, lot: null, stock_lot_id: null, placing: null, assisting: null, supervisor: null, slot: null,
+      components: [], followups: [], complications: [], surgery: null, grafts: [], impression_type: null, impression_taken_on: null,
+    };
+    const failed = { ...data(true), statuses: { 36: 'implant_placed' }, sites: [site] } as unknown as ChartData;
+    render(<ChartPanel patientId="pt" data={failed} initialTooth={36} />);
+    expect(screen.getByRole('combobox', { name: 'Scan / impression' })).toBeInTheDocument();
   });
 });

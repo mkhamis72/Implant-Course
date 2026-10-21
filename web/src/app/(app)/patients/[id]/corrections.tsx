@@ -6,7 +6,6 @@ import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, type ChartData, type ImplantSite, type LotOnHand } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
 import { visitResult } from '@/lib/visits/visits';
-import { BONE_TYPES } from '@/lib/inventory/schemas';
 import { correctBatch, correctPlacement, voidComponent, voidFollowup } from './implant-actions';
 
 type Result = { error?: string };
@@ -51,9 +50,6 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
     placingDelegateId: site.placing_delegate_id ?? '',
     assistingDelegateId: site.assisting_delegate_id ?? '',
     supervisorId: site.supervisor_id ?? '',
-    torque: site.torque_ncm?.toString() ?? '',
-    isq: site.isq?.toString() ?? '',
-    boneType: site.bone_type ?? '',
     graft: site.graft ?? '',
     notes: site.notes ?? '',
   });
@@ -92,21 +88,6 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
           <select className="input" value={v.supervisorId} onChange={set('supervisorId')}>
             <option value="">Choose the supervisor…</option>
             {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="label">Insertion torque (Ncm)</span>
-          <input className="input" inputMode="decimal" value={v.torque} onChange={set('torque')} />
-        </label>
-        <label className="block">
-          <span className="label">ISQ</span>
-          <input className="input" inputMode="decimal" value={v.isq} onChange={set('isq')} />
-        </label>
-        <label className="block">
-          <span className="label">Bone type</span>
-          <select className="input" value={v.boneType} onChange={set('boneType')}>
-            <option value="">—</option>
-            {BONE_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
         </label>
       </div>

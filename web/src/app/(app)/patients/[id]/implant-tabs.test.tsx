@@ -7,7 +7,7 @@ vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), 
 vi.mock('./visit-actions', () => ({ recordVisit: vi.fn() }));
 vi.mock('./outcome-actions', () => ({ saveComplication: vi.fn(), voidComplication: vi.fn(), saveFailure: vi.fn() }));
 vi.mock('./implant-actions', () => ({
-  planImplant: vi.fn(), placeImplant: vi.fn(), cancelPlan: vi.fn(), setTechnique: vi.fn(), fitComponent: vi.fn(),
+  planImplant: vi.fn(), placeImplant: vi.fn(), cancelPlan: vi.fn(), setTechnique: vi.fn(), recordImpression: vi.fn(), fitComponent: vi.fn(),
   correctBatch: vi.fn(), correctPlacement: vi.fn(), voidFollowup: vi.fn(), voidComponent: vi.fn(),
 }));
 import { ImplantTabs } from './implant-tabs';
@@ -37,7 +37,7 @@ describe('<ImplantTabs>', () => {
   it('opens on Implant with counts on Surgical details and Complications; Corrections only for editors', () => {
     render(<Tabs editable={true} justPlaced={false} />);
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
-      'Implant', 'Surgical details0/90 of 9 recorded', 'Visits', 'Complications11, 1 open', 'Corrections',
+      'Implant', 'Surgical details0/120 of 12 recorded', 'Visits', 'Complications11, 1 open', 'Corrections',
     ]);
     expect(screen.getByRole('tab', { name: 'Implant' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tabpanel', { name: 'Implant' })).toBeVisible();

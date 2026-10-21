@@ -4,7 +4,7 @@ import { requirePermission } from '@/lib/auth/session';
 import { canEdit } from '@/lib/auth/permissions';
 import { ageOn } from '@/lib/patients/age';
 import type { Patient } from '@/lib/patients/types';
-import { PATIENT_FILTERS, PATIENT_FILTER_LABELS, TOOTH_FILTERS, parseStages, teethByPatient, type StageSite } from '@/lib/patients/stages';
+import { PATIENT_FILTERS, PATIENT_FILTER_LABELS, SCAN_FILTERS, TOOTH_FILTERS, parseStages, teethByPatient, toothBoundFilters, type StageSite } from '@/lib/patients/stages';
 import { firstParam, type PageSearchParams } from '@/lib/search-params';
 import { DeletePatient } from './delete-patient';
 
@@ -21,10 +21,11 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
   // The search returns one row more than it shows, to tell whether there are more.
   const rows = (data ?? []) as Patient[];
   const patients = rows.slice(0, 50);
+  const teethStages = toothBoundFilters(stages);
   let teeth: Record<string, string> = {};
-  if (stages.length && patients.length) {
+  if (teethStages.length && patients.length) {
     const ids = patients.map((p) => p.id);
-    const toothStates = stages.filter((s) => TOOTH_FILTERS.includes(s));
+    const toothStates = teethStages.filter((s) => TOOTH_FILTERS.includes(s));
     const [sites, states] = await Promise.all([
       supabase.rpc('implant_stage_sites', { p_patients: ids }),
       toothStates.length
@@ -33,7 +34,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
     ]);
     if (sites.error || states.error) throw new Error('Could not load the patients’ teeth');
     const stateRows = (states.data ?? []).map((r) => ({ patient_id: r.patient_id, tooth: r.tooth, stage: r.status }));
-    teeth = teethByPatient([...((sites.data ?? []) as StageSite[]), ...stateRows], stages);
+    teeth = teethByPatient([...((sites.data ?? []) as StageSite[]), ...stateRows], teethStages);
   }
   const today = new Date();
 
@@ -73,6 +74,20 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
             ))}
           </div>
         </fieldset>
+        <fieldset className="basis-full">
+          <legend className="label">Scan / impression</legend>
+          <div className="flex flex-wrap gap-2">
+            {SCAN_FILTERS.map((s) => (
+              <label
+                key={s}
+                className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-line-strong bg-surface px-3 text-sm hover:bg-sunken has-[:checked]:border-accent has-[:checked]:bg-accent-soft"
+              >
+                <input type="checkbox" name="stage" value={s} defaultChecked={stages.includes(s)} />
+                {PATIENT_FILTER_LABELS[s]}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <button className="btn-secondary btn">Search</button>
       </form>
       <div className="card overflow-x-auto">
@@ -86,7 +101,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
                 <th>Name</th>
                 <th>Age</th>
                 <th>Phone</th>
-                {stages.length > 0 && <th>Teeth</th>}
+                {teethStages.length > 0 && <th>Teeth</th>}
                 <th><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -102,7 +117,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
                   </td>
                   <td data-label="Age">{ageOn(p.dob, today) ?? '—'}</td>
                   <td data-label="Phone">{p.phone || '—'}</td>
-                  {stages.length > 0 && <td data-label="Teeth">{teeth[p.id] ?? '—'}</td>}
+                  {teethStages.length > 0 && <td data-label="Teeth">{teeth[p.id] ?? '—'}</td>}
                   <td data-label="Actions">
                     {editable && <DeletePatient id={p.id} name={p.full_name} triggerLabel={`Delete ${p.full_name}`} />}
                   </td>

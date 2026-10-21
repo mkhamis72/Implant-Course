@@ -29,7 +29,9 @@ describe('<Corrections> placement details', () => {
     expect(within(box).getByLabelText('Placement date')).toHaveValue('2026-05-02');
     expect(within(box).getByRole('combobox', { name: 'Placed by' })).toHaveValue('gone');
     expect(within(within(box).getByRole('combobox', { name: 'Placed by' })).getByRole('option', { name: 'Dr Former (inactive)' })).toBeInTheDocument();
-    expect(within(box).getByLabelText('Insertion torque (Ncm)')).toHaveValue('35');
+    expect(within(box).queryByLabelText(/Insertion torque/)).not.toBeInTheDocument();
+    expect(within(box).queryByLabelText('ISQ')).not.toBeInTheDocument();
+    expect(within(box).queryByRole('combobox', { name: 'Bone type' })).not.toBeInTheDocument();
 
     expect(within(box).queryByLabelText('Graft')).not.toBeInTheDocument();
     fireEvent.change(within(box).getByLabelText('Placement date'), { target: { value: '2026-05-01' } });
@@ -38,7 +40,7 @@ describe('<Corrections> placement details', () => {
     fireEvent.click(within(box).getByRole('button', { name: 'Save details' }));
     expect(vi.mocked(correctPlacement)).toHaveBeenCalledWith({
       siteId: 's1', patientId: 'pt', placedOn: '2026-05-01', placingDelegateId: 'd1', assistingDelegateId: '', supervisorId: 'sup2',
-      torque: '35', isq: '70', boneType: 'D2', graft: 'Bio-Oss old note', notes: 'first',
+      graft: 'Bio-Oss old note', notes: 'first',
     });
     expect(await screen.findByRole('status')).toHaveTextContent('Correction saved.');
   });

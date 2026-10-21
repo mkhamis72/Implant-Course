@@ -25,7 +25,7 @@ test('records surgical details and a graft; Implants tab and History follow', as
   const panel = page.getByRole('complementary', { name: 'Tooth details' });
   const box = panel.getByTestId('surgical-details');
   const tab = panel.getByRole('tab', { name: /Surgical details/ });
-  await expect(tab).toHaveAccessibleName('Surgical details 0 of 9 recorded');
+  await expect(tab).toHaveAccessibleName('Surgical details 0 of 12 recorded');
   await tab.click();
 
   await box.getByRole('button', { name: 'Edit surgical details' }).click();
@@ -34,12 +34,15 @@ test('records surgical details and a graft; Implants tab and History follow', as
   await box.getByRole('combobox', { name: 'Soft-tissue phenotype' }).selectOption('thick');
   await box.getByLabel('Keratinized mucosa (mm)').fill('3');
   await box.getByRole('combobox', { name: 'Flap' }).selectOption('crestal');
+  await box.getByLabel('Insertion torque (Ncm, optional)').fill('35');
+  await box.getByLabel('ISQ (optional)').fill('72');
+  await box.getByRole('combobox', { name: 'Bone type' }).selectOption('D2');
   await box.getByRole('combobox', { name: 'Torque measured as' }).selectOption('peak');
   await box.getByRole('combobox', { name: 'Healing' }).selectOption('submerged');
   await box.getByRole('combobox', { name: 'Primary closure' }).selectOption('yes');
   await box.getByRole('combobox', { name: 'Grafting performed' }).selectOption('yes');
   await box.getByRole('button', { name: 'Save surgical details' }).click();
-  await expect(tab).toHaveAccessibleName('Surgical details 9 of 9 recorded');
+  await expect(tab).toHaveAccessibleName('Surgical details 12 of 12 recorded');
   await expect(box).toContainText('Grafting is marked as performed, but no graft is recorded.');
 
   await box.getByRole('button', { name: 'Add graft' }).click();
@@ -52,7 +55,7 @@ test('records surgical details and a graft; Implants tab and History follow', as
   await expect(box).not.toContainText('no graft is recorded');
 
   await page.goto(`/patients/${patientId}/implants`);
-  await expect(page.getByTestId('details-completeness')).toHaveText('9/9');
+  await expect(page.getByTestId('details-completeness')).toHaveText('12/12');
 
   await page.goto(`/patients/${patientId}/history`);
   await expect(page.getByText('Surgical details recorded')).toBeVisible();

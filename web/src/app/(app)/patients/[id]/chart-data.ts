@@ -9,7 +9,7 @@ import type { ToothState } from '@/lib/patients/types';
 import type { VisitRow } from '@/lib/visits/visits';
 
 export const SITE_SELECT = `
-  id, tooth, state, technique, placed_on, torque_ncm, isq, bone_type, graft, notes, created_at, updated_at, failed_on, failure_type, failure_reason, failure_notes, stock_lot_id,
+  id, tooth, state, technique, impression_type, impression_taken_on, placed_on, torque_ncm, isq, bone_type, graft, notes, created_at, updated_at, failed_on, failure_type, failure_reason, failure_notes, stock_lot_id,
   placing_delegate_id, assisting_delegate_id, supervisor_id,
   product:products(*),
   lot:stock_lots(lot_no, expiry),

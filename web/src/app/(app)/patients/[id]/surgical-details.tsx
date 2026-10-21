@@ -9,12 +9,39 @@ import {
   daysSinceExtraction, describeGraft, describeSurgery, surgeryCompleteness, timingWarning,
   type ImplantGraft, type PlacementTiming,
 } from '@/lib/implants/surgery';
+import { BONE_TYPES } from '@/lib/inventory/schemas';
 import { YES_NO } from '@/lib/patients/risk-factors';
 import { Field, Footer, useSubmit } from './implant-forms';
 import { deleteGraft, saveGraft, saveSurgery } from './surgery-actions';
 
 // bare: inside the Surgical details tab, which already shows the count (no collapsible wrapper).
 type Props = { site: ImplantSite; patientId: string; editable: boolean; startOpen?: boolean; bare?: boolean };
+
+const TORQUES = ['15', '25', '35', '45'];
+
+function TorqueField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="block">
+        <span className="label">Insertion torque (Ncm, optional)</span>
+        <input className="input" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} />
+      </label>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {TORQUES.map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={value === t}
+            onClick={() => onChange(t)}
+            className={`rounded-full border px-3 py-1 text-sm ${value === t ? 'border-accent bg-accent-soft text-accent-strong' : 'border-line-strong hover:bg-sunken'}`}
+          >
+            {t} Ncm
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Choice<T extends string>({ label, value, onChange, values, labels }: {
   label: string; value: string; onChange: (v: string) => void; values: readonly T[]; labels: Record<T, string>;
@@ -31,7 +58,7 @@ function Choice<T extends string>({ label, value, onChange, values, labels }: {
 
 export function SurgicalDetails({ site, patientId, editable, startOpen = false, bare = false }: Props) {
   const [editing, setEditing] = useState(false);
-  const { recorded, total } = surgeryCompleteness(site.surgery);
+  const { recorded, total } = surgeryCompleteness(site.surgery, site);
   const parts = describeSurgery(site.surgery, site.placed_on);
   const grafts = site.grafts ?? [];
   const missingGraft = site.surgery?.grafting_performed === 'yes' && grafts.length === 0;
@@ -74,6 +101,7 @@ function SurgeryForm({ site, patientId, onDone }: { site: ImplantSite; patientId
     keratinizedMucosaMm: s?.keratinized_mucosa_mm === null || s?.keratinized_mucosa_mm === undefined ? '' : String(s.keratinized_mucosa_mm),
     flap: s?.flap ?? '', torqueType: s?.torque_type ?? '', healing: s?.healing ?? '', primaryClosure: s?.primary_closure ?? '',
     graftingPerformed: s?.grafting_performed ?? '',
+    torque: site.torque_ncm?.toString() ?? '', isq: site.isq?.toString() ?? '', boneType: site.bone_type ?? '',
   });
   const set = (key: keyof typeof v) => (value: string) => setV((cur) => ({ ...cur, [key]: value }));
   const { error, pending, submit } = useSubmit(saveSurgery, onDone);
@@ -84,6 +112,21 @@ function SurgeryForm({ site, patientId, onDone }: { site: ImplantSite; patientId
       e.preventDefault();
       submit({ siteId: site.id, patientId, expectedUpdatedAt: version, ...v });
     }}>
+      <div className="space-y-3">
+        <TorqueField value={v.torque} onChange={set('torque')} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Choice label="Torque measured as" value={v.torqueType} onChange={set('torqueType')} values={TORQUE_TYPES} labels={TORQUE_TYPE_LABELS} />
+          <Field label="ISQ (optional)">
+            <input className="input" inputMode="decimal" value={v.isq} onChange={(e) => set('isq')(e.target.value)} />
+          </Field>
+          <Field label="Bone type">
+            <select className="input" value={v.boneType} onChange={(e) => set('boneType')(e.target.value)}>
+              <option value="">— not recorded</option>
+              {BONE_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </Field>
+        </div>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Choice label="Placement timing" value={v.placementTiming} onChange={set('placementTiming')} values={PLACEMENT_TIMINGS} labels={PLACEMENT_TIMING_LABELS} />
         <Field label="Extraction date">
@@ -98,7 +141,6 @@ function SurgeryForm({ site, patientId, onDone }: { site: ImplantSite; patientId
           <input className="input" inputMode="decimal" value={v.keratinizedMucosaMm} onChange={(e) => set('keratinizedMucosaMm')(e.target.value)} />
         </Field>
         <Choice label="Flap" value={v.flap} onChange={set('flap')} values={FLAPS} labels={FLAP_LABELS} />
-        <Choice label="Torque measured as" value={v.torqueType} onChange={set('torqueType')} values={TORQUE_TYPES} labels={TORQUE_TYPE_LABELS} />
         <Choice label="Healing" value={v.healing} onChange={set('healing')} values={HEALINGS} labels={HEALING_LABELS} />
         <Choice label="Primary closure" value={v.primaryClosure} onChange={set('primaryClosure')} values={YES_NO} labels={YES_NO_LABELS} />
         <Choice label="Grafting performed" value={v.graftingPerformed} onChange={set('graftingPerformed')} values={YES_NO} labels={YES_NO_LABELS} />

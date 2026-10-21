@@ -2,6 +2,7 @@ import {
   COMPONENT_LABELS, SITE_STATE_LABELS, type ComponentType, type FollowupOutcome, type SiteState,
 } from '@/lib/inventory/types';
 import { GRAFT_PROCEDURE_LABELS, SURGERY_FIELD_LABELS, type GraftProcedure } from '@/lib/implants/surgery';
+import { impressionSummary, type ImpressionType } from '@/lib/implants/impression';
 import { TYPE_LABELS } from '@/lib/implants/complications';
 import { FAILURE_REASON_LABELS, FAILURE_TYPE_LABELS, type FailureReason, type FailureType } from '@/lib/implants/failure';
 import { visitResult, type Attendance } from '@/lib/visits/visits';
@@ -23,10 +24,16 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 /** Placement details an implant correction can change (correct_placement, 0042). */
-const SITE_FIELD_LABELS: Record<string, string> = {
+const PLACEMENT_FIELD_LABELS: Record<string, string> = {
   placed_on: 'placement date', placing_delegate_id: 'placed by', assisting_delegate_id: 'assisted by',
-  supervisor_id: 'supervisor', torque_ncm: 'torque', isq: 'ISQ', bone_type: 'bone type', graft: 'graft', notes: 'notes',
+  supervisor_id: 'supervisor', graft: 'graft', notes: 'notes',
 };
+
+/** Stability values are recorded in Surgical details (save_implant_surgery_v2, 0053); older corrections may name them too. */
+const STABILITY_FIELD_LABELS: Record<string, string> = { torque_ncm: 'torque', isq: 'ISQ', bone_type: 'bone type' };
+const SITE_FIELD_LABELS: Record<string, string> = { ...PLACEMENT_FIELD_LABELS, ...STABILITY_FIELD_LABELS };
+
+const IMPRESSION_FIELD_LABELS: Record<string, string> = { impression_type: 'scan / impression', impression_taken_on: 'scan / impression date' };
 
 function changedFields(
   before: Record<string, unknown> | null, after: Record<string, unknown> | null, labels: Record<string, string> = FIELD_LABELS,
@@ -79,6 +86,18 @@ export function describeChange(e: HistoryEntry): string {
       }
       if (e.before.state === e.after?.state) {
         const corrected = changedFields(e.before, e.after, SITE_FIELD_LABELS);
+        if (!changedFields(e.before, e.after, PLACEMENT_FIELD_LABELS).length) {
+          if (changedFields(e.before, e.after, IMPRESSION_FIELD_LABELS).length) {
+            if (!e.after?.impression_type) return `Implant on tooth ${tooth}: scan / impression cleared`;
+            const summary = impressionSummary({
+              impression_type: e.after.impression_type as ImpressionType,
+              impression_taken_on: (e.after.impression_taken_on as string | null) ?? null,
+            });
+            return `Implant on tooth ${tooth}: scan / impression recorded — ${summary}`;
+          }
+          const stability = changedFields(e.before, e.after, STABILITY_FIELD_LABELS);
+          if (stability.length) return `Implant on tooth ${tooth}: stability recorded — ${stability.join(', ')}`;
+        }
         return corrected.length ? `Implant on tooth ${tooth} corrected: ${corrected.join(', ')}` : `Implant on tooth ${tooth} updated`;
       }
       return `Implant on tooth ${tooth}: ${label(e.before.state)} → ${label(e.after?.state)}`;

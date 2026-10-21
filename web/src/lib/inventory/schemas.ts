@@ -87,19 +87,13 @@ export const placeSchema = z.object({
   assistingDelegateId: optionalId,
   supervisorId: requiredId('Choose a supervisor.'),
   technique,
-  torque: optionalNumber(0, 150, 'Enter an insertion torque between 0 and 150 Ncm.'),
-  isq: optionalNumber(0, 100, 'Enter an ISQ between 0 and 100.'),
-  boneType: z.preprocess(
-    (v) => (v === '' || v === undefined || v === null ? null : v),
-    z.enum(BONE_TYPES, { message: 'Choose a bone type from D1 to D4.' }).nullable(),
-  ),
   graft: text(200),
   notes: text(1000),
 });
 
 /** Correcting a placed implant: the placement's date, people and clinical values (not the implant or batch). */
 export const correctPlacementSchema = placeSchema
-  .pick({ patientId: true, placedOn: true, placingDelegateId: true, assistingDelegateId: true, supervisorId: true, torque: true, isq: true, boneType: true, graft: true, notes: true })
+  .pick({ patientId: true, placedOn: true, placingDelegateId: true, assistingDelegateId: true, supervisorId: true, graft: true, notes: true })
   .extend({ siteId: requiredId('Implant not found.') });
 
 export const componentSchema = z

@@ -21,7 +21,7 @@ export async function saveSurgery(input: Record<string, unknown>): Promise<Resul
   const parsed = surgerySchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const s = parsed.data;
-  return run(s.patientId, 'save_implant_surgery', {
+  return run(s.patientId, 'save_implant_surgery_v2', {
     p_site: s.siteId,
     p_extraction_date: s.extractionDate,
     p_placement_timing: s.placementTiming,
@@ -32,6 +32,9 @@ export async function saveSurgery(input: Record<string, unknown>): Promise<Resul
     p_healing: s.healing,
     p_primary_closure: s.primaryClosure,
     p_grafting_performed: s.graftingPerformed,
+    p_torque: s.torque,
+    p_isq: s.isq,
+    p_bone_type: s.boneType,
     p_expected_updated_at: s.expectedUpdatedAt,
   });
 }
