@@ -2,7 +2,8 @@ import { CHART_ORDER, toothType, type ToothType } from '@/lib/patients/fdi';
 
 export const TOOTH_W = 40;
 export const TOOTH_H = 130;
-export const JAW_GAP = 46;
+// Room in the gap for each jaw's tooth numbers and a restoration bar on its side of the jaw line.
+export const JAW_GAP = 78;
 const GAP = 6;
 const MIDLINE_GAP = 28;
 
@@ -22,3 +23,22 @@ export function toothLayout(): ToothBox[] {
   }
   return boxes;
 }
+
+const LAYOUT = toothLayout();
+
+/** Height of a restoration bar. */
+export const SPAN_H = 12;
+/** Space between a bar and the jaw line. */
+const SPAN_TO_LINE = 4;
+
+/** The bar under the teeth a restoration covers: from the first box to the last, on the jaw's side of the jaw line. */
+export function spanBox(teeth: number[]): { x: number; y: number; width: number; jaw: 'upper' | 'lower' } {
+  const boxes = LAYOUT.filter((b) => teeth.includes(b.fdi));
+  const x = Math.min(...boxes.map((b) => b.x));
+  const right = Math.max(...boxes.map((b) => b.x)) + TOOTH_W;
+  const jaw = boxes[0]?.jaw ?? 'upper';
+  const line = TOOTH_H + JAW_GAP / 2;
+  const y = jaw === 'upper' ? line - SPAN_TO_LINE - SPAN_H : line + SPAN_TO_LINE;
+  return { x, y, width: right - x, jaw };
+}
+

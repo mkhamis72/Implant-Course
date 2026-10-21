@@ -38,10 +38,11 @@ describe('component rules', () => {
       badgesFor([
         site(36, 'placed', [comp('ti_base', null)]),
         site(46, 'restored', [comp('final_restoration', null)]),
+        site(26, 'restored', [comp('final_restoration', null), comp('abutment', null)]),
         site(11, 'failed', [comp('healing_abutment', null)]),
         site(21, 'planned'),
       ]),
-    ).toEqual({ 36: 'TB', 46: 'CR' });
+    ).toEqual({ 36: 'TB', 26: 'AB' }); // old final_restoration components are drawn as restorations now
   });
 });
 

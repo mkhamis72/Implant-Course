@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CHART_HEIGHT, CHART_WIDTH, JAW_GAP, MIDLINE_X, TOOTH_H, TOOTH_W, toothLayout } from './layout';
+import { CHART_HEIGHT, CHART_WIDTH, JAW_GAP, MIDLINE_X, SPAN_H, TOOTH_H, TOOTH_W, spanBox, toothLayout } from './layout';
 
 describe('toothLayout', () => {
   const boxes = toothLayout();
@@ -26,5 +26,27 @@ describe('toothLayout', () => {
   it('knows each tooth’s type', () => {
     expect(byFdi.get(13)!.type).toBe('canine');
     expect(byFdi.get(46)!.type).toBe('molar');
+  });
+});
+
+describe('spanBox', () => {
+  const byFdi = new Map(toothLayout().map((b) => [b.fdi, b]));
+
+  it('spans exactly the covered teeth’s boxes, in the jaw gap', () => {
+    const box = spanBox([34, 35, 36]);
+    expect(box.jaw).toBe('lower');
+    expect(box.x).toBe(byFdi.get(34)!.x);
+    expect(box.x + box.width).toBe(byFdi.get(36)!.x + TOOTH_W);
+    expect(box.y).toBeGreaterThan(TOOTH_H + JAW_GAP / 2);
+    expect(box.y + SPAN_H).toBeLessThan(byFdi.get(34)!.y);
+  });
+
+  it('crosses the midline for a full arch and sits above the jaw line in the upper jaw', () => {
+    const box = spanBox([15, 14, 13, 12, 11, 21, 22, 23, 24, 25]);
+    expect(box.jaw).toBe('upper');
+    expect(box.x).toBe(byFdi.get(15)!.x);
+    expect(box.x + box.width).toBe(byFdi.get(25)!.x + TOOTH_W);
+    expect(box.y).toBeGreaterThan(TOOTH_H);
+    expect(box.y + SPAN_H).toBeLessThan(TOOTH_H + JAW_GAP / 2);
   });
 });

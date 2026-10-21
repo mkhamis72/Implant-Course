@@ -5,7 +5,7 @@ import type { ChartData } from '@/lib/inventory/types';
 vi.mock('./implant-actions', () => ({
   fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), receiveStockForPlacement: vi.fn(),
 }));
-import { PlaceForm } from './implant-forms';
+import { ComponentForm, PlaceForm } from './implant-forms';
 
 const implant = { id: 'p1', type: 'implant', brand: 'Brand', system: 'S', platform: null, diameter_mm: 4, length_mm: 10, description: '' };
 const lot = { stock_lot_id: 'l1', product_id: 'p1', lot_no: 'OLD', expiry: '2030-06-09', received_on: '2030-01-01', qty_received: 1, on_hand: 1 };
@@ -120,5 +120,15 @@ describe('<PlaceForm> graft', () => {
   it('no longer asks for a free-text graft (grafts go in Surgical details)', () => {
     render(<PlaceForm patientId="pt" tooth={36} data={data} onDone={() => {}} plannedProductId={null} />);
     expect(screen.queryByLabelText('Graft (optional)')).not.toBeInTheDocument();
+  });
+});
+
+describe('<ComponentForm>', () => {
+  it('no longer offers a final restoration (restorations are recorded on the Restoration tab)', () => {
+    const site = { id: 's1', tooth: 36, state: 'placed', components: [] } as unknown as Parameters<typeof ComponentForm>[0]['site'];
+    render(<ComponentForm patientId="pt" site={site} data={data} onDone={() => {}} />);
+    const select = screen.getByRole('combobox', { name: 'Component' });
+    expect(within(select).queryByRole('option', { name: 'Final restoration' })).toBeNull();
+    expect(within(select).getByRole('option', { name: 'Abutment' })).toBeInTheDocument();
   });
 });

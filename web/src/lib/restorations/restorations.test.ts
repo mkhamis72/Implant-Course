@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   coursesForDate, currentRestoration, defaultTeeth, describeTeeth, jawOf, loadingOf, problemEditSchema, problemSchema, restorationEditSchema, restorationSchema,
+  restorationSpans,
   type Restoration,
 } from './restorations';
 
@@ -123,5 +124,25 @@ describe('problem schemas', () => {
     const edit = { ...rec, problemId: uuid(5), expectedUpdatedAt: '2026-03-01T10:00:00+00:00' };
     expect(problemEditSchema.parse(edit)).toMatchObject({ problemId: uuid(5) });
     expect(problemEditSchema.safeParse({ ...edit, expectedUpdatedAt: '' }).success).toBe(false);
+  });
+});
+
+describe('restorationSpans (odontogram bars)', () => {
+  const sites = [{ id: 's15', tooth: 15 }, { id: 's12', tooth: 12 }, { id: 's22', tooth: 22 }, { id: 's25', tooth: 25 }, { id: 's34', tooth: 34 }, { id: 's36', tooth: 36 }, { id: 's46', tooth: 46 }];
+  it('one span per current restoration, implants in arch order, labelled by type', () => {
+    const spans = restorationSpans([
+      r({ id: 'a', type: 'bridge', teeth: [34, 35, 36], site_ids: ['s36', 's34'] }),
+      r({ id: 'b', type: 'full_arch', stage: 'temporary', teeth: [15, 14, 13, 12, 11, 21, 22, 23, 24, 25], site_ids: ['s22', 's15', 's25', 's12'] }),
+      r({ id: 'c', teeth: [46], site_ids: ['s46'] }),
+      r({ id: 'd', teeth: [46], site_ids: ['s46'], ended_on: '2026-01-10', end_kind: 'replaced' }),
+    ], sites);
+    expect(spans).toEqual([
+      { id: 'a', teeth: [34, 35, 36], implantTeeth: [34, 36], label: 'Bridge 34–36', temporary: false },
+      { id: 'b', teeth: [15, 14, 13, 12, 11, 21, 22, 23, 24, 25], implantTeeth: [15, 12, 22, 25], label: 'Full arch · 15, 12, 22, 25', temporary: true },
+      { id: 'c', teeth: [46], implantTeeth: [46], label: 'Crown', temporary: false },
+    ]);
+  });
+  it('labels an overdenture by its implants', () => {
+    expect(restorationSpans([r({ type: 'overdenture', teeth: [34, 35, 36], site_ids: ['s34', 's36'] })], sites)[0].label).toBe('Overdenture · 34, 36');
   });
 });

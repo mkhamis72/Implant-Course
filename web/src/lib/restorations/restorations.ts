@@ -100,6 +100,28 @@ export function currentRestoration(siteId: string, all: Restoration[]): Restorat
   return all.find((r) => isCurrent(r) && r.site_ids.includes(siteId)) ?? null;
 }
 
+/** A current restoration as the odontogram draws it: one bar under `teeth`. */
+export type RestorationSpan = { id: string; teeth: number[]; implantTeeth: number[]; label: string; temporary: boolean };
+
+/** One span per current restoration; implant teeth in arch order (the first one opens for a pontic). */
+export function restorationSpans(all: Restoration[], sites: readonly { id: string; tooth: number }[]): RestorationSpan[] {
+  const toothOf = new Map(sites.map((s) => [s.id, s.tooth]));
+  return all.filter(isCurrent).flatMap((r) => {
+    if (r.teeth.length === 0) return [];
+    const arch = ARCH_ORDER[jawOf(r.teeth[0])];
+    const implantTeeth = r.site_ids
+      .map((id) => toothOf.get(id))
+      .filter((t): t is number => t !== undefined)
+      .sort((a, b) => arch.indexOf(a) - arch.indexOf(b));
+    if (implantTeeth.length === 0) return [];
+    const label =
+      r.type === 'single_crown' ? 'Crown'
+      : r.type === 'bridge' ? `Bridge ${describeTeeth(r.teeth)}`
+      : `${RESTORATION_TYPE_LABELS[r.type]} · ${implantTeeth.join(', ')}`;
+    return [{ id: r.id, teeth: r.teeth, implantTeeth, label, temporary: r.stage === 'temporary' }];
+  });
+}
+
 /** The same day of the month `months` later, clamped to the end of a shorter month. */
 function addMonths(iso: string, months: number): string {
   const [y, m, d] = iso.split('-').map(Number);

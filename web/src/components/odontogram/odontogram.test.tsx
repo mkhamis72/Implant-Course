@@ -70,3 +70,39 @@ describe('<Odontogram> alerts', () => {
     expect(container.querySelectorAll('[data-alert]')).toHaveLength(1);
   });
 });
+
+describe('<Odontogram> restorations', () => {
+  const bridge = { id: 'r1', teeth: [34, 35, 36], implantTeeth: [34, 36], label: 'Bridge 34–36', temporary: false };
+
+  it('draws one bar per restoration, labelled, and outlines pontics dashed', () => {
+    const { container } = render(
+      <Odontogram statuses={{ 34: 'restored', 36: 'restored' }} spans={[bridge]} selected={[]} onSelect={vi.fn()} />,
+    );
+    expect(screen.getAllByRole('button', { name: /^Bridge/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Bridge 34–36' }).textContent).toBe('Bridge 34–36');
+    expect(container.querySelectorAll('[data-span]')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /^Tooth 35, / })).toHaveAttribute('data-covered', 'pontic');
+    expect(screen.getByRole('button', { name: /^Tooth 34, / })).toHaveAttribute('data-covered', 'implant');
+    expect(screen.getByRole('button', { name: /^Tooth 37, / })).not.toHaveAttribute('data-covered');
+  });
+
+  it('draws a temporary lighter and says so', () => {
+    render(<Odontogram statuses={{}} spans={[{ ...bridge, temporary: true }]} selected={[]} onSelect={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Bridge 34–36, temporary' })).toHaveAttribute('opacity', '0.5');
+  });
+
+  it('a bar or a pontic opens the first implant on its Restoration tab; shift-click still selects the pontic', () => {
+    const onSelect = vi.fn();
+    render(<Odontogram statuses={{}} spans={[bridge]} selected={[]} onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Tooth 35, / }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bridge 34–36' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Tooth 36, / }));
+    fireEvent.click(screen.getByRole('button', { name: /^Tooth 35, / }), { shiftKey: true });
+    expect(onSelect.mock.calls).toEqual([
+      [34, false, 'restoration'],
+      [34, false, 'restoration'],
+      [36, false, 'restoration'],
+      [35, true],
+    ]);
+  });
+});

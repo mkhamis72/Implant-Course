@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { currentComponent } from '@/lib/inventory/components';
+import { shownComponents } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
 import {
   COMPONENT_LABELS, SITE_STATE_LABELS, TECHNIQUES, TECHNIQUE_LABELS,
@@ -16,17 +16,18 @@ import { Complications } from './complications';
 import { FailureBox } from './failure-box';
 import { ImpressionControl } from './impression-control';
 
-// The restorative sequence on an implant; the connection stage covers Ti-base, multi-unit or abutment.
+// The component sequence on an implant; the connection stage covers Ti-base, multi-unit or abutment. Crowns are
+// restorations now (Restoration tab): old final_restoration components are left out here, kept in the history list.
 const STAGES: { label: string; types: ComponentType[] }[] = [
   { label: 'Cover screw', types: ['cover_screw'] },
   { label: 'Healing abutment', types: ['healing_abutment'] },
   { label: 'Abutment', types: ['ti_base', 'multi_unit', 'abutment'] },
-  { label: 'Crown', types: ['final_restoration'] },
 ];
 
 function ComponentTimeline({ site }: { site: ImplantSite }) {
-  const current = currentComponent(site)?.component_type;
-  const fitted = new Set(site.components.filter((c) => !c.voided_at).map((c) => c.component_type));
+  const components = shownComponents(site);
+  const current = components.find((c) => c.removed_on === null)?.component_type;
+  const fitted = new Set(components.filter((c) => !c.voided_at).map((c) => c.component_type));
   return (
     <ol aria-label="Components so far" className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-xs">
       {STAGES.map((stage, i) => {

@@ -18,6 +18,11 @@ export function currentComponent(site: ImplantSite): SiteComponent | null {
   return site.components.find((c) => c.removed_on === null) ?? null;
 }
 
+/** Components shown on the chart and the component timeline: old final_restoration rows are drawn as restorations now. */
+export function shownComponents(site: ImplantSite): SiteComponent[] {
+  return site.components.filter((c) => c.component_type !== 'final_restoration');
+}
+
 export function activeSite(sites: readonly ImplantSite[], tooth: number): ImplantSite | null {
   return sites.find((s) => s.tooth === tooth && (s.state === 'planned' || s.state === 'placed' || s.state === 'restored')) ?? null;
 }
@@ -26,7 +31,7 @@ export function badgesFor(sites: readonly ImplantSite[]): Partial<Record<number,
   const badges: Partial<Record<number, string>> = {};
   for (const site of sites) {
     if (site.state !== 'placed' && site.state !== 'restored') continue;
-    const current = currentComponent(site);
+    const current = shownComponents(site).find((c) => c.removed_on === null);
     if (current) badges[site.tooth] = COMPONENT_BADGES[current.component_type];
   }
   return badges;

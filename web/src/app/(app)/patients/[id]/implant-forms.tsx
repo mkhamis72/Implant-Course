@@ -351,12 +351,13 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, siteId: site.id, ...v }); }}>
       <Field label="Component">
         <select className="input" value={v.componentType} onChange={(e) => set('componentType')(e.target.value)}>
-          {COMPONENT_TYPES.map((t) => <option key={t} value={t}>{COMPONENT_LABELS[t]}</option>)}
+          {/* Crowns and bridges are recorded on the Restoration tab; final_restoration stays for old records only. */}
+          {COMPONENT_TYPES.filter((t) => t !== 'final_restoration').map((t) => <option key={t} value={t}>{COMPONENT_LABELS[t]}</option>)}
         </select>
       </Field>
       <Field label="Product (optional)">
         <select className="input" value={v.productId} onChange={(e) => set('productId')(e.target.value)}>
-          <option value="">{v.componentType === 'final_restoration' ? 'Lab-made / not from stock' : 'Not from stock'}</option>
+          <option value="">Not from stock</option>
           {products.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
         </select>
       </Field>

@@ -20,9 +20,13 @@ const ACTION_LABELS: Record<Exclude<PanelAction, 'cancel'>, string> = {
   plan: 'Plan implant', place: 'Place implant', component: 'Add component', followup: 'Record visit',
 };
 
-export function ImplantSection({ patientId, tooth, status, data }: { patientId: string; tooth: number; status: ToothState; data: ChartData }) {
+export function ImplantSection({ patientId, tooth, status, data, openTab }: {
+  patientId: string; tooth: number; status: ToothState; data: ChartData;
+  /** The tab to open with, e.g. the Restoration tab when a restoration on the chart was clicked. */
+  openTab?: ImplantTabKey;
+}) {
   const [mode, setMode] = useState<Mode>('none');
-  const [tab, setTab] = useState<ImplantTabKey>(initialTab(false));
+  const [tab, setTab] = useState<ImplantTabKey>(openTab ?? initialTab(false));
   const [justPlaced, setJustPlaced] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();

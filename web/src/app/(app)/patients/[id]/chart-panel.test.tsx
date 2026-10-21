@@ -4,7 +4,10 @@ import type { ChartData } from '@/lib/inventory/types';
 
 vi.mock('./chart-actions', () => ({ setToothStatus: vi.fn() }));
 vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), deleteGraft: vi.fn() }));
-vi.mock('./restoration-actions', () => ({ addRestoration: vi.fn(), updateRestoration: vi.fn(), voidRestoration: vi.fn() }));
+vi.mock('./restoration-actions', () => ({
+  addRestoration: vi.fn(), updateRestoration: vi.fn(), voidRestoration: vi.fn(),
+  recordRestorationProblem: vi.fn(), updateRestorationProblem: vi.fn(), voidRestorationProblem: vi.fn(),
+}));
 vi.mock('./visit-actions', () => ({ recordVisit: vi.fn() }));
 vi.mock('./outcome-actions', () => ({ saveComplication: vi.fn(), voidComplication: vi.fn(), saveFailure: vi.fn() }));
 vi.mock('./implant-actions', () => ({
@@ -58,5 +61,28 @@ describe('ChartPanel', () => {
     const failed = { ...data(true), statuses: { 36: 'implant_placed' }, sites: [site] } as unknown as ChartData;
     render(<ChartPanel patientId="pt" data={failed} initialTooth={36} />);
     expect(screen.getByRole('combobox', { name: 'Scan / impression' })).toBeInTheDocument();
+  });
+
+  it('draws a bridge as one bar; clicking its pontic opens the first implant on the Restoration tab', () => {
+    const site = (id: string, tooth: number) => ({
+      id, tooth, state: 'restored', placed_on: '2030-03-10', technique: 'guided', torque_ncm: null, isq: null, bone_type: null,
+      graft: '', product: null, lot: null, stock_lot_id: null, placing: null, assisting: null, supervisor: null, slot: null,
+      components: [], followups: [], complications: [], surgery: null, grafts: [],
+    });
+    const bridge = {
+      id: 'r1', stage: 'final', type: 'bridge', teeth: [34, 35, 36], fitted_on: '2030-05-01', retention: 'screw', material: 'zirconia',
+      delegate_id: null, supervisor_id: null, course_id: null, notes: '', ended_on: null, end_kind: null, end_reason: null,
+      updated_at: '2030-05-01T10:00:00+00:00', site_ids: ['s36', 's34'], problems: [],
+    };
+    const ended = { ...bridge, id: 'r0', stage: 'temporary', ended_on: '2030-05-01', end_kind: 'replaced' };
+    const restored = {
+      ...data(true), statuses: { 34: 'restored', 36: 'restored' }, sites: [site('s34', 34), site('s36', 36)], restorations: [ended, bridge],
+    } as unknown as ChartData;
+    window.matchMedia = vi.fn(() => ({ matches: false })) as unknown as typeof window.matchMedia;
+    render(<ChartPanel patientId="pt" data={restored} initialTooth={null} />);
+    expect(screen.getAllByRole('button', { name: /^Bridge / })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /^Tooth 35, / }));
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('34');
+    expect(screen.getByRole('tab', { name: /^Restoration/ })).toHaveAttribute('aria-selected', 'true');
   });
 });
