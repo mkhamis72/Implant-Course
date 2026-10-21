@@ -90,3 +90,9 @@ export async function seedLecturer(adminApi: SupabaseClient, name: string): Prom
   if (error) throw error;
   return data.id;
 }
+
+/** A course that is running today (Cairo), for forms that need one. */
+export async function seedRunningCourse(api: SupabaseClient, name: string): Promise<string> {
+  const day = (offset: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date(Date.now() + offset * 86400000));
+  return seedCourse(api, { name, start: day(-30), end: day(30) });
+}
