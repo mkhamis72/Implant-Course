@@ -38,16 +38,26 @@ test('places an implant from the chart and deducts stock', async ({ page }) => {
   await expect(batch.getByRole('radio')).toHaveCount(1);
   await batch.getByRole('radio', { name: `Lot ${s.lotNo} · exp 2031-12-31 · 3 left` }).check();
   await page.getByLabel('Placed by (delegate)').selectOption({ label: s.delegate });
-  await page.getByLabel('Insertion torque (Ncm, optional)').fill('35');
   await page.getByRole('combobox', { name: 'Technique' }).selectOption({ label: 'Free hand' });
   await page.getByRole('button', { name: 'Save placement' }).click();
 
   await expect(page.getByRole('button', { name: 'Tooth 36, Implant placed' })).toBeVisible();
+  // Stability is recorded in Surgical details, which opens after placement.
+  const surgical = panel(page).getByTestId('surgical-details');
+  await surgical.getByRole('button', { name: 'Edit surgical details' }).click();
+  await surgical.getByLabel('Insertion torque (Ncm, optional)').fill('35');
+  await surgical.getByRole('combobox', { name: 'Bone type' }).selectOption('D2');
+  await surgical.getByRole('button', { name: 'Save surgical details' }).click();
+  await expect(surgical.getByRole('button', { name: 'Edit surgical details' })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Tooth 36, Implant placed' }).click();
+  await panel(page).getByRole('tab', { name: 'Implant' }).click();
   const details = panel(page).getByTestId('site-details');
   await expect(details).toContainText(s.delegate);
   await expect(details).toContainText('Test Organizer');
   await expect(details).toContainText(`Lot ${s.lotNo}`);
   await expect(details).toContainText('35 Ncm');
+  await expect(details).toContainText('Bone D2');
   await expect(details.getByTestId('technique')).toContainText('Free hand');
 
   await page.goto(`/inventory/lots/${s.lotId}`);
@@ -180,4 +190,20 @@ test('a final restoration from the lab marks the tooth restored', async ({ page 
   await page.getByRole('combobox', { name: 'Component', exact: true }).selectOption('final_restoration');
   await page.getByRole('button', { name: 'Save component' }).click();
   await expect(page.getByRole('button', { name: 'Tooth 14, Restored, CR' })).toBeVisible();
+});
+
+test('records a digital scan and finds the patient by it', async ({ page }) => {
+  const s = await setup(page);
+  const name = (await page.getByRole('heading', { level: 1 }).first().innerText()).trim();
+  await placeOn(page, s, 36);
+  await panel(page).getByRole('tab', { name: 'Implant' }).click();
+  const impression = panel(page).getByTestId('impression');
+  await impression.getByRole('combobox', { name: 'Scan / impression' }).selectOption({ label: 'Digital scan' });
+  await impression.getByRole('button', { name: 'Save' }).click();
+  await expect(impression).toContainText('Digital scan');
+
+  await page.goto(`/patients?stage=digital_scan&q=${encodeURIComponent(name)}`);
+  await expect(page.getByRole('row', { name: new RegExp(name) })).toBeVisible();
+  await page.goto(`/patients?stage=impression_pending&q=${encodeURIComponent(name)}`);
+  await expect(page.getByRole('row', { name: new RegExp(name) })).toHaveCount(0);
 });
