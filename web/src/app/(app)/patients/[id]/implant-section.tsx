@@ -87,7 +87,7 @@ export function ImplantSection({ patientId, tooth, status, data, openTab }: {
       {mode === 'plan' && <PlanForm patientId={patientId} tooth={tooth} data={data} onDone={done} />}
       {mode === 'place' && (
         <PlaceForm patientId={patientId} tooth={tooth} data={data} onDone={done} plannedProductId={site?.product?.id ?? null}
-          plannedTechnique={site?.technique ?? null} slot={site?.slot ?? null} onPlaced={() => { setJustPlaced(true); setTab(initialTab(true)); }} />
+          plannedTechnique={site?.technique ?? null} slot={site?.slot ?? null} plannedCourseId={site?.course_id ?? null} onPlaced={() => { setJustPlaced(true); setTab(initialTab(true)); }} />
       )}
       {mode === 'component' && site && <ComponentForm patientId={patientId} site={site} data={data} onDone={done} />}
       {mode === 'followup' && site && <RecordVisitForm patientId={patientId} site={site} data={data} onDone={done} />}

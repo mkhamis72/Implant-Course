@@ -11,7 +11,7 @@ import type { CourseOption, Restoration, RestorationProblem } from '@/lib/restor
 
 export const SITE_SELECT = `
   id, tooth, state, technique, impression_type, impression_taken_on, placed_on, torque_ncm, isq, bone_type, graft, notes, created_at, updated_at, failed_on, failure_type, failure_reason, failure_notes, stock_lot_id,
-  placing_delegate_id, assisting_delegate_id, supervisor_id,
+  placing_delegate_id, assisting_delegate_id, supervisor_id, course_id,
   product:products(*),
   lot:stock_lots(lot_no, expiry),
   placing:delegates!implant_sites_placing_delegate_id_fkey(full_name),
@@ -87,7 +87,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supabase.rpc('implant_visits', { p_patient: patientId }),
     supabase.from('restorations').select(RESTORATION_SELECT).eq('patient_id', patientId).is('voided_at', null),
     // Courses are readable with Courses or Schedule view; without it the picker is empty (RLS returns no rows).
-    supabase.from('courses').select('id, name, start_date, end_date').order('start_date', { ascending: false }),
+    supabase.rpc('course_options'),
   ]);
   for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses]) {
     if (r.error) throw new Error('Could not load the chart');

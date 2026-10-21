@@ -38,7 +38,7 @@ export async function placeImplant(input: Record<string, unknown>): Promise<Resu
   const parsed = placeSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const p = parsed.data;
-  return run(p.patientId, 'place_implant_v2', {
+  return run(p.patientId, 'place_implant_v3', {
     p_patient: p.patientId,
     p_tooth: p.tooth,
     p_product: p.productId,
@@ -47,13 +47,11 @@ export async function placeImplant(input: Record<string, unknown>): Promise<Resu
     p_placing_delegate: p.placingDelegateId,
     p_supervisor: p.supervisorId,
     p_assisting_delegate: p.assistingDelegateId,
-    p_torque: null,
-    p_isq: null,
-    p_bone_type: null,
     p_graft: p.graft,
     p_notes: p.notes,
     p_slot: p.slotId,
     p_technique: p.technique,
+    p_course: p.courseId,
   });
 }
 
@@ -114,15 +112,13 @@ export async function correctPlacement(input: Record<string, unknown>): Promise<
   const parsed = correctPlacementSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const p = parsed.data;
-  return run(p.patientId, 'correct_placement', {
+  return run(p.patientId, 'correct_placement_v2', {
     p_site: p.siteId,
     p_placed_on: p.placedOn,
     p_placing_delegate: p.placingDelegateId,
     p_assisting_delegate: p.assistingDelegateId,
     p_supervisor: p.supervisorId,
-    p_torque: null,
-    p_isq: null,
-    p_bone_type: null,
+    p_course: p.courseId,
     p_graft: p.graft,
     p_notes: p.notes,
   });

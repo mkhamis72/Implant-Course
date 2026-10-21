@@ -50,9 +50,12 @@ describe('delegateSchema', () => {
 });
 
 describe('placeSchema / componentSchema', () => {
-  const place = { patientId: id, tooth: 36, productId: id, lotId: id, placedOn: '2026-01-10', placingDelegateId: id, supervisorId: id, technique: 'guided' };
+  const place = { patientId: id, tooth: 36, productId: id, lotId: id, placedOn: '2026-01-10', placingDelegateId: id, supervisorId: id, courseId: id, technique: 'guided' };
   it('accepts a complete placement and optional fields as null', () => {
     expect(placeSchema.parse({ ...place, assistingDelegateId: '' })).toMatchObject({ assistingDelegateId: null });
+  });
+  it('requires the course', () => {
+    expect(err(placeSchema.safeParse({ ...place, courseId: '' }))).toBe('Choose the course.');
   });
   it('names the first missing piece', () => {
     expect(err(placeSchema.safeParse({ ...place, lotId: '' }))).toBe('Choose a stock batch.');

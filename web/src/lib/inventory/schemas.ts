@@ -86,6 +86,7 @@ export const placeSchema = z.object({
   slotId: optionalId,
   assistingDelegateId: optionalId,
   supervisorId: requiredId('Choose a supervisor.'),
+  courseId: requiredId('Choose the course.'),
   technique,
   graft: text(200),
   notes: text(1000),
@@ -93,7 +94,7 @@ export const placeSchema = z.object({
 
 /** Correcting a placed implant: the placement's date, people and clinical values (not the implant or batch). */
 export const correctPlacementSchema = placeSchema
-  .pick({ patientId: true, placedOn: true, placingDelegateId: true, assistingDelegateId: true, supervisorId: true, graft: true, notes: true })
+  .pick({ patientId: true, placedOn: true, placingDelegateId: true, assistingDelegateId: true, supervisorId: true, courseId: true, graft: true, notes: true })
   .extend({ siteId: requiredId('Implant not found.') });
 
 export const componentSchema = z

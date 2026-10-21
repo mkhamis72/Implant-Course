@@ -129,6 +129,7 @@ export type ImplantSite = {
   placing_delegate_id: string | null;
   assisting_delegate_id: string | null;
   supervisor_id: string | null;
+  course_id: string | null;
   placing: Person;
   assisting: Person;
   supervisor: { full_name: string } | null;
@@ -164,7 +165,7 @@ export type ChartData = {
   supervisors: Option[];
   /** The patient's restorations (voided ones left out), each with its implants and live problems. */
   restorations: Restoration[];
-  /** For the restoration course picker; empty when the reader can't see courses. */
+  /** Course pickers (placement, corrections, restoration), from course_options(): newest first. */
   courses: CourseOption[];
   today: string;
   me: string;
