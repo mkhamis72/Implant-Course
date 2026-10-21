@@ -135,4 +135,14 @@ describe('<Restorations>', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove from record' }));
     expect(vi.mocked(voidRestorationProblem)).toHaveBeenCalledWith({ patientId: 'pt', problemId: 'p1', reason: 'Duplicate' });
   });
+
+  it('offers Record a problem on an ended (remade) restoration to editors, not viewers', () => {
+    const remade = { ...final, id: 'r3', ended_on: '2026-06-01', end_kind: 'remade' as const, end_reason: 'Chipped' };
+    const newer = { ...final, id: 'r4', fitted_on: '2026-06-01' };
+    const { unmount } = render(<Restorations site={s36} patientId="pt" data={data([remade, newer])} />);
+    expect(screen.getAllByRole('button', { name: 'Record a problem' })).toHaveLength(2);
+    unmount();
+    render(<Restorations site={s36} patientId="pt" data={data([remade, newer], false)} />);
+    expect(screen.queryByRole('button', { name: 'Record a problem' })).toBeNull();
+  });
 });
