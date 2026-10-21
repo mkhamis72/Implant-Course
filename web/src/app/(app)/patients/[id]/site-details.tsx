@@ -123,7 +123,7 @@ export function ImplantFacts({ site, patientId, data }: { site: ImplantSite; pat
         )}
         {people.length > 0 && <p className="text-muted">{people.join(', ')}</p>}
         {site.state !== 'removed' && <TechniqueControl site={site} patientId={patientId} editable={data.editable} />}
-        {(site.state === 'placed' || site.state === 'restored') && (
+        {site.state !== 'planned' && site.state !== 'removed' && (
           <ImpressionControl site={site} patientId={patientId} editable={data.editable} />
         )}
         {(site.state === 'placed' || site.state === 'restored') && <ComponentTimeline site={site} />}

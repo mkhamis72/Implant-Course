@@ -42,7 +42,7 @@ export function ImpressionControl({ site, patientId, editable }: { site: Implant
                 name="takenOn"
                 type="date"
                 max={todayIso()}
-                defaultValue={valueOf(state, 'takenOn', site.impression_taken_on ?? todayIso())}
+                defaultValue={valueOf(state, 'takenOn', site.impression_taken_on ?? (site.impression_type ? '' : todayIso()))}
               />
             </label>
           )}

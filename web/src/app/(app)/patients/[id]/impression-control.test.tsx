@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { todayIso } from '@/lib/dates';
 import type { ImplantSite } from '@/lib/inventory/types';
 
-const recordImpression = vi.fn(async (_prev: unknown, _fd: FormData) => ({}));
+const recordImpression = vi.fn<(prev: unknown, fd: FormData) => Promise<object>>(async () => ({}));
 vi.mock('./implant-actions', () => ({ recordImpression: (prev: unknown, fd: FormData) => recordImpression(prev, fd) }));
 
 import { ImpressionControl } from './impression-control';
@@ -28,5 +28,17 @@ describe('ImpressionControl', () => {
     expect(fd.get('type')).toBe('digital_scan');
     expect(fd.get('takenOn')).toBe(todayIso());
     expect(fd.get('expectedUpdatedAt')).toBe('2026-10-21T10:00:00Z');
+  });
+
+  it('keeps a missing date blank on a legacy row that has a type', () => {
+    const legacy = { ...site, impression_type: 'conventional', impression_taken_on: null } as unknown as ImplantSite;
+    render(<ImpressionControl site={legacy} patientId="p1" editable />);
+    expect(screen.getByLabelText(/date/i)).toHaveValue('');
+  });
+
+  it('shows the saved date when one is recorded', () => {
+    const saved = { ...site, impression_type: 'digital_scan', impression_taken_on: '2026-10-01' } as unknown as ImplantSite;
+    render(<ImpressionControl site={saved} patientId="p1" editable />);
+    expect(screen.getByLabelText(/date/i)).toHaveValue('2026-10-01');
   });
 });
