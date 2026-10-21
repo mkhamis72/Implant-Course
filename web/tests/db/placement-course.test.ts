@@ -87,6 +87,28 @@ describe('placement records its course', () => {
     });
   });
 
+  it('correct_placement_v2 refuses a placement date after a fitted restoration', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const site = await placeV3(c, s, { tooth: 36, course: s.course });
+      await c.query(
+        `select public.add_restoration(p_patient => $1, p_stage => 'temporary', p_type => 'single_crown',
+           p_sites => array[$2::uuid], p_teeth => array[36]::smallint[], p_fitted_on => '2026-03-03'::date,
+           p_retention => null, p_material => null, p_delegate => $3, p_supervisor => null, p_course => null,
+           p_remake_reason => null, p_notes => '')`,
+        [s.patient, site, s.delegate],
+      );
+      const correct = (placedOn: string) =>
+        c.query(
+          `select public.correct_placement_v2(p_site => $1, p_placed_on => $2::date, p_placing_delegate => $3,
+             p_assisting_delegate => null, p_supervisor => $4, p_course => $5, p_graft => '', p_notes => '')`,
+          [site, placedOn, s.delegate, users.organizer, s.course],
+        );
+      await refused(c, () => correct('2026-03-04'), /can't be placed after its first .*restoration.*\(2026-03-03\)/);
+      await correct('2026-03-03');
+    });
+  });
+
   it('v2 still places without a course and the placement counts by date and enrollment in course_report', async () => {
     await withTx(async (c) => {
       const s = await setup(c);

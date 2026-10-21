@@ -112,4 +112,67 @@ describe('convert_final_restorations', () => {
       expect(before.site[0].state).toBe('restored');
     });
   });
+
+  // Fitting rows in one transaction gives them the same created_at; spread them so the window order is the fit order.
+  const ageComponents = async (c: Client, ids: string[]) => {
+    await asPostgres(c);
+    for (const [i, id] of ids.entries()) {
+      await c.query(
+        'update public.site_components set created_at = now() - make_interval(mins => $2::int) where id = $1',
+        [id, ids.length - i],
+      );
+    }
+    await actAs(c, users.organizer);
+  };
+
+  it('converts a same-day pair: the newer crown is current, the older one remade by it', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const older = await fit(c, s.site, 'final_restoration', 5, s.delegate);
+      const newer = await fit(c, s.site, 'final_restoration', 5, s.delegate);
+      await ageComponents(c, [older, newer]);
+      expect(await convert(c)).toBeGreaterThanOrEqual(2);
+      const rows = await restosOf(c, s.site);
+      expect(rows).toHaveLength(2);
+      const current = rows.filter((r) => r.ended_on === null);
+      expect(current).toHaveLength(1);
+      const remade = rows.find((r) => r.ended_on !== null);
+      expect(remade).toMatchObject({
+        ended_on: await daysAgo(c, 5), end_kind: 'remade', end_reason: 'not recorded', ended_by: current[0].id,
+      });
+      expect(await convert(c)).toBe(0);
+    });
+  });
+
+  it('converts a 3-crown chain with a same-day tail', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const a = await fit(c, s.site, 'final_restoration', 20, s.delegate);
+      const b = await fit(c, s.site, 'final_restoration', 5, s.delegate);
+      const last = await fit(c, s.site, 'final_restoration', 5, s.delegate);
+      await ageComponents(c, [a, b, last]);
+      expect(await convert(c)).toBeGreaterThanOrEqual(3);
+      const rows = await restosOf(c, s.site);
+      expect(rows).toHaveLength(3);
+      const current = rows.filter((r) => r.ended_on === null);
+      expect(current).toHaveLength(1);
+      const first = rows.find((r) => r.fitted_on === rows[0].fitted_on && r.id !== current[0].id);
+      expect(first?.fitted_on).toBe(await daysAgo(c, 20));
+      const middle = rows.find((r) => r.id !== first?.id && r.id !== current[0].id);
+      expect(middle).toMatchObject({ end_kind: 'remade', ended_by: current[0].id, ended_on: await daysAgo(c, 5) });
+      expect(first).toMatchObject({ end_kind: 'remade', ended_by: middle?.id, ended_on: await daysAgo(c, 5) });
+      expect(await convert(c)).toBe(0);
+    });
+  });
+
+  it('skips a removed crown with no successor', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const id = await fit(c, s.site, 'final_restoration', 10, s.delegate);
+      await asPostgres(c);
+      await c.query('update public.site_components set removed_on = public.cairo_today() - 2 where id = $1', [id]);
+      expect(await convert(c)).toBe(0);
+      expect(await restosOf(c, s.site)).toHaveLength(0);
+    });
+  });
 });
