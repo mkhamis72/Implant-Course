@@ -125,9 +125,10 @@ type Surgery = Partial<{
 }>;
 const saveSurgery = (c: Client, site: string, s: Surgery = {}) =>
   c.query(
-    `select public.save_implant_surgery(p_site => $1, p_extraction_date => $2::date, p_placement_timing => $3,
+    `select public.save_implant_surgery_v2(p_site => $1, p_extraction_date => $2::date, p_placement_timing => $3,
        p_soft_tissue_phenotype => $4, p_keratinized_mucosa_mm => $5, p_flap => $6, p_torque_type => $7, p_healing => $8,
-       p_primary_closure => $9, p_grafting_performed => $10, p_expected_updated_at => $11::timestamptz)`,
+       p_primary_closure => $9, p_grafting_performed => $10, p_torque => null, p_isq => null, p_bone_type => null,
+       p_expected_updated_at => $11::timestamptz)`,
     [site, s.extraction ?? null, s.timing ?? null, s.phenotype ?? null, s.km ?? null, s.flap ?? null, s.torqueType ?? null,
      s.healing ?? null, s.closure ?? null, s.grafting ?? null, s.expected ?? null],
   );

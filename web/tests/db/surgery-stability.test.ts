@@ -38,6 +38,15 @@ const updatedAt = async (c: Client, site: string) =>
   (await c.query('select updated_at::text as t from public.implant_surgery where site_id = $1', [site])).rows[0].t;
 
 describe('save_implant_surgery_v2: torque, ISQ and bone type', () => {
+  it('replaces save_implant_surgery, which is dropped (0056)', async () => {
+    await withTx(async (c) => {
+      const { rows } = await c.query(
+        `select to_regprocedure('public.save_implant_surgery(uuid, date, text, text, numeric, text, text, text, text, text, timestamptz)') as fn`,
+      );
+      expect(rows[0].fn).toBeNull();
+    });
+  });
+
   it('saves torque, ISQ and bone type on the implant', async () => {
     await withTx(async (c) => {
       const { site } = await placedSite(c);
