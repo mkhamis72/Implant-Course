@@ -167,6 +167,18 @@ describe('describeChange: restorations', () => {
       before: { stage: 'final', voided_at: null }, after: { stage: 'final', voided_at: '2026-10-21', voided_reason: 'Wrong tooth' } }))
       .toBe('Restoration removed from the record (Wrong tooth)');
   });
+  it('describes ending and reopening a restoration', () => {
+    const open = { stage: 'temporary', ended_on: null, end_kind: null, end_reason: null, ended_by: null, voided_at: null };
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'UPDATE',
+      before: open, after: { ...open, ended_on: '2026-10-20', end_kind: 'replaced', ended_by: 'r2' } }))
+      .toBe('Restoration replaced on 20 Oct 2026');
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'UPDATE',
+      before: { ...open, stage: 'final' }, after: { ...open, stage: 'final', ended_on: '2026-10-20', end_kind: 'remade', end_reason: 'Chipped', ended_by: 'r2' } }))
+      .toBe('Restoration remade on 20 Oct 2026 (Chipped)');
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'UPDATE',
+      before: { ...open, ended_on: '2026-10-20', end_kind: 'replaced', ended_by: 'r2' }, after: open }))
+      .toBe('Restoration reopened');
+  });
   it('describes problems', () => {
     expect(describeChange({ ...base, table_name: 'restoration_problems', action: 'INSERT', before: null, after: { type: 'debonding', action: 'recemented' } }))
       .toBe('Restoration problem recorded: Debonding / loss of retention — Recemented');

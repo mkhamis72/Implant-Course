@@ -129,7 +129,7 @@ export function ImplantFacts({ site, patientId, data }: { site: ImplantSite; pat
         )}
         {(site.state === 'placed' || site.state === 'restored') && <ComponentTimeline site={site} />}
       </div>
-      <FailureBox site={site} patientId={patientId} editable={data.editable} />
+      <FailureBox site={site} patientId={patientId} editable={data.editable} restorations={data.restorations} />
       {site.components.length > 0 && (
         <div>
           <h4 className="font-medium">Component history</h4>

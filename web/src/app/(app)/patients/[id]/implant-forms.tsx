@@ -72,7 +72,6 @@ export function Footer({ error, pending, saveLabel, onCancel }: { error: string 
   );
 }
 
-/** The chosen batch, or '' if it can't be used on that date (e.g. the date moved past its expiry). */
 /** Courses running on the date first, the others after. */
 export function CourseOptions({ courses, date }: { courses: ChartData['courses']; date: string }) {
   const { running, others } = coursesForDate(courses, date);
@@ -92,6 +91,7 @@ export function CourseOptions({ courses, date }: { courses: ChartData['courses']
   );
 }
 
+/** The chosen batch, or '' if it can't be used on that date (e.g. the date moved past its expiry). */
 function keepIfUsable(data: ChartData, productId: string, lotId: string, usedOn: string): string {
   return availableLots(data.lots, productId, usedOn).some((l) => l.stock_lot_id === lotId) ? lotId : '';
 }

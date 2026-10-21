@@ -138,7 +138,7 @@ describe('restorationSpans (odontogram bars)', () => {
     ], sites);
     expect(spans).toEqual([
       { id: 'a', teeth: [34, 35, 36], implantTeeth: [34, 36], label: 'Bridge 34–36', temporary: false },
-      { id: 'b', teeth: [15, 14, 13, 12, 11, 21, 22, 23, 24, 25], implantTeeth: [15, 12, 22, 25], label: 'Full arch · 15, 12, 22, 25', temporary: true },
+      { id: 'b', teeth: [15, 14, 13, 12, 11, 21, 22, 23, 24, 25], implantTeeth: [15, 12, 22, 25], label: 'Full arch · on 15, 12, 22, 25', temporary: true },
       { id: 'c', teeth: [46], implantTeeth: [46], label: 'Crown', temporary: false },
     ]);
   });
@@ -150,6 +150,6 @@ describe('restorationSpans (odontogram bars)', () => {
     ], withLost)).toEqual([{ id: 'a', teeth: [34, 35, 36], implantTeeth: [34, 36], label: 'Bridge 34–36', temporary: false }]);
   });
   it('labels an overdenture by its implants', () => {
-    expect(restorationSpans([r({ type: 'overdenture', teeth: [34, 35, 36], site_ids: ['s34', 's36'] })], sites)[0].label).toBe('Overdenture · 34, 36');
+    expect(restorationSpans([r({ type: 'overdenture', teeth: [34, 35, 36], site_ids: ['s34', 's36'] })], sites)[0].label).toBe('Overdenture · on 34, 36');
   });
 });

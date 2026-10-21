@@ -122,7 +122,7 @@ export function restorationSpans(
     const label =
       r.type === 'single_crown' ? 'Crown'
       : r.type === 'bridge' ? `Bridge ${describeTeeth(r.teeth)}`
-      : `${RESTORATION_TYPE_LABELS[r.type]} · ${implantTeeth.join(', ')}`;
+      : `${RESTORATION_TYPE_LABELS[r.type]} · on ${implantTeeth.join(', ')}`;
     return [{ id: r.id, teeth: r.teeth, implantTeeth, label, temporary: r.stage === 'temporary' }];
   });
 }

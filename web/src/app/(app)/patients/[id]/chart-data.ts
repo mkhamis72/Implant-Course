@@ -86,7 +86,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name'),
     supabase.rpc('implant_visits', { p_patient: patientId }),
     supabase.from('restorations').select(RESTORATION_SELECT).eq('patient_id', patientId).is('voided_at', null),
-    // Courses are readable with Courses or Schedule view; without it the picker is empty (RLS returns no rows).
+    // Course choices for the pickers: course_options() needs View on Patients, like this page.
     supabase.rpc('course_options'),
   ]);
   for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses]) {

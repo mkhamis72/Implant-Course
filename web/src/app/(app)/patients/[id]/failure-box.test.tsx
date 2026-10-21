@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { ImplantSite } from '@/lib/inventory/types';
+import type { Restoration } from '@/lib/restorations/restorations';
 
 vi.mock('./outcome-actions', () => ({ saveComplication: vi.fn(), voidComplication: vi.fn(), saveFailure: vi.fn() }));
 vi.mock('./implant-actions', () => ({ fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), receiveStockForPlacement: vi.fn() }));
@@ -16,7 +17,7 @@ beforeEach(() => vi.mocked(saveFailure).mockReset().mockResolvedValue({}));
 
 describe('<FailureBox>', () => {
   it('asks for details on an old failure and records them without a version', () => {
-    render(<FailureBox site={failed()} patientId="pt" editable />);
+    render(<FailureBox site={failed()} patientId="pt" editable restorations={[]} />);
     expect(screen.getByTestId('failure')).toHaveTextContent('Failure details not recorded.');
     fireEvent.click(screen.getByRole('button', { name: 'Add failure details' }));
     fireEvent.change(screen.getByLabelText(/^Failure date/), { target: { value: '2026-05-01' } });
@@ -29,15 +30,24 @@ describe('<FailureBox>', () => {
   });
 
   it('shows recorded details with early/late and edits them with the version it opened with', () => {
-    render(<FailureBox site={failed({ failed_on: '2026-05-01', failure_type: 'removed', failure_reason: 'peri_implantitis' })} patientId="pt" editable />);
+    render(<FailureBox site={failed({ failed_on: '2026-05-01', failure_type: 'removed', failure_reason: 'peri_implantitis' })} patientId="pt" editable restorations={[]} />);
     expect(screen.getByTestId('failure')).toHaveTextContent(/Removed · Peri-implantitis · .+ · early/);
     fireEvent.click(screen.getByRole('button', { name: 'Edit failure details' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save failure details' }));
     expect(vi.mocked(saveFailure)).toHaveBeenCalledWith(expect.objectContaining({ expectedUpdatedAt: '2026-05-02T08:00:00.5+00:00', failureType: 'removed' }));
   });
 
+  it('counts a restoration on this implant as loading', () => {
+    const site = failed({ failed_on: '2026-05-01', failure_type: 'removed', failure_reason: 'peri_implantitis' });
+    const crown = (siteIds: string[]) => [{ fitted_on: '2026-04-01', site_ids: siteIds }] as unknown as Restoration[];
+    const { rerender } = render(<FailureBox site={site} patientId="pt" editable restorations={crown(['s1'])} />);
+    expect(screen.getByTestId('failure')).toHaveTextContent(/ · late/);
+    rerender(<FailureBox site={site} patientId="pt" editable restorations={crown(['other'])} />);
+    expect(screen.getByTestId('failure')).toHaveTextContent(/ · early/);
+  });
+
   it('renders nothing for an implant that has not failed', () => {
-    const { container } = render(<FailureBox site={failed({ state: 'placed' } as Partial<ImplantSite>)} patientId="pt" editable />);
+    const { container } = render(<FailureBox site={failed({ state: 'placed' } as Partial<ImplantSite>)} patientId="pt" editable restorations={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

@@ -338,7 +338,7 @@
   - Odontogram prop `spans?: { id: string; teeth: number[]; implantTeeth: number[]; label: string; temporary: boolean }[]`, one per current restoration.
   - `layout.ts` gets `spanBox(teeth: number[]): { x; y; width; jaw }`, which reuses the tooth box geometry.
   - **Drawing:**
-    - one bar per span, between the tooth boxes and the jaw line, labelled e.g. "Bridge 34–36" or "Full arch · 15, 12, 22, 25" (single crown: "Crown");
+    - one bar per span, between the tooth boxes and the jaw line, labelled e.g. "Bridge 34–36" or "Full arch · on 15, 12, 22, 25" (single crown: "Crown");
     - covered teeth without an implant are outlined dashed;
     - temporaries are drawn at reduced opacity, using tokens only.
   - **Clicking** a bar or a covered tooth calls `onSelect` with the restoration's first implant tooth (for a pontic or cantilever) and opens the Restoration tab.

@@ -7,6 +7,7 @@ import { TYPE_LABELS } from '@/lib/implants/complications';
 import { FAILURE_REASON_LABELS, FAILURE_TYPE_LABELS, type FailureReason, type FailureType } from '@/lib/implants/failure';
 import { PROBLEM_ACTION_LABELS, PROBLEM_TYPE_LABELS, RESTORATION_TYPE_LABELS, STAGE_LABELS, describeTeeth } from '@/lib/restorations/restorations';
 import { visitResult, type Attendance } from '@/lib/visits/visits';
+import { formatDate } from '@/lib/format';
 import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
 
 const FAILURE_FIELD_LABELS: Record<string, string> = { failed_on: 'failure date', failure_type: 'failure type', failure_reason: 'failure reason', failure_notes: 'failure notes' };
@@ -151,6 +152,11 @@ export function describeChange(e: HistoryEntry): string {
         const type = (RESTORATION_TYPE_LABELS[row?.type as keyof typeof RESTORATION_TYPE_LABELS] ?? String(row?.type)).toLowerCase();
         return `Restoration added: ${stage} ${type} on ${describeTeeth((row?.teeth as number[] | undefined) ?? [])}`;
       }
+      if (e.after?.end_kind && !e.before?.end_kind) {
+        const on = formatDate(String(e.after.ended_on));
+        return e.after.end_kind === 'remade' ? `Restoration remade on ${on} (${e.after.end_reason})` : `Restoration replaced on ${on}`;
+      }
+      if (e.before?.end_kind && !e.after?.end_kind) return 'Restoration reopened';
       const changed = changedFields(e.before, e.after, RESTORATION_FIELD_LABELS);
       return changed.length ? `Restoration updated: ${changed.join(', ')}` : 'Restoration updated';
     }

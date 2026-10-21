@@ -78,7 +78,7 @@ export function ImplantTabs({ site, patientId, data, justPlaced, selected, onSel
           )}
           {t.key === 'surgery' && <SurgicalDetails site={site} patientId={patientId} editable={data.editable} startOpen={justPlaced} bare />}
           {t.key === 'restoration' && <Restorations site={site} patientId={patientId} data={data} />}
-          {t.key === 'visits' &&<Visits site={site} visits={data.visits} />}
+          {t.key === 'visits' && <Visits site={site} visits={data.visits} />}
           {t.key === 'complications' && <Complications site={site} patientId={patientId} editable={data.editable} bare />}
           {t.key === 'corrections' && <Corrections patientId={patientId} site={site} data={data} bare />}
         </div>

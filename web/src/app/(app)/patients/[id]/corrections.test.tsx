@@ -50,4 +50,12 @@ describe('<Corrections> placement details', () => {
     });
     expect(await screen.findByRole('status')).toHaveTextContent('Correction saved.');
   });
+
+  // The chart doesn't load enrollments (Patients viewers can't read them), so the report's date-plus-enrollment
+  // fallback can't be computed here: a placement with no course asks for one.
+  it('leaves the course empty on a placement recorded without one', () => {
+    render(<Corrections patientId="pt" site={{ ...site, course_id: null } as ImplantSite} data={data} />);
+    const box = screen.getByRole('group', { name: 'Placement details' });
+    expect(within(box).getByRole('combobox', { name: 'Course' })).toHaveValue('');
+  });
 });

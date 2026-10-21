@@ -12,7 +12,7 @@ export const FAILURE_REASON_LABELS: Record<FailureReason, string> = {
   no_osseointegration: 'No osseointegration', peri_implantitis: 'Peri-implantitis', fracture: 'Fracture', malposition: 'Malposition', other: 'Other',
 };
 
-/** Components at abutment level or beyond: a failure after the first of these is late. */
+/** Components at abutment level or beyond: a failure after the first of these (or of any restoration) is late. */
 const ABUTMENT_LEVEL = ['ti_base', 'multi_unit', 'abutment', 'final_restoration'];
 
 type FailureSite = {
@@ -23,21 +23,24 @@ type FailureSite = {
   components: readonly { component_type: string; fitted_on: string; voided_at: string | null }[];
 };
 
-export function failureTiming(site: FailureSite): 'early' | 'late' | null {
+/** Restorations fitted on this implant (temporary or final, voided ones left out) count as loading too. */
+type FittedRestoration = { fitted_on: string };
+
+export function failureTiming(site: FailureSite, restorations: readonly FittedRestoration[] = []): 'early' | 'late' | null {
   if (!site.failed_on) return null;
-  const first = site.components
-    .filter((c) => !c.voided_at && ABUTMENT_LEVEL.includes(c.component_type))
-    .map((c) => c.fitted_on)
-    .sort()[0];
+  const first = [
+    ...site.components.filter((c) => !c.voided_at && ABUTMENT_LEVEL.includes(c.component_type)).map((c) => c.fitted_on),
+    ...restorations.map((r) => r.fitted_on),
+  ].sort()[0];
   return first !== undefined && first <= site.failed_on ? 'late' : 'early';
 }
 
-export function describeFailure(site: FailureSite): string {
+export function describeFailure(site: FailureSite, restorations: readonly FittedRestoration[] = []): string {
   return [
     site.failure_type ? FAILURE_TYPE_LABELS[site.failure_type] : null,
     site.failure_reason ? FAILURE_REASON_LABELS[site.failure_reason] : null,
     site.failed_on ? formatDate(site.failed_on) : null,
-    failureTiming(site),
+    failureTiming(site, restorations),
   ].filter(Boolean).join(' · ');
 }
 
