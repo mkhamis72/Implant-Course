@@ -7,6 +7,7 @@ import { productLabel } from '@/lib/inventory/labels';
 import type { ChartData, ImplantSite, LotOnHand, Product } from '@/lib/inventory/types';
 import type { ToothState } from '@/lib/patients/types';
 import type { VisitRow } from '@/lib/visits/visits';
+import type { CourseOption, Restoration, RestorationProblem } from '@/lib/restorations/restorations';
 
 export const SITE_SELECT = `
   id, tooth, state, technique, impression_type, impression_taken_on, placed_on, torque_ncm, isq, bone_type, graft, notes, created_at, updated_at, failed_on, failure_type, failure_reason, failure_notes, stock_lot_id,
@@ -45,10 +46,37 @@ export function sortSite(site: ImplantSite): ImplantSite {
   };
 }
 
+const RESTORATION_SELECT = `
+  id, stage, type, teeth, fitted_on, retention, material, delegate_id, supervisor_id, course_id, notes,
+  ended_on, end_kind, end_reason, updated_at,
+  sites:restoration_sites(site_id),
+  problems:restoration_problems(id, noticed_on, type, action, notes, updated_at, voided_at),
+  delegate:delegates(full_name),
+  supervisor:supervisors(full_name),
+  course:courses(name)
+`;
+
+type RestorationRow = Omit<Restoration, 'site_ids' | 'problems'> & {
+  sites: { site_id: string }[];
+  problems: (RestorationProblem & { voided_at: string | null })[];
+};
+
+/** Site ids flattened; voided problems left out, newest first. */
+function toRestoration({ sites, problems, ...r }: RestorationRow): Restoration {
+  return {
+    ...r,
+    site_ids: sites.map((s) => s.site_id),
+    problems: problems
+      .filter((p) => !p.voided_at)
+      .map((p) => ({ id: p.id, noticed_on: p.noticed_on, type: p.type, action: p.action, notes: p.notes, updated_at: p.updated_at }))
+      .sort((a, b) => (a.noticed_on < b.noticed_on ? 1 : a.noticed_on > b.noticed_on ? -1 : 0)),
+  };
+}
+
 export async function loadChartData(patientId: string): Promise<ChartData> {
   const supabase = await createClient();
   const me = await getCurrentProfile();
-  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits] = await Promise.all([
+  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses] = await Promise.all([
     supabase.from('tooth_status').select('tooth, status').eq('patient_id', patientId),
     supabase.from('implant_sites').select(SITE_SELECT).eq('patient_id', patientId).order('created_at'),
     supabase.from('products').select('*').eq('active', true),
@@ -57,8 +85,11 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supabase.from('profiles').select('user_id, full_name, email').eq('active', true).in('role', ['admin', 'organizer']).order('full_name'),
     supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name'),
     supabase.rpc('implant_visits', { p_patient: patientId }),
+    supabase.from('restorations').select(RESTORATION_SELECT).eq('patient_id', patientId).is('voided_at', null),
+    // Courses are readable with Courses or Schedule view; without it the picker is empty (RLS returns no rows).
+    supabase.from('courses').select('id, name, start_date, end_date').order('start_date', { ascending: false }),
   ]);
-  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits]) {
+  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses]) {
     if (r.error) throw new Error('Could not load the chart');
   }
   const statusMap: Partial<Record<number, ToothState>> = {};
@@ -75,6 +106,8 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     delegates: (delegates.data ?? []).map((d) => ({ id: d.id as string, label: d.full_name as string })),
     organizers: (organizers.data ?? []).map((o) => ({ id: o.user_id as string, label: (o.full_name || o.email) as string })),
     supervisors: (supervisors.data ?? []).map((s) => ({ id: s.id as string, label: s.full_name as string })),
+    restorations: ((restorations.data ?? []) as unknown as RestorationRow[]).map(toRestoration),
+    courses: (courses.data ?? []) as CourseOption[],
     today: todayIso(),
     me: me?.user_id ?? '',
     editable: me ? canEdit(me, 'patients') : false,
