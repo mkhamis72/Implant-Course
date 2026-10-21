@@ -7,7 +7,11 @@ import { canSeeImplants, reportAccessNote } from '@/lib/auth/permissions';
 import { formatDate, formatTime } from '@/lib/format';
 import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutcome, type SiteState, type Technique } from '@/lib/inventory/types';
 import type { Course } from '@/lib/schedule/types';
-import { bySession, implantLabel, summarise, type CourseReportRow, type Stats, type Summary } from '@/lib/reports/course-report';
+import {
+  bySession, implantLabel, restorationStageLabel, restorationStatus, restorationTypeLabel, summarise,
+  type CourseReportRow, type CourseRestorationRow, type Stats, type Summary,
+} from '@/lib/reports/course-report';
+import { describeTeeth } from '@/lib/restorations/restorations';
 import { PrintButton } from '../../../schedule/pull-list/print-button';
 
 const dash = (v: number | string | null | undefined) => (v === null || v === undefined || v === '' ? '—' : String(v));
@@ -35,15 +39,17 @@ export default async function CourseReportPage({ params }: { params: Promise<{ i
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
   const supabase = await createClient();
-  const [{ data: course }, { data, error }] = await Promise.all([
+  const [{ data: course }, { data, error }, { data: restoData, error: restoError }] = await Promise.all([
     supabase.from('courses').select('*').eq('id', id).maybeSingle(),
     supabase.rpc('course_report', { p_course: id }),
+    supabase.rpc('course_restorations', { p_course: id }),
   ]);
   if (!course) notFound();
-  if (error) throw new Error('Could not load the course report');
+  if (error || restoError) throw new Error('Could not load the course report');
   const c = course as Course;
   const rows = (data ?? []) as CourseReportRow[];
-  const all = summarise(rows);
+  const restorations = (restoData ?? []) as CourseRestorationRow[];
+  const all = summarise(rows, restorations);
   const sessions = bySession(rows);
   const note = reportAccessNote(profile);
 
@@ -71,7 +77,7 @@ export default async function CourseReportPage({ params }: { params: Promise<{ i
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-3">
         <div className="card space-y-1">
           <h2 className="font-semibold">Totals</h2>
-          <p className="text-sm">{plural(all.implants, 'implant')} · {plural(all.patients, 'patient')}</p>
+          <p className="text-sm">{plural(all.implants, 'implant')} · {plural(all.restorations, 'restoration')} · {plural(all.patients, 'patient')}</p>
           <p className="text-sm text-muted">{counts(all.byState, (k) => SITE_STATE_LABELS[k as SiteState] ?? k)}</p>
         </div>
         <div className="card space-y-1">
@@ -105,6 +111,7 @@ export default async function CourseReportPage({ params }: { params: Promise<{ i
                 <th>Placed</th>
                 <th>Assisted</th>
                 <th>Mean torque (Ncm)</th>
+                <th>Restored</th>
               </tr>
             </thead>
             <tbody>
@@ -114,6 +121,7 @@ export default async function CourseReportPage({ params }: { params: Promise<{ i
                   <td data-label="Placed">{d.placed}</td>
                   <td data-label="Assisted">{d.assisted}</td>
                   <td data-label="Mean torque (Ncm)">{dash(d.meanTorque)}</td>
+                  <td data-label="Restored">{d.restored}</td>
                 </tr>
               ))}
             </tbody>
@@ -173,6 +181,44 @@ export default async function CourseReportPage({ params }: { params: Promise<{ i
         </section>
       ))}
       {sessions.length === 0 && <p className="card text-muted">No implants placed in this course yet.</p>}
+
+      <section className="card space-y-2 break-inside-avoid" data-testid="report-restorations">
+        <h2 className="font-semibold">Restorations</h2>
+        {restorations.length === 0 ? (
+          <p className="text-sm text-muted">No restorations fitted in this course yet.</p>
+        ) : (
+          <div className="overflow-x-auto print:overflow-visible">
+            <table className="table print:text-[10px]">
+              <thead>
+                <tr>
+                  <th>Patient</th>
+                  <th>Teeth</th>
+                  <th>Stage</th>
+                  <th>Type</th>
+                  <th>Fitted</th>
+                  <th>Delegate</th>
+                  <th>Supervisor</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {restorations.map((r) => (
+                  <tr key={r.restoration_id} data-testid="report-restoration">
+                    <td data-label="Patient">{r.patient_name} ({r.file_no})</td>
+                    <td data-label="Teeth">{describeTeeth(r.teeth)}</td>
+                    <td data-label="Stage">{restorationStageLabel(r.stage)}</td>
+                    <td data-label="Type">{restorationTypeLabel(r.type)}</td>
+                    <td data-label="Fitted">{formatDate(r.fitted_on)}</td>
+                    <td data-label="Delegate">{dash(r.delegate)}</td>
+                    <td data-label="Supervisor">{dash(r.supervisor)}</td>
+                    <td data-label="Status">{restorationStatus(r)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
         </>
       )}
     </div>

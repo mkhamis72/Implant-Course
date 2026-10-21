@@ -1,5 +1,6 @@
 import { toCsv } from '@/lib/csv';
 import { productLabel } from '@/lib/inventory/labels';
+import { describeTeeth, RESTORATION_TYPE_LABELS, STAGE_LABELS, type RestorationStage, type RestorationType } from '@/lib/restorations/restorations';
 import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutcome, type SiteState, type Technique } from '@/lib/inventory/types';
 
 /** A row of public.course_report(course): one implant placed in the course. */
@@ -12,9 +13,15 @@ export type CourseReportRow = {
   torque_ncm: number | string | null; isq: number | string | null; bone_type: string | null; technique: string | null; graft: string;
   last_outcome: string | null;
 };
+/** A row of public.course_restorations(course): one restoration fitted in the course. */
+export type CourseRestorationRow = {
+  restoration_id: string; patient_name: string; file_no: string; teeth: number[]; stage: string; type: string; fitted_on: string;
+  delegate_id: string | null; delegate: string | null; supervisor: string | null; ended_on: string | null; end_kind: string | null;
+};
 export type Stats = { n: number; mean: number | null; median: number | null; min: number | null; max: number | null };
 export type Summary = {
   implants: number;
+  restorations: number;
   patients: number;
   byTechnique: Record<string, number>;
   byState: Record<string, number>;
@@ -22,7 +29,7 @@ export type Summary = {
   bySize: Record<string, number>;
   torque: Stats;
   isq: Stats;
-  delegates: { name: string; placed: number; assisted: number; meanTorque: number | null }[];
+  delegates: { name: string; placed: number; assisted: number; meanTorque: number | null; restored: number }[];
   supervisors: { name: string; count: number }[];
 };
 export type SessionGroup = { sessionId: string | null; title: string; date: string | null; rows: CourseReportRow[]; summary: Summary };
@@ -60,10 +67,15 @@ function tally(keys: string[]): Record<string, number> {
   return out;
 }
 
-export function summarise(rows: CourseReportRow[]): Summary {
-  const people = new Map<string, { placed: number; assisted: number; torques: (number | string | null)[] }>();
+export const restorationStatus = (r: Pick<CourseRestorationRow, 'ended_on' | 'end_kind'>) =>
+  r.ended_on === null ? 'Current' : r.end_kind === 'remade' ? 'Remade' : 'Replaced';
+export const restorationStageLabel = (s: string) => STAGE_LABELS[s as RestorationStage] ?? s;
+export const restorationTypeLabel = (t: string) => RESTORATION_TYPE_LABELS[t as RestorationType] ?? t;
+
+export function summarise(rows: CourseReportRow[], restorations: CourseRestorationRow[] = []): Summary {
+  const people = new Map<string, { placed: number; assisted: number; torques: (number | string | null)[]; restored: number }>();
   const person = (name: string) => {
-    if (!people.has(name)) people.set(name, { placed: 0, assisted: 0, torques: [] });
+    if (!people.has(name)) people.set(name, { placed: 0, assisted: 0, torques: [], restored: 0 });
     return people.get(name)!;
   };
   for (const r of rows) {
@@ -74,9 +86,11 @@ export function summarise(rows: CourseReportRow[]): Summary {
     }
     if (r.assisting_delegate) person(r.assisting_delegate).assisted += 1;
   }
+  for (const r of restorations) if (r.delegate) person(r.delegate).restored += 1;
   const sup = tally(rows.map((r) => r.supervisor).filter((s): s is string => Boolean(s)));
   return {
     implants: rows.length,
+    restorations: restorations.length,
     patients: new Set(rows.map((r) => r.file_no)).size,
     byTechnique: tally(rows.map((r) => r.technique ?? 'not_set')),
     byState: tally(rows.map((r) => r.state)),
@@ -85,7 +99,7 @@ export function summarise(rows: CourseReportRow[]): Summary {
     torque: stats(rows.map((r) => r.torque_ncm)),
     isq: stats(rows.map((r) => r.isq)),
     delegates: [...people.entries()]
-      .map(([name, p]) => ({ name, placed: p.placed, assisted: p.assisted, meanTorque: stats(p.torques).mean }))
+      .map(([name, p]) => ({ name, placed: p.placed, assisted: p.assisted, meanTorque: stats(p.torques).mean, restored: p.restored }))
       .sort((a, b) => b.placed - a.placed || a.name.localeCompare(b.name)),
     supervisors: Object.entries(sup)
       .map(([name, count]) => ({ name, count }))
@@ -107,8 +121,8 @@ export function bySession(rows: CourseReportRow[]): SessionGroup[] {
 }
 
 /** One row per implant: ISO dates, plain numbers, empty cells for values not recorded. */
-export function courseReportCsv(rows: CourseReportRow[]): string {
-  return toCsv(
+export function courseReportCsv(rows: CourseReportRow[], restorations: CourseRestorationRow[] = []): string {
+  const implants = toCsv(
     [
       'Session', 'Session date', 'Patient', 'File', 'Tooth', 'Placed on', 'State', 'Placed by', 'Assisted by', 'Supervisor',
       'Brand', 'System', 'Diameter (mm)', 'Length (mm)', 'Implant', 'Lot', 'Torque (Ncm)', 'ISQ', 'Bone type', 'Technique', 'Graft',
@@ -122,4 +136,14 @@ export function courseReportCsv(rows: CourseReportRow[]): string {
       r.last_outcome ? OUTCOME_LABELS[r.last_outcome as FollowupOutcome] : '',
     ]),
   );
+  if (restorations.length === 0) return implants;
+  // A second table after a blank line; the leading column says what kind of row it is.
+  const section = toCsv(
+    ['restoration', 'patient', 'file_no', 'teeth', 'stage', 'type', 'fitted_on', 'delegate', 'status'],
+    restorations.map((r) => [
+      'restoration', r.patient_name, r.file_no, describeTeeth(r.teeth), restorationStageLabel(r.stage), restorationTypeLabel(r.type),
+      r.fitted_on, r.delegate ?? '', restorationStatus(r),
+    ]),
+  );
+  return `${implants}\r\n${section.replace(/^\uFEFF/, '')}`;
 }

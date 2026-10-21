@@ -7,6 +7,7 @@ import { contentDisposition, csvFilename, toCsv } from '@/lib/csv';
 import { productLabel } from '@/lib/inventory/labels';
 import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutcome, type SiteState } from '@/lib/inventory/types';
 import type { ReportRow } from '@/lib/schedule/types';
+import { restorationsCsvSection, type MyRestorationRow } from '@/lib/delegate-portal/report';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
@@ -14,13 +15,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) return new NextResponse('Not found', { status: 404 });
   const supabase = await createClient();
-  const [{ data: delegate }, { data, error }] = await Promise.all([
+  const [{ data: delegate }, { data, error }, { data: restoData, error: restoError }] = await Promise.all([
     supabase.from('delegates').select('full_name').eq('id', id).maybeSingle(),
     supabase.rpc('delegate_report', { p_delegate: id }),
+    supabase.rpc('delegate_restorations', { p_delegate: id }),
   ]);
-  if (!delegate || error) return new NextResponse('Not found', { status: 404 });
+  if (!delegate || error || restoError) return new NextResponse('Not found', { status: 404 });
   const rows = (data ?? []) as ReportRow[];
-  const csv = toCsv(
+  const csv =
+    toCsv(
     ['Course', 'Patient', 'File', 'Tooth', 'Role', 'Implant', 'Technique', 'Lot', 'Placed on', 'State', 'Last follow-up'],
     rows.map((r) => [
       r.course_name ?? '',
@@ -35,7 +38,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       SITE_STATE_LABELS[r.state as SiteState] ?? r.state,
       r.last_outcome ? OUTCOME_LABELS[r.last_outcome as FollowupOutcome] : '',
     ]),
-  );
+  ) + restorationsCsvSection((restoData ?? []) as MyRestorationRow[]);
   const filename = csvFilename(delegate.full_name, id);
   return new NextResponse(csv, {
     headers: {
