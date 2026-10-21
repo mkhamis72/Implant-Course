@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { describeChange } from './history';
+import { describeChange, isHiddenFromHistory } from './history';
 import type { HistoryEntry } from './types';
 
 const entry = (e: Partial<HistoryEntry>): HistoryEntry => ({
@@ -176,5 +176,13 @@ describe('describeChange: restorations', () => {
     expect(describeChange({ ...base, table_name: 'restoration_problems', action: 'UPDATE',
       before: { type: 'wear', action: 'none', voided_at: null }, after: { type: 'wear', action: 'none', voided_at: '2026-10-21', voided_reason: 'Duplicate' } }))
       .toBe('Restoration problem removed from the record: Wear (Duplicate)');
+  });
+});
+
+describe('restoration links', () => {
+  it('hides restoration_sites rows and nothing else', () => {
+    const base = { id: 1, at: '2026-10-21T10:00:00Z', actor: 'A', action: 'INSERT' as const, before: null, after: { site_id: 's1' } };
+    expect(isHiddenFromHistory({ ...base, table_name: 'restoration_sites' })).toBe(true);
+    expect(isHiddenFromHistory({ ...base, table_name: 'restorations' })).toBe(false);
   });
 });

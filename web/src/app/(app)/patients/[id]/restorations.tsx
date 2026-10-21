@@ -100,11 +100,11 @@ export function RestorationCard({ r, patientId, data, editable }: { r: Restorati
         <div>
           <p className="font-medium">Problems</p>
           <ul className="space-y-1">
-            {r.problems.map((p) => <ProblemItem key={p.id} r={r} p={p} patientId={patientId} editable={data.editable} />)}
+            {r.problems.map((p) => <ProblemItem key={p.id} r={r} p={p} patientId={patientId} editable={editable} />)}
           </ul>
         </div>
       )}
-      {data.editable && !addingProblem && (
+      {editable && !addingProblem && (
         <button type="button" className="btn-secondary btn" onClick={() => setAddingProblem(true)}>Record a problem</button>
       )}
       {addingProblem && <ProblemForm r={r} patientId={patientId} onDone={() => setAddingProblem(false)} />}

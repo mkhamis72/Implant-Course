@@ -55,6 +55,9 @@ function stateLabel(value: unknown): string {
   return STATE_LABELS[(value as ToothState) ?? 'present'] ?? String(value);
 }
 
+/** Link rows that only repeat what their restoration entry already says (the row holds no tooth to name). */
+export const isHiddenFromHistory = (e: HistoryEntry) => e.table_name === 'restoration_sites';
+
 export function describeChange(e: HistoryEntry): string {
   const fields = changedFields(e.before, e.after);
   switch (e.table_name) {
