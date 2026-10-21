@@ -25,7 +25,7 @@ export function ImplantTabs({ site, patientId, data, justPlaced, selected, onSel
   const live = (site.complications ?? []).filter((c) => !c.voided_at);
   const tabs = implantTabs({
     editable: correctable(site, data),
-    surgery: surgeryCompleteness(site.surgery),
+    surgery: surgeryCompleteness(site.surgery, site),
     complications: { total: live.length, open: live.filter(isOpen).length },
   }).filter((t) => t.key !== 'surgery' || site.state !== 'removed');
   const current = tabs.some((t) => t.key === selected) ? selected : 'implant';

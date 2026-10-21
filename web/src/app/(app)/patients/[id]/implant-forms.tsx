@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { availableLots } from '@/lib/inventory/lots';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { acceptsProduct } from '@/lib/inventory/components';
-import { BONE_TYPES } from '@/lib/inventory/schemas';
 import {
   COMPONENT_LABELS, COMPONENT_TYPES, TECHNIQUES, TECHNIQUE_LABELS,
   type ChartData, type ComponentType, type ImplantSite, type Technique,
@@ -209,32 +208,6 @@ function BatchSelect({ data, productId, usedOn, value, onChange, receive }: {
   );
 }
 
-const TORQUES = ['15', '25', '35', '45'];
-
-function TorqueField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <div>
-      <label className="block">
-        <span className="label">Insertion torque (Ncm, optional)</span>
-        <input className="input" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} />
-      </label>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {TORQUES.map((t) => (
-          <button
-            key={t}
-            type="button"
-            aria-pressed={value === t}
-            onClick={() => onChange(t)}
-            className={`rounded-full border px-3 py-1 text-sm ${value === t ? 'border-accent bg-accent-soft text-accent-strong' : 'border-line-strong hover:bg-sunken'}`}
-          >
-            {t} Ncm
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const nameOf = (options: { id: string; label: string }[], id: string) => options.find((o) => o.id === id)?.label ?? null;
 
 /**
@@ -289,7 +262,7 @@ export function PlaceForm({
   const [v, setV] = useState({
     productId: plannedProductId ?? '', technique: plannedTechnique ?? '', lotId: '', placedOn: data.today,
     placingDelegateId: placingFromSlot, assistingDelegateId: assistingFromSlot,
-    supervisorId: slot?.supervisor_id ?? (data.supervisors.some((s) => s.id === data.me) ? data.me : ''), torque: '', isq: '', boneType: '', graft: '', notes: '',
+    supervisorId: slot?.supervisor_id ?? (data.supervisors.some((s) => s.id === data.me) ? data.me : ''), graft: '', notes: '',
   });
   const set = (key: keyof typeof v) => (value: string) =>
     setV((cur) => ({
@@ -351,18 +324,6 @@ export function PlaceForm({
           </select>
         </Field>
       </People>
-      <TorqueField value={v.torque} onChange={set('torque')} />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="ISQ (optional)">
-          <input className="input" inputMode="decimal" value={v.isq} onChange={(e) => set('isq')(e.target.value)} />
-        </Field>
-        <Field label="Bone type (optional)">
-          <select className="input" value={v.boneType} onChange={(e) => set('boneType')(e.target.value)}>
-            <option value="">—</option>
-            {BONE_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-        </Field>
-      </div>
       <Field label="Notes (optional)">
         <input className="input" value={v.notes} onChange={(e) => set('notes')(e.target.value)} />
       </Field>

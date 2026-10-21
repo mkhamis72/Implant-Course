@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { isRealDate, todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
 import { YES_NO, type YesNo } from '@/lib/patients/risk-factors';
+import { BONE_TYPES } from '@/lib/inventory/schemas';
 
 export const PLACEMENT_TIMINGS = ['immediate', 'early_soft_tissue', 'early_partial_bone', 'delayed'] as const;
 export type PlacementTiming = (typeof PLACEMENT_TIMINGS)[number];
@@ -112,10 +113,13 @@ export const SURGERY_FIELD_LABELS = {
   placement_timing: 'placement timing', extraction_date: 'extraction date', soft_tissue_phenotype: 'phenotype',
   keratinized_mucosa_mm: 'keratinized mucosa', flap: 'flap', torque_type: 'torque type', healing: 'healing',
   primary_closure: 'primary closure', grafting_performed: 'grafting performed',
+  torque_ncm: 'insertion torque', isq: 'ISQ', bone_type: 'bone type',
 } as const;
 type SurgeryField = keyof typeof SURGERY_FIELD_LABELS;
 const SURGERY_FIELDS = Object.keys(SURGERY_FIELD_LABELS) as SurgeryField[];
 export const SURGERY_TOTAL = SURGERY_FIELDS.length;
+/** Stability values live on the implant site, not on its surgery row. */
+export type Stability = { torque_ncm: number | null; isq: number | null; bone_type: string | null };
 
 export function daysSinceExtraction(extraction: string | null, placedOn: string | null): number | null {
   if (!extraction || !placedOn) return null;
@@ -133,8 +137,9 @@ export function timingWarning(timing: PlacementTiming | null, days: number | nul
   return `${what} usually means ${range} after extraction; this is ${span(days)}.`;
 }
 
-export function surgeryCompleteness(s: ImplantSurgery | null): { recorded: number; total: number } {
-  const recorded = s ? SURGERY_FIELDS.filter((f) => s[f] !== null && s[f] !== undefined).length : 0;
+export function surgeryCompleteness(s: ImplantSurgery | null, stability: Stability): { recorded: number; total: number } {
+  const values: Record<string, unknown> = { ...(s ?? {}), ...stability };
+  const recorded = SURGERY_FIELDS.filter((f) => values[f] !== null && values[f] !== undefined).length;
   return { recorded, total: SURGERY_TOTAL };
 }
 
@@ -169,6 +174,8 @@ const optionalEnum = <T extends readonly [string, ...string[]]>(values: T, messa
   z.preprocess(blankToNull, z.enum(values, { message }).nullable());
 const optionalPastDate = (message: string) =>
   z.preprocess(blankToNull, z.string().refine((v) => isRealDate(v) && v <= todayIso(), { message }).nullable());
+const optionalNumber = (min: number, max: number, message: string) =>
+  z.preprocess((v) => (blankToNull(v) === null ? null : Number(v)), z.number({ message }).min(min, { message }).max(max, { message }).nullable());
 const id = (message: string) => z.string({ message }).uuid({ message });
 const KM = 'Enter the keratinized mucosa width from 0 to 15 mm.';
 
@@ -184,6 +191,9 @@ export const surgerySchema = z.object({
     z.number({ message: KM }).min(0, { message: KM }).max(15, { message: KM }).nullable(),
   ),
   flap: optionalEnum(FLAPS, 'Choose the flap from the list.'),
+  torque: optionalNumber(0, 150, 'Enter an insertion torque between 0 and 150 Ncm.'),
+  isq: optionalNumber(0, 100, 'Enter an ISQ between 0 and 100.'),
+  boneType: optionalEnum(BONE_TYPES, 'Choose a bone type from D1 to D4.'),
   torqueType: optionalEnum(TORQUE_TYPES, 'Choose peak or final.'),
   healing: optionalEnum(HEALINGS, 'Choose the healing from the list.'),
   primaryClosure: optionalEnum(YES_NO, 'Choose yes or no.'),

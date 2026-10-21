@@ -42,11 +42,14 @@ describe('days and timing', () => {
 });
 
 describe('completeness and summaries', () => {
-  it('counts the nine fields; zero mm counts as recorded', () => {
-    expect(surgeryCompleteness(null)).toEqual({ recorded: 0, total: 9 });
-    expect(surgeryCompleteness(empty)).toEqual({ recorded: 0, total: 9 });
-    expect(surgeryCompleteness({ ...empty, keratinized_mucosa_mm: 0, flap: 'crestal' })).toEqual({ recorded: 2, total: 9 });
-    expect(surgeryCompleteness(full)).toEqual({ recorded: 9, total: 9 });
+  const none = { torque_ncm: null, isq: null, bone_type: null };
+  const all = { torque_ncm: 35, isq: 72, bone_type: 'D2' };
+  it('counts the twelve fields; zero mm counts as recorded', () => {
+    expect(surgeryCompleteness(null, none)).toEqual({ recorded: 0, total: 12 });
+    expect(surgeryCompleteness(empty, none)).toEqual({ recorded: 0, total: 12 });
+    expect(surgeryCompleteness({ ...empty, keratinized_mucosa_mm: 0, flap: 'crestal' }, none)).toEqual({ recorded: 2, total: 12 });
+    expect(surgeryCompleteness(full, all)).toEqual({ recorded: 12, total: 12 });
+    expect(surgeryCompleteness(null, { torque_ncm: 35, isq: null, bone_type: 'D2' })).toEqual({ recorded: 2, total: 12 });
   });
   it('describes the recorded values in words', () => {
     expect(describeSurgery(full, '2026-03-10')).toEqual([
@@ -69,13 +72,20 @@ describe('completeness and summaries', () => {
 });
 
 describe('schemas', () => {
+  it('parses torque, ISQ and bone type, and rejects out-of-range values', () => {
+    expect(surgerySchema.parse({ ...ids, torque: '', isq: '', boneType: '' })).toMatchObject({ torque: null, isq: null, boneType: null });
+    expect(surgerySchema.parse({ ...ids, torque: '35', isq: '72', boneType: 'D2' })).toMatchObject({ torque: 35, isq: 72, boneType: 'D2' });
+    expect(firstError(surgerySchema.safeParse({ ...ids, torque: '151' }))).toBe('Enter an insertion torque between 0 and 150 Ncm.');
+    expect(firstError(surgerySchema.safeParse({ ...ids, isq: '101' }))).toBe('Enter an ISQ between 0 and 100.');
+    expect(firstError(surgerySchema.safeParse({ ...ids, boneType: 'D5' }))).toBe('Choose a bone type from D1 to D4.');
+  });
   it('parses the surgical details form ("" = not recorded)', () => {
     expect(surgerySchema.parse({
       ...ids, expectedUpdatedAt: '', extractionDate: '2026-03-01', placementTiming: 'delayed', softTissuePhenotype: '',
-      keratinizedMucosaMm: '2.5', flap: 'crestal', torqueType: '', healing: 'transmucosal', primaryClosure: 'no', graftingPerformed: '',
+      keratinizedMucosaMm: '2.5', flap: 'crestal', torqueType: '', torque: '', isq: '', boneType: '', healing: 'transmucosal', primaryClosure: 'no', graftingPerformed: '',
     })).toEqual({
       ...ids, expectedUpdatedAt: null, extractionDate: '2026-03-01', placementTiming: 'delayed', softTissuePhenotype: null,
-      keratinizedMucosaMm: 2.5, flap: 'crestal', torqueType: null, healing: 'transmucosal', primaryClosure: 'no', graftingPerformed: null,
+      keratinizedMucosaMm: 2.5, flap: 'crestal', torqueType: null, torque: null, isq: null, boneType: null, healing: 'transmucosal', primaryClosure: 'no', graftingPerformed: null,
     });
   });
   it('refuses out-of-range mucosa, a future extraction date and unknown values', () => {

@@ -53,7 +53,7 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
             {sites.map((s) => {
               const current = currentComponent(s);
               const last = lastFollowup(s);
-              const details = surgeryCompleteness(s.surgery);
+              const details = surgeryCompleteness(s.surgery, s);
               return (
                 <tr key={s.id} data-testid="implant-row">
                   <td data-label="Tooth">

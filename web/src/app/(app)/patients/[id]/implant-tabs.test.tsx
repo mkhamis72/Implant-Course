@@ -37,7 +37,7 @@ describe('<ImplantTabs>', () => {
   it('opens on Implant with counts on Surgical details and Complications; Corrections only for editors', () => {
     render(<Tabs editable={true} justPlaced={false} />);
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
-      'Implant', 'Surgical details0/90 of 9 recorded', 'Visits', 'Complications11, 1 open', 'Corrections',
+      'Implant', 'Surgical details0/120 of 12 recorded', 'Visits', 'Complications11, 1 open', 'Corrections',
     ]);
     expect(screen.getByRole('tab', { name: 'Implant' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tabpanel', { name: 'Implant' })).toBeVisible();

@@ -16,11 +16,16 @@ beforeEach(() => {
 describe('surgery actions', () => {
   it('saves surgical details with the version the form was rendered from', async () => {
     expect(await saveSurgery({ ...ids, expectedUpdatedAt: '2026-10-17T10:00:00.123456+00:00', flap: 'crestal', keratinizedMucosaMm: '2' })).toEqual({});
-    expect(rpc).toHaveBeenCalledWith('save_implant_surgery', {
+    expect(rpc).toHaveBeenCalledWith('save_implant_surgery_v2', {
       p_site: ids.siteId, p_extraction_date: null, p_placement_timing: null, p_soft_tissue_phenotype: null, p_keratinized_mucosa_mm: 2,
       p_flap: 'crestal', p_torque_type: null, p_healing: null, p_primary_closure: null, p_grafting_performed: null,
-      p_expected_updated_at: '2026-10-17T10:00:00.123456+00:00',
+      p_torque: null, p_isq: null, p_bone_type: null, p_expected_updated_at: '2026-10-17T10:00:00.123456+00:00',
     });
+  });
+
+  it('sends torque, ISQ and bone type with the surgical details', async () => {
+    await saveSurgery({ ...ids, torque: '35', isq: '72', boneType: 'D2' });
+    expect(rpc).toHaveBeenCalledWith('save_implant_surgery_v2', expect.objectContaining({ p_torque: 35, p_isq: 72, p_bone_type: 'D2' }));
   });
 
   it('shows a database business error verbatim and never calls the database for an invalid form', async () => {
