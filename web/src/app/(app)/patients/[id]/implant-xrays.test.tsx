@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import type { ChartData, ImplantSite } from '@/lib/inventory/types';
 import type { Radiograph } from '@/lib/radiographs/radiographs';
 
 vi.mock('./xrays/actions', () => ({ saveRadiograph: vi.fn(), voidRadiograph: vi.fn() }));
 vi.mock('./implant-actions', () => ({ fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), receiveStockForPlacement: vi.fn() }));
 import { ImplantXrays } from './implant-xrays';
+import { saveRadiograph } from './xrays/actions';
 
 const site = { id: 's1', tooth: 46, state: 'placed', placed_on: '2026-03-10' } as unknown as ImplantSite;
 const xray = (over: Partial<Radiograph>): Radiograph => ({
@@ -43,5 +44,31 @@ describe('<ImplantXrays>', () => {
     expect(screen.getByText('No X-rays recorded for this tooth.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add X-ray' }));
     expect(screen.getByRole('checkbox', { name: '46' })).toBeChecked();
+  });
+
+  it('editing from one implant\x27s tab saves every implant\x27s levels, with mesial and distal in the right columns', async () => {
+    vi.mocked(saveRadiograph).mockReset().mockResolvedValue({});
+    const s36 = { id: 's36', tooth: 36, state: 'placed', placed_on: '2026-03-10' } as unknown as ImplantSite;
+    const s34 = { id: 's34', tooth: 34, state: 'placed', placed_on: '2026-03-10' } as unknown as ImplantSite;
+    const r = xray({
+      teeth: [34, 36],
+      levels: [
+        { site: 's34', tooth: 34, mesial_mm: 3, distal_mm: 4 },
+        { site: 's36', tooth: 36, mesial_mm: 1.5, distal_mm: 2.5 },
+      ],
+    });
+    const d = { sites: [s34, s36], radiographs: [r], editable: true, today: '2026-10-22' } as unknown as ChartData;
+    render(<ImplantXrays site={s36} patientId="pt" data={d} />);
+    const row = within(screen.getByTestId('xray')).getAllByRole('row')[1];
+    const cells = within(row).getAllByRole('cell');
+    expect(cells[1]).toHaveTextContent('1.5 mm');
+    expect(cells[2]).toHaveTextContent('2.5 mm');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save X-ray' }));
+    await waitFor(() => expect(saveRadiograph).toHaveBeenCalled());
+    const input = vi.mocked(saveRadiograph).mock.calls[0][0] as Record<string, unknown>;
+    expect(input).toMatchObject({
+      mesial_s36: '1.5', distal_s36: '2.5', mesial_s34: '3', distal_s34: '4',
+    });
   });
 });
