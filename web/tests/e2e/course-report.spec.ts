@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { uniqueName } from './patients';
-import { apiAs, enroll, seedChair, seedCourse, seedDelegate, seedImplantStock, seedSession } from './api';
+import { apiAs, enroll, seedChair, seedCourse, seedDelegate, seedImplantStock, seedSession, placeImplant } from './api';
 
 test('course report shows each placed implant, a session summary, and downloads a CSV', async ({ page }) => {
   const admin = await apiAs(TEST_USERS.admin.email);
@@ -27,11 +27,17 @@ test('course report shows each placed implant, a session summary, and downloads 
     p_placing: [d1], p_assisting: [d2], p_implants: [{ tooth: 36, technique: 'guided' }], p_override_reason: 'E2E report',
   });
   expect(bookError).toBeNull();
-  const { error: placeError } = await api.rpc('place_implant_v2', {
+  const { data: placed, error: placeError } = await placeImplant(api, {
     p_patient: p!.id, p_tooth: 36, p_product: productId, p_lot: lotId, p_placed_on: today, p_placing_delegate: d1,
-    p_supervisor: supervisor, p_assisting_delegate: d2, p_slot: slot, p_technique: 'guided', p_torque: 35, p_isq: 72, p_bone_type: 'D2',
+    p_supervisor: supervisor, p_assisting_delegate: d2, p_slot: slot, p_technique: 'guided', p_course: courseId,
   });
   expect(placeError).toBeNull();
+  const { error: stabilityError } = await api.rpc('save_implant_surgery_v2', {
+    p_site: placed, p_extraction_date: null, p_placement_timing: null, p_soft_tissue_phenotype: null, p_keratinized_mucosa_mm: null,
+    p_flap: null, p_torque_type: null, p_healing: null, p_primary_closure: null, p_grafting_performed: null,
+    p_torque: 35, p_isq: 72, p_bone_type: 'D2', p_expected_updated_at: null,
+  });
+  expect(stabilityError).toBeNull();
 
   await login(page, TEST_USERS.viewer.email);
   await page.goto(`/courses/${courseId}`);

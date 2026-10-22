@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
-import { apiAs, receiveStock, seedDelegate, seedImplantStock, seedRunningCourse } from './api';
+import { apiAs, receiveStock, seedDelegate, seedImplantStock, seedRunningCourse, placeImplant } from './api';
 
 async function placedImplant(page: Page) {
   const api = await apiAs(TEST_USERS.organizer.email);
@@ -15,7 +15,7 @@ async function placedImplant(page: Page) {
   await login(page, TEST_USERS.organizer.email);
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Fix patient') });
   const me = (await api.auth.getUser()).data.user!.id;
-  const { data: siteId, error } = await api.rpc('place_implant_v2', {
+  const { data: siteId, error } = await placeImplant(api, {
     p_patient: patientId, p_tooth: 36, p_product: stock.productId, p_lot: stock.lotId,
     p_placed_on: new Date().toISOString().slice(0, 10), p_placing_delegate: delegate, p_supervisor: me,
   });

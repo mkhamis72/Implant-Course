@@ -3,7 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
-import { apiAs, seedDelegate, seedImplantStock } from './api';
+import { apiAs, seedDelegate, seedImplantStock, placeImplant } from './api';
 
 // The narrowest common phone width, stricter than the Pixel 7 default.
 test.use({ viewport: { width: 360, height: 780 } });
@@ -72,7 +72,7 @@ test('the visit form and its probing grid fit a phone screen', async ({ page }) 
   await login(page, TEST_USERS.organizer.email);
   const id = await createPatientViaUi(page, { full_name: uniqueName('Phone visit') });
   const me = (await api.auth.getUser()).data.user!.id;
-  const { error } = await api.rpc('place_implant_v2', {
+  const { error } = await placeImplant(api, {
     p_patient: id, p_tooth: 36, p_product: stock.productId, p_lot: stock.lotId,
     p_placed_on: new Date().toISOString().slice(0, 10), p_placing_delegate: delegate, p_supervisor: me, p_technique: 'guided',
   });

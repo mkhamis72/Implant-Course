@@ -130,16 +130,18 @@ describe('undoing a component', () => {
 describe('correcting the placement details', () => {
   const correct = (c: Client, site: string, f: Record<string, unknown>) =>
     c.query(
-      `select public.correct_placement(p_site => $1, p_placed_on => $2::date, p_placing_delegate => $3,
-         p_assisting_delegate => $4, p_supervisor => $5, p_torque => $6, p_isq => $7, p_bone_type => $8,
-         p_graft => $9, p_notes => $10)`,
-      [site, f.placedOn, f.placing, f.assisting ?? null, f.supervisor, f.torque ?? null, f.isq ?? null, f.boneType ?? null,
-       f.graft ?? '', f.notes ?? ''],
+      `select public.correct_placement_v2(p_site => $1, p_placed_on => $2::date, p_placing_delegate => $3,
+         p_assisting_delegate => $4, p_supervisor => $5, p_course => course_id, p_graft => $6, p_notes => $7)
+       from public.implant_sites where id = $1`,
+      [site, f.placedOn, f.placing, f.assisting ?? null, f.supervisor, f.graft ?? '', f.notes ?? ''],
     );
 
-  it('corrects the date and people (stability values are ignored), leaving stock alone', async () => {
+  it('corrects the date and people, leaving stability values and stock alone', async () => {
     await withTx(async (c) => {
       const s = await placed(c);
+      await asPostgres(c);
+      await c.query("update public.implant_sites set torque_ncm = 40, isq = 70, bone_type = 'D3' where id = $1", [s.site]);
+      await actAs(c, users.organizer);
       const right = await makeDelegate(c, 'Zz Right Delegate');
       const helper = await makeDelegate(c, 'Zz Helper');
       await asPostgres(c);
@@ -147,7 +149,7 @@ describe('correcting the placement details', () => {
       await actAs(c, users.organizer);
       const before = await onHand(c, s.wrongLot);
       await correct(c, s.site, {
-        placedOn: '2026-01-15', placing: right, assisting: helper, supervisor: sup, torque: 40, isq: 70, boneType: 'D3', graft: 'Bio-Oss', notes: 'fixed',
+        placedOn: '2026-01-15', placing: right, assisting: helper, supervisor: sup, graft: 'Bio-Oss', notes: 'fixed',
       });
       const { rows } = await c.query(
         `select placed_on::text, placing_delegate_id, assisting_delegate_id, supervisor_id, torque_ncm::float as torque,
@@ -156,7 +158,7 @@ describe('correcting the placement details', () => {
       );
       expect(rows[0]).toEqual({
         placed_on: '2026-01-15', placing_delegate_id: right, assisting_delegate_id: helper, supervisor_id: sup,
-        torque: null, isq: null, bone_type: null, graft: 'Bio-Oss', notes: 'fixed',
+        torque: 40, isq: 70, bone_type: 'D3', graft: 'Bio-Oss', notes: 'fixed',
       });
       expect(await onHand(c, s.wrongLot)).toBe(before);
     });
@@ -169,7 +171,7 @@ describe('correcting the placement details', () => {
       await refused(c, () => correct(c, s.site, { ...base, placedOn: '2999-01-01' }), /today or earlier/);
       await correct(c, s.site, { ...base, placedOn: '2026-01-10' });
       await c.query("select public.record_visit($1, '2026-02-01', null, '1-week', 'attended', 'ok', '{}'::jsonb, '')", [s.site]);
-      await refused(c, () => correct(c, s.site, { ...base, placedOn: '2026-03-01' }), /after its first component, follow-up, complication or failure/);
+      await refused(c, () => correct(c, s.site, { ...base, placedOn: '2026-03-01' }), /after its first component, .*follow-up, complication or failure/);
       await correct(c, s.site, { ...base, placedOn: '2026-01-20' });
 
       const expiring = await receive(c, s.implant, 1, 'EXP', '2026-06-01');

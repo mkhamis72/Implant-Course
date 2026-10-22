@@ -96,3 +96,18 @@ export async function seedRunningCourse(api: SupabaseClient, name: string): Prom
   const day = (offset: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date(Date.now() + offset * 86400000));
   return seedCourse(api, { name, start: day(-30), end: day(30) });
 }
+
+/** place_implant_v3 with its optional arguments defaulted; without p_course it uses a new course that is running today. */
+export async function placeImplant(
+  api: SupabaseClient,
+  a: {
+    p_patient: string; p_tooth: number; p_product: string; p_lot: string; p_placed_on: string;
+    p_placing_delegate: string; p_supervisor: string; p_assisting_delegate?: string | null; p_graft?: string;
+    p_notes?: string; p_slot?: string | null; p_technique?: string | null; p_course?: string;
+  },
+) {
+  const course = a.p_course ?? (await seedRunningCourse(api, `E2E Placement course ${Date.now()}${Math.floor(Math.random() * 1000)}`));
+  return api.rpc('place_implant_v3', {
+    p_assisting_delegate: null, p_graft: '', p_notes: '', p_slot: null, p_technique: null, ...a, p_course: course,
+  });
+}

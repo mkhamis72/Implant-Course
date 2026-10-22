@@ -41,7 +41,7 @@ describe('placing from a booking', () => {
   it('a planned implant linked to a booking keeps the link when placed from the chart', async () => {
     await withTx(async (c) => {
       const b = await booked(c);
-      const site = await place(c, { patient: b.patient, product: b.product, lot: b.lot, delegate: b.delegate, supervisor: users.organizer, tooth: 36 });
+      const site = await place(c, { patient: b.patient, product: b.product, lot: b.lot, delegate: b.delegate, supervisor: users.organizer, tooth: 36, course: b.course });
       const s = await c.query('select slot_id, course_id from public.implant_sites where id = $1', [site]);
       expect(s.rows[0]).toEqual({ slot_id: b.slot, course_id: b.course });
     });

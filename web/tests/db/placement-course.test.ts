@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs } from './helpers';
-import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, place, receive, setPerms } from './fixtures';
+import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -106,20 +106,6 @@ describe('placement records its course', () => {
         );
       await refused(c, () => correct('2026-03-04'), /can't be placed after its first .*restoration.*\(2026-03-03\)/);
       await correct('2026-03-03');
-    });
-  });
-
-  it('v2 still places without a course and the placement counts by date and enrollment in course_report', async () => {
-    await withTx(async (c) => {
-      const s = await setup(c);
-      await enroll(c, s.course, s.delegate);
-      const site = await place(c, {
-        patient: s.patient, tooth: 46, product: s.product, lot: s.lot, delegate: s.delegate, supervisor: users.organizer,
-        placedOn: '2026-03-02',
-      });
-      expect(await courseOf(c, site)).toBeNull();
-      const { rows } = await c.query('select site_id from public.course_report($1)', [s.course]);
-      expect(rows.map((r) => r.site_id)).toContain(site);
     });
   });
 

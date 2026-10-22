@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
-import { apiAs, seedDelegate, seedImplantStock } from './api';
+import { apiAs, seedDelegate, seedImplantStock, placeImplant } from './api';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -13,7 +13,7 @@ async function placedImplant(page: Page) {
   await login(page, TEST_USERS.organizer.email);
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Complication patient') });
   const me = (await api.auth.getUser()).data.user!.id;
-  const { error } = await api.rpc('place_implant_v2', {
+  const { error } = await placeImplant(api, {
     p_patient: patientId, p_tooth: 36, p_product: stock.productId, p_lot: stock.lotId, p_placed_on: today(),
     p_placing_delegate: delegate, p_supervisor: me,
   });
