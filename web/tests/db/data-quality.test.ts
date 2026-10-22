@@ -159,6 +159,34 @@ describe('data_quality_issues', () => {
     });
   });
 
+  it('does not flag an X-ray from a first implant against its replacement on the same tooth', async () => {
+    await withTx(async (c) => {
+      const { patient, site, implant, lot, delegate } = await setup(c);
+      const xrayDay = await daysAgo(c, 60);
+      await xrayAt(c, patient, xrayDay, 'follow_up');
+      await c.query(`update public.implant_sites set state = 'failed', failed_on = $2::date where id = $1`, [site, await daysAgo(c, 40)]);
+      await actAs(c, users.organizer);
+      await place(c, { patient, tooth: 36, product: implant, lot, delegate, supervisor: users.organizer, placedOn: await daysAgo(c, 20) });
+      await asPostgres(c);
+      expect(await issues(c, patient)).toEqual([]);
+    });
+  });
+
+  it('lists a record once even when it covers several implants (earliest-placed site)', async () => {
+    await withTx(async (c) => {
+      const { patient, site, implant, lot, delegate } = await setup(c);
+      await actAs(c, users.organizer);
+      const second = await place(c, { patient, tooth: 37, product: implant, lot, delegate, supervisor: users.organizer, placedOn: await daysAgo(c, 90) });
+      await asPostgres(c);
+      const rid = await restorationAt(c, patient, site, await daysAgo(c, 150));
+      await c.query('insert into public.restoration_sites (restoration_id, site_id) values ($1, $2)', [rid, second]);
+      await c.query(`update public.restorations set teeth = array[36, 37]::smallint[] where id = $1`, [rid]);
+      const rows = (await issues(c, patient)).filter((r) => r.record_table === 'restorations');
+      expect(rows).toHaveLength(1);
+      expect(rows[0].site_id).toBe(site);
+    });
+  });
+
   it('with a null patient returns issues for all patients', async () => {
     await withTx(async (c) => {
       const { site } = await setup(c);

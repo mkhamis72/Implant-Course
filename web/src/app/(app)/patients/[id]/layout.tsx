@@ -23,7 +23,7 @@ export default async function PatientLayout({ children, params }: { children: Re
   if (!patient) notFound();
   const p = patient as Patient;
   const age = ageOn(p.dob, new Date());
-  const issueCount = (issues ?? []).length;
+  const issueList = (issues ?? []) as { message: string }[];
   const alerts = medicalAlerts(history as MedicalHistory | null);
 
   return (
@@ -34,7 +34,7 @@ export default async function PatientLayout({ children, params }: { children: Re
         {age !== null && <span className="text-sm text-muted">Age {age}</span>}
         {p.sex && <span className="text-sm capitalize text-muted">{p.sex}</span>}
         {p.archived && <span className="rounded bg-sunken px-2 py-0.5 text-sm text-ink">Archived</span>}
-        <DateProblemBadge count={issueCount} />
+        <DateProblemBadge count={issueList.length} href="/patients/data-quality" title={issueList.map((i) => i.message).join(' ')} />
         {alerts.length > 0 && (
           <ul className="flex flex-wrap gap-2" aria-label="Medical alerts">
             {alerts.map((alert) => (
