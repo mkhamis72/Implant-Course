@@ -27,7 +27,10 @@ export function XrayList({ patientId, radiographs, sites, editable }: {
   );
 }
 
-function XrayCard({ r, patientId, sites, editable }: { r: Radiograph; patientId: string; sites: XraySite[]; editable: boolean }) {
+/** One X-ray. `onlySite` limits the shown bone levels to one implant (the edit form still carries them all). */
+export function XrayCard({ r, patientId, sites, editable, onlySite }: {
+  r: Radiograph; patientId: string; sites: XraySite[]; editable: boolean; onlySite?: string;
+}) {
   const [mode, setMode] = useState<'view' | 'edit' | 'remove'>('view');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +43,8 @@ function XrayCard({ r, patientId, sites, editable }: { r: Radiograph; patientId:
     setPending(false);
     if (result.error) setError(result.error);
   }
+
+  const shownLevels = onlySite ? r.levels.filter((l) => l.site === onlySite) : r.levels;
 
   if (mode === 'edit') {
     return <RadiographForm patientId={patientId} sites={sites} radiograph={r} onDone={() => setMode('view')} />;
@@ -54,11 +59,11 @@ function XrayCard({ r, patientId, sites, editable }: { r: Radiograph; patientId:
         {r.link && <a href={r.link} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Open image ↗</a>}
       </div>
       {r.notes && <p className="whitespace-pre-wrap text-sm">{r.notes}</p>}
-      {r.levels.length > 0 && (
+      {shownLevels.length > 0 && (
         <table className="table">
           <thead><tr><th>Tooth</th><th>Mesial</th><th>Distal</th></tr></thead>
           <tbody>
-            {r.levels.map((l) => (
+            {shownLevels.map((l) => (
               <tr key={l.site}>
                 <td data-label="Tooth">{l.tooth}</td>
                 <td data-label="Mesial">{boneLevelLabel(l.mesial_mm)}</td>

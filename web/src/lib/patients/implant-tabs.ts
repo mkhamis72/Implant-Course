@@ -1,7 +1,7 @@
 import { STAGE_LABELS, type RestorationStage } from '@/lib/restorations/restorations';
 
 /** Tabs of a placed implant in the tooth panel (patients/[id]/implant-tabs.tsx). */
-export type ImplantTabKey = 'implant' | 'surgery' | 'restoration' | 'visits' | 'complications' | 'corrections';
+export type ImplantTabKey = 'implant' | 'surgery' | 'restoration' | 'visits' | 'xrays' | 'complications' | 'corrections';
 
 export type TabBadge = { text: string; srText: string; tone: 'ok' | 'warn' | 'bad' | 'off' };
 export type ImplantTab = { key: ImplantTabKey; label: string; badge: TabBadge | null };
@@ -12,6 +12,8 @@ export function implantTabs(input: {
   complications: { total: number; open: number };
   /** Stage of the implant's current restoration, if any. */
   restoration: RestorationStage | null;
+  /** Live X-rays showing the implant's tooth. */
+  xrays: number;
 }): ImplantTab[] {
   const { recorded, total } = input.surgery;
   const c = input.complications;
@@ -29,6 +31,11 @@ export function implantTabs(input: {
       badge: stage === null ? null : { text: STAGE_LABELS[stage], srText: `current: ${stage}`, tone: stage === 'final' ? 'ok' : 'off' },
     },
     { key: 'visits', label: 'Visits', badge: null },
+    {
+      key: 'xrays',
+      label: 'X-rays',
+      badge: input.xrays === 0 ? null : { text: String(input.xrays), srText: `${input.xrays} X-ray${input.xrays === 1 ? '' : 's'}`, tone: 'off' },
+    },
     {
       key: 'complications',
       label: 'Complications',

@@ -10,6 +10,7 @@ import { Corrections } from './corrections';
 import { Restorations } from './restorations';
 import { SurgicalDetails } from './surgical-details';
 import { Visits } from './visits';
+import { ImplantXrays } from './implant-xrays';
 import { Complications } from './complications';
 import { ImplantFacts, correctable } from './site-details';
 
@@ -29,6 +30,7 @@ export function ImplantTabs({ site, patientId, data, justPlaced, selected, onSel
     editable: correctable(site, data),
     surgery: surgeryCompleteness(site.surgery, site),
     complications: { total: live.length, open: live.filter(isOpen).length },
+    xrays: data.radiographs.filter((r) => r.teeth.includes(site.tooth)).length,
     restoration: currentRestoration(site.id, data.restorations)?.stage ?? null,
   }).filter((t) => (t.key !== 'surgery' && t.key !== 'restoration') || site.state !== 'removed');
   const current = tabs.some((t) => t.key === selected) ? selected : 'implant';
@@ -79,6 +81,7 @@ export function ImplantTabs({ site, patientId, data, justPlaced, selected, onSel
           {t.key === 'surgery' && <SurgicalDetails site={site} patientId={patientId} editable={data.editable} startOpen={justPlaced} bare />}
           {t.key === 'restoration' && <Restorations site={site} patientId={patientId} data={data} />}
           {t.key === 'visits' && <Visits site={site} visits={data.visits} />}
+          {t.key === 'xrays' && <ImplantXrays site={site} patientId={patientId} data={data} />}
           {t.key === 'complications' && <Complications site={site} patientId={patientId} editable={data.editable} bare />}
           {t.key === 'corrections' && <Corrections patientId={patientId} site={site} data={data} bare />}
         </div>

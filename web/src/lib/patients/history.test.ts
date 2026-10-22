@@ -198,3 +198,22 @@ describe('restoration links', () => {
     expect(isHiddenFromHistory({ ...base, table_name: 'restorations' })).toBe(false);
   });
 });
+
+describe('describeChange: radiographs', () => {
+  const base = { id: 1, at: '2026-10-22T10:00:00Z', actor: 'A' };
+  it('describes adding, updating and removing an X-ray', () => {
+    expect(describeChange({ ...base, table_name: 'radiographs', action: 'INSERT', before: null, after: { type: 'periapical', purpose: 'baseline', teeth: [46, 47] } }))
+      .toBe('X-ray added: Periapical, Baseline (after placement) (teeth 46, 47)');
+    expect(describeChange({ ...base, table_name: 'radiographs', action: 'UPDATE',
+      before: { type: 'cbct', purpose: 'planning', teeth: [46], link: null, notes: '' },
+      after: { type: 'cbct', purpose: 'planning', teeth: [46, 47], link: 'https://x.test', notes: '' } }))
+      .toBe('X-ray updated: teeth, link');
+    expect(describeChange({ ...base, table_name: 'radiographs', action: 'UPDATE',
+      before: { voided_at: null }, after: { voided_at: '2026-10-22T10:00:00Z', voided_reason: 'wrong patient' } }))
+      .toBe('X-ray removed from the record (wrong patient)');
+  });
+  it('describes bone-level rows without a tooth (the row holds only the implant id)', () => {
+    expect(describeChange({ ...base, table_name: 'radiograph_bone_levels', action: 'INSERT', before: null, after: { site_id: 's1', mesial_mm: 0.5 } }))
+      .toBe('Bone level recorded');
+  });
+});
