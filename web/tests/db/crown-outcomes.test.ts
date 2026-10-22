@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs } from './helpers';
-import { enroll, makeCourse, makeDelegate, makePatient, makeProduct, place, receive } from './fixtures';
+import { withTx, actAs, asPostgres } from './helpers';
+import { enroll, legacyFailure, makeCourse, makeDelegate, makePatient, makeProduct, place, receive } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -111,19 +111,61 @@ describe('crown_outcomes', () => {
     });
   });
 
+  it('implant lost before the remake censors the crown', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const site = await s.placeAt(36);
+      const first = await restore(c, s.patient, [site], await s.day(60));
+      await visit(c, site, await s.day(150), 'failed', { failure_type: 'lost', failure_reason: 'peri_implantitis' });
+      // The API cannot remake a crown over a lost implant, so end it directly (as the owner).
+      const endedOn = await s.day(200);
+      await asPostgres(c);
+      await c.query("update public.restorations set ended_on = $2::date, end_kind = 'remade', end_reason = 'Lost' where id = $1", [first, endedOn]);
+      await actAs(c, users.organizer);
+      const row = (await crowns(c)).find((x) => x.restoration_id === first);
+      expect(row).toMatchObject({ censored_by_implant_event: true, remade: false, remade_on: null, last_contact: await s.day(150) });
+    });
+  });
+
+  it('implant lost after the remake leaves the crown remade', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const site = await s.placeAt(36);
+      const first = await restore(c, s.patient, [site], await s.day(60));
+      await restore(c, s.patient, [site], await s.day(100), { reason: 'Fractured' });
+      await visit(c, site, await s.day(250), 'failed', { failure_type: 'lost', failure_reason: 'peri_implantitis' });
+      const row = (await crowns(c)).find((x) => x.restoration_id === first);
+      expect(row).toMatchObject({ remade: true, remade_on: await s.day(100), censored_by_implant_event: false });
+    });
+  });
+
+  it('a remade crown over an implant event of unknown date is remade, not censored', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const site = await s.placeAt(36);
+      const first = await restore(c, s.patient, [site], await s.day(60));
+      await restore(c, s.patient, [site], await s.day(100), { reason: 'Fractured' });
+      await legacyFailure(c, site, await s.day(300), users.organizer);
+      const row = (await crowns(c)).find((x) => x.restoration_id === first);
+      expect(row).toMatchObject({ remade: true, remade_on: await s.day(100), censored_by_implant_event: false });
+    });
+  });
+
   it('problem count', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
       const site = await s.placeAt(36);
       const r = await restore(c, s.patient, [site], await s.day(60));
-      const p1 = (await c.query(`select public.record_restoration_problem($1, $2::date, 'chipping', 'repaired', '') as id`,
-        [r, await s.day(100)])).rows[0].id;
+      const other = await restore(c, s.patient, [await s.placeAt(46)], await s.day(60));
+      const po = (await c.query(`select public.record_restoration_problem($1, $2::date, 'wear', 'none', '') as id`,
+        [other, await s.day(90)])).rows[0].id;
+      await c.query('select public.void_restoration_problem($1, $2)', [po, 'Wrong crown']);
+      await c.query(`select public.record_restoration_problem($1, $2::date, 'chipping', 'repaired', '')`, [r, await s.day(100)]);
       await c.query(`select public.record_restoration_problem($1, $2::date, 'debonding', 'recemented', '')`, [r, await s.day(120)]);
       const p3 = (await c.query(`select public.record_restoration_problem($1, $2::date, 'wear', 'none', '') as id`,
         [r, await s.day(130)])).rows[0].id;
       expect((await crowns(c)).find((x) => x.restoration_id === r)!.problems).toBe(3);
       await c.query('select public.void_restoration_problem($1, $2)', [p3, 'Entered twice']);
-      expect(p1).toBeTruthy();
       expect((await crowns(c)).find((x) => x.restoration_id === r)!.problems).toBe(2);
     });
   });

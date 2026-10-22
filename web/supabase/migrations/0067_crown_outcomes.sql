@@ -43,7 +43,7 @@ language sql stable security invoker set search_path = '' as $$
     select coalesce(r.end_kind = 'remade'
                     and not (im.any_event and im.event_on is not null and im.event_on < r.ended_on), false) as remade,
            coalesce(im.any_event
-                    and not coalesce(r.end_kind = 'remade' and im.event_on is not null and r.ended_on <= im.event_on, false), false) as censored
+                    and not coalesce(r.end_kind = 'remade' and (im.event_on is null or r.ended_on <= im.event_on), false), false) as censored
   ) ev
   cross join lateral (
     -- At the first implant event when it has a date, else at the latest contact; never before the crown was fitted.
