@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { issueLink, issuesForSite, type DataQualityIssue } from './issues';
+import { issueLink, issuesForSite, sortIssues, type DataQualityIssue } from './issues';
 
 const base: DataQualityIssue = {
   patient_id: 'p1', patient_name: 'A', file_no: 'P00001', site_id: 's1', tooth: 36, kind: 'before_placement',
@@ -24,5 +24,18 @@ describe('issuesForSite', () => {
   it('keeps only the matching site', () => {
     expect(issuesForSite([base, { ...base, site_id: 's2' }, { ...base, site_id: null }], 's1')).toHaveLength(1);
     expect(issuesForSite(undefined, 's1')).toEqual([]);
+  });
+});
+
+describe('sortIssues', () => {
+  it('orders by patient, then tooth with none last, then date', () => {
+    const rows = [
+      { ...base, patient_name: 'B', tooth: 11, record_id: 'a' },
+      { ...base, patient_name: 'A', tooth: null, record_id: 'b' },
+      { ...base, patient_name: 'A', tooth: 36, record_date: '2026-03-01', record_id: 'c' },
+      { ...base, patient_name: 'A', tooth: 36, record_date: '2026-01-01', record_id: 'd' },
+      { ...base, patient_name: 'A', tooth: 14, record_id: 'e' },
+    ];
+    expect(sortIssues(rows).map((r) => r.record_id)).toEqual(['e', 'd', 'c', 'b', 'a']);
   });
 });

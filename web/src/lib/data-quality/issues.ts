@@ -24,3 +24,13 @@ export function issueLink(issue: Pick<DataQualityIssue, 'patient_id' | 'tooth' |
 export function issuesForSite(issues: DataQualityIssue[] | undefined, siteId: string): DataQualityIssue[] {
   return (issues ?? []).filter((i) => i.site_id === siteId);
 }
+
+/** Page order: patient name, then tooth (no tooth last), then the record's date. */
+export function sortIssues(issues: DataQualityIssue[]): DataQualityIssue[] {
+  return [...issues].sort(
+    (a, b) =>
+      a.patient_name.localeCompare(b.patient_name) ||
+      (a.tooth ?? Infinity) - (b.tooth ?? Infinity) ||
+      a.record_date.localeCompare(b.record_date),
+  );
+}

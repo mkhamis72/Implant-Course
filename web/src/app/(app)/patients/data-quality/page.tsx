@@ -2,14 +2,14 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { formatDate } from '@/lib/format';
-import { issueLink, type DataQualityIssue } from '@/lib/data-quality/issues';
+import { issueLink, sortIssues, type DataQualityIssue } from '@/lib/data-quality/issues';
 
 export default async function DataQualityPage() {
   await requirePermission('patients');
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('data_quality_issues', { p_patient: null });
   if (error) throw new Error('Could not load the data-quality list');
-  const rows = (data ?? []) as DataQualityIssue[];
+  const rows = sortIssues((data ?? []) as DataQualityIssue[]);
 
   return (
     <div className="space-y-6">
@@ -30,7 +30,7 @@ export default async function DataQualityPage() {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={`${r.record_table}-${r.record_id}-${r.site_id ?? ''}`} data-testid="data-quality-row">
+                <tr key={`${r.kind}-${r.record_table}-${r.record_id}-${r.site_id ?? ''}`} data-testid="data-quality-row">
                   <td data-label="Patient">
                     <Link href={`/patients/${r.patient_id}`} className="text-accent hover:underline">{r.patient_name}</Link>
                     <span className="ml-2 text-sm text-muted">{r.file_no}</span>
