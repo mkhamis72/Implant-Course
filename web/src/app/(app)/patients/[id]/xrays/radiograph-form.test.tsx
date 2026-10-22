@@ -1,0 +1,58 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+
+vi.mock('../implant-actions', () => ({ fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), receiveStockForPlacement: vi.fn() }));
+vi.mock('./actions', () => ({ saveRadiograph: vi.fn(), voidRadiograph: vi.fn() }));
+import { RadiographForm, type XraySite } from './radiograph-form';
+import { saveRadiograph } from './actions';
+
+const sites: XraySite[] = [
+  { id: 's36', tooth: 36, state: 'placed', placed_on: '2026-01-10' },
+  { id: 's21', tooth: 21, state: 'planned', placed_on: null },
+];
+
+beforeEach(() => {
+  vi.mocked(saveRadiograph).mockReset().mockResolvedValue({});
+});
+
+const tick = (tooth: number) => fireEvent.click(screen.getByRole('checkbox', { name: String(tooth) }));
+
+describe('RadiographForm', () => {
+  it('shows a bone-level row only for ticked teeth with an implant', () => {
+    render(<RadiographForm patientId="p1" sites={sites} onDone={() => {}} />);
+    expect(screen.queryByLabelText('Mesial 36')).toBeNull();
+    tick(35);
+    expect(screen.queryByLabelText('Mesial 36')).toBeNull();
+    tick(36);
+    expect(screen.getByLabelText('Mesial 36')).toBeTruthy();
+    tick(21);
+    expect(screen.queryByLabelText('Mesial 21')).toBeNull();
+  });
+
+  it('pre-ticks prefillTeeth', () => {
+    render(<RadiographForm patientId="p1" sites={sites} prefillTeeth={[36]} onDone={() => {}} />);
+    expect((screen.getByRole('checkbox', { name: '36' }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByLabelText('Mesial 36')).toBeTruthy();
+  });
+
+  it('saves teeth and measurement fields', async () => {
+    const onDone = vi.fn();
+    render(<RadiographForm patientId="p1" sites={sites} prefillTeeth={[36]} onDone={onDone} />);
+    fireEvent.change(screen.getByLabelText(/^Type/), { target: { value: 'periapical' } });
+    fireEvent.change(screen.getByLabelText(/^Purpose/), { target: { value: 'baseline' } });
+    fireEvent.change(screen.getByLabelText('Mesial 36'), { target: { value: '0.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save X-ray' }));
+    await waitFor(() => expect(saveRadiograph).toHaveBeenCalled());
+    const input = vi.mocked(saveRadiograph).mock.calls[0][0];
+    expect(input).toMatchObject({ patientId: 'p1', teeth: [36], type: 'periapical', purpose: 'baseline', mesial_s36: '0.5', distal_s36: '' });
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+  });
+
+  it('sends the version when editing', async () => {
+    const r = { id: 'x1', taken_on: '2026-02-01', type: 'cbct', purpose: 'planning', teeth: [36], link: null, notes: '', updated_at: 'v1', levels: [] } as never;
+    render(<RadiographForm patientId="p1" sites={sites} radiograph={r} onDone={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Save X-ray' }));
+    await waitFor(() => expect(saveRadiograph).toHaveBeenCalled());
+    expect(vi.mocked(saveRadiograph).mock.calls[0][0]).toMatchObject({ id: 'x1', expectedUpdatedAt: 'v1', takenOn: '2026-02-01' });
+  });
+});
