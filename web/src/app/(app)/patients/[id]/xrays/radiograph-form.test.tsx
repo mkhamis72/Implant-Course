@@ -5,6 +5,7 @@ vi.mock('../implant-actions', () => ({ fitComponent: vi.fn(), placeImplant: vi.f
 vi.mock('./actions', () => ({ saveRadiograph: vi.fn(), voidRadiograph: vi.fn() }));
 import { RadiographForm, type XraySite } from './radiograph-form';
 import { saveRadiograph } from './actions';
+import { todayIso } from '@/lib/dates';
 
 const sites: XraySite[] = [
   { id: 's36', tooth: 36, state: 'placed', placed_on: '2026-01-10' },
@@ -54,5 +55,31 @@ describe('RadiographForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save X-ray' }));
     await waitFor(() => expect(saveRadiograph).toHaveBeenCalled());
     expect(vi.mocked(saveRadiograph).mock.calls[0][0]).toMatchObject({ id: 'x1', expectedUpdatedAt: 'v1', takenOn: '2026-02-01' });
+  });
+  it('refuses to untick a tooth that still has a bone level', async () => {
+    const r = { id: 'x1', taken_on: '2026-02-01', type: 'periapical', purpose: 'baseline', teeth: [36], link: null, notes: '', updated_at: 'v1',
+      levels: [{ site: 's36', mesial_mm: 0.5, distal_mm: null }] } as never;
+    render(<RadiographForm patientId="p1" sites={sites} radiograph={r} onDone={() => {}} />);
+    tick(36);
+    fireEvent.click(screen.getByRole('button', { name: 'Save X-ray' }));
+    expect(await screen.findByText('Clear the bone level for tooth 36 before removing it from the X-ray.')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('tooth 36');
+    expect(saveRadiograph).not.toHaveBeenCalled();
+  });
+
+  it('caps the date at today', () => {
+    render(<RadiographForm patientId="p1" sites={sites} onDone={() => {}} />);
+    expect(screen.getByLabelText(/^Date/).getAttribute('max')).toBe(todayIso());
+  });
+
+  it('labels a failed implant apart from its replacement on the same tooth', () => {
+    const two: XraySite[] = [
+      { id: 'old', tooth: 36, state: 'failed', placed_on: '2025-01-10' },
+      { id: 'new', tooth: 36, state: 'placed', placed_on: '2026-01-10' },
+    ];
+    render(<RadiographForm patientId="p1" sites={two} prefillTeeth={[36]} onDone={() => {}} />);
+    expect(screen.getByLabelText('Mesial 36 (failed)')).toBeTruthy();
+    expect(screen.getByLabelText('Mesial 36')).toBeTruthy();
+    expect(screen.getByText('36 (failed)')).toBeTruthy();
   });
 });

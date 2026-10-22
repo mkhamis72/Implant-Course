@@ -207,6 +207,45 @@ describe('save_radiograph', () => {
     });
   });
 
+  it('an edit writes only the bone levels that changed', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const a = await s.placeAt(36);
+      const b = await s.placeAt(37);
+      const levels = [{ site: a, mesial_mm: 0.5, distal_mm: null }, { site: b, mesial_mm: 1, distal_mm: 1 }];
+      const id = await save(c, { patient: s.patient, purpose: 'follow_up', teeth: [36, 37], levels });
+      const audit = async () => {
+        await asPostgres(c);
+        const rows = (await c.query(
+          `select action from public.audit_log where table_name = 'radiograph_bone_levels'
+             and coalesce(after, before) ->> 'radiograph_id' = $1 order by id`, [id])).rows.map((r) => r.action as string);
+        await actAs(c, users.organizer);
+        return rows;
+      };
+      const before = (await audit()).length;
+      await save(c, { id, patient: s.patient, purpose: 'follow_up', teeth: [36, 37], notes: 'Notes only', levels, expected: await updatedAt(c, id) });
+      expect((await audit()).length).toBe(before);
+      await save(c, {
+        id, patient: s.patient, purpose: 'follow_up', teeth: [36, 37], notes: 'Notes only',
+        levels: [{ site: a, mesial_mm: 1, distal_mm: null }, levels[1]], expected: await updatedAt(c, id),
+      });
+      expect((await audit()).slice(before)).toEqual(['UPDATE']);
+    });
+  });
+
+  it('refuses a bone level on an implant placed after the X-ray date', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const early = await s.placeAt(36);
+      const late = await s.placeAt(37, await daysAgo(c, 2));
+      const takenOn = await daysAgo(c, 10);
+      await refused(c, () => save(c, {
+        patient: s.patient, purpose: 'follow_up', teeth: [36, 37], takenOn,
+        levels: [{ site: early, mesial_mm: 0.5, distal_mm: null }, { site: late, mesial_mm: 0.5, distal_mm: null }],
+      }), /A bone level can only be recorded for an implant placed by the X-ray's date\./);
+    });
+  });
+
   it('rejects a stale updated_at', async () => {
     await withTx(async (c) => {
       const s = await setup(c);

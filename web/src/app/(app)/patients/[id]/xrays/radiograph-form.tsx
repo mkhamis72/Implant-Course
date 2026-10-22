@@ -33,10 +33,15 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
     return init;
   });
   const { error, pending, submit } = useSubmit(saveRadiograph, onDone);
+  const [blocked, setBlocked] = useState<string | null>(null);
 
   const rows = sites
     .filter((s) => (MEASURABLE_STATES as readonly string[]).includes(s.state) && teeth.includes(s.tooth))
     .sort((a, b) => a.tooth - b.tooth);
+  // A failed implant and its replacement can share a tooth: name the failed one.
+  const rowLabel = (s: XraySite) =>
+    s.state === 'failed' && rows.some((o) => o.id !== s.id && o.tooth === s.tooth) ? `${s.tooth} (failed)` : String(s.tooth);
+  const hasLevel = (id: string) => (levels[`mesial_${id}`] ?? '').trim() !== '' || (levels[`distal_${id}`] ?? '').trim() !== '';
 
   function toggle(tooth: number) {
     setTeeth((cur) => (cur.includes(tooth) ? cur.filter((t) => t !== tooth) : [...cur, tooth]));
@@ -45,6 +50,13 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
   return (
     <form className="card space-y-3" onSubmit={(e) => {
       e.preventDefault();
+      // Dropping a measured tooth would delete its bone level, so the measurement has to be cleared first.
+      const dropped = sites.find((s) => !teeth.includes(s.tooth) && hasLevel(s.id));
+      if (dropped) {
+        setBlocked(`Clear the bone level for tooth ${dropped.tooth} before removing it from the X-ray.`);
+        return;
+      }
+      setBlocked(null);
       const measured: Record<string, string> = {};
       for (const s of rows) {
         measured[`mesial_${s.id}`] = levels[`mesial_${s.id}`] ?? '';
@@ -57,7 +69,7 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
     }}>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Date" required>
-          <input className="input" type="date" aria-required="true" value={v.takenOn} onChange={(e) => setV({ ...v, takenOn: e.target.value })} />
+          <input className="input" type="date" aria-required="true" max={todayIso()} value={v.takenOn} onChange={(e) => setV({ ...v, takenOn: e.target.value })} />
         </Field>
         <Field label="Type" required>
           <select className="input" aria-required="true" value={v.type} onChange={(e) => setV({ ...v, type: e.target.value as typeof v.type })}>
@@ -102,7 +114,7 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
           </p>
           {rows.map((s) => (
             <div key={s.id} className="grid grid-cols-[3rem_1fr_1fr] items-center gap-2" data-testid="bone-level-row">
-              <span className="font-medium">{s.tooth}</span>
+              <span className="font-medium">{rowLabel(s)}</span>
               {(['mesial', 'distal'] as const).map((side) => (
                 <input
                   key={side}
@@ -112,7 +124,7 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
                   min={BONE_LEVEL_MIN}
                   max={BONE_LEVEL_MAX}
                   placeholder={side === 'mesial' ? 'Mesial mm' : 'Distal mm'}
-                  aria-label={`${side === 'mesial' ? 'Mesial' : 'Distal'} ${s.tooth}`}
+                  aria-label={`${side === 'mesial' ? 'Mesial' : 'Distal'} ${rowLabel(s)}`}
                   value={levels[`${side}_${s.id}`] ?? ''}
                   onChange={(e) => setLevels({ ...levels, [`${side}_${s.id}`]: e.target.value })}
                 />
@@ -121,7 +133,7 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
           ))}
         </fieldset>
       )}
-      <Footer error={error} pending={pending} saveLabel="Save X-ray" onCancel={onDone} />
+      <Footer error={blocked ?? error} pending={pending} saveLabel="Save X-ray" onCancel={onDone} />
     </form>
   );
 }

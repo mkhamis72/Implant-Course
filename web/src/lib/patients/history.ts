@@ -6,7 +6,7 @@ import { impressionSummary, type ImpressionType } from '@/lib/implants/impressio
 import { TYPE_LABELS } from '@/lib/implants/complications';
 import { FAILURE_REASON_LABELS, FAILURE_TYPE_LABELS, type FailureReason, type FailureType } from '@/lib/implants/failure';
 import { PROBLEM_ACTION_LABELS, PROBLEM_TYPE_LABELS, RESTORATION_TYPE_LABELS, STAGE_LABELS, describeTeeth } from '@/lib/restorations/restorations';
-import { RADIOGRAPH_PURPOSE_LABELS, RADIOGRAPH_TYPE_LABELS, type RadiographPurpose, type RadiographType } from '@/lib/radiographs/radiographs';
+import { RADIOGRAPH_PURPOSE_LABELS, RADIOGRAPH_TYPE_LABELS, boneLevelLabel, type RadiographPurpose, type RadiographType } from '@/lib/radiographs/radiographs';
 import { visitResult, type Attendance } from '@/lib/visits/visits';
 import { formatDate } from '@/lib/format';
 import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
@@ -184,8 +184,19 @@ export function describeChange(e: HistoryEntry): string {
       return changed.length ? `X-ray updated: ${changed.join(', ')}` : 'X-ray updated';
     }
     // The row holds only the radiograph and implant ids, so the tooth can't be named here.
-    case 'radiograph_bone_levels':
-      return e.action === 'INSERT' ? 'Bone level recorded' : e.action === 'DELETE' ? 'Bone level removed' : 'Bone level updated';
+    case 'radiograph_bone_levels': {
+      const mm = (row: Record<string, unknown> | null, side: 'mesial' | 'distal') => {
+        const v = row?.[`${side}_mm`];
+        return boneLevelLabel(v === null || v === undefined ? null : Number(v));
+      };
+      const sides = ['mesial', 'distal'] as const;
+      if (e.action === 'UPDATE') {
+        const changed = sides.filter((s) => mm(e.before, s) !== mm(e.after, s)).map((s) => `${s} ${mm(e.before, s)} → ${mm(e.after, s)}`);
+        return changed.length ? `Bone level updated: ${changed.join(', ')}` : 'Bone level updated';
+      }
+      const row = e.action === 'INSERT' ? e.after : e.before;
+      return `Bone level ${e.action === 'INSERT' ? 'recorded' : 'removed'}: ${sides.map((s) => `${s} ${mm(row, s)}`).join(', ')}`;
+    }
     default:
       return `${e.table_name} ${e.action.toLowerCase()}`;
   }

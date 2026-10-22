@@ -214,6 +214,15 @@ describe('describeChange: radiographs', () => {
   });
   it('describes bone-level rows without a tooth (the row holds only the implant id)', () => {
     expect(describeChange({ ...base, table_name: 'radiograph_bone_levels', action: 'INSERT', before: null, after: { site_id: 's1', mesial_mm: 0.5 } }))
-      .toBe('Bone level recorded');
+      .toBe('Bone level recorded: mesial 0.5 mm, distal —');
+    expect(describeChange({ ...base, table_name: 'radiograph_bone_levels', action: 'UPDATE',
+      before: { site_id: 's1', mesial_mm: 0.5, distal_mm: 2 }, after: { site_id: 's1', mesial_mm: 1, distal_mm: 2 } }))
+      .toBe('Bone level updated: mesial 0.5 mm → 1 mm');
+    expect(describeChange({ ...base, table_name: 'radiograph_bone_levels', action: 'UPDATE',
+      before: { site_id: 's1', mesial_mm: null, distal_mm: 2 }, after: { site_id: 's1', mesial_mm: 1.5, distal_mm: null } }))
+      .toBe('Bone level updated: mesial — → 1.5 mm, distal 2 mm → —');
+    expect(describeChange({ ...base, table_name: 'radiograph_bone_levels', action: 'DELETE',
+      before: { site_id: 's1', mesial_mm: null, distal_mm: -0.5 }, after: null }))
+      .toBe('Bone level removed: mesial —, distal -0.5 mm');
   });
 });

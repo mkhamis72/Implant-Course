@@ -46,4 +46,7 @@ test('records an X-ray with a bone level, shows it on the implant, and removes i
 
   await page.goto(`/patients/${patientId}/xrays`);
   await expect(page.getByText('No X-rays recorded.')).toBeVisible();
+
+  await page.goto(`/patients/${patientId}/history`);
+  await expect(page.getByTestId('history-entry').filter({ hasText: 'X-ray removed from the record (Wrong patient)' })).toHaveCount(1);
 });
