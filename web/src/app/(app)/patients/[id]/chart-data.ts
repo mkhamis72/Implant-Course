@@ -7,6 +7,7 @@ import { productLabel } from '@/lib/inventory/labels';
 import type { ChartData, ImplantSite, LotOnHand, Product } from '@/lib/inventory/types';
 import type { ToothState } from '@/lib/patients/types';
 import type { VisitRow } from '@/lib/visits/visits';
+import type { Radiograph } from '@/lib/radiographs/radiographs';
 import type { CourseOption, Restoration, RestorationProblem } from '@/lib/restorations/restorations';
 
 export const SITE_SELECT = `
@@ -76,7 +77,7 @@ function toRestoration({ sites, problems, ...r }: RestorationRow): Restoration {
 export async function loadChartData(patientId: string): Promise<ChartData> {
   const supabase = await createClient();
   const me = await getCurrentProfile();
-  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses] = await Promise.all([
+  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs] = await Promise.all([
     supabase.from('tooth_status').select('tooth, status').eq('patient_id', patientId),
     supabase.from('implant_sites').select(SITE_SELECT).eq('patient_id', patientId).order('created_at'),
     supabase.from('products').select('*').eq('active', true),
@@ -88,8 +89,9 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supabase.from('restorations').select(RESTORATION_SELECT).eq('patient_id', patientId).is('voided_at', null),
     // Course choices for the pickers: course_options() needs View on Patients, like this page.
     supabase.rpc('course_options'),
+    supabase.rpc('radiographs_for', { p_patient: patientId }),
   ]);
-  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses]) {
+  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs]) {
     if (r.error) throw new Error('Could not load the chart');
   }
   const statusMap: Partial<Record<number, ToothState>> = {};
@@ -108,6 +110,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supervisors: (supervisors.data ?? []).map((s) => ({ id: s.id as string, label: s.full_name as string })),
     restorations: ((restorations.data ?? []) as unknown as RestorationRow[]).map(toRestoration),
     courses: (courses.data ?? []) as CourseOption[],
+    radiographs: (radiographs.data ?? []) as unknown as Radiograph[],
     today: todayIso(),
     me: me?.user_id ?? '',
     editable: me ? canEdit(me, 'patients') : false,

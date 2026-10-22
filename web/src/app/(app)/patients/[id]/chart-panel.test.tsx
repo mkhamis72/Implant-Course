@@ -10,6 +10,7 @@ vi.mock('./restoration-actions', () => ({
 }));
 vi.mock('./visit-actions', () => ({ recordVisit: vi.fn() }));
 vi.mock('./outcome-actions', () => ({ saveComplication: vi.fn(), voidComplication: vi.fn(), saveFailure: vi.fn() }));
+vi.mock('./xrays/actions', () => ({ saveRadiograph: vi.fn(), voidRadiograph: vi.fn() }));
 vi.mock('./implant-actions', () => ({
   planImplant: vi.fn(), placeImplant: vi.fn(), cancelPlan: vi.fn(), setTechnique: vi.fn(), recordImpression: vi.fn(), fitComponent: vi.fn(),
   correctBatch: vi.fn(), voidFollowup: vi.fn(), voidComponent: vi.fn(),
@@ -18,7 +19,7 @@ import { ChartPanel } from './chart-panel';
 
 const data = (editable: boolean) =>
   ({
-    statuses: {}, sites: [], visits: [], implants: [], componentProducts: [], lots: [], delegates: [], organizers: [], supervisors: [], restorations: [], courses: [],
+    statuses: {}, sites: [], visits: [], implants: [], componentProducts: [], lots: [], delegates: [], organizers: [], supervisors: [], restorations: [], courses: [], radiographs: [],
     today: '2030-06-10', me: 'u1', editable,
   }) as unknown as ChartData;
 

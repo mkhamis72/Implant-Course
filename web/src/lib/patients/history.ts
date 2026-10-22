@@ -6,6 +6,7 @@ import { impressionSummary, type ImpressionType } from '@/lib/implants/impressio
 import { TYPE_LABELS } from '@/lib/implants/complications';
 import { FAILURE_REASON_LABELS, FAILURE_TYPE_LABELS, type FailureReason, type FailureType } from '@/lib/implants/failure';
 import { PROBLEM_ACTION_LABELS, PROBLEM_TYPE_LABELS, RESTORATION_TYPE_LABELS, STAGE_LABELS, describeTeeth } from '@/lib/restorations/restorations';
+import { RADIOGRAPH_PURPOSE_LABELS, RADIOGRAPH_TYPE_LABELS, boneLevelLabel, type RadiographPurpose, type RadiographType } from '@/lib/radiographs/radiographs';
 import { visitResult, type Attendance } from '@/lib/visits/visits';
 import { formatDate } from '@/lib/format';
 import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
@@ -37,6 +38,10 @@ const SITE_FIELD_LABELS: Record<string, string> = { ...PLACEMENT_FIELD_LABELS, .
 
 const RESTORATION_FIELD_LABELS: Record<string, string> = {
   retention: 'retention', material: 'material', delegate_id: 'delegate', supervisor_id: 'supervisor', course_id: 'course', notes: 'notes',
+};
+
+const RADIOGRAPH_FIELD_LABELS: Record<string, string> = {
+  taken_on: 'date', type: 'type', purpose: 'purpose', teeth: 'teeth', link: 'link', notes: 'notes',
 };
 
 const IMPRESSION_FIELD_LABELS: Record<string, string> = { impression_type: 'scan / impression', impression_taken_on: 'scan / impression date' };
@@ -166,6 +171,31 @@ export function describeChange(e: HistoryEntry): string {
       if (e.after?.voided_at && !e.before?.voided_at) return `Restoration problem removed from the record: ${type} (${e.after.voided_reason})`;
       const action = PROBLEM_ACTION_LABELS[row?.action as keyof typeof PROBLEM_ACTION_LABELS] ?? String(row?.action);
       return `Restoration problem ${e.action === 'INSERT' ? 'recorded' : 'updated'}: ${type} — ${action}`;
+    }
+    case 'radiographs': {
+      const row = e.after ?? e.before;
+      if (e.after?.voided_at && !e.before?.voided_at) return `X-ray removed from the record (${e.after.voided_reason})`;
+      if (e.action === 'INSERT') {
+        const type = RADIOGRAPH_TYPE_LABELS[row?.type as RadiographType] ?? String(row?.type);
+        const purpose = RADIOGRAPH_PURPOSE_LABELS[row?.purpose as RadiographPurpose] ?? String(row?.purpose);
+        return `X-ray added: ${type}, ${purpose} (teeth ${((row?.teeth as number[] | undefined) ?? []).join(', ')})`;
+      }
+      const changed = changedFields(e.before, e.after, RADIOGRAPH_FIELD_LABELS);
+      return changed.length ? `X-ray updated: ${changed.join(', ')}` : 'X-ray updated';
+    }
+    // The row holds only the radiograph and implant ids, so the tooth can't be named here.
+    case 'radiograph_bone_levels': {
+      const mm = (row: Record<string, unknown> | null, side: 'mesial' | 'distal') => {
+        const v = row?.[`${side}_mm`];
+        return boneLevelLabel(v === null || v === undefined ? null : Number(v));
+      };
+      const sides = ['mesial', 'distal'] as const;
+      if (e.action === 'UPDATE') {
+        const changed = sides.filter((s) => mm(e.before, s) !== mm(e.after, s)).map((s) => `${s} ${mm(e.before, s)} → ${mm(e.after, s)}`);
+        return changed.length ? `Bone level updated: ${changed.join(', ')}` : 'Bone level updated';
+      }
+      const row = e.action === 'INSERT' ? e.after : e.before;
+      return `Bone level ${e.action === 'INSERT' ? 'recorded' : 'removed'}: ${sides.map((s) => `${s} ${mm(row, s)}`).join(', ')}`;
     }
     default:
       return `${e.table_name} ${e.action.toLowerCase()}`;
