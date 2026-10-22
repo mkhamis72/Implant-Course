@@ -90,4 +90,23 @@ describe('ChartPanel', () => {
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('35');
     expect(screen.queryByRole('tab', { name: /^Restoration/ })).toBeNull();
   });
+
+  it('shows the Date problem badge only for the implant whose site has an issue', () => {
+    const site = {
+      id: 's1', tooth: 36, state: 'placed', placed_on: '2030-03-10', technique: 'guided', torque_ncm: null, isq: null, bone_type: null,
+      graft: '', product: null, lot: null, stock_lot_id: null, placing: null, assisting: null, supervisor: null, slot: null,
+      components: [], followups: [], complications: [], surgery: null, grafts: [],
+    };
+    const issue = (site_id: string | null) => ({
+      patient_id: 'pt', patient_name: 'A', file_no: 'P1', site_id, tooth: 36, kind: 'before_placement', record_table: 'implant_followups',
+      record_id: 'r', record_date: '2030-01-01', reference_date: '2030-03-10', message: 'm',
+    });
+    const withIssues = (issues: unknown[]) =>
+      ({ ...data(true), statuses: { 36: 'implant_placed' }, sites: [site], issues }) as unknown as ChartData;
+    const { unmount } = render(<ChartPanel patientId="pt" data={withIssues([issue('s1')])} initialTooth={36} />);
+    expect(screen.getByText('Date problem')).toBeInTheDocument();
+    unmount();
+    render(<ChartPanel patientId="pt" data={withIssues([issue('other')])} initialTooth={36} />);
+    expect(screen.queryByText('Date problem')).toBeNull();
+  });
 });
