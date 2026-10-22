@@ -40,7 +40,7 @@ describe('reportAccessNote', () => {
       'Implant records are only shown to users with access to Patients.',
     );
     expect(reportAccessNote({ role: 'organizer', permissions: { delegates: 'view', schedule: 'view' } })).toBe(
-      'Follow-up results are only shown to users with access to Patients.',
+      'Follow-up results and restorations are only shown to users with access to Patients.',
     );
     expect(reportAccessNote({ role: 'organizer', permissions: { delegates: 'view', patients: 'view' } })).toBeNull();
     expect(reportAccessNote({ role: 'admin', permissions: {} })).toBeNull();

@@ -5,6 +5,7 @@ import { acceptsProduct, currentComponent } from '@/lib/inventory/components';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, type ChartData, type ImplantSite, type LotOnHand } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
+import { CourseOptions } from './implant-forms';
 import { visitResult } from '@/lib/visits/visits';
 import { correctBatch, correctPlacement, voidComponent, voidFollowup } from './implant-actions';
 
@@ -50,6 +51,7 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
     placingDelegateId: site.placing_delegate_id ?? '',
     assistingDelegateId: site.assisting_delegate_id ?? '',
     supervisorId: site.supervisor_id ?? '',
+    courseId: site.course_id ?? '',
     graft: site.graft ?? '',
     notes: site.notes ?? '',
   });
@@ -88,6 +90,13 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
           <select className="input" value={v.supervisorId} onChange={set('supervisorId')}>
             <option value="">Choose the supervisor…</option>
             {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="label">Course</span>
+          <select className="input" value={v.courseId} onChange={set('courseId')}>
+            <option value="">Choose the course…</option>
+            <CourseOptions courses={data.courses} date={v.placedOn} />
           </select>
         </label>
       </div>

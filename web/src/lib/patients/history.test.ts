@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { describeChange } from './history';
+import { describeChange, isHiddenFromHistory } from './history';
 import type { HistoryEntry } from './types';
 
 const entry = (e: Partial<HistoryEntry>): HistoryEntry => ({
@@ -149,5 +149,52 @@ describe('describeChange: complications and failure', () => {
       before: { tooth: 46, state: 'failed', failure_type: 'removed', failed_on: '2026-05-01', failure_reason: 'fracture' },
       after: { tooth: 46, state: 'failed', failure_type: 'lost', failed_on: '2026-05-01', failure_reason: 'fracture' } }))
       .toBe('Implant on tooth 46: failure details corrected: failure type');
+  });
+});
+
+describe('describeChange: restorations', () => {
+  const base = { id: 1, at: '2026-10-21T10:00:00Z', actor: 'A' };
+  it('describes adding, updating and removing a restoration', () => {
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'INSERT', before: null, after: { stage: 'final', type: 'bridge', teeth: [34, 35, 36] } }))
+      .toBe('Restoration added: Final bridge on 34–36');
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'INSERT', before: null, after: { stage: 'temporary', type: 'single_crown', teeth: [36] } }))
+      .toBe('Restoration added: Temporary single crown on 36');
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'UPDATE',
+      before: { stage: 'final', type: 'bridge', teeth: [34, 35, 36], material: null, notes: '', voided_at: null },
+      after: { stage: 'final', type: 'bridge', teeth: [34, 35, 36], material: 'zirconia', notes: '', voided_at: null } }))
+      .toBe('Restoration updated: material');
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'UPDATE',
+      before: { stage: 'final', voided_at: null }, after: { stage: 'final', voided_at: '2026-10-21', voided_reason: 'Wrong tooth' } }))
+      .toBe('Restoration removed from the record (Wrong tooth)');
+  });
+  it('describes ending and reopening a restoration', () => {
+    const open = { stage: 'temporary', ended_on: null, end_kind: null, end_reason: null, ended_by: null, voided_at: null };
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'UPDATE',
+      before: open, after: { ...open, ended_on: '2026-10-20', end_kind: 'replaced', ended_by: 'r2' } }))
+      .toBe('Restoration replaced on 20 Oct 2026');
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'UPDATE',
+      before: { ...open, stage: 'final' }, after: { ...open, stage: 'final', ended_on: '2026-10-20', end_kind: 'remade', end_reason: 'Chipped', ended_by: 'r2' } }))
+      .toBe('Restoration remade on 20 Oct 2026 (Chipped)');
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'UPDATE',
+      before: { ...open, ended_on: '2026-10-20', end_kind: 'replaced', ended_by: 'r2' }, after: open }))
+      .toBe('Restoration reopened');
+  });
+  it('describes problems', () => {
+    expect(describeChange({ ...base, table_name: 'restoration_problems', action: 'INSERT', before: null, after: { type: 'debonding', action: 'recemented' } }))
+      .toBe('Restoration problem recorded: Debonding / loss of retention — Recemented');
+    expect(describeChange({ ...base, table_name: 'restoration_problems', action: 'UPDATE',
+      before: { type: 'chipping', action: 'none', voided_at: null }, after: { type: 'chipping', action: 'repaired', voided_at: null } }))
+      .toBe('Restoration problem updated: Chipping — Repaired / polished');
+    expect(describeChange({ ...base, table_name: 'restoration_problems', action: 'UPDATE',
+      before: { type: 'wear', action: 'none', voided_at: null }, after: { type: 'wear', action: 'none', voided_at: '2026-10-21', voided_reason: 'Duplicate' } }))
+      .toBe('Restoration problem removed from the record: Wear (Duplicate)');
+  });
+});
+
+describe('restoration links', () => {
+  it('hides restoration_sites rows and nothing else', () => {
+    const base = { id: 1, at: '2026-10-21T10:00:00Z', actor: 'A', action: 'INSERT' as const, before: null, after: { site_id: 's1' } };
+    expect(isHiddenFromHistory({ ...base, table_name: 'restoration_sites' })).toBe(true);
+    expect(isHiddenFromHistory({ ...base, table_name: 'restorations' })).toBe(false);
   });
 });

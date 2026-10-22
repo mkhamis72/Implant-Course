@@ -15,6 +15,12 @@ export const COMPLICATION_TYPES: Record<ComplicationCategory, readonly string[]>
   mechanical: ['implant_fracture', 'abutment_fracture', 'screw_loosening', 'screw_fracture', 'restoration_fracture',
     'loss_of_retention', 'prosthetic_remake', 'other'],
 };
+/** What the implant form offers: crown problems are recorded on the restoration now. SQL and old rows keep the other types. */
+const CROWN_TYPES = ['screw_loosening', 'screw_fracture', 'restoration_fracture', 'loss_of_retention', 'prosthetic_remake'];
+export const IMPLANT_FORM_TYPES: Record<ComplicationCategory, readonly string[]> = {
+  ...COMPLICATION_TYPES,
+  mechanical: COMPLICATION_TYPES.mechanical.filter((t) => !CROWN_TYPES.includes(t)),
+};
 export const TYPE_LABELS: Record<string, string> = {
   intraoperative_injury: 'Intraoperative injury', haemorrhage: 'Haemorrhage', nerve_symptoms: 'Nerve symptoms',
   sinus_complication: 'Sinus complication', wound_dehiscence: 'Wound dehiscence', infection: 'Infection',

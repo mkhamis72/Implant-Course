@@ -5,7 +5,9 @@ import { GRAFT_PROCEDURE_LABELS, SURGERY_FIELD_LABELS, type GraftProcedure } fro
 import { impressionSummary, type ImpressionType } from '@/lib/implants/impression';
 import { TYPE_LABELS } from '@/lib/implants/complications';
 import { FAILURE_REASON_LABELS, FAILURE_TYPE_LABELS, type FailureReason, type FailureType } from '@/lib/implants/failure';
+import { PROBLEM_ACTION_LABELS, PROBLEM_TYPE_LABELS, RESTORATION_TYPE_LABELS, STAGE_LABELS, describeTeeth } from '@/lib/restorations/restorations';
 import { visitResult, type Attendance } from '@/lib/visits/visits';
+import { formatDate } from '@/lib/format';
 import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
 
 const FAILURE_FIELD_LABELS: Record<string, string> = { failed_on: 'failure date', failure_type: 'failure type', failure_reason: 'failure reason', failure_notes: 'failure notes' };
@@ -33,6 +35,10 @@ const PLACEMENT_FIELD_LABELS: Record<string, string> = {
 const STABILITY_FIELD_LABELS: Record<string, string> = { torque_ncm: 'torque', isq: 'ISQ', bone_type: 'bone type' };
 const SITE_FIELD_LABELS: Record<string, string> = { ...PLACEMENT_FIELD_LABELS, ...STABILITY_FIELD_LABELS };
 
+const RESTORATION_FIELD_LABELS: Record<string, string> = {
+  retention: 'retention', material: 'material', delegate_id: 'delegate', supervisor_id: 'supervisor', course_id: 'course', notes: 'notes',
+};
+
 const IMPRESSION_FIELD_LABELS: Record<string, string> = { impression_type: 'scan / impression', impression_taken_on: 'scan / impression date' };
 
 function changedFields(
@@ -49,6 +55,9 @@ function changedFields(
 function stateLabel(value: unknown): string {
   return STATE_LABELS[(value as ToothState) ?? 'present'] ?? String(value);
 }
+
+/** Link rows that only repeat what their restoration entry already says (the row holds no tooth to name). */
+export const isHiddenFromHistory = (e: HistoryEntry) => e.table_name === 'restoration_sites';
 
 export function describeChange(e: HistoryEntry): string {
   const fields = changedFields(e.before, e.after);
@@ -134,6 +143,29 @@ export function describeChange(e: HistoryEntry): string {
       if (e.after?.voided_at && !e.before?.voided_at) return `Complication removed from the record: ${label} (${e.after.voided_reason})`;
       if (e.after?.resolved_on && !e.before?.resolved_on) return `Complication resolved: ${label}`;
       return `Complication updated: ${label}`;
+    }
+    case 'restorations': {
+      const row = e.after ?? e.before;
+      if (e.after?.voided_at && !e.before?.voided_at) return `Restoration removed from the record (${e.after.voided_reason})`;
+      if (e.action === 'INSERT') {
+        const stage = STAGE_LABELS[row?.stage as keyof typeof STAGE_LABELS] ?? String(row?.stage);
+        const type = (RESTORATION_TYPE_LABELS[row?.type as keyof typeof RESTORATION_TYPE_LABELS] ?? String(row?.type)).toLowerCase();
+        return `Restoration added: ${stage} ${type} on ${describeTeeth((row?.teeth as number[] | undefined) ?? [])}`;
+      }
+      if (e.after?.end_kind && !e.before?.end_kind) {
+        const on = formatDate(String(e.after.ended_on));
+        return e.after.end_kind === 'remade' ? `Restoration remade on ${on} (${e.after.end_reason})` : `Restoration replaced on ${on}`;
+      }
+      if (e.before?.end_kind && !e.after?.end_kind) return 'Restoration reopened';
+      const changed = changedFields(e.before, e.after, RESTORATION_FIELD_LABELS);
+      return changed.length ? `Restoration updated: ${changed.join(', ')}` : 'Restoration updated';
+    }
+    case 'restoration_problems': {
+      const row = e.after ?? e.before;
+      const type = PROBLEM_TYPE_LABELS[row?.type as keyof typeof PROBLEM_TYPE_LABELS] ?? String(row?.type);
+      if (e.after?.voided_at && !e.before?.voided_at) return `Restoration problem removed from the record: ${type} (${e.after.voided_reason})`;
+      const action = PROBLEM_ACTION_LABELS[row?.action as keyof typeof PROBLEM_ACTION_LABELS] ?? String(row?.action);
+      return `Restoration problem ${e.action === 'INSERT' ? 'recorded' : 'updated'}: ${type} — ${action}`;
     }
     default:
       return `${e.table_name} ${e.action.toLowerCase()}`;

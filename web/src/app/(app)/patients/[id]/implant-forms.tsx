@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { availableLots } from '@/lib/inventory/lots';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { acceptsProduct } from '@/lib/inventory/components';
+import { coursesForDate } from '@/lib/restorations/restorations';
+import { formatDate } from '@/lib/format';
 import {
   COMPONENT_LABELS, COMPONENT_TYPES, TECHNIQUES, TECHNIQUE_LABELS,
   type ChartData, type ComponentType, type ImplantSite, type Technique,
@@ -66,6 +68,25 @@ export function Footer({ error, pending, saveLabel, onCancel }: { error: string 
           Cancel
         </button>
       </div>
+    </>
+  );
+}
+
+/** Courses running on the date first, the others after. */
+export function CourseOptions({ courses, date }: { courses: ChartData['courses']; date: string }) {
+  const { running, others } = coursesForDate(courses, date);
+  return (
+    <>
+      {running.length > 0 && (
+        <optgroup label={`Running on ${formatDate(date)}`}>
+          {running.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </optgroup>
+      )}
+      {others.length > 0 && (
+        <optgroup label="Other courses">
+          {others.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </optgroup>
+      )}
     </>
   );
 }
@@ -254,13 +275,19 @@ export function PlaceForm({
   plannedProductId,
   plannedTechnique = null,
   slot = null,
+  plannedCourseId = null,
   onPlaced,
-}: Base & { plannedProductId: string | null; plannedTechnique?: Technique | null; slot?: ImplantSite['slot']; onPlaced?: () => void }) {
+}: Base & {
+  plannedProductId: string | null; plannedTechnique?: Technique | null; slot?: ImplantSite['slot'];
+  /** The course the booking's surgery session belongs to. */
+  plannedCourseId?: string | null; onPlaced?: () => void;
+}) {
   // A booked implant starts with the booking's delegates and supervisor.
   const placingFromSlot = slot?.delegates.find((d) => d.role === 'placing')?.delegate_id ?? '';
   const assistingFromSlot = slot?.delegates.find((d) => d.role === 'assisting')?.delegate_id ?? '';
   const [v, setV] = useState({
     productId: plannedProductId ?? '', technique: plannedTechnique ?? '', lotId: '', placedOn: data.today,
+    courseId: plannedCourseId ?? '',
     placingDelegateId: placingFromSlot, assistingDelegateId: assistingFromSlot,
     supervisorId: slot?.supervisor_id ?? (data.supervisors.some((s) => s.id === data.me) ? data.me : ''), graft: '', notes: '',
   });
@@ -296,6 +323,12 @@ export function PlaceForm({
       <TechniqueField value={v.technique} onChange={set('technique')} />
       <Field label="Placement date" required>
         <input className="input" type="date" aria-required="true" value={v.placedOn} onChange={(e) => set('placedOn')(e.target.value)} />
+      </Field>
+      <Field label="Course" required>
+        <select className="input" aria-required="true" value={v.courseId} onChange={(e) => set('courseId')(e.target.value)}>
+          <option value="">Choose the course…</option>
+          <CourseOptions courses={data.courses} date={v.placedOn} />
+        </select>
       </Field>
       <People
         booked={Boolean(placingFromSlot)}
@@ -351,12 +384,13 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, siteId: site.id, ...v }); }}>
       <Field label="Component">
         <select className="input" value={v.componentType} onChange={(e) => set('componentType')(e.target.value)}>
-          {COMPONENT_TYPES.map((t) => <option key={t} value={t}>{COMPONENT_LABELS[t]}</option>)}
+          {/* Crowns and bridges are recorded on the Restoration tab; final_restoration stays for old records only. */}
+          {COMPONENT_TYPES.filter((t) => t !== 'final_restoration').map((t) => <option key={t} value={t}>{COMPONENT_LABELS[t]}</option>)}
         </select>
       </Field>
       <Field label="Product (optional)">
         <select className="input" value={v.productId} onChange={(e) => set('productId')(e.target.value)}>
-          <option value="">{v.componentType === 'final_restoration' ? 'Lab-made / not from stock' : 'Not from stock'}</option>
+          <option value="">Not from stock</option>
           {products.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
         </select>
       </Field>

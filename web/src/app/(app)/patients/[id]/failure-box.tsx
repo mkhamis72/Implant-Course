@@ -2,11 +2,14 @@
 
 import { useState } from 'react';
 import type { ImplantSite } from '@/lib/inventory/types';
+import type { Restoration } from '@/lib/restorations/restorations';
 import { FAILURE_REASONS, FAILURE_REASON_LABELS, FAILURE_TYPES, FAILURE_TYPE_LABELS, describeFailure } from '@/lib/implants/failure';
 import { Field, Footer, useSubmit } from './implant-forms';
 import { saveFailure } from './outcome-actions';
 
-export function FailureBox({ site, patientId, editable }: { site: ImplantSite; patientId: string; editable: boolean }) {
+export function FailureBox({ site, patientId, editable, restorations }: {
+  site: ImplantSite; patientId: string; editable: boolean; restorations: readonly Restoration[];
+}) {
   const [editing, setEditing] = useState(false);
   if (site.state !== 'failed') return null;
   const recorded = site.failure_type !== null;
@@ -17,7 +20,7 @@ export function FailureBox({ site, patientId, editable }: { site: ImplantSite; p
         <FailureForm site={site} patientId={patientId} onDone={() => setEditing(false)} />
       ) : (
         <>
-          <p className={recorded ? '' : 'text-muted'}>{recorded ? describeFailure(site) : 'Failure details not recorded.'}</p>
+          <p className={recorded ? '' : 'text-muted'}>{recorded ? describeFailure(site, restorations.filter((r) => r.site_ids.includes(site.id))) : 'Failure details not recorded.'}</p>
           {site.failure_notes && <p className="text-muted">{site.failure_notes}</p>}
           {editable && (
             <button type="button" className="btn-secondary btn" onClick={() => setEditing(true)}>

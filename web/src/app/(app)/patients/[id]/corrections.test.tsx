@@ -10,7 +10,7 @@ import { Corrections } from './corrections';
 const site = {
   id: 's1', tooth: 36, state: 'placed', technique: 'guided', placed_on: '2026-05-02', stock_lot_id: 'l1',
   torque_ncm: 35, isq: 70, bone_type: 'D2', graft: 'Bio-Oss old note', notes: 'first', product: null, lot: null,
-  placing_delegate_id: 'gone', assisting_delegate_id: null, supervisor_id: 'sup1',
+  placing_delegate_id: 'gone', assisting_delegate_id: null, supervisor_id: 'sup1', course_id: 'c1',
   placing: { full_name: 'Dr Former' }, assisting: null, supervisor: { full_name: 'Prof A' },
   components: [], followups: [], slot: null, created_at: '2026-05-02T00:00:00Z',
 } as unknown as ImplantSite;
@@ -18,6 +18,10 @@ const data = {
   lots: [], implants: [], componentProducts: [],
   delegates: [{ id: 'd1', label: 'Dr Right' }],
   supervisors: [{ id: 'sup1', label: 'Prof A' }, { id: 'sup2', label: 'Prof B' }],
+  courses: [
+    { id: 'c1', name: 'May course', start_date: '2026-05-01', end_date: '2026-05-05' },
+    { id: 'c2', name: 'June course', start_date: '2026-06-01', end_date: '2026-06-05' },
+  ],
 } as unknown as ChartData;
 
 describe('<Corrections> placement details', () => {
@@ -37,11 +41,21 @@ describe('<Corrections> placement details', () => {
     fireEvent.change(within(box).getByLabelText('Placement date'), { target: { value: '2026-05-01' } });
     fireEvent.change(within(box).getByRole('combobox', { name: 'Placed by' }), { target: { value: 'd1' } });
     fireEvent.change(within(box).getByRole('combobox', { name: 'Supervisor' }), { target: { value: 'sup2' } });
+    expect(within(box).getByRole('combobox', { name: 'Course' })).toHaveValue('c1');
+    fireEvent.change(within(box).getByRole('combobox', { name: 'Course' }), { target: { value: 'c2' } });
     fireEvent.click(within(box).getByRole('button', { name: 'Save details' }));
     expect(vi.mocked(correctPlacement)).toHaveBeenCalledWith({
-      siteId: 's1', patientId: 'pt', placedOn: '2026-05-01', placingDelegateId: 'd1', assistingDelegateId: '', supervisorId: 'sup2',
+      siteId: 's1', patientId: 'pt', placedOn: '2026-05-01', placingDelegateId: 'd1', assistingDelegateId: '', supervisorId: 'sup2', courseId: 'c2',
       graft: 'Bio-Oss old note', notes: 'first',
     });
     expect(await screen.findByRole('status')).toHaveTextContent('Correction saved.');
+  });
+
+  // The chart doesn't load enrollments (Patients viewers can't read them), so the report's date-plus-enrollment
+  // fallback can't be computed here: a placement with no course asks for one.
+  it('leaves the course empty on a placement recorded without one', () => {
+    render(<Corrections patientId="pt" site={{ ...site, course_id: null } as ImplantSite} data={data} />);
+    const box = screen.getByRole('group', { name: 'Placement details' });
+    expect(within(box).getByRole('combobox', { name: 'Course' })).toHaveValue('');
   });
 });

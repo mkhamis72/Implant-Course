@@ -48,7 +48,7 @@ export function toPermissions(rows: { area: string; level: string }[] | null | u
 export function reportAccessNote(p: Who): string | null {
   if (canView(p, 'patients')) return null;
   return canView(p, 'schedule')
-    ? 'Follow-up results are only shown to users with access to Patients.'
+    ? 'Follow-up results and restorations are only shown to users with access to Patients.'
     : 'Implant records are only shown to users with access to Patients.';
 }
 

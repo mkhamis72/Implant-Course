@@ -3,6 +3,7 @@ import type { ImplantGraft, ImplantSurgery } from '@/lib/implants/surgery';
 import type { ImplantComplication } from '@/lib/implants/complications';
 import type { FailureReason, FailureType } from '@/lib/implants/failure';
 import type { Attendance, VisitFindings, VisitRow } from '@/lib/visits/visits';
+import type { CourseOption, Restoration } from '@/lib/restorations/restorations';
 
 export const PRODUCT_TYPES = [
   'implant', 'cover_screw', 'healing_abutment', 'graft', 'membrane', 'ti_base', 'multi_unit',
@@ -128,6 +129,7 @@ export type ImplantSite = {
   placing_delegate_id: string | null;
   assisting_delegate_id: string | null;
   supervisor_id: string | null;
+  course_id: string | null;
   placing: Person;
   assisting: Person;
   supervisor: { full_name: string } | null;
@@ -161,6 +163,10 @@ export type ChartData = {
   delegates: Option[];
   organizers: Option[];
   supervisors: Option[];
+  /** The patient's restorations (voided ones left out), each with its implants and live problems. */
+  restorations: Restoration[];
+  /** Course pickers (placement, corrections, restoration), from course_options(): newest first. */
+  courses: CourseOption[];
   today: string;
   me: string;
   /** Patients/edit: false shows the chart read-only. */

@@ -3,24 +3,34 @@ import { implantTabs, initialTab, tabAfterKey, type ImplantTab } from './implant
 
 const keys = (tabs: ImplantTab[]) => tabs.map((t) => t.key);
 
+const none = { restoration: null };
+
 describe('implantTabs', () => {
-  it('lists Implant, Surgical details, Visits, Complications and, for editors, Corrections', () => {
-    const tabs = implantTabs({ editable: true, surgery: { recorded: 3, total: 9 }, complications: { total: 0, open: 0 } });
-    expect(keys(tabs)).toEqual(['implant', 'surgery', 'visits', 'complications', 'corrections']);
-    expect(keys(implantTabs({ editable: false, surgery: { recorded: 3, total: 9 }, complications: { total: 0, open: 0 } })))
-      .toEqual(['implant', 'surgery', 'visits', 'complications']);
+  it('lists Implant, Surgical details, Restoration, Visits, Complications and, for editors, Corrections', () => {
+    const tabs = implantTabs({ editable: true, surgery: { recorded: 3, total: 9 }, complications: { total: 0, open: 0 }, ...none });
+    expect(keys(tabs)).toEqual(['implant', 'surgery', 'restoration', 'visits', 'complications', 'corrections']);
+    expect(keys(implantTabs({ editable: false, surgery: { recorded: 3, total: 9 }, complications: { total: 0, open: 0 }, ...none })))
+      .toEqual(['implant', 'surgery', 'restoration', 'visits', 'complications']);
   });
 
   it('counts surgical details recorded: warn until complete', () => {
-    const [, partial] = implantTabs({ editable: false, surgery: { recorded: 3, total: 9 }, complications: { total: 0, open: 0 } });
+    const [, partial] = implantTabs({ editable: false, surgery: { recorded: 3, total: 9 }, complications: { total: 0, open: 0 }, ...none });
     expect(partial.badge).toEqual({ text: '3/9', srText: '3 of 9 recorded', tone: 'warn' });
-    const [, full] = implantTabs({ editable: false, surgery: { recorded: 9, total: 9 }, complications: { total: 0, open: 0 } });
+    const [, full] = implantTabs({ editable: false, surgery: { recorded: 9, total: 9 }, complications: { total: 0, open: 0 }, ...none });
     expect(full.badge).toEqual({ text: '9/9', srText: '9 of 9 recorded', tone: 'ok' });
+  });
+
+  it("shows the current restoration's stage on Restoration", () => {
+    const restoration = (stage: 'temporary' | 'final' | null) =>
+      implantTabs({ editable: false, surgery: { recorded: 0, total: 9 }, complications: { total: 0, open: 0 }, restoration: stage })[2];
+    expect(restoration(null)).toEqual({ key: 'restoration', label: 'Restoration', badge: null });
+    expect(restoration('final').badge).toEqual({ text: 'Final', srText: 'current: final', tone: 'ok' });
+    expect(restoration('temporary').badge).toEqual({ text: 'Temporary', srText: 'current: temporary', tone: 'off' });
   });
 
   it('counts complications: none shows no badge, open ones are bad, resolved ones are quiet', () => {
     const complications = (total: number, open: number) =>
-      implantTabs({ editable: false, surgery: { recorded: 0, total: 9 }, complications: { total, open } })[3].badge;
+      implantTabs({ editable: false, surgery: { recorded: 0, total: 9 }, complications: { total, open }, ...none })[4].badge;
     expect(complications(0, 0)).toBeNull();
     expect(complications(2, 1)).toEqual({ text: '2', srText: '2, 1 open', tone: 'bad' });
     expect(complications(2, 0)).toEqual({ text: '2', srText: '2, none open', tone: 'off' });

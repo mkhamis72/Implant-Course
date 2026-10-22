@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { bySession, courseReportCsv, implantLabel, stats, summarise, type CourseReportRow } from './course-report';
+import {
+  bySession, courseReportCsv, implantLabel, restorationStatus, stats, summarise, type CourseReportRow, type CourseRestorationRow,
+} from './course-report';
 
 const base: CourseReportRow = {
   site_id: 's1', session_id: 'se1', session_title: 'Day 1 surgery', session_date: '2030-03-02', slot_start: '2030-03-02T07:00:00Z',
@@ -38,8 +40,8 @@ describe('summarise', () => {
     expect(s.bySize).toEqual({ 'Oxy PSK Ø4.0 × 10 mm': 2, 'Oxy PSK Ø4.0 × 11.5 mm': 1 });
     expect(s.torque).toEqual({ n: 2, mean: 35, median: 35, min: 35, max: 35 });
     expect(s.delegates).toEqual([
-      { name: 'Dr One', placed: 2, assisted: 0, meanTorque: 35 },
-      { name: 'Dr Two', placed: 1, assisted: 2, meanTorque: null },
+      { name: 'Dr One', placed: 2, assisted: 0, meanTorque: 35, restored: 0 },
+      { name: 'Dr Two', placed: 1, assisted: 2, meanTorque: null, restored: 0 },
     ]);
     expect(s.supervisors).toEqual([{ name: 'Prof Laila', count: 3 }]);
   });
@@ -74,5 +76,41 @@ describe('courseReportCsv', () => {
   });
   it('labels a site without a product as —', () => {
     expect(implantLabel(row({ brand: null }))).toBe('—');
+  });
+});
+
+const resto = (over: Partial<CourseRestorationRow>): CourseRestorationRow => ({
+  restoration_id: 'r1', patient_name: 'Amal Hassan', file_no: 'P00012', teeth: [34, 35, 36], stage: 'final', type: 'bridge',
+  fitted_on: '2030-03-20', delegate_id: 'd1', delegate: 'Dr One', supervisor: 'Prof Laila', ended_on: null, end_kind: null, ...over,
+});
+
+describe('restorations in the report', () => {
+  it('counts restored per delegate and ignores restorations without a delegate there', () => {
+    const s = summarise(
+      [base],
+      [resto({}), resto({ restoration_id: 'r2' }), resto({ restoration_id: 'r3', delegate_id: null, delegate: null }), resto({ restoration_id: 'r4', delegate: 'Dr Three' })],
+    );
+    expect(s.restorations).toBe(4);
+    expect(s.delegates).toEqual([
+      { name: 'Dr One', placed: 1, assisted: 0, meanTorque: 35, restored: 2 },
+      { name: 'Dr Three', placed: 0, assisted: 0, meanTorque: null, restored: 1 },
+      { name: 'Dr Two', placed: 0, assisted: 1, meanTorque: null, restored: 0 },
+    ]);
+  });
+  it('names the status from ended_on and end_kind', () => {
+    expect(restorationStatus(resto({}))).toBe('Current');
+    expect(restorationStatus(resto({ ended_on: '2030-04-01', end_kind: 'replaced' }))).toBe('Replaced');
+    expect(restorationStatus(resto({ ended_on: '2030-04-01', end_kind: 'remade' }))).toBe('Remade');
+  });
+  it('adds a restorations section after the implant rows', () => {
+    const csv = courseReportCsv([base], [resto({}), resto({ restoration_id: 'r2', teeth: [36], type: 'single_crown', stage: 'temporary', delegate: null, ended_on: '2030-04-01', end_kind: 'replaced' })]).replace(/^﻿/, '');
+    const lines = csv.split(/\r?\n/);
+    expect(lines[2]).toBe('');
+    expect(lines[3]).toBe('restoration,patient,file_no,teeth,stage,type,fitted_on,delegate,status');
+    expect(lines[4]).toBe('restoration,Amal Hassan,P00012,34–36,Final,Bridge,2030-03-20,Dr One,Current');
+    expect(lines[5]).toBe('restoration,Amal Hassan,P00012,36,Temporary,Single crown,2030-03-20,,Replaced');
+  });
+  it('leaves the CSV unchanged when there are no restorations', () => {
+    expect(courseReportCsv([base], [])).toBe(courseReportCsv([base]));
   });
 });

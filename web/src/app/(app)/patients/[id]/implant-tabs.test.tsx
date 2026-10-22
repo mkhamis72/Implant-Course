@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { ChartData, ImplantSite } from '@/lib/inventory/types';
 
 vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), deleteGraft: vi.fn() }));
+vi.mock('./restoration-actions', () => ({ addRestoration: vi.fn(), updateRestoration: vi.fn(), voidRestoration: vi.fn() }));
 vi.mock('./visit-actions', () => ({ recordVisit: vi.fn() }));
 vi.mock('./outcome-actions', () => ({ saveComplication: vi.fn(), voidComplication: vi.fn(), saveFailure: vi.fn() }));
 vi.mock('./implant-actions', () => ({
@@ -23,7 +24,7 @@ const site = {
 } as unknown as ImplantSite;
 const data = (editable: boolean) =>
   ({
-    statuses: {}, sites: [site], visits: [], implants: [], componentProducts: [], lots: [], delegates: [], organizers: [], supervisors: [],
+    statuses: {}, sites: [site], visits: [], implants: [], componentProducts: [], lots: [], delegates: [], organizers: [], supervisors: [], restorations: [], courses: [],
     today: '2026-10-18', me: 'u1', editable,
   }) as unknown as ChartData;
 
@@ -37,7 +38,7 @@ describe('<ImplantTabs>', () => {
   it('opens on Implant with counts on Surgical details and Complications; Corrections only for editors', () => {
     render(<Tabs editable={true} justPlaced={false} />);
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
-      'Implant', 'Surgical details0/120 of 12 recorded', 'Visits', 'Complications11, 1 open', 'Corrections',
+      'Implant', 'Surgical details0/120 of 12 recorded', 'Restoration', 'Visits', 'Complications11, 1 open', 'Corrections',
     ]);
     expect(screen.getByRole('tab', { name: 'Implant' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tabpanel', { name: 'Implant' })).toBeVisible();

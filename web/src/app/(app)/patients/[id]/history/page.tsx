@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { formatDateTime } from '@/lib/format';
-import { describeChange } from '@/lib/patients/history';
+import { describeChange, isHiddenFromHistory } from '@/lib/patients/history';
 import type { HistoryEntry } from '@/lib/patients/types';
 
 export default async function HistoryPage({ params }: { params: Promise<{ id: string }> }) {
@@ -10,7 +10,7 @@ export default async function HistoryPage({ params }: { params: Promise<{ id: st
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('patient_history', { p_patient: id });
   if (error) throw new Error('Could not load history');
-  const entries = (data ?? []) as HistoryEntry[];
+  const entries = ((data ?? []) as HistoryEntry[]).filter((e) => !isHiddenFromHistory(e));
 
   return (
     <section className="card max-w-3xl">

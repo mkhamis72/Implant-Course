@@ -70,3 +70,54 @@ describe('<Odontogram> alerts', () => {
     expect(container.querySelectorAll('[data-alert]')).toHaveLength(1);
   });
 });
+
+describe('<Odontogram> restorations', () => {
+  const bridge = { id: 'r1', teeth: [34, 35, 36], implantTeeth: [34, 36], label: 'Bridge 34–36', temporary: false };
+
+  it('draws one bar per restoration, labelled, and outlines pontics dashed', () => {
+    const { container } = render(
+      <Odontogram statuses={{ 34: 'restored', 36: 'restored' }} spans={[bridge]} selected={[]} onSelect={vi.fn()} />,
+    );
+    expect(screen.getAllByRole('button', { name: /^Bridge/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Bridge 34–36' }).textContent).toBe('Bridge 34–36');
+    expect(container.querySelectorAll('[data-span]')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /^Tooth 35, / })).toHaveAttribute('data-covered', 'pontic');
+    expect(screen.getByRole('button', { name: /^Tooth 34, / })).toHaveAttribute('data-covered', 'implant');
+    expect(screen.getByRole('button', { name: /^Tooth 37, / })).not.toHaveAttribute('data-covered');
+  });
+
+  it('draws a temporary lighter and says so', () => {
+    render(<Odontogram statuses={{}} spans={[{ ...bridge, temporary: true }, { ...bridge, id: 'r2', teeth: [46], implantTeeth: [46], label: 'Crown' }]} selected={[]} onSelect={vi.fn()} />);
+    const temp = screen.getByRole('button', { name: 'Bridge 34–36, temporary' });
+    const final = screen.getByRole('button', { name: 'Crown' });
+    // Only the bar is lighter; the label keeps full contrast.
+    expect(temp).not.toHaveAttribute('opacity');
+    expect(temp.querySelector('rect')!.style.fill).toBe('var(--color-accent-soft)');
+    expect(temp.querySelector('text')!.style.fill).toBe('var(--color-accent-strong)');
+    expect(final.querySelector('rect')!.style.fill).toBe('var(--color-accent)');
+  });
+
+  it('a bar or a pontic opens the first implant on its Restoration tab; shift-click still selects the pontic', () => {
+    const onSelect = vi.fn();
+    render(<Odontogram statuses={{}} spans={[bridge]} selected={[]} onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Tooth 35, / }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bridge 34–36' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Tooth 36, / }));
+    fireEvent.click(screen.getByRole('button', { name: /^Tooth 35, / }), { shiftKey: true });
+    expect(onSelect.mock.calls).toEqual([
+      [34, false, 'restoration'],
+      [34, false, 'restoration'],
+      [36, false, 'restoration'],
+      [35, true],
+    ]);
+  });
+
+  it('while its restoration is open, a covered tooth clicks like any tooth (a pontic selects itself)', () => {
+    const onSelect = vi.fn();
+    render(<Odontogram statuses={{}} spans={[bridge]} openSpan="r1" selected={[34]} onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Tooth 35, / }));
+    fireEvent.keyDown(screen.getByRole('button', { name: /^Tooth 34, / }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: 'Bridge 34–36' }));
+    expect(onSelect.mock.calls).toEqual([[35, false], [34, false], [34, false, 'restoration']]);
+  });
+});

@@ -5,7 +5,9 @@ import type { ChartData, ImplantSite } from '@/lib/inventory/types';
 import { surgeryCompleteness } from '@/lib/implants/surgery';
 import { isOpen } from '@/lib/implants/complications';
 import { implantTabs, tabAfterKey, type ImplantTabKey, type TabBadge } from '@/lib/patients/implant-tabs';
+import { currentRestoration } from '@/lib/restorations/restorations';
 import { Corrections } from './corrections';
+import { Restorations } from './restorations';
 import { SurgicalDetails } from './surgical-details';
 import { Visits } from './visits';
 import { Complications } from './complications';
@@ -27,7 +29,8 @@ export function ImplantTabs({ site, patientId, data, justPlaced, selected, onSel
     editable: correctable(site, data),
     surgery: surgeryCompleteness(site.surgery, site),
     complications: { total: live.length, open: live.filter(isOpen).length },
-  }).filter((t) => t.key !== 'surgery' || site.state !== 'removed');
+    restoration: currentRestoration(site.id, data.restorations)?.stage ?? null,
+  }).filter((t) => (t.key !== 'surgery' && t.key !== 'restoration') || site.state !== 'removed');
   const current = tabs.some((t) => t.key === selected) ? selected : 'implant';
   const id = useId();
   const tabRefs = useRef<Partial<Record<ImplantTabKey, HTMLButtonElement | null>>>({});
@@ -74,6 +77,7 @@ export function ImplantTabs({ site, patientId, data, justPlaced, selected, onSel
             </div>
           )}
           {t.key === 'surgery' && <SurgicalDetails site={site} patientId={patientId} editable={data.editable} startOpen={justPlaced} bare />}
+          {t.key === 'restoration' && <Restorations site={site} patientId={patientId} data={data} />}
           {t.key === 'visits' && <Visits site={site} visits={data.visits} />}
           {t.key === 'complications' && <Complications site={site} patientId={patientId} editable={data.editable} bare />}
           {t.key === 'corrections' && <Corrections patientId={patientId} site={site} data={data} bare />}

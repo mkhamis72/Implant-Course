@@ -5,12 +5,16 @@ import type { ChartData } from '@/lib/inventory/types';
 vi.mock('./implant-actions', () => ({
   fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), receiveStockForPlacement: vi.fn(),
 }));
-import { PlaceForm } from './implant-forms';
+import { ComponentForm, PlaceForm } from './implant-forms';
 
 const implant = { id: 'p1', type: 'implant', brand: 'Brand', system: 'S', platform: null, diameter_mm: 4, length_mm: 10, description: '' };
 const lot = { stock_lot_id: 'l1', product_id: 'p1', lot_no: 'OLD', expiry: '2030-06-09', received_on: '2030-01-01', qty_received: 1, on_hand: 1 };
 const data = {
   today: '2030-06-10', me: 'u1', editable: true, canReceive: true, implants: [implant], lots: [lot], delegates: [], organizers: [], supervisors: [], componentProducts: [],
+  courses: [
+    { id: 'c1', name: 'June course', start_date: '2030-06-08', end_date: '2030-06-12' },
+    { id: 'c2', name: 'Earlier course', start_date: '2030-01-01', end_date: '2030-01-05' },
+  ],
 } as unknown as ChartData;
 
 describe('<PlaceForm> implant picker', () => {
@@ -120,5 +124,53 @@ describe('<PlaceForm> graft', () => {
   it('no longer asks for a free-text graft (grafts go in Surgical details)', () => {
     render(<PlaceForm patientId="pt" tooth={36} data={data} onDone={() => {}} plannedProductId={null} />);
     expect(screen.queryByLabelText('Graft (optional)')).not.toBeInTheDocument();
+  });
+});
+
+describe('<ComponentForm>', () => {
+  it('no longer offers a final restoration (restorations are recorded on the Restoration tab)', () => {
+    const site = { id: 's1', tooth: 36, state: 'placed', components: [] } as unknown as Parameters<typeof ComponentForm>[0]['site'];
+    render(<ComponentForm patientId="pt" site={site} data={data} onDone={() => {}} />);
+    const select = screen.getByRole('combobox', { name: 'Component' });
+    expect(within(select).queryByRole('option', { name: 'Final restoration' })).toBeNull();
+    expect(within(select).getByRole('option', { name: 'Abutment' })).toBeInTheDocument();
+  });
+});
+
+describe('<PlaceForm> course', () => {
+  const full = {
+    ...data,
+    delegates: [{ id: 'd1', label: 'Dr Right' }], supervisors: [{ id: 'sup1', label: 'Prof A' }],
+  } as unknown as ChartData;
+  const fill = () => {
+    fireEvent.change(screen.getByRole('combobox', { name: /Placed by/ }), { target: { value: 'd1' } });
+    fireEvent.change(screen.getByRole('combobox', { name: /Supervisor/ }), { target: { value: 'sup1' } });
+  };
+
+  it('has a required Course select listing courses running on the placement date first', () => {
+    render(<PlaceForm patientId="pt" tooth={36} data={full} onDone={() => {}} plannedProductId="p1" />);
+    const course = screen.getByRole('combobox', { name: /Course/ });
+    expect(course).toHaveAttribute('aria-required', 'true');
+    expect(course).toHaveValue('');
+    expect(within(course).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose the course…', 'June course', 'Earlier course']);
+  });
+
+  it('pre-selects the course of the booking and sends it', async () => {
+    const { placeImplant } = await import('./implant-actions');
+    vi.mocked(placeImplant).mockResolvedValue({});
+    const slot = { id: 's1', starts_at: '2030-06-10T08:00:00Z', supervisor_id: 'sup1', chair: null, delegates: [{ delegate_id: 'd1', role: 'placing' as const }] };
+    render(<PlaceForm patientId="pt" tooth={36} data={full} onDone={() => {}} plannedProductId="p1" slot={slot} plannedCourseId="c2" />);
+    expect(screen.getByRole('combobox', { name: /Course/ })).toHaveValue('c2');
+    fireEvent.click(screen.getByRole('button', { name: 'Save placement' }));
+    await vi.waitFor(() => expect(vi.mocked(placeImplant)).toHaveBeenCalledWith(expect.objectContaining({ courseId: 'c2', slotId: 's1' })));
+  });
+
+  it('sends an empty course when none is chosen, which the schema refuses', async () => {
+    const { placeImplant } = await import('./implant-actions');
+    vi.mocked(placeImplant).mockClear();
+    render(<PlaceForm patientId="pt" tooth={36} data={full} onDone={() => {}} plannedProductId="p1" />);
+    fill();
+    fireEvent.click(screen.getByRole('button', { name: 'Save placement' }));
+    await vi.waitFor(() => expect(vi.mocked(placeImplant)).toHaveBeenCalledWith(expect.objectContaining({ courseId: '' })));
   });
 });

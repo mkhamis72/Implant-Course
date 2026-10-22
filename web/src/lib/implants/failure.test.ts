@@ -13,6 +13,13 @@ describe('failure', () => {
     expect(failureTiming(site('2026-05-01', [{ component_type: 'abutment', fitted_on: '2026-04-01', voided_at: '2026-04-02T00:00:00Z' }]))).toBe('early');
     expect(failureTiming(site('2026-05-01', [{ component_type: 'final_restoration', fitted_on: '2026-05-01', voided_at: null }]))).toBe('late');
   });
+  it('counts a restoration on the implant as loading', () => {
+    const crown = [{ fitted_on: '2026-04-01' }];
+    expect(failureTiming(site('2026-05-01'), crown)).toBe('late');
+    expect(failureTiming(site('2026-03-15'), crown)).toBe('early');
+    expect(failureTiming(site('2026-05-01', [{ component_type: 'healing_abutment', fitted_on: '2026-03-01', voided_at: null }]), [{ fitted_on: '2026-05-01' }])).toBe('late');
+    expect(describeFailure(site('2026-05-01'), crown)).toMatch(/ · late$/);
+  });
   it('describes a failure', () => {
     expect(describeFailure(site('2026-05-01'))).toMatch(/^Removed · Peri-implantitis · .+ · early$/);
   });

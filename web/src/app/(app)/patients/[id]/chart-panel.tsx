@@ -6,6 +6,7 @@ import { Legend } from '@/components/odontogram/legend';
 import { MANUAL_STATES, STATE_LABELS, canSetByHand, type ManualState, type ToothState } from '@/lib/patients/types';
 import { badgesFor } from '@/lib/inventory/components';
 import { openComplicationTeeth } from '@/lib/implants/complications';
+import { restorationSpans } from '@/lib/restorations/restorations';
 import type { ChartData } from '@/lib/inventory/types';
 import { setToothStatus } from './chart-actions';
 import { statusTone, toothName, type Tone } from '@/lib/patients/tooth-panel';
@@ -23,14 +24,20 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
   const statuses = data.statuses;
   const badges = useMemo(() => badgesFor(data.sites), [data.sites]);
   const alerts = useMemo(() => openComplicationTeeth(data.sites), [data.sites]);
+  const spans = useMemo(() => restorationSpans(data.restorations, data.sites), [data.restorations, data.sites]);
   const [selected, setSelected] = useState<number[]>(initialTooth ? [initialTooth] : []);
+  // A restoration bar or covered tooth opens the Restoration tab; `n` remounts the panel when the tooth was already open.
+  const [opened, setOpened] = useState<{ tab: 'restoration'; n: number } | null>(null);
+  // That restoration, while its implant is the one tooth open: a second tap on a covered tooth then selects the tooth itself.
+  const openSpan = opened && selected.length === 1 ? (spans.find((s) => s.implantTeeth.includes(selected[0]))?.id ?? null) : null;
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const panelRef = useRef<HTMLElement>(null);
 
-  function onSelect(fdi: number, additive: boolean) {
+  function onSelect(fdi: number, additive: boolean, tab?: 'restoration') {
     setError(null);
+    setOpened(tab ? { tab, n: (opened?.n ?? 0) + 1 } : null);
     // The panel sits under the chart. When its heading would be off-screen (phones, short windows), bring it into
     // view after a tap; otherwise leave the chart where it is, so the next tooth stays in reach.
     if (!additive) {
@@ -41,6 +48,7 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
       });
     }
     setSelected((current) => {
+      if (tab) return [fdi];
       if (additive) {
         return current.includes(fdi) ? current.filter((t) => t !== fdi) : [...current, fdi].sort((a, b) => a - b);
       }
@@ -69,7 +77,7 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
               <span>Right</span>
               <span>Left</span>
             </div>
-            <Odontogram statuses={statuses} badges={badges} alerts={alerts} selected={selected} onSelect={onSelect} />
+            <Odontogram statuses={statuses} badges={badges} alerts={alerts} spans={spans} openSpan={openSpan} selected={selected} onSelect={onSelect} />
           </div>
         </div>
         <Legend />
@@ -82,6 +90,7 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
         {selected.length === 0 ? (
           <p className="text-sm text-muted">
             Click a tooth to see and change its status. Shift- or Ctrl-click to select several teeth.
+            {spans.length > 0 && ' Tap a restoration to open it; tap a covered tooth again to select the tooth itself.'}
           </p>
         ) : (
           <>
@@ -137,7 +146,8 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
             )}
             {error && <p role="alert" className="text-sm text-bad">{error}</p>}
             {selected.length === 1 && (
-              <ImplantSection key={selected[0]} patientId={patientId} tooth={selected[0]} status={statusOf(selected[0])} data={data} />
+              <ImplantSection key={`${selected[0]}:${opened?.n ?? 0}`} patientId={patientId} tooth={selected[0]} status={statusOf(selected[0])} data={data}
+                openTab={opened?.tab} />
             )}
           </>
         )}

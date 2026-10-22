@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import type { ImplantSite } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
 import {
-  CASE_DEFINITIONS, CATEGORY_LABELS, COMPLICATION_CATEGORIES, COMPLICATION_TYPES, SEVERITIES, SEVERITY_LABELS, TYPE_LABELS,
+  CASE_DEFINITIONS, CATEGORY_LABELS, COMPLICATION_CATEGORIES, IMPLANT_FORM_TYPES, SEVERITIES, SEVERITY_LABELS, TYPE_LABELS,
   describeComplication, isOpen, type ComplicationCategory, type ImplantComplication,
 } from '@/lib/implants/complications';
 import { Field, Footer, useSubmit } from './implant-forms';
@@ -95,7 +95,9 @@ function ComplicationForm({ site, patientId, complication, onDone }: {
   const set = (key: keyof typeof v) => (value: string) =>
     setV((cur) => ({ ...cur, [key]: value, ...(key === 'category' ? { type: '', otherType: '' } : {}) }));
   const { error, pending, submit } = useSubmit(saveComplication, onDone);
-  const types = v.category ? COMPLICATION_TYPES[v.category as ComplicationCategory] : [];
+  const offered = v.category ? IMPLANT_FORM_TYPES[v.category as ComplicationCategory] : [];
+  // An older entry keeps its crown type choosable so editing it doesn't force a change.
+  const types = v.type && v.category === complication?.category && !offered.includes(v.type) ? [...offered, v.type] : offered;
   return (
     <form className="space-y-3 rounded-lg border border-line p-3" onSubmit={(e) => {
       e.preventDefault();
