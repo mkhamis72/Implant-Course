@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
-import { apiAs, randomFutureDate, seedCourse, seedDelegate, seedImplantStock } from './api';
+import { apiAs, randomFutureDate, seedCourse, seedDelegate, seedImplantStock, placeImplant } from './api';
 
 async function confirmDelete(page: Page, noun: string, name: string) {
   await page.getByRole('button', { name: `Delete ${noun}` }).click();
@@ -31,7 +31,7 @@ test('refuses to delete a patient with a placed implant', async ({ page }) => {
   const name = uniqueName('Keep me');
   const patientId = await createPatientViaUi(page, { full_name: name });
   const me = (await api.auth.getUser()).data.user!.id;
-  const { error } = await api.rpc('place_implant_v2', {
+  const { error } = await placeImplant(api, {
     p_patient: patientId, p_tooth: 36, p_product: stock.productId, p_lot: stock.lotId,
     p_placed_on: new Date().toISOString().slice(0, 10), p_placing_delegate: delegate, p_supervisor: me,
   });

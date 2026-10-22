@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { uniqueName } from './patients';
-import { apiAs, receiveStock, seedDelegate, seedImplantStock, seedProduct } from './api';
+import { apiAs, receiveStock, seedDelegate, seedImplantStock, seedProduct, placeImplant } from './api';
 
 async function seedPatient(api: SupabaseClient, full_name: string): Promise<string> {
   const { data, error } = await api.from('patients').insert({ full_name }).select('id').single();
@@ -21,7 +21,7 @@ test('filters patients by implant stage and shows the matching teeth', async ({ 
 
   const placeWith = async (name: string, tooth: number, component: string) => {
     const patient = await seedPatient(api, name);
-    const { data: site, error } = await api.rpc('place_implant_v2', {
+    const { data: site, error } = await placeImplant(api, {
       p_patient: patient, p_tooth: tooth, p_product: stock.productId, p_lot: stock.lotId,
       p_placed_on: today, p_placing_delegate: delegate, p_supervisor: me,
     });

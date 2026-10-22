@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
-import { apiAs, seedDelegate, seedImplantStock } from './api';
+import { apiAs, seedDelegate, seedImplantStock, placeImplant } from './api';
 
 test('shows placed and assisted implants with totals, and exports CSV', async ({ page }) => {
   const api = await apiAs(TEST_USERS.organizer.email);
@@ -17,7 +17,7 @@ test('shows placed and assisted implants with totals, and exports CSV', async ({
   const me = (await api.auth.getUser()).data.user!.id;
   const today = new Date().toISOString().slice(0, 10);
   for (const [tooth, placing, assisting, technique] of [[36, delegate, helper, 'guided'], [46, helper, delegate, 'free_hand']] as const) {
-    const { error } = await api.rpc('place_implant_v2', {
+    const { error } = await placeImplant(api, {
       p_patient: patientId, p_tooth: tooth, p_product: stock.productId, p_lot: stock.lotId, p_placed_on: today,
       p_placing_delegate: placing, p_assisting_delegate: assisting, p_supervisor: me, p_technique: technique,
     });

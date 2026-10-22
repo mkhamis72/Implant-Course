@@ -40,23 +40,47 @@ export async function onHand(c: Client, lot: string): Promise<number> {
   return rows[0].on_hand;
 }
 
+/** Runs fn as the connection's own role (bypassing RLS and column grants), then returns to the role in use. */
+async function asOwner<T>(c: Client, fn: () => Promise<T>): Promise<T> {
+  const role = (await c.query('select current_user as u')).rows[0].u as string;
+  await c.query('reset role');
+  try {
+    return await fn();
+  } finally {
+    if (role !== 'postgres') await c.query(`set local role ${role}`);
+  }
+}
+
+/** Places through place_implant_v3 in the given course (the booking's, else a new one, when omitted); torque / ISQ / bone type are set directly. */
 export async function place(
   c: Client,
   a: {
     patient: string; tooth: number; product: string; lot: string; delegate: string; supervisor: string;
-    assistant?: string; placedOn?: string; slot?: string; technique?: string;
+    assistant?: string; placedOn?: string; slot?: string; technique?: string; course?: string;
     torque?: number; isq?: number; boneType?: string;
   },
 ): Promise<string> {
+  const course = a.course
+    ?? (a.slot
+      ? (await asOwner(c, () => c.query('select s.course_id from public.surgery_slots w join public.sessions s on s.id = w.session_id where w.id = $1', [a.slot]))).rows[0]?.course_id
+      : null)
+    ?? (await asOwner(c, () => makeCourse(c)));
   const { rows } = await c.query(
-    `select public.place_implant_v2(
+    `select public.place_implant_v3(
        p_patient => $1, p_tooth => $2::smallint, p_product => $3, p_lot => $4,
        p_placed_on => coalesce($5::date, current_date), p_placing_delegate => $6, p_supervisor => $7,
-       p_assisting_delegate => $8, p_slot => $9, p_technique => $10, p_torque => $11, p_isq => $12, p_bone_type => $13) as id`,
+       p_assisting_delegate => $8, p_graft => '', p_notes => '', p_slot => $9, p_technique => $10, p_course => $11) as id`,
     [a.patient, a.tooth, a.product, a.lot, a.placedOn ?? null, a.delegate, a.supervisor, a.assistant ?? null, a.slot ?? null,
-     a.technique ?? null, a.torque ?? null, a.isq ?? null, a.boneType ?? null],
+     a.technique ?? null, course],
   );
-  return rows[0].id;
+  const id = rows[0].id as string;
+  if (a.torque !== undefined || a.isq !== undefined || a.boneType !== undefined) {
+    await asOwner(c, () => c.query(
+      'update public.implant_sites set torque_ncm = $2, isq = $3, bone_type = $4 where id = $1',
+      [id, a.torque ?? null, a.isq ?? null, a.boneType ?? null],
+    ));
+  }
+  return id;
 }
 
 export async function makeCourse(c: Client, start = '2030-03-01', end = '2030-03-05'): Promise<string> {

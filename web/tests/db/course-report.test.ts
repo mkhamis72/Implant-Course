@@ -5,12 +5,6 @@ import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makePro
 
 const users = inject('testUsers');
 
-async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp) {
-  await c.query('savepoint s');
-  await expect(fn()).rejects.toThrow(pattern);
-  await c.query('rollback to savepoint s');
-}
-
 async function world(c: Client) {
   await actAs(c, users.admin);
   const chair = await makeChair(c);
@@ -26,42 +20,12 @@ async function world(c: Client) {
   return { chair, course, session, d1, d2, product, lot };
 }
 
-describe('ISQ and bone type at placement', () => {
-  it('place_implant_v2 stores ISQ and bone type; out-of-range values are refused', async () => {
+describe('retired placement functions', () => {
+  it('place_implant, place_implant_v2 and correct_placement are gone (0052, 0063)', async () => {
     await withTx(async (c) => {
-      const w = await world(c);
-      const patient = await makePatient(c, 'Zz Report Isq');
-      const site = await place(c, {
-        patient, tooth: 36, product: w.product, lot: w.lot, delegate: w.d1, supervisor: users.organizer,
-        technique: 'guided', torque: 35, isq: 72.5, boneType: 'D2', placedOn: '2026-01-10',
-      });
-      const { rows } = await c.query('select torque_ncm::float as t, isq::float as isq, bone_type from public.implant_sites where id = $1', [site]);
-      expect(rows[0]).toEqual({ t: 35, isq: 72.5, bone_type: 'D2' });
-      await refused(
-        c,
-        () => place(c, { patient, tooth: 46, product: w.product, lot: w.lot, delegate: w.d1, supervisor: users.organizer, isq: 150, placedOn: '2026-01-10' }),
-        /Enter an ISQ between 0 and 100/,
-      );
-      await refused(
-        c,
-        () => place(c, { patient, tooth: 46, product: w.product, lot: w.lot, delegate: w.d1, supervisor: users.organizer, boneType: 'D5', placedOn: '2026-01-10' }),
-        /Choose a bone type from D1 to D4/,
-      );
-    });
-  });
-
-  it('a call without ISQ and bone type stores neither; the old 13-argument place_implant is gone (0052)', async () => {
-    await withTx(async (c) => {
-      const w = await world(c);
-      const patient = await makePatient(c, 'Zz Report Old Call');
-      const { rows } = await c.query(
-        `select public.place_implant_v2(p_patient => $1, p_tooth => 36::smallint, p_product => $2, p_lot => $3,
-           p_placed_on => '2026-01-10', p_placing_delegate => $4, p_supervisor => $5, p_torque => 30, p_technique => 'free_hand') as id`,
-        [patient, w.product, w.lot, w.d1, users.organizer],
-      );
-      const s = await c.query('select torque_ncm::float as t, isq, bone_type from public.implant_sites where id = $1', [rows[0].id]);
-      expect(s.rows[0]).toEqual({ t: 30, isq: null, bone_type: null });
-      expect((await c.query(`select to_regproc('public.place_implant') as f`)).rows[0].f).toBeNull();
+      for (const f of ['place_implant', 'place_implant_v2', 'correct_placement']) {
+        expect((await c.query('select to_regproc($1) as f', ['public.' + f])).rows[0].f).toBeNull();
+      }
     });
   });
 });
@@ -120,9 +84,13 @@ describe('course_report', () => {
       // Placement must be today or earlier, so unlinked placements need a course in the past.
       const past = await makeCourse(c, '2026-01-05', '2026-01-15');
       await enroll(c, past, w.d1);
-      await place(c, { patient: p, tooth: 36, product: w.product, lot: w.lot, delegate: w.d1, supervisor: users.organizer, placedOn: '2026-01-10' });
-      await place(c, { patient: p, tooth: 46, product: w.product, lot: w.lot, delegate: w.d1, supervisor: users.organizer, placedOn: '2026-01-20' });
-      await place(c, { patient: p, tooth: 11, product: w.product, lot: w.lot, delegate: outsider, supervisor: users.organizer, placedOn: '2026-01-10' });
+      await place(c, { patient: p, tooth: 36, product: w.product, lot: w.lot, delegate: w.d1, supervisor: users.organizer, course: past, placedOn: '2026-01-10' });
+      await place(c, { patient: p, tooth: 46, product: w.product, lot: w.lot, delegate: w.d1, supervisor: users.organizer, course: past, placedOn: '2026-01-20' });
+      await place(c, { patient: p, tooth: 11, product: w.product, lot: w.lot, delegate: outsider, supervisor: users.organizer, course: past, placedOn: '2026-01-10' });
+      // Older placements have no course: they are matched by date and enrollment.
+      await c.query('reset role');
+      await c.query('update public.implant_sites set course_id = null where patient_id = $1', [p]);
+      await actAs(c, users.organizer);
       const { rows } = await c.query('select tooth, session_id from public.course_report($1) order by tooth', [past]);
       expect(rows).toEqual([{ tooth: 36, session_id: null }]);
     });
