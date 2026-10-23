@@ -7,6 +7,8 @@ import { RESEARCH_FILTER_KEYS, rpcArgs, type ResearchFilters } from '@/lib/resea
 import { TABLE_NAMES, assertAllowlisted, type ExportTables } from '@/lib/research/export/dictionary';
 import type { ExportMeta } from '@/lib/research/export/assemble';
 import { exportFileName } from '@/lib/research/export/assemble';
+import { DICTIONARY } from '@/lib/research/export/dictionary';
+import { fetchAll } from '@/lib/research/export/fetch-all';
 import { buildXlsx } from '@/lib/research/export/xlsx';
 import { buildZip } from '@/lib/research/export/zip';
 
@@ -29,9 +31,13 @@ export async function GET(req: NextRequest) {
   // The readers insert study codes, so they are volatile: always plain POST calls.
   const [version, ...results] = await Promise.all([
     supabase.rpc('outcomes_version'),
-    ...TABLE_NAMES.map((t) => supabase.rpc(`research_export_${t}` as 'research_export_implants', args)),
+    ...TABLE_NAMES.map((t) => fetchAll(supabase, `research_export_${t}`, args, Object.keys(DICTIONARY[t]))),
   ]);
-  if (version.error || results.some((r) => r.error)) return new NextResponse('Could not build the export', { status: 500 });
+  const failed = version.error ?? results.find((r) => r.error)?.error;
+  if (failed) {
+    console.error('Research export failed', failed.message);
+    return new NextResponse('Could not build the export', { status: 500 });
+  }
 
   const tables = Object.fromEntries(TABLE_NAMES.map((t, i) => [t, (results[i].data ?? []) as Record<string, unknown>[]])) as ExportTables;
   assertAllowlisted(tables);

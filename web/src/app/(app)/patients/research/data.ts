@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { fetchAll } from '@/lib/research/export/fetch-all';
 import { rpcArgs, type CrownDetailRow, type DetailRow, type ResearchFilters } from '@/lib/research/view';
 
 export type ResearchRow = DetailRow & { placing_delegate_id: string | null; placing_delegate: string | null };
@@ -13,11 +14,11 @@ export async function loadResearch(filters: ResearchFilters) {
   const byProduct = args.p_brand !== null || args.p_system !== null;
   const [version, implants, base, crowns] = await Promise.all([
     supabase.rpc('outcomes_version'),
-    supabase.rpc('implant_outcomes_detail', args),
+    fetchAll<ResearchRow>(supabase, 'implant_outcomes_detail', args, ['site_id']),
     byProduct
-      ? supabase.rpc('implant_outcomes_detail', { ...args, p_brand: null, p_system: null })
+      ? fetchAll<ResearchRow>(supabase, 'implant_outcomes_detail', { ...args, p_brand: null, p_system: null }, ['site_id'])
       : Promise.resolve(null),
-    supabase.rpc('crown_outcomes_detail', args),
+    fetchAll<CrownDetailRow>(supabase, 'crown_outcomes_detail', args, ['restoration_id']),
   ]);
   if (version.error || implants.error || base?.error || crowns.error) throw new Error('Could not load the research figures');
   const rows = (implants.data ?? []) as ResearchRow[];

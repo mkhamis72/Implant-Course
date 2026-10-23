@@ -1,12 +1,25 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const rpc = vi.fn();
+const handler = vi.fn();
+// PostgREST-like builder: order() chains, range() slices the handler's rows, awaiting directly gives the whole result.
+const rpc = vi.fn((name: string, args?: any, ...rest: unknown[]) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const b = {
+    order: () => b,
+    range: async (from: number, to: number) => {
+      const r = await handler(name, args, ...rest);
+      return r.error ? r : { data: (r.data as unknown[]).slice(from, to + 1), error: null };
+    },
+    then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(handler(name, args, ...rest)).then(res, rej),
+  };
+  return b;
+});
 const profile = vi.fn();
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc }) }));
 vi.mock('@/lib/auth/session', () => ({ getCurrentProfile: () => profile() }));
 
 import { GET } from './route';
+import { DICTIONARY } from '@/lib/research/export/dictionary';
 
 const staff = (patients: 'view' | null, research: 'view' | null = 'view') => ({
   active: true, role: 'organizer', permissions: { patients, research },
@@ -14,10 +27,11 @@ const staff = (patients: 'view' | null, research: 'view' | null = 'view') => ({
 const req = (qs: string) => new Request(`http://localhost:3000/patients/research/export?${qs}`) as never;
 
 beforeEach(() => {
-  rpc.mockReset();
+  rpc.mockClear();
+  handler.mockReset();
   profile.mockReset();
   profile.mockResolvedValue(staff('view'));
-  rpc.mockImplementation(async (name: string) => (name === 'outcomes_version' ? { data: 'v1', error: null } : { data: name.startsWith('research_export_') ? [] : 'log-id', error: null }));
+  handler.mockImplementation(async (name: string) => (name === 'outcomes_version' ? { data: 'v1', error: null } : { data: name.startsWith('research_export_') ? [] : 'log-id', error: null }));
 });
 
 describe('GET /patients/research/export', () => {
@@ -63,8 +77,19 @@ describe('GET /patients/research/export', () => {
     expect((await GET(req('format=xlsx'))).status).toBe(403);
   });
 
+  it('pages past the 1000-row cap: 1000 + 5 rows are all built and logged', async () => {
+    const rows = Array.from({ length: 1005 }, (_, i) => ({ [Object.keys(DICTIONARY.visits)[0]]: `I-${i}` }));
+    handler.mockImplementation(async (name: string) =>
+      name === 'outcomes_version' ? { data: 'v1', error: null } : name === 'research_export_visits' ? { data: rows, error: null } : { data: name.startsWith('research_export_') ? [] : 'id', error: null });
+    const res = await GET(req('format=csv'));
+    expect(res.status).toBe(200);
+    expect(rpc.mock.calls.filter((c) => c[0] === 'research_export_visits')).toHaveLength(2);
+    const log = rpc.mock.calls.find((c) => c[0] === 'log_research_export');
+    expect(log?.[1].p_row_counts.visits).toBe(1005);
+  });
+
   it('does not log when a reader fails', async () => {
-    rpc.mockImplementation(async (name: string) => (name === 'research_export_visits' ? { data: null, error: { message: 'x' } } : { data: [], error: null }));
+    handler.mockImplementation(async (name: string) => (name === 'research_export_visits' ? { data: null, error: { message: 'x' } } : { data: [], error: null }));
     expect((await GET(req('format=csv'))).status).toBe(500);
     expect(rpc.mock.calls.some((c) => c[0] === 'log_research_export')).toBe(false);
   });
