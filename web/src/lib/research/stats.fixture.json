@@ -1,0 +1,65 @@
+{
+  "source": "Freireich et al. (1963) 6-MP vs placebo remission data (gehan in R MASS). Published R output: survfit(Surv(time, event) ~ 1, conf.type = 'log-log') for 6-MP and survdiff(Surv(time, event) ~ group). Written by hand because R is not installed locally; regenerate with scripts/research/gen-stats-fixture.R.",
+  "digits": { "surv": 3, "ci": 3, "chisq": 1, "pSignificant": 3 },
+  "groups": {
+    "mp6": [
+      { "months": 6, "event": true },
+      { "months": 6, "event": true },
+      { "months": 6, "event": true },
+      { "months": 6, "event": false },
+      { "months": 7, "event": true },
+      { "months": 9, "event": false },
+      { "months": 10, "event": true },
+      { "months": 10, "event": false },
+      { "months": 11, "event": false },
+      { "months": 13, "event": true },
+      { "months": 16, "event": true },
+      { "months": 17, "event": false },
+      { "months": 19, "event": false },
+      { "months": 20, "event": false },
+      { "months": 22, "event": true },
+      { "months": 23, "event": true },
+      { "months": 25, "event": false },
+      { "months": 32, "event": false },
+      { "months": 32, "event": false },
+      { "months": 34, "event": false },
+      { "months": 35, "event": false }
+    ],
+    "placebo": [
+      { "months": 1, "event": true },
+      { "months": 1, "event": true },
+      { "months": 2, "event": true },
+      { "months": 2, "event": true },
+      { "months": 3, "event": true },
+      { "months": 4, "event": true },
+      { "months": 4, "event": true },
+      { "months": 5, "event": true },
+      { "months": 5, "event": true },
+      { "months": 8, "event": true },
+      { "months": 8, "event": true },
+      { "months": 8, "event": true },
+      { "months": 8, "event": true },
+      { "months": 11, "event": true },
+      { "months": 11, "event": true },
+      { "months": 12, "event": true },
+      { "months": 12, "event": true },
+      { "months": 15, "event": true },
+      { "months": 17, "event": true },
+      { "months": 22, "event": true },
+      { "months": 23, "event": true }
+    ]
+  },
+  "km": {
+    "group": "mp6",
+    "rows": [
+      { "time": 6, "nRisk": 21, "nEvent": 3, "surv": 0.857, "lower": 0.62, "upper": 0.952 },
+      { "time": 7, "nRisk": 17, "nEvent": 1, "surv": 0.807 },
+      { "time": 10, "nRisk": 15, "nEvent": 1, "surv": 0.753 },
+      { "time": 13, "nRisk": 12, "nEvent": 1, "surv": 0.69 },
+      { "time": 16, "nRisk": 11, "nEvent": 1, "surv": 0.627 },
+      { "time": 22, "nRisk": 7, "nEvent": 1, "surv": 0.538 },
+      { "time": 23, "nRisk": 6, "nEvent": 1, "surv": 0.448 }
+    ]
+  },
+  "logRank": { "groups": ["mp6", "placebo"], "chisq": 16.8, "df": 1, "p": 4.17e-5 }
+}

@@ -1,4 +1,5 @@
 // Aggregates what SQL decided (implant_outcomes_detail / crown_outcomes_detail). Never recomputes a status.
+import { kmFit, survivalAtTime } from './stats'
 
 export type Milestone = 'survived' | 'failed' | 'unknown' | 'not_reached' | 'not_loaded'
 
@@ -78,20 +79,14 @@ export function crownSummary(crowns: CrownRow[]) {
 // Product-limit estimate; at tied times events are applied before censorings.
 export function kaplanMeier(rows: ImplantRow[]) {
   const known = rows.filter((r) => !r.event_time_unknown)
-  const times = known.map((r) => ({ month: r.follow_up_days / MONTH_DAYS, event: r.event }))
+  const fit = kmFit(known.map((r) => ({ months: r.follow_up_days / MONTH_DAYS, event: r.event })))
   const points = [{ month: 0, survival: 1 }]
-  const eventMonths = [...new Set(times.filter((t) => t.event).map((t) => t.month))].sort((a, b) => a - b)
-  let s = 1
-  for (const m of eventMonths) {
-    const atRisk = times.filter((t) => t.month >= m).length
-    const d = times.filter((t) => t.event && t.month === m).length
-    s *= 1 - d / atRisk
-    points.push({ month: m, survival: s })
-  }
-  const n = (m: number) => times.filter((t) => t.month >= m).length
+  fit.times.forEach((month, i) => {
+    if (fit.nEvent[i] > 0) points.push({ month, survival: fit.surv[i] })
+  })
   return {
     points,
-    atRisk: ([0, 12, 24] as const).map((month) => ({ month, n: n(month) })),
+    atRisk: ([0, 12, 24] as const).map((month) => ({ month, n: survivalAtTime(fit, month).nRisk })),
     excludedUnknownTime: rows.length - known.length,
   }
 }
