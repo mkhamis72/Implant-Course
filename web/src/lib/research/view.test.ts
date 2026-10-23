@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { drilldownHref, rpcArgs, selectImplants, isDrilldownList, type DetailRow } from './view';
+import { drilldownHref, effectiveSystem, rpcArgs, selectImplants, isDrilldownList, type DetailRow } from './view';
 
 const row = (over: Partial<DetailRow> = {}): DetailRow => ({
   site_id: 's', patient_id: 'p', tooth: 11, placed_on: '2025-01-01', year_1: 'survived', year_2: 'not_reached',
@@ -49,5 +49,18 @@ describe('selectImplants', () => {
   it('knows its lists', () => {
     expect(isDrilldownList('crowns_remade')).toBe(true);
     expect(isDrilldownList('drop table')).toBe(false);
+  });
+});
+
+describe('calendar dates and effectiveSystem', () => {
+  it('treats an impossible date as no filter', () => {
+    expect(rpcArgs({ course: '', from: '2026-02-31', to: '2026-13-01', delegate: '', brand: '', system: '' })).toMatchObject({ p_from: null, p_to: null });
+  });
+  it('drops a system that does not belong to the brand', () => {
+    const rows = [row({ brand: 'Oxy', system: 'PSK' }), row({ brand: 'Other', system: 'ZZ' })];
+    expect(effectiveSystem('Oxy', 'ZZ', rows)).toBe('');
+    expect(effectiveSystem('Oxy', 'PSK', rows)).toBe('PSK');
+    expect(effectiveSystem('', 'ZZ', rows)).toBe('ZZ');
+    expect(effectiveSystem('Oxy', '', rows)).toBe('');
   });
 });

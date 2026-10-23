@@ -31,12 +31,24 @@ export type CrownDetailRow = CrownRow & {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+const realDate = (s: string) => {
+  if (!DATE.test(s)) return false;
+  const d = new Date(s + 'T00:00:00Z');
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+};
+
+/** The selected system if it belongs to the selected brand (or no brand is selected); otherwise none. */
+export function effectiveSystem(brand: string, system: string, rows: { brand: string | null; system: string | null }[]): string {
+  if (!system || !brand) return system;
+  return rows.some((r) => r.brand === brand && r.system === system) ? system : "";
+}
+
 /** Arguments for implant_outcomes_detail / crown_outcomes_detail; empty or malformed filters mean "all". */
 export function rpcArgs(f: ResearchFilters) {
   return {
     p_course: UUID.test(f.course) ? f.course : null,
-    p_from: DATE.test(f.from) ? f.from : null,
-    p_to: DATE.test(f.to) ? f.to : null,
+    p_from: realDate(f.from) ? f.from : null,
+    p_to: realDate(f.to) ? f.to : null,
     p_delegate: UUID.test(f.delegate) ? f.delegate : null,
     p_brand: f.brand || null,
     p_system: f.system || null,

@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { canView } from '@/lib/auth/permissions';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
-import { RESEARCH_FILTER_KEYS } from '@/lib/research/view';
+import { RESEARCH_FILTER_KEYS, effectiveSystem } from '@/lib/research/view';
 import { loadResearch } from './data';
 import { FilterForm } from './filter-form';
 import { NoPatientsNote, ResearchView } from './research-view';
@@ -12,7 +12,7 @@ const distinct = (values: (string | null)[]) => [...new Set(values.filter((v): v
 
 export default async function ResearchPage({ searchParams }: { searchParams: PageSearchParams }) {
   const profile = await requirePermission('research');
-  const filters = await readParams(searchParams, ...RESEARCH_FILTER_KEYS);
+  const requested = await readParams(searchParams, ...RESEARCH_FILTER_KEYS);
   const header = (version: string | null) => (
     <div className="page-header">
       <div>
@@ -36,12 +36,17 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
   }
 
   const supabase = await createClient();
-  const [{ version, rows, base, crowns }, courses, delegates] = await Promise.all([
-    loadResearch(filters),
+  const [first, courses, delegates] = await Promise.all([
+    loadResearch(requested),
     supabase.rpc('course_options'),
     supabase.from('delegates').select('id, full_name').order('full_name'),
   ]);
   if (courses.error) throw new Error('Could not load the courses');
+
+  // A line that isn't one of the selected brand's is dropped (and the figures reloaded without it).
+  const system = effectiveSystem(requested.brand, requested.system, first.base);
+  const filters = { ...requested, system };
+  const { version, rows, base, crowns } = system === requested.system ? first : await loadResearch(filters);
 
   // Delegates the user can't list (no Delegates view) still appear when they placed an implant in range.
   const delegateNames = new Map<string, string>();
