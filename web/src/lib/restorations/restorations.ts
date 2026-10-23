@@ -141,8 +141,13 @@ function addMonths(iso: string, months: number): string {
 export function loadingOf(placedOn: string, restorations: Restoration[]): Loading | null {
   const first = restorations.map((r) => r.fitted_on).sort()[0];
   if (first === undefined) return null;
-  if (first <= addDays(placedOn, LOADING_IMMEDIATE_DAYS)) return 'immediate';
-  if (first <= addMonths(placedOn, LOADING_EARLY_MONTHS)) return 'early';
+  return loadingFrom(placedOn, first);
+}
+
+/** Loading of an implant placed on `placedOn` whose first restoration was fitted on `loadedOn`. */
+export function loadingFrom(placedOn: string, loadedOn: string): Loading {
+  if (loadedOn <= addDays(placedOn, LOADING_IMMEDIATE_DAYS)) return 'immediate';
+  if (loadedOn <= addMonths(placedOn, LOADING_EARLY_MONTHS)) return 'early';
   return 'conventional';
 }
 

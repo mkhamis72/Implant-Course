@@ -10,6 +10,7 @@ export function ExportForm({ filters }: { filters: ResearchFilters }) {
       <label className="flex items-center gap-2"><input type="radio" name="format" value="xlsx" defaultChecked /> Excel (.xlsx)</label>
       <label className="flex items-center gap-2"><input type="radio" name="format" value="csv" /> CSV files (.zip)</label>
       <button className="btn">Export</button>
+      <a className="text-accent" href="/patients/research/analysis.R" download>Download R script</a>
     </form>
   );
 }

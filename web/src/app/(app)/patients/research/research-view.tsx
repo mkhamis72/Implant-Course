@@ -1,8 +1,12 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { complications, crownSummary, formatPct, icoiBreakdown, kaplanMeier, survivalAt, type CrownRow } from '@/lib/research/summary';
+import { complications, crownSummary, formatPct, icoiBreakdown, kaplanMeier, kmEstimate, MILESTONE_DAYS, survivalAt, type CrownRow } from '@/lib/research/summary';
+import { THIN_AT_RISK } from '@/lib/research/stats';
+import { CLUSTER_NOTE, groupRows, isCompareKey, thinWarning, unknownDateNote, type GroupVars } from '@/lib/research/groups';
 import { GRADE_LABELS, drilldownHref, type DetailRow, type ResearchFilters } from '@/lib/research/view';
-import { SurvivalChart } from './survival-chart';
+import { curveStyle } from '@/lib/research/curve-style';
+import { SurvivalChart, type Curve } from './survival-chart';
+import { CiText, ComparePanel, Note, Warning } from './compare-panel';
 
 const MONTH_DAYS = 30.4375;
 
@@ -23,38 +27,51 @@ function Tile({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+// The KM estimate at 12 / 24 months (the same fit as the curve), its 95% CI and number at risk, then the SQL
+// milestone breakdown with no % of its own. Thin = fewer than THIN_AT_RISK at risk at that point.
 function SurvivalTile({ rows, year, filters }: { rows: DetailRow[]; year: 'year_1' | 'year_2'; filters: ResearchFilters }) {
+  const e = kmEstimate(rows, MILESTONE_DAYS[year]);
   const s = survivalAt(rows, year);
-  const m = s.survived + s.failed;
   return (
     <Tile title={year === 'year_1' ? 'Survival at 1 year' : 'Survival at 2 years'}>
-      {m === 0 ? (
-        <p className="text-3xl font-semibold">—</p>
+      {!e.defined ? (
+        <>
+          <p className="text-3xl font-semibold">—</p>
+          <p className="text-sm text-muted">No implant followed this long yet</p>
+        </>
       ) : (
         <>
-          <p className="text-3xl font-semibold"><Num list={`${year}_survived`} filters={filters}>{formatPct(s.pct)}</Num></p>
-          <p className="text-sm">
-            <Num list={`${year}_survived`} filters={filters}>{s.survived} of {m}</Num> survived ·{' '}
-            <Num list={`${year}_failed`} filters={filters}>{s.failed} failed</Num>
-          </p>
+          <p className="text-3xl font-semibold">{formatPct(e.surv * 100)}</p>
+          <p className="text-sm"><CiText e={e} /></p>
+          <p className="text-sm text-muted">{`at risk ${e.nRisk}`}</p>
         </>
       )}
-      <p className="text-sm text-muted"><Num list={`${year}_not_reached`} filters={filters}>{s.notReached} not reached</Num></p>
-      <p className="text-sm text-muted"><Num list={`${year}_unknown`} filters={filters}>{s.unknown} lost to follow-up</Num></p>
-      {m > 0 && s.small && <span className="badge badge-warn">small sample</span>}
+      <p className="text-sm text-muted">
+        Status at the milestone:{' '}
+        <Num list={`${year}_survived`} filters={filters}>{s.survived} survived</Num> ·{' '}
+        <Num list={`${year}_failed`} filters={filters}>{s.failed} failed</Num> ·{' '}
+        <Num list={`${year}_not_reached`} filters={filters}>{s.notReached} not reached</Num> ·{' '}
+        <Num list={`${year}_unknown`} filters={filters}>{s.unknown} lost to follow-up</Num>
+      </p>
+      {e.defined && e.nRisk < THIN_AT_RISK && <Warning>{thinWarning(e.nRisk, e.events)}</Warning>}
     </Tile>
   );
 }
+
+const monthsOf = (rows: DetailRow[]) =>
+  Math.max(0, ...rows.filter((r) => !r.event_time_unknown).map((r) => r.follow_up_days / MONTH_DAYS));
 
 const GRADE_ORDER = ['I', 'II', 'III', 'IV', 'not_assessable', 'not_graded'] as const;
 const GRADE_BAR: Record<(typeof GRADE_ORDER)[number], string> = {
   I: 'bg-ok', II: 'bg-accent', III: 'bg-warn', IV: 'bg-bad', not_assessable: 'bg-off', not_graded: 'bg-line-strong',
 };
 
-export function ResearchView({ rows, crowns, filters, noProduct }: {
+export function ResearchView({ rows, crowns, filters, groups = [], noProduct }: {
   rows: DetailRow[];
   crowns: CrownRow[];
   filters: ResearchFilters;
+  /** implant_outcomes_groups rows, when the comparison needs them. */
+  groups?: GroupVars[];
   /** Implants with no product in the set before the brand / type filter. */
   noProduct: number;
 }) {
@@ -63,7 +80,19 @@ export function ResearchView({ rows, crowns, filters, noProduct }: {
   const comp = complications(rows);
   const crown = crownSummary(crowns);
   const km = kaplanMeier(rows);
-  const endMonth = Math.max(0, ...rows.filter((r) => !r.event_time_unknown).map((r) => r.follow_up_days / MONTH_DAYS));
+  const endMonth = monthsOf(rows);
+  const compare = isCompareKey(filters.compare) ? filters.compare : null;
+  const grouped = compare ? groupRows(rows, groups, compare) : [];
+  // Loading is a table only (survivor bias): no group curves.
+  const byGroup = compare !== null && compare !== 'loading' && grouped.length > 0;
+  const curves: Curve[] = byGroup
+    ? grouped.map((g, i) => ({
+        label: g.notAssessed ? `${g.label} (not tested)` : g.label,
+        ...curveStyle(i),
+        points: kaplanMeier(g.rows).points,
+        end: monthsOf(g.rows),
+      }))
+    : [{ label: 'All implants', color: curveStyle(0).color, points: km.points, end: endMonth }];
 
   return (
     <div className="space-y-6">
@@ -83,6 +112,8 @@ export function ResearchView({ rows, crowns, filters, noProduct }: {
         </Tile>
       </div>
 
+      <Note>{CLUSTER_NOTE}</Note>
+
       {noProduct > 0 && (
         <p className="text-sm text-muted">
           <Num list="no_product" filters={filters}>{noProduct}</Num> implants have no product recorded
@@ -94,14 +125,17 @@ export function ResearchView({ rows, crowns, filters, noProduct }: {
         {km.points.length === 1 && endMonth === 0 ? (
           <p className="text-muted">No implants to plot.</p>
         ) : (
-          <SurvivalChart points={km.points} atRisk={km.atRisk} endMonth={endMonth} />
+          <SurvivalChart curves={curves} band={byGroup ? [] : km.band} atRisk={km.atRisk} endMonth={endMonth} />
         )}
         {km.excludedUnknownTime > 0 && (
           <p className="text-sm text-muted">
-            <Num list="km_excluded" filters={filters}>{km.excludedUnknownTime}</Num> implants left out: failure date unknown
+            <Num list="km_excluded" filters={filters}>{unknownDateNote(km.excludedUnknownTime)}</Num>
           </p>
         )}
+        <Note>{CLUSTER_NOTE}</Note>
       </section>
+
+      <ComparePanel compare={compare} groups={grouped} filters={filters} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section aria-label="ICOI success" className="card space-y-3">
