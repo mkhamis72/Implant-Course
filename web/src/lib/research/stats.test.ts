@@ -79,8 +79,10 @@ describe('logRank (6-MP vs placebo)', () => {
     expect(r.df).toBe(fixture.logRank.df)
     expect(r.chisq).toBeCloseTo(fixture.logRank.chisq, fixture.digits.chisq)
     expect(r.p).not.toBeNull()
+    // half a unit in the last published significant digit
     const sig = fixture.digits.pSignificant
-    expect(Number((r.p as number).toPrecision(sig))).toBe(Number(fixture.logRank.p.toPrecision(sig)))
+    const halfUnit = 0.5 * 10 ** (Math.floor(Math.log10(fixture.logRank.p)) - sig + 1)
+    expect(Math.abs((r.p as number) - fixture.logRank.p)).toBeLessThanOrEqual(halfUnit * (1 + 1e-9))
   })
 
   it('matches the two-group closed form (O - E)^2 / V to 4 decimals', () => {
@@ -112,6 +114,89 @@ describe('logRank (6-MP vs placebo)', () => {
 
   it('handles three groups with k - 1 degrees of freedom', () => {
     const r = logRank([groups.mp6, groups.placebo, groups.mp6.slice(0, 10)])
+    expect(r.df).toBe(2)
+    expect(r.p).toBeCloseTo(chiSquareP(r.chisq, 2), 12)
+  })
+
+  // Small three-group example: O, E and V built independently, chisq = d' V^-1 d on groups A and B
+  // with an explicit 2 x 2 inverse (dropping C).
+  const A: Row[] = [
+    { months: 1, event: true },
+    { months: 3, event: true },
+    { months: 6, event: false },
+  ]
+  const B: Row[] = [
+    { months: 2, event: true },
+    { months: 4, event: false },
+    { months: 5, event: true },
+  ]
+  const C: Row[] = [
+    { months: 1, event: false },
+    { months: 3, event: true },
+    { months: 5, event: true },
+    { months: 7, event: false },
+  ]
+
+  it('matches a hand-built three-group chi-square', () => {
+    const gs = [A, B, C]
+    const times = [...new Set(gs.flat().filter((r) => r.event).map((r) => r.months))]
+    const oe = [0, 0]
+    const v = [
+      [0, 0],
+      [0, 0],
+    ]
+    for (const t of times) {
+      const n = gs.map((g) => g.filter((r) => r.months >= t).length)
+      const d = gs.map((g) => g.filter((r) => r.event && r.months === t).length)
+      const N = n[0] + n[1] + n[2]
+      const D = d[0] + d[1] + d[2]
+      const f = N > 1 ? (D * (N - D)) / (N - 1) / N ** 2 : 0
+      oe[0] += d[0] - (D * n[0]) / N
+      oe[1] += d[1] - (D * n[1]) / N
+      v[0][0] += f * n[0] * (N - n[0])
+      v[1][1] += f * n[1] * (N - n[1])
+      v[0][1] -= f * n[0] * n[1]
+    }
+    v[1][0] = v[0][1]
+    const det = v[0][0] * v[1][1] - v[0][1] * v[1][0]
+    const expected = (oe[0] ** 2 * v[1][1] - 2 * oe[0] * oe[1] * v[0][1] + oe[1] ** 2 * v[0][0]) / det
+    const r = logRank(gs)
+    expect(r.df).toBe(2)
+    expect(r.chisq).toBeCloseTo(expected, 10)
+  })
+
+  it('gives the same result whatever the group order', () => {
+    const base = logRank([A, B, C])
+    for (const order of [
+      [B, C, A],
+      [C, A, B],
+      [C, B, A],
+    ]) {
+      const r = logRank(order)
+      expect(r.df).toBe(base.df)
+      expect(r.chisq).toBeCloseTo(base.chisq, 10)
+    }
+  })
+
+  it('gives no p-value when the variance is zero (everyone at risk fails together)', () => {
+    const r = logRank([[{ months: 2, event: true }], [{ months: 2, event: true }]])
+    expect(r).toEqual({ chisq: 0, df: 0, p: null })
+    const r3 = logRank([
+      [{ months: 2, event: true }],
+      [{ months: 2, event: true }],
+      [{ months: 2, event: true }],
+    ])
+    expect(r3).toEqual({ chisq: 0, df: 0, p: null })
+  })
+
+  it('stays finite when the only informative event is the first one', () => {
+    // t = 1: three at risk, one fails (variance > 0); t = 2: the two left both fail (n = d, no variance)
+    const r = logRank([
+      [{ months: 1, event: true }],
+      [{ months: 2, event: true }],
+      [{ months: 2, event: true }],
+    ])
+    expect(Number.isFinite(r.chisq)).toBe(true)
     expect(r.df).toBe(2)
     expect(r.p).toBeCloseTo(chiSquareP(r.chisq, 2), 12)
   })
@@ -162,6 +247,39 @@ describe('chiSquareP', () => {
     expect(chiSquareP(5.991, 2)).toBeCloseTo(Math.exp(-5.991 / 2), 12)
     expect(chiSquareP(18.307, 10)).toBeCloseTo(0.05, 4)
     expect(chiSquareP(0, 3)).toBe(1)
+  })
+  it('refuses inputs it cannot evaluate instead of returning 1', () => {
+    expect(() => chiSquareP(Number.NaN, 1)).toThrow(RangeError)
+    expect(() => chiSquareP(3, 0)).toThrow(RangeError)
+    expect(() => chiSquareP(3, -1)).toThrow(RangeError)
+    expect(() => chiSquareP(3, Number.NaN)).toThrow(RangeError)
+  })
+})
+
+describe('non-finite times', () => {
+  it('skips rows whose time is not a finite number (no hang)', () => {
+    const fit = kmFit([
+      { months: Number.NaN, event: true },
+      { months: 2, event: true },
+      { months: Number.POSITIVE_INFINITY, event: false },
+      { months: 4, event: false },
+    ])
+    expect(fit.times).toEqual([2, 4])
+    expect(fit.nRisk).toEqual([2, 1])
+    expect(fit.surv[0]).toBeCloseTo(0.5, 12)
+  })
+  it('skips them in the log-rank test too', () => {
+    const a: Row[] = [
+      { months: 1, event: true },
+      { months: 3, event: false },
+    ]
+    const b: Row[] = [
+      { months: 2, event: true },
+      { months: 4, event: false },
+    ]
+    const clean = logRank([a, b])
+    const dirty = logRank([[...a, { months: Number.NaN, event: true }], b])
+    expect(dirty).toEqual(clean)
   })
 })
 

@@ -22,8 +22,10 @@ export const THIN_GROUP = 5
 // Product-limit estimate at every distinct time (events and censorings, like survfit).
 // At a tied time, the events are counted before the censorings: everyone with that time is at risk.
 // CI: Greenwood variance on the log-log scale; null where S is 1 or 0 (cannot be estimated).
+// Deliberate difference from R: where S = 1, survfit reports a 1–1 interval; this returns null.
+// Rows whose time is not a finite number are skipped.
 export function kmFit(rows: SurvivalRow[]): KmFit {
-  const sorted = [...rows].sort((a, b) => a.months - b.months)
+  const sorted = finiteRows(rows).sort((a, b) => a.months - b.months)
   const fit: KmFit = { times: [], surv: [], lower: [], upper: [], nRisk: [], nEvent: [] }
   let s = 1
   let greenwood = 0
@@ -69,10 +71,13 @@ export function survivalAtTime(fit: KmFit, months: number) {
   }
 }
 
-// Log-rank test as R survdiff (rho = 0): chi-square on (groups with expected > 0) - 1 df.
-// Empty groups are ignored; p is null when there are no events or fewer than two groups to compare.
+// Log-rank test as R survdiff (rho = 0): chisq = (O - E)' V^- (O - E) over the groups with expected > 0,
+// on rank(V) degrees of freedom (= groups with expected > 0, minus 1, whenever V is not zero).
+// Empty groups and rows with a non-finite time are ignored. p is null when there are no events, fewer
+// than two groups to compare, or no variance at all (everyone at risk failed together at every event),
+// where R's solve() would fail.
 export function logRank(groups: SurvivalRow[][]): { chisq: number; df: number; p: number | null } {
-  const present = groups.filter((g) => g.length > 0)
+  const present = groups.map(finiteRows).filter((g) => g.length > 0)
   const k = present.length
   const eventTimes = [...new Set(present.flat().filter((r) => r.event).map((r) => r.months))].sort((a, b) => a - b)
   if (eventTimes.length === 0 || k < 2) return { chisq: 0, df: Math.max(k - 1, 0), p: null }
@@ -97,43 +102,61 @@ export function logRank(groups: SurvivalRow[][]): { chisq: number; df: number; p
 
   // Groups nobody in which was at risk at any event contribute nothing (R: df counts expected > 0).
   const kept = expected.map((e, a) => (e > 0 ? a : -1)).filter((a) => a >= 0)
-  const df = kept.length - 1
-  if (df < 1) return { chisq: 0, df: Math.max(df, 0), p: null }
-  const idx = kept.slice(0, df)
-  const diff = idx.map((a) => observed[a] - expected[a])
-  const x = solve(
-    idx.map((a) => idx.map((b) => v[a][b])),
+  if (kept.length < 2) return { chisq: 0, df: 0, p: null }
+  const diff = kept.map((a) => observed[a] - expected[a])
+  const { chisq, rank } = quadraticFormGeneralized(
+    kept.map((a) => kept.map((b) => v[a][b])),
     diff,
   )
-  const chisq = diff.reduce((sum, di, i) => sum + di * x[i], 0)
-  return { chisq, df, p: chiSquareP(chisq, df) }
+  if (rank === 0 || !Number.isFinite(chisq)) return { chisq: 0, df: 0, p: null }
+  return { chisq, df: rank, p: chiSquareP(chisq, rank) }
 }
 
-// Gaussian elimination with partial pivoting.
-function solve(m: number[][], rhs: number[]): number[] {
-  const n = rhs.length
-  const a = m.map((row, i) => [...row, rhs[i]])
-  for (let c = 0; c < n; c++) {
-    let p = c
-    for (let r = c + 1; r < n; r++) if (Math.abs(a[r][c]) > Math.abs(a[p][c])) p = r
-    ;[a[c], a[p]] = [a[p], a[c]]
-    for (let r = c + 1; r < n; r++) {
-      const f = a[r][c] / a[c][c]
-      for (let j = c; j <= n; j++) a[r][j] -= f * a[c][j]
+// x' V^- x for a symmetric positive semi-definite V, via an LDL' decomposition that drops
+// pivots too small to trust (like R's cholesky2 / chsolve2 used for score tests). Returns rank(V).
+function quadraticFormGeneralized(v: number[][], x: number[]): { chisq: number; rank: number } {
+  const n = x.length
+  const scale = Math.max(...v.map((row, i) => Math.abs(row[i])))
+  const tol = scale * Number.EPSILON ** 0.75
+  const l = Array.from({ length: n }, () => new Array<number>(n).fill(0))
+  const d = new Array<number>(n).fill(0)
+  for (let i = 0; i < n; i++) {
+    let di = v[i][i]
+    for (let m = 0; m < i; m++) di -= l[i][m] ** 2 * d[m]
+    if (!(di > tol)) continue // dropped dimension: d[i] = 0, column i of L stays 0
+    d[i] = di
+    for (let j = i + 1; j < n; j++) {
+      let s = v[j][i]
+      for (let m = 0; m < i; m++) s -= l[j][m] * l[i][m] * d[m]
+      l[j][i] = s / di
     }
   }
-  const x = new Array<number>(n).fill(0)
-  for (let r = n - 1; r >= 0; r--) {
-    let s = a[r][n]
-    for (let j = r + 1; j < n; j++) s -= a[r][j] * x[j]
-    x[r] = s / a[r][r]
+  // forward solve L y = x (unit lower triangular), then chisq = sum y_i^2 / d_i over kept pivots
+  const y = new Array<number>(n).fill(0)
+  let chisq = 0
+  let rank = 0
+  for (let i = 0; i < n; i++) {
+    let s = x[i]
+    for (let m = 0; m < i; m++) s -= l[i][m] * y[m]
+    y[i] = s
+    if (d[i] > 0) {
+      chisq += (s * s) / d[i]
+      rank++
+    }
   }
-  return x
+  return { chisq, rank }
+}
+
+function finiteRows(rows: SurvivalRow[]): SurvivalRow[] {
+  return rows.filter((r) => Number.isFinite(r.months))
 }
 
 // Upper tail of the chi-square distribution: Q(df / 2, chisq / 2), the regularized upper incomplete gamma.
+// Throws on a NaN chi-square or a df that is not positive, rather than hiding it as p = 1.
 export function chiSquareP(chisq: number, df: number): number {
-  if (!(chisq > 0)) return 1
+  if (Number.isNaN(chisq)) throw new RangeError('chiSquareP: chi-square is NaN')
+  if (!(df > 0)) throw new RangeError(`chiSquareP: df must be positive (got ${df})`)
+  if (chisq <= 0) return 1
   return upperGammaQ(df / 2, chisq / 2)
 }
 
