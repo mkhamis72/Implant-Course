@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
-import { AREAS, AREA_LABELS, type Permissions } from '@/lib/auth/permissions';
+import { AREAS, AREA_LABELS, VIEW_ONLY_AREAS, type Permissions } from '@/lib/auth/permissions';
 import type { ActionState } from '@/lib/admin/schemas';
 import { savePermissions } from './actions';
 
@@ -11,7 +11,7 @@ const LEVELS = [
   { value: 'edit', label: 'Edit' },
 ] as const;
 
-/** None / View / Edit per panel for one organizer. */
+/** None / View / Edit per panel for one organizer; view-only areas (Research) have no Edit. */
 export function PermissionGrid({ userId, permissions }: { userId: string; permissions: Permissions }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(savePermissions, {});
   return (
@@ -22,7 +22,7 @@ export function PermissionGrid({ userId, permissions }: { userId: string; permis
         {AREAS.map((area) => (
           <fieldset key={area} className="flex flex-wrap items-center gap-x-3 text-sm">
             <legend className="float-left w-24 font-medium">{AREA_LABELS[area]}</legend>
-            {LEVELS.map((l) => (
+            {LEVELS.filter((l) => l.value !== 'edit' || !VIEW_ONLY_AREAS.includes(area)).map((l) => (
               <label key={l.value} className="flex items-center gap-1">
                 <input type="radio" name={`perm_${area}`} value={l.value} defaultChecked={(permissions[area] ?? 'none') === l.value} />
                 {l.label}

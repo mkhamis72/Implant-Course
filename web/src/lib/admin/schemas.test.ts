@@ -40,16 +40,21 @@ describe('permissionsSchema', () => {
   const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
   const grid = {
     user_id: id, perm_patients: 'edit', perm_schedule: 'view', perm_courses: 'none',
-    perm_checklists: 'none', perm_inventory: 'view', perm_delegates: 'none',
+    perm_checklists: 'none', perm_inventory: 'view', perm_delegates: 'none', perm_research: 'none',
   };
   it('maps the radio grid to area levels, None as null', () => {
     expect(permissionsSchema.parse(grid)).toEqual({
       user_id: id,
-      perms: { patients: 'edit', schedule: 'view', courses: null, checklists: null, inventory: 'view', delegates: null },
+      perms: { patients: 'edit', schedule: 'view', courses: null, checklists: null, inventory: 'view', delegates: null, research: null },
     });
+  });
+  it('Research is None or View only', () => {
+    expect(permissionsSchema.parse({ ...grid, perm_research: 'view' }).perms.research).toBe('view');
+    expect(permissionsSchema.safeParse({ ...grid, perm_research: 'edit' }).success).toBe(false);
   });
   it('rejects unknown levels and missing panels', () => {
     expect(permissionsSchema.safeParse({ ...grid, perm_patients: 'all' }).success).toBe(false);
     expect(permissionsSchema.safeParse({ ...grid, perm_delegates: undefined }).success).toBe(false);
+    expect(permissionsSchema.safeParse({ ...grid, perm_research: undefined }).success).toBe(false);
   });
 });

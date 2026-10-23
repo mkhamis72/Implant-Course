@@ -34,13 +34,13 @@ describe('inviteUser', () => {
 
 describe('savePermissions', () => {
   const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
-  const grid = { user_id: id, perm_patients: 'edit', perm_schedule: 'view', perm_courses: 'none', perm_checklists: 'none', perm_inventory: 'view', perm_delegates: 'none' };
+  const grid = { user_id: id, perm_patients: 'edit', perm_schedule: 'view', perm_courses: 'none', perm_checklists: 'none', perm_inventory: 'view', perm_delegates: 'none', perm_research: 'view' };
   it('saves the grid through set_user_permissions', async () => {
     rpc.mockResolvedValue({ error: null });
     expect(await savePermissions({}, form(grid))).toEqual({ ok: 'Permissions saved.' });
     expect(rpc).toHaveBeenCalledWith('set_user_permissions', {
       p_user: id,
-      p_perms: { patients: 'edit', schedule: 'view', courses: null, checklists: null, inventory: 'view', delegates: null },
+      p_perms: { patients: 'edit', schedule: 'view', courses: null, checklists: null, inventory: 'view', delegates: null, research: 'view' },
     });
   });
   it('shows the database’s refusal', async () => {

@@ -130,7 +130,7 @@ export async function book(
   return rows[0].id;
 }
 
-export type Perms = Partial<Record<'patients' | 'schedule' | 'courses' | 'checklists' | 'inventory' | 'delegates', 'view' | 'edit' | null>>;
+export type Perms = Partial<Record<'patients' | 'schedule' | 'courses' | 'checklists' | 'inventory' | 'delegates' | 'research', 'view' | 'edit' | null>>;
 
 /** Sets a user's area permissions directly (bypasses RLS; call as postgres). Unlisted areas become None. */
 export async function setPerms(c: Client, user: string, perms: Perms): Promise<void> {
