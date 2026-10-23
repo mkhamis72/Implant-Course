@@ -76,10 +76,10 @@ describe('buildXlsx', () => {
 });
 
 describe('buildZip', () => {
-  it('holds one CSV per table, the dictionary and a README', () => {
+  it('holds one CSV per table, the dictionary, a README and the R script', () => {
     const files = unzipSync(buildZip(tables(), meta()));
     expect(Object.keys(files).sort()).toEqual(
-      [...TABLE_NAMES.map((n) => `${n}.csv`), 'data_dictionary.csv', 'README.txt'].sort(),
+      [...TABLE_NAMES.map((n) => `${n}.csv`), 'data_dictionary.csv', 'README.txt', 'analysis.R'].sort(),
     );
     expect(strFromU8(files['README.txt'])).toContain(CONFIDENTIALITY_NOTE);
     expect([...files['implants.csv'].slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]); // strFromU8 would strip the BOM

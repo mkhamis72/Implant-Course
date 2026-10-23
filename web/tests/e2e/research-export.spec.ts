@@ -94,6 +94,7 @@ test('an admin exports anonymised research data as Excel and CSV, and the export
       expect(entries).toContain(`${n}.csv`);
     }
     expect(entries).toContain('README.txt');
+    expect(entries).toContain('analysis.R');
     const implantCsv = strFromU8(files['implants.csv']).replace(/^﻿/, '').trim().split(/\r?\n/);
     expect(implantCsv).toHaveLength(3);
     expect(strFromU8(files['patients.csv']).replace(/^﻿/, '').trim().split(/\r?\n/)).toHaveLength(3);
