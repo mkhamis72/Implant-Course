@@ -32,7 +32,7 @@ export default async function PatientLayout({ children, params }: { children: Re
 
   return (
     <div className="space-y-4">
-      <header data-testid="patient-header" className="card flex flex-wrap items-center gap-x-6 gap-y-2 py-4">
+      <header data-testid="patient-header" className="card flex flex-wrap items-center gap-x-6 gap-y-2 py-4 print:hidden">
         <h1>{p.full_name}</h1>
         <span className="text-sm text-muted">File {p.file_no}</span>
         {age !== null && <span className="text-sm text-muted">Age {age}</span>}

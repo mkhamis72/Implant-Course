@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
-import { makeDelegate, makePatient, place, receive, setPerms } from './fixtures';
+import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeSession, place, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -415,6 +415,51 @@ describe('research consent readers', () => {
       await setPerms(c, users.target, { patients: 'view', research: 'view' });
       await actAs(c, users.target);
       expect((await counts(c, s.brand))[0].patients).toBe(5);
+    });
+  });
+});
+
+describe('patient_course_options', () => {
+  it("lists the patient's courses from bookings and placements, newest first; cancelled bookings and other patients' courses are left out", async () => {
+    await withTx(async (c) => {
+      await actAs(c, users.organizer);
+      const patient = await makePatient(c, 'Zz Consent Courses');
+      const other = await makePatient(c, 'Zz Consent Courses Other');
+      const placedIn = await makeCourse(c, '2030-01-01', '2030-01-05');
+      const bookedIn = await makeCourse(c, '2030-06-01', '2030-06-05');
+      const cancelledIn = await makeCourse(c, '2030-09-01', '2030-09-05');
+      const othersCourse = await makeCourse(c, '2030-12-01', '2030-12-05');
+      const delegate = await makeDelegate(c, 'Zz Consent Courses Delegate');
+      await asPostgres(c);
+      const chair = await makeChair(c);
+      await actAs(c, users.organizer);
+      const booking = (course: string, date: string, who = patient) => enroll(c, course, delegate)
+        .then(() => makeSession(c, course, 'surgery', date))
+        .then((session) => book(c, { session, chair, patient: who, supervisor: users.organizer, placing: [delegate] }));
+      await booking(bookedIn, '2030-06-02');
+      const cancelled = await booking(cancelledIn, '2030-09-02');
+      await booking(othersCourse, '2030-12-02', other);
+      const product = (await c.query(
+        `insert into public.products (type, brand, system, diameter_mm, length_mm) values ('implant', 'Zz Consent Courses', 'MD EXT', 4.0, 10) returning id`,
+      )).rows[0].id as string;
+      const lot = await receive(c, product, 2, 'ZZCC1');
+      await place(c, { patient, tooth: 36, product, lot, delegate, supervisor: users.organizer, course: placedIn });
+      await asPostgres(c);
+      await c.query(`update public.surgery_slots set status = 'cancelled' where id = $1`, [cancelled]);
+
+      await setPerms(c, users.target, { patients: 'view' });
+      await actAs(c, users.target);
+      const rows = (await c.query('select * from public.patient_course_options($1)', [patient])).rows;
+      expect(rows.map((r) => r.id)).toEqual([bookedIn, placedIn]);
+      expect(Object.keys(rows[0]).sort()).toEqual(['id', 'name', 'start_date']);
+      expect((await c.query('select * from public.patient_course_options($1)', [other])).rows.map((r) => r.id)).toEqual([othersCourse]);
+
+      await asPostgres(c);
+      await setPerms(c, users.target, { schedule: 'edit', courses: 'edit' });
+      await actAs(c, users.target);
+      await refused(c, () => c.query('select * from public.patient_course_options($1)', [patient]), /permission to view Patients/);
+      await actAs(c, users.delegate);
+      await refused(c, () => c.query('select * from public.patient_course_options($1)', [patient]), /./);
     });
   });
 });

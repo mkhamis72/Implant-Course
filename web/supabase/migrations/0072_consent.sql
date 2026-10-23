@@ -361,10 +361,28 @@ language sql stable security definer set search_path = '' as $$
     and exists (select 1 from public.patient_consents pc where pc.file_id = f.id and pc.patient_id = p_patient);
 $$;
 
+-- The courses a patient is linked to through a (not cancelled) booking or a placed implant, newest first: the
+-- consent print page's Course select. Definer like course_options(): Patients view alone can't read sessions.
+create function public.patient_course_options(p_patient uuid)
+returns table (id uuid, name text, start_date date)
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  perform app_private.require_perm('patients', 'view');
+  return query
+  select c.id, c.name, c.start_date from public.courses c
+  where c.id in (
+    select s.course_id from public.surgery_slots w join public.sessions s on s.id = w.session_id
+    where w.patient_id = p_patient and w.status <> 'cancelled'
+    union
+    select i.course_id from public.implant_sites i where i.patient_id = p_patient and i.course_id is not null
+  )
+  order by c.start_date desc, c.id;
+end $$;
+
 revoke execute on function public.consent_versions(), public.current_consent_version(), public.patient_consents_for(uuid),
-  public.consent_file(uuid, uuid) from public, anon;
+  public.consent_file(uuid, uuid), public.patient_course_options(uuid) from public, anon;
 grant execute on function public.consent_versions(), public.current_consent_version(), public.patient_consents_for(uuid),
-  public.consent_file(uuid, uuid) to authenticated;
+  public.consent_file(uuid, uuid), public.patient_course_options(uuid) to authenticated;
 
 
 -- ── Research consent ─────────────────────────────────────────────────────────────────────────────
