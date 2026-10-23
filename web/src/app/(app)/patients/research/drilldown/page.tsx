@@ -30,7 +30,7 @@ function PatientCell({ id, name, fileNo }: { id: string; name: string | null; fi
 
 export default async function ResearchDrilldownPage({ searchParams }: { searchParams: PageSearchParams }) {
   const profile = await requirePermission('research');
-  const { list, ...filters } = await readParams(searchParams, 'list', ...RESEARCH_FILTER_KEYS);
+  const { list, ...filters } = await readParams(searchParams, 'list', ...RESEARCH_FILTER_KEYS, 'compare'); // compare: kept for the link back
   if (!isDrilldownList(list)) notFound();
   const query = filterQuery(filters);
   const header = (

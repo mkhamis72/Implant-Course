@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ResearchFilters } from '@/lib/research/view';
+import { isCompareKey } from '@/lib/research/groups';
 
 type Option = { id: string; name: string };
 
@@ -13,6 +14,7 @@ export function FilterForm({ filters, courses, delegates, brands, systems }: {
 }) {
   return (
     <form className="card grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Filters">
+      {isCompareKey(filters.compare) && <input type="hidden" name="compare" value={filters.compare} />}
       <label className="block">
         <span className="label">Course</span>
         <select className="input" name="course" defaultValue={filters.course}>

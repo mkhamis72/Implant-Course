@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { drilldownHref, effectiveSystem, rpcArgs, selectImplants, isDrilldownList, type DetailRow } from './view';
+import { drilldownHref, effectiveSystem, filterQuery, rpcArgs, selectImplants, isDrilldownList, type DetailRow } from './view';
 
 const row = (over: Partial<DetailRow> = {}): DetailRow => ({
   site_id: 's', patient_id: 'p', tooth: 11, placed_on: '2025-01-01', year_1: 'survived', year_2: 'not_reached',
@@ -24,6 +24,12 @@ describe('drilldownHref', () => {
   it('carries the non-empty filters', () => {
     expect(drilldownHref('year_1_failed', { course: 'c1', from: '2025-01-01', to: '', delegate: '', brand: 'Oxy', system: '' }))
       .toBe('/patients/research/drilldown?list=year_1_failed&course=c1&from=2025-01-01&brand=Oxy');
+  });
+  it('carries the compare choice, and drops an unknown one', () => {
+    const f = { course: '', from: '', to: '', delegate: '', brand: '', system: '' };
+    expect(drilldownHref('implants', { ...f, compare: 'technique' })).toBe('/patients/research/drilldown?list=implants&compare=technique');
+    expect(filterQuery({ ...f, course: 'c1', compare: 'smoking' })).toBe('course=c1&compare=smoking');
+    expect(filterQuery({ ...f, compare: 'nope' })).toBe('');
   });
 });
 

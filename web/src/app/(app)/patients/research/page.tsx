@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/auth/session';
 import { canView } from '@/lib/auth/permissions';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
 import { RESEARCH_FILTER_KEYS, effectiveSystem } from '@/lib/research/view';
+import { isCompareKey, needsGroupVars } from '@/lib/research/groups';
 import { loadResearch } from './data';
 import { FilterForm } from './filter-form';
 import { ExportForm, ExportLog, type ExportLogRow } from './export-panel';
@@ -13,7 +14,9 @@ const distinct = (values: (string | null)[]) => [...new Set(values.filter((v): v
 
 export default async function ResearchPage({ searchParams }: { searchParams: PageSearchParams }) {
   const profile = await requirePermission('research');
-  const requested = await readParams(searchParams, ...RESEARCH_FILTER_KEYS);
+  const { compare: compareParam, ...requested } = await readParams(searchParams, ...RESEARCH_FILTER_KEYS, 'compare');
+  const compare = isCompareKey(compareParam) ? compareParam : null;
+  const withGroups = needsGroupVars(compare);
   const header = (version: string | null) => (
     <div className="page-header">
       <div>
@@ -38,7 +41,7 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
 
   const supabase = await createClient();
   const [first, courses, delegates] = await Promise.all([
-    loadResearch(requested),
+    loadResearch(requested, withGroups),
     supabase.rpc('course_options'),
     supabase.from('delegates').select('id, full_name').order('full_name'),
   ]);
@@ -46,8 +49,8 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
 
   // A line that isn't one of the selected brand's is dropped (and the figures reloaded without it).
   const system = effectiveSystem(requested.brand, requested.system, first.base);
-  const filters = { ...requested, system };
-  const { version, rows, base, crowns } = system === requested.system ? first : await loadResearch(filters);
+  const filters = { ...requested, system, compare: compare ?? '' };
+  const { version, rows, base, crowns, groups } = system === requested.system ? first : await loadResearch(filters, withGroups);
 
   const isAdmin = profile.role === 'admin';
   let exportLog: ExportLogRow[] = [];
@@ -80,7 +83,7 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
         brands={brands}
         systems={systems}
       />
-      <ResearchView rows={rows} crowns={crowns} filters={filters} noProduct={base.filter((r) => r.product_id === null).length} />
+      <ResearchView rows={rows} crowns={crowns} filters={filters} groups={groups} noProduct={base.filter((r) => r.product_id === null).length} />
       <ExportForm filters={filters} />
       <ExportLog
         isAdmin={isAdmin}

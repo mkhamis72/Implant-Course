@@ -1,15 +1,19 @@
 // Research page plumbing: URL filters → reader arguments, drill-down lists and their links. Selection only reads the
 // statuses SQL returned (implant_outcomes_detail / crown_outcomes_detail); nothing is recomputed here.
 import type { CrownRow, ImplantRow } from './summary';
+import { isCompareKey } from './groups';
 
 export const RESEARCH_FILTER_KEYS = ['course', 'from', 'to', 'delegate', 'brand', 'system'] as const;
-export type ResearchFilters = Record<(typeof RESEARCH_FILTER_KEYS)[number], string>;
+/** The filters, plus the page's Compare by choice (`compare`), which links carry but the readers ignore. */
+export type ResearchFilters = Record<(typeof RESEARCH_FILTER_KEYS)[number], string> & { compare?: string };
 
 export type DetailRow = ImplantRow & {
   site_id: string
   patient_id: string
   tooth: number
   placed_on: string
+  /** First restoration fitted (implant_outcomes_detail); optional so fixtures without it still type. */
+  loaded_on?: string | null
   latest_grade_reason: string | null
   product_id: string | null
   brand: string | null
@@ -58,6 +62,7 @@ export function rpcArgs(f: ResearchFilters) {
 export function filterQuery(f: ResearchFilters): string {
   const q = new URLSearchParams();
   for (const k of RESEARCH_FILTER_KEYS) if (f[k]) q.set(k, f[k]);
+  if (isCompareKey(f.compare)) q.set('compare', f.compare);
   return q.toString();
 }
 
