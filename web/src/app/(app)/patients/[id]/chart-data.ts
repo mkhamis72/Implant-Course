@@ -1,3 +1,4 @@
+import type { DataQualityIssue } from '@/lib/data-quality/issues';
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentProfile } from '@/lib/auth/session';
@@ -77,7 +78,7 @@ function toRestoration({ sites, problems, ...r }: RestorationRow): Restoration {
 export async function loadChartData(patientId: string): Promise<ChartData> {
   const supabase = await createClient();
   const me = await getCurrentProfile();
-  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs] = await Promise.all([
+  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, issues] = await Promise.all([
     supabase.from('tooth_status').select('tooth, status').eq('patient_id', patientId),
     supabase.from('implant_sites').select(SITE_SELECT).eq('patient_id', patientId).order('created_at'),
     supabase.from('products').select('*').eq('active', true),
@@ -90,7 +91,9 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     // Course choices for the pickers: course_options() needs View on Patients, like this page.
     supabase.rpc('course_options'),
     supabase.rpc('radiographs_for', { p_patient: patientId }),
+    supabase.rpc('data_quality_issues', { p_patient: patientId }),
   ]);
+  // The Date problem badge fails soft (no badge), like the patient header: it must never take the chart down.
   for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs]) {
     if (r.error) throw new Error('Could not load the chart');
   }
@@ -111,6 +114,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     restorations: ((restorations.data ?? []) as unknown as RestorationRow[]).map(toRestoration),
     courses: (courses.data ?? []) as CourseOption[],
     radiographs: (radiographs.data ?? []) as unknown as Radiograph[],
+    issues: (issues.error ? [] : (issues.data ?? [])) as DataQualityIssue[],
     today: todayIso(),
     me: me?.user_id ?? '',
     editable: me ? canEdit(me, 'patients') : false,

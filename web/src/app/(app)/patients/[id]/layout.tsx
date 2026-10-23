@@ -6,6 +6,7 @@ import { canEdit } from '@/lib/auth/permissions';
 import { ageOn } from '@/lib/patients/age';
 import { medicalAlerts } from '@/lib/patients/alerts';
 import type { MedicalHistory, Patient } from '@/lib/patients/types';
+import { DateProblemBadge } from './date-problem-badge';
 import { PatientTabs } from './patient-tabs';
 import { DeletePatient } from '../delete-patient';
 
@@ -14,13 +15,15 @@ export default async function PatientLayout({ children, params }: { children: Re
   const profile = await requirePermission('patients');
   if (!z.string().uuid().safeParse(id).success) notFound();
   const supabase = await createClient();
-  const [{ data: patient }, { data: history }] = await Promise.all([
+  const [{ data: patient }, { data: history }, { data: issues }] = await Promise.all([
     supabase.from('patients').select('*').eq('id', id).maybeSingle(),
     supabase.from('medical_history').select('*').eq('patient_id', id).maybeSingle(),
+    supabase.rpc('data_quality_issues', { p_patient: id }),
   ]);
   if (!patient) notFound();
   const p = patient as Patient;
   const age = ageOn(p.dob, new Date());
+  const issueList = (issues ?? []) as { message: string }[];
   const alerts = medicalAlerts(history as MedicalHistory | null);
 
   return (
@@ -31,6 +34,7 @@ export default async function PatientLayout({ children, params }: { children: Re
         {age !== null && <span className="text-sm text-muted">Age {age}</span>}
         {p.sex && <span className="text-sm capitalize text-muted">{p.sex}</span>}
         {p.archived && <span className="rounded bg-sunken px-2 py-0.5 text-sm text-ink">Archived</span>}
+        <DateProblemBadge count={issueList.length} href="/patients/data-quality" title={issueList.map((i) => i.message).join(' ')} />
         {alerts.length > 0 && (
           <ul className="flex flex-wrap gap-2" aria-label="Medical alerts">
             {alerts.map((alert) => (
