@@ -365,3 +365,54 @@ revoke execute on function public.consent_versions(), public.current_consent_ver
   public.consent_file(uuid, uuid) from public, anon;
 grant execute on function public.consent_versions(), public.current_consent_version(), public.patient_consents_for(uuid),
   public.consent_file(uuid, uuid) to authenticated;
+
+
+-- ── Research consent ─────────────────────────────────────────────────────────────────────────────
+-- A patient's research answer is the research item of their current consent record (latest non-voided by signed_on,
+-- then created_at): 'yes' / 'no', or 'not_recorded' without one. Both readers cover the patients of
+-- implant_outcomes_detail (0069) with the six Research filters, the same set as research_export_patients (0070).
+-- Security invoker: implant_outcomes_detail needs View on Research and View on Patients, patient_consents View on Patients.
+
+-- Research page warning: how many of the filtered patients said yes, no, or have no record.
+create function public.research_consent_counts(p_course uuid, p_from date, p_to date, p_delegate uuid,
+  p_brand text, p_system text)
+returns table (patients int, yes int, no int, not_recorded int)
+language sql stable security invoker set search_path = '' as $$
+  with x as (
+    select distinct o.patient_id
+    from public.implant_outcomes_detail(p_course, p_from, p_to, p_delegate, p_brand, p_system) o
+  ), a as (
+    select (select pc.research from public.patient_consents pc
+            where pc.patient_id = x.patient_id and pc.voided_at is null
+            order by pc.signed_on desc, pc.created_at desc limit 1) as research
+    from x
+  )
+  select count(*)::int, (count(*) filter (where a.research))::int, (count(*) filter (where not a.research))::int,
+         (count(*) filter (where a.research is null))::int
+  from a
+  where (select public.can('research', 'view'));
+$$;
+
+-- Research export: one row per exported patient, merged into the patients table by patient_code. The export calls
+-- assign_research_codes first, so research_code only reads.
+create function public.research_export_consent(p_course uuid, p_from date, p_to date, p_delegate uuid,
+  p_brand text, p_system text)
+returns table (patient_code text, research_consent text)
+language sql security invoker set search_path = '' as $$
+  with x as (
+    select distinct o.patient_id
+    from public.implant_outcomes_detail(p_course, p_from, p_to, p_delegate, p_brand, p_system) o
+  )
+  select public.research_code('patient', x.patient_id),
+         coalesce((select case when pc.research then 'yes' else 'no' end from public.patient_consents pc
+                   where pc.patient_id = x.patient_id and pc.voided_at is null
+                   order by pc.signed_on desc, pc.created_at desc limit 1), 'not_recorded')
+  from x
+  where (select public.can('research', 'view'))
+  order by 1;
+$$;
+
+revoke execute on function public.research_consent_counts(uuid, date, date, uuid, text, text),
+  public.research_export_consent(uuid, date, date, uuid, text, text) from public, anon;
+grant execute on function public.research_consent_counts(uuid, date, date, uuid, text, text),
+  public.research_export_consent(uuid, date, date, uuid, text, text) to authenticated;

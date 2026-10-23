@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
-import { makePatient, setPerms } from './fixtures';
+import { makeDelegate, makePatient, place, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -320,6 +320,101 @@ describe('consent audit', () => {
       await asPostgres(c);
       const n = await c.query('select count(*)::int as n from public.stored_files where id = $1', [file]);
       expect(n.rows[0].n).toBe(0);
+    });
+  });
+});
+
+describe('research consent readers', () => {
+  const filterArgs = (brand: string) => [null, null, null, null, brand, null];
+  const counts = async (c: Client, brand: string) =>
+    (await c.query('select * from public.research_consent_counts($1, $2::date, $3::date, $4, $5, $6)', filterArgs(brand))).rows;
+  const exported = async (c: Client, brand: string) =>
+    (await c.query('select * from public.research_export_consent($1, $2::date, $3::date, $4, $5, $6)', filterArgs(brand))).rows;
+
+  /**
+   * Five patients with an implant of one brand: A consented to research, B refused, C has no record, D consented then
+   * a newer refusal was voided (falls back to yes), E's only record is voided. F (another brand) refused: outside the filter.
+   */
+  async function seed(c: Client) {
+    const { early } = await setup(c, 'Zz Consent Research Setup');
+    const tag = Math.random().toString(36).slice(2, 8);
+    const product = async (brand: string) => (await c.query(
+      `insert into public.products (type, brand, system, diameter_mm, length_mm) values ('implant', $1, 'MD EXT', 4.0, 10) returning id`,
+      [brand])).rows[0].id as string;
+    const brand = `Zz Consent ${tag}`;
+    const prod = await product(brand);
+    const other = await product(`Zz Consent Other ${tag}`);
+    const lot = await receive(c, prod, 10, `CA${tag}`);
+    const otherLot = await receive(c, other, 10, `CB${tag}`);
+    const delegate = await makeDelegate(c, `Zz Consent Delegate ${tag}`);
+    const placedOn = await daysAgo(c, 30);
+    const patient = async (name: string, p = prod, l = lot) => {
+      const id = await makePatient(c, `Zz Consent ${name} ${tag}`);
+      await place(c, { patient: id, tooth: 36, product: p, lot: l, delegate, supervisor: users.organizer, placedOn });
+      return id;
+    };
+    const yes: [boolean, boolean, boolean, boolean] = [true, true, false, true];
+    const no: [boolean, boolean, boolean, boolean] = [true, false, false, true];
+    const a = await patient('A');
+    const b = await patient('B');
+    const cc = await patient('C');
+    const d = await patient('D');
+    const e = await patient('E');
+    const f = await patient('F', other, otherLot);
+    await record(c, { patient: a, version: early, answers: yes });
+    await record(c, { patient: b, version: early, answers: no });
+    await record(c, { patient: d, version: early, signedOn: await daysAgo(c, 5), answers: yes });
+    await voidIt(c, await record(c, { patient: d, version: early, signedOn: await daysAgo(c, 1), answers: no }), 'Wrong patient');
+    await voidIt(c, await record(c, { patient: e, version: early, answers: yes }), 'Wrong patient');
+    await record(c, { patient: f, version: early, answers: no });
+    return { brand, a, b, c: cc, d, e, f };
+  }
+
+  it('counts and codes the filtered patients from their current record; voided records fall back', async () => {
+    await withTx(async (c) => {
+      const s = await seed(c);
+      await actAs(c, users.admin);
+      expect(await counts(c, s.brand)).toEqual([{ patients: 5, yes: 2, no: 1, not_recorded: 2 }]);
+
+      await c.query('select public.assign_research_codes($1, $2::date, $3::date, $4, $5, $6)', filterArgs(s.brand));
+      const code = async (id: string) => (await c.query(`select public.research_code('patient', $1) as code`, [id])).rows[0].code as string;
+      const want = [
+        [await code(s.a), 'yes'], [await code(s.b), 'no'], [await code(s.c), 'not_recorded'],
+        [await code(s.d), 'yes'], [await code(s.e), 'not_recorded'],
+      ].sort((x, y) => x[0].localeCompare(y[0]));
+      const rows = await exported(c, s.brand);
+      expect(rows.map((r) => [r.patient_code, r.research_consent])).toEqual(want);
+      expect(rows.map((r) => r.patient_code)).not.toContain(await code(s.f));
+      // The same patients, by the same codes, as the export's patients table.
+      const patients = (await c.query('select patient_code from public.research_export_patients($1, $2::date, $3::date, $4, $5, $6)', filterArgs(s.brand))).rows;
+      expect(patients.map((r) => r.patient_code).sort()).toEqual(want.map((w) => w[0]));
+      expect(Object.keys(rows[0])).toEqual(['patient_code', 'research_consent']);
+    });
+  });
+
+  it('needs Research view and Patients view', async () => {
+    await withTx(async (c) => {
+      const s = await seed(c);
+      await asPostgres(c);
+      await setPerms(c, users.target, { patients: 'view' });
+      await actAs(c, users.target);
+      expect(await counts(c, s.brand)).toEqual([{ patients: 0, yes: 0, no: 0, not_recorded: 0 }]);
+      expect(await exported(c, s.brand)).toEqual([]);
+
+      await asPostgres(c);
+      await setPerms(c, users.target, { research: 'view', schedule: 'view' });
+      await actAs(c, users.target);
+      expect(await counts(c, s.brand)).toEqual([{ patients: 0, yes: 0, no: 0, not_recorded: 0 }]);
+      expect(await exported(c, s.brand)).toEqual([]);
+
+      await actAs(c, users.delegate);
+      expect(await counts(c, s.brand)).toEqual([{ patients: 0, yes: 0, no: 0, not_recorded: 0 }]);
+      expect(await exported(c, s.brand)).toEqual([]);
+
+      await asPostgres(c);
+      await setPerms(c, users.target, { patients: 'view', research: 'view' });
+      await actAs(c, users.target);
+      expect((await counts(c, s.brand))[0].patients).toBe(5);
     });
   });
 });

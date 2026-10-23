@@ -13,6 +13,7 @@ import {
 } from '@/lib/restorations/restorations';
 import { RISK_QUESTIONS } from '@/lib/patients/risk-factors';
 import { GRADE_LABELS, MILESTONE_LABELS } from '@/lib/research/view';
+import { RESEARCH_CONSENT_LABELS } from '@/lib/research/consent';
 
 export const TABLE_NAMES = [
   'implants', 'patients', 'visits', 'radiographs', 'complications', 'restorations', 'restoration_problems', 'grafts',
@@ -128,6 +129,7 @@ const PATIENTS_DICTIONARY: Record<string, DictionaryEntry> = {
   periodontitis_history: coded('Periodontitis history', risk('periodontitis_history'), PATIENT_HISTORY, RISK_NOTE),
   bruxism: coded('Bruxism or parafunction', risk('bruxism'), PATIENT_HISTORY, RISK_NOTE),
   previous_implant_failure: coded('Previous implant failure', risk('previous_implant_failure'), PATIENT_HISTORY, RISK_NOTE),
+  research_consent: coded('Research consent', labels(RESEARCH_CONSENT_LABELS), 'Patient consent record', 'The research answer of the patient\'s current consent record (the latest one not voided). Not recorded means no consent record is on file, not "no".'),
 };
 
 const BOP = (site: string): DictionaryEntry => coded(`Bleeding on probing, ${site}`, YES_NO, VISITS, 'Empty when not recorded or not attended.');
@@ -237,14 +239,18 @@ export const DICTIONARY: Record<TableName, Record<string, DictionaryEntry>> = {
   grafts: GRAFTS_DICTIONARY,
 };
 
+/** Columns added to a table from another reader (research_export_consent), merged by patient_code: not reader columns. */
+export const MERGED_COLUMNS: Partial<Record<TableName, string[]>> = { patients: ['research_consent'] };
+
 const DATE_FIRST: Partial<Record<TableName, string>> = {
   implants: 'placed_on', visits: 'date', radiographs: 'taken_on', complications: 'noticed_on',
   restorations: 'fitted_on', restoration_problems: 'noticed_on', grafts: 'performed_on',
 };
 
-/** The paging order of a table's reader: its date column first (so files read chronologically), then every other column, so the order is total. */
+/** The paging order of a table's reader: its date column first (so files read chronologically), then every other reader column, so the order is total. */
 export function exportOrder(table: TableName): string[] {
-  const cols = Object.keys(DICTIONARY[table]);
+  const merged = MERGED_COLUMNS[table] ?? [];
+  const cols = Object.keys(DICTIONARY[table]).filter((c) => !merged.includes(c));
   const first = DATE_FIRST[table];
   return first ? [first, ...cols.filter((c) => c !== first)] : cols;
 }

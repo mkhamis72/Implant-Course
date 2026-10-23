@@ -1,10 +1,13 @@
 import { DICTIONARY, TABLE_NAMES, type TableName } from './dictionary';
+import { consentLine, type ConsentCounts } from '@/lib/research/consent';
 
 export type ExportMeta = {
   exportedAt: string;
   filters: Record<string, string | null>;
   version: string;
   rowCounts: Record<TableName, number>;
+  /** Research consent of the exported patients. */
+  consent: ConsentCounts;
 };
 
 export const CONFIDENTIALITY_NOTE =
@@ -28,7 +31,7 @@ export function dictionaryRows(): Record<string, string>[] {
   );
 }
 
-/** The about sheet / README lines as [label, value] pairs: confidentiality note, filters, export time, outcomes version, row counts. */
+/** The about sheet / README lines as [label, value] pairs: confidentiality note, filters, export time, outcomes version, row counts, research consent. */
 export function aboutLines(meta: ExportMeta): [string, string][] {
   // Course and delegate filters must arrive as study codes: raw ids stay in the export log.
   for (const [k, v] of Object.entries(meta.filters)) {
@@ -41,6 +44,7 @@ export function aboutLines(meta: ExportMeta): [string, string][] {
     ['Outcomes version', meta.version],
     ...Object.entries(meta.filters).map(([k, v]): [string, string] => [`Filter: ${k}`, v ?? 'all']),
     ...TABLE_NAMES.map((t): [string, string] => [`Rows: ${t}`, String(meta.rowCounts[t] ?? 0)]),
+    ['Research consent', consentLine(meta.consent)],
     ['Data dictionary', 'See the data_dictionary sheet / data_dictionary.csv for every column, its unit and its allowed values.'],
   ];
 }

@@ -8,6 +8,7 @@ import { TABLE_NAMES, assertAllowlisted, exportOrder, type ExportTables } from '
 import type { ExportMeta } from '@/lib/research/export/assemble';
 import { exportFileName } from '@/lib/research/export/assemble';
 import { fetchAll } from '@/lib/research/export/fetch-all';
+import { consentCounts, mergeConsent } from '@/lib/research/consent';
 import { buildXlsx } from '@/lib/research/export/xlsx';
 import { buildZip } from '@/lib/research/export/zip';
 
@@ -43,6 +44,12 @@ export async function GET(req: NextRequest) {
     }
     results.push(r.data);
   }
+  // Research consent of the same patients, merged into the patients table by study code.
+  const consent = await fetchAll(supabase, 'research_export_consent', args, ['patient_code']);
+  if (consent.error) {
+    console.error('Research export failed', consent.error.message);
+    return new NextResponse('Could not build the export', { status: 500 });
+  }
   // The files name the course and delegate filters by study code; raw ids go only into the export log.
   const codeOf = async (entity: 'course' | 'delegate', id: string | null) =>
     id ? supabase.rpc('research_code', { p_entity: entity, p_id: id }) : { data: null, error: null };
@@ -56,11 +63,12 @@ export async function GET(req: NextRequest) {
   }
 
   const tables = Object.fromEntries(TABLE_NAMES.map((t, i) => [t, results[i]])) as ExportTables;
+  tables.patients = mergeConsent(tables.patients, consent.data);
   assertAllowlisted(tables);
   const rowCounts = Object.fromEntries(TABLE_NAMES.map((t) => [t, tables[t].length])) as ExportMeta['rowCounts'];
   const logged = Object.fromEntries(RESEARCH_FILTER_KEYS.map((k) => [k, args[`p_${k}` as keyof typeof args] ?? null]));
   const shown = { ...logged, course: (courseCode.data as string | null) ?? null, delegate: (delegateCode.data as string | null) ?? null };
-  const meta: ExportMeta = { exportedAt: new Date().toISOString(), filters: shown, version: String(version.data ?? ''), rowCounts };
+  const meta: ExportMeta = { exportedAt: new Date().toISOString(), filters: shown, version: String(version.data ?? ''), rowCounts, consent: consentCounts(tables.patients) };
 
   const body = format === 'xlsx' ? await buildXlsx(tables, meta) : buildZip(tables, meta);
 

@@ -21,6 +21,7 @@ vi.mock('@/lib/auth/session', () => ({ getCurrentProfile: () => profile() }));
 import { GET } from './route';
 import { DICTIONARY } from '@/lib/research/export/dictionary';
 import { strFromU8, unzipSync } from 'fflate';
+import ExcelJS from 'exceljs';
 
 const COURSE = '11111111-2222-4333-8444-555555555555';
 const DELEGATE = '66666666-7777-4888-9999-aaaaaaaaaaaa';
@@ -108,7 +109,8 @@ describe('GET /patients/research/export', () => {
     expect((await GET(req('format=csv&brand=Oxy'))).status).toBe(200);
     expect(order[0]).toBe('assign_research_codes');
     expect(rpc.mock.calls[0][1]).toMatchObject({ p_brand: 'Oxy', p_course: null });
-    expect(order.filter((n) => n.startsWith('research_export_'))).toHaveLength(8);
+    expect(order.filter((n) => n.startsWith('research_export_'))).toHaveLength(9);
+    expect(order.indexOf('research_export_consent')).toBeGreaterThan(order.indexOf('assign_research_codes'));
     expect(most).toBe(1);
   });
 
@@ -132,6 +134,46 @@ describe('GET /patients/research/export', () => {
     expect(readme).toContain('Oxy');
     const log = rpc.mock.calls.find((c) => c[0] === 'log_research_export');
     expect(log?.[1].p_filters).toMatchObject({ course: COURSE, delegate: DELEGATE, brand: 'Oxy' });
+  });
+
+  it('merges research_consent into the patients sheet and adds the Research consent line to the about sheet', async () => {
+    const patients = [{ patient_code: 'P-AAA222', sex: 'female' }, { patient_code: 'P-BBB333', sex: 'male' }, { patient_code: 'P-CCC444', sex: null }];
+    const consent = [{ patient_code: 'P-AAA222', research_consent: 'yes' }, { patient_code: 'P-BBB333', research_consent: 'no' }];
+    handler.mockImplementation(async (name: string) =>
+      name === 'outcomes_version' ? { data: 'v1', error: null }
+        : name === 'research_export_patients' ? { data: patients, error: null }
+          : name === 'research_export_consent' ? { data: consent, error: null }
+            : { data: name.startsWith('research_export_') ? [] : null, error: null });
+    const res = await GET(req('format=xlsx'));
+    expect(res.status).toBe(200);
+    const consentCall = rpc.mock.calls.find((c) => c[0] === 'research_export_consent');
+    expect(consentCall?.[1]).toMatchObject({ p_course: null, p_brand: null });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await res.arrayBuffer());
+    const ws = wb.getWorksheet('patients')!;
+    const header = (ws.getRow(1).values as unknown[]).slice(1);
+    expect(header).toContain('research_consent');
+    const col = header.indexOf('research_consent') + 1;
+    expect([2, 3, 4].map((r) => ws.getRow(r).getCell(col).value)).toEqual(['yes', 'no', 'not_recorded']);
+    const about = wb.getWorksheet('about')!;
+    const lines = about.getSheetValues().slice(1).map((r) => (r as unknown[]).slice(1));
+    expect(lines).toContainEqual(['Research consent', '1 yes, 1 no, 1 not recorded (of 3 patients)']);
+    // Every header is a dictionary column; nothing like a file, its bytes or the form text is ever exported.
+    for (const sheet of wb.worksheets.filter((w) => !['data_dictionary', 'about'].includes(w.name))) {
+      const cols = (sheet.getRow(1).values as unknown[]).slice(1) as string[];
+      for (const c of cols) {
+        expect(Object.keys(DICTIONARY[sheet.name as keyof typeof DICTIONARY]), sheet.name).toContain(c);
+        expect(c).not.toMatch(/file|bytes|text_en|text_ar/);
+      }
+    }
+    const log = rpc.mock.calls.find((c) => c[0] === 'log_research_export');
+    expect(log?.[1].p_row_counts.patients).toBe(3);
+  });
+
+  it('is 500 and logs nothing when the consent reader fails', async () => {
+    handler.mockImplementation(async (name: string) => (name === 'research_export_consent' ? { data: null, error: { message: 'x' } } : { data: name === 'outcomes_version' ? 'v1' : [], error: null }));
+    expect((await GET(req('format=csv'))).status).toBe(500);
+    expect(rpc.mock.calls.some((c) => c[0] === 'log_research_export')).toBe(false);
   });
 
   it('does not log when a reader fails', async () => {

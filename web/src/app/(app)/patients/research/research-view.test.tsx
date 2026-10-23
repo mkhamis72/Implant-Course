@@ -124,6 +124,15 @@ describe('<ResearchView>', () => {
     expect(screen.getByText(/implants have no product recorded/)).toHaveTextContent('3 implants have no product recorded');
     expect(screen.getByText('Number at risk')).toBeInTheDocument();
   });
+
+  it('warns when patients in the filter have no research consent on file, and only then', () => {
+    const { rerender } = render(
+      <ResearchView rows={big} crowns={crowns} filters={filters} noProduct={0} consent={{ patients: 40, yes: 28, no: 4, not_recorded: 8 }} />,
+    );
+    expect(screen.getByText('⚠ 12 of 40 patients have no research consent on file (8 not recorded, 4 refused)')).toBeInTheDocument();
+    rerender(<ResearchView rows={big} crowns={crowns} filters={filters} noProduct={0} consent={{ patients: 40, yes: 40, no: 0, not_recorded: 0 }} />);
+    expect(screen.queryByText(/research consent on file/)).toBeNull();
+  });
 });
 
 describe('<NoPatientsNote>', () => {

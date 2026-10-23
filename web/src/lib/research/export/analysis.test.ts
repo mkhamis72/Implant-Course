@@ -97,7 +97,7 @@ describe('analysis.R', () => {
 describe('buildZip', () => {
   it('ships analysis.R with the CSVs', () => {
     const tables = Object.fromEntries(TABLE_NAMES.map((t) => [t, []])) as unknown as ExportTables;
-    const meta = { exportedAt: '2026-10-23T10:00:00Z', filters: {}, version: 'outcomes-v1', rowCounts: Object.fromEntries(TABLE_NAMES.map((t) => [t, 0])) } as never;
+    const meta = { exportedAt: '2026-10-23T10:00:00Z', filters: {}, version: 'outcomes-v1', rowCounts: Object.fromEntries(TABLE_NAMES.map((t) => [t, 0])), consent: { patients: 0, yes: 0, no: 0, not_recorded: 0 } } as never;
     const files = unzipSync(buildZip(tables, meta));
     expect(Object.keys(files)).toContain('analysis.R');
     expect(strFromU8(files['analysis.R'])).toBe(script);

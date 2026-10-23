@@ -5,6 +5,7 @@ import { THIN_AT_RISK } from '@/lib/research/stats';
 import { CLUSTER_NOTE, groupRows, isCompareKey, thinWarning, unknownDateNote, type GroupVars } from '@/lib/research/groups';
 import { GRADE_LABELS, drilldownHref, type DetailRow, type ResearchFilters } from '@/lib/research/view';
 import { curveStyle } from '@/lib/research/curve-style';
+import { consentWarning, type ConsentCounts } from '@/lib/research/consent';
 import { SurvivalChart, type Curve } from './survival-chart';
 import { CiText, ComparePanel, Note, Warning } from './compare-panel';
 
@@ -66,12 +67,14 @@ const GRADE_BAR: Record<(typeof GRADE_ORDER)[number], string> = {
   I: 'bg-ok', II: 'bg-accent', III: 'bg-warn', IV: 'bg-bad', not_assessable: 'bg-off', not_graded: 'bg-line-strong',
 };
 
-export function ResearchView({ rows, crowns, filters, groups = [], noProduct }: {
+export function ResearchView({ rows, crowns, filters, groups = [], consent, noProduct }: {
   rows: DetailRow[];
   crowns: CrownRow[];
   filters: ResearchFilters;
   /** implant_outcomes_groups rows, when the comparison needs them. */
   groups?: GroupVars[];
+  /** Research consent of the patients in the filter (research_consent_counts). */
+  consent?: ConsentCounts;
   /** Implants with no product in the set before the brand / type filter. */
   noProduct: number;
 }) {
@@ -85,6 +88,7 @@ export function ResearchView({ rows, crowns, filters, groups = [], noProduct }: 
   const grouped = compare ? groupRows(rows, groups, compare) : [];
   // Loading is a table only (survivor bias): no group curves.
   const byGroup = compare !== null && compare !== 'loading' && grouped.length > 0;
+  const missingConsent = consent ? consentWarning(consent) : null;
   const curves: Curve[] = byGroup
     ? grouped.map((g, i) => ({
         label: g.notAssessed ? `${g.label} (not tested)` : g.label,
@@ -96,6 +100,7 @@ export function ResearchView({ rows, crowns, filters, groups = [], noProduct }: 
 
   return (
     <div className="space-y-6">
+      {missingConsent && <Warning>{missingConsent}</Warning>}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Tile title="Implants">
           <p className="text-3xl font-semibold"><Num list="implants" filters={filters}>{total}</Num></p>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DICTIONARY, TABLE_NAMES, assertAllowlisted, exportOrder, type ExportTables } from './dictionary';
+import { DICTIONARY, MERGED_COLUMNS, TABLE_NAMES, assertAllowlisted, exportOrder, type ExportTables } from './dictionary';
 import { READER_COLUMNS } from './reader-columns.fixture';
 
 describe('exportOrder', () => {
@@ -8,7 +8,8 @@ describe('exportOrder', () => {
     for (const t of TABLE_NAMES) {
       const order = exportOrder(t);
       expect(order[0], t).toBe(first[t]);
-      expect([...order].sort()).toEqual(Object.keys(DICTIONARY[t]).sort());
+      // Merged columns come from another reader, so the table's own reader can't order by them.
+      expect([...order].sort()).toEqual(Object.keys(DICTIONARY[t]).filter((c) => !(MERGED_COLUMNS[t] ?? []).includes(c)).sort());
     }
   });
 });
@@ -21,7 +22,7 @@ describe('DICTIONARY', () => {
 
   it.each(Object.entries(READER_COLUMNS))('has an entry for every column of %s, and no extras', (table, cols) => {
     const d = DICTIONARY[table as keyof typeof DICTIONARY];
-    expect(Object.keys(d)).toEqual(cols);
+    expect(Object.keys(d)).toEqual([...cols, ...(MERGED_COLUMNS[table as keyof typeof DICTIONARY] ?? [])]);
     for (const c of cols) {
       expect(d[c].label.length).toBeGreaterThan(0);
       expect(d[c].source.length).toBeGreaterThan(0);
@@ -54,6 +55,19 @@ describe('DICTIONARY', () => {
   it('notes the outcome rule version on outcome columns', () => {
     for (const c of ['event', 'at_loading', 'year_1', 'latest_grade', 'follow_up_days']) {
       expect(DICTIONARY.implants[c].notes, c).toMatch(/outcomes-v1/);
+    }
+  });
+
+  it('codes research_consent with exactly yes, no and not_recorded, merged into patients only', () => {
+    const e = DICTIONARY.patients.research_consent;
+    expect(e.kind).toBe('coded');
+    expect(Object.keys(e.values ?? {})).toEqual(['yes', 'no', 'not_recorded']);
+    expect(MERGED_COLUMNS).toEqual({ patients: ['research_consent'] });
+  });
+
+  it('never lists a file, bytes or form-text column', () => {
+    for (const t of TABLE_NAMES) {
+      for (const col of Object.keys(DICTIONARY[t])) expect(col, t).not.toMatch(/file|bytes|text_en|text_ar/);
     }
   });
 
