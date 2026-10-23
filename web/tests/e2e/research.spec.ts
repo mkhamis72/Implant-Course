@@ -25,6 +25,14 @@ test('the research page counts placed implants, drills down, compares by techniq
       p_placing_delegate: delegate, p_supervisor: me, p_technique: technique,
     });
     expect(placed.error).toBeNull();
+    if (technique === 'guided') {
+      // One lost implant, so the technique comparison has a failure and a log-rank p-value.
+      const failed = await api.rpc('record_visit', {
+        p_site: placed.data, p_date: today(), p_visit_key: null, p_check_type: '3-month', p_attendance: 'attended',
+        p_outcome: 'failed', p_findings: { failure_type: 'lost', failure_reason: 'no_osseointegration' }, p_notes: '',
+      });
+      expect(failed.error).toBeNull();
+    }
   }
 
   // The test organizer has no Research permission: refused.
@@ -45,13 +53,14 @@ test('the research page counts placed implants, drills down, compares by techniq
     await expect(adminPage).toHaveURL(/\/patients\/research\/drilldown\?list=implants/);
     for (const name of names) await expect(adminPage.getByText(name).first()).toBeVisible();
 
-    // Compare by technique: two groups of one implant each, so a thin-data warning (or a p-value) and the clustering note.
+    // Compare by technique: two groups of one implant each and one failure, so a p-value, the thin-data warning and the clustering note.
     await adminPage.goto(`/patients/research?brand=${encodeURIComponent(brand)}&compare=technique`);
     const compare = adminPage.getByRole('region', { name: 'Compare groups' });
     await expect(compare.getByRole('cell', { name: /^Guided/ })).toBeVisible();
     await expect(compare.getByRole('cell', { name: /^Free hand/ })).toBeVisible();
     await expect(compare).toContainText('Log-rank test');
-    await expect(compare).toContainText(/p [=<] 0\.\d{3}|Not enough data/);
+    await expect(compare).toContainText(/Log-rank test on 2 implants, 1 failure: p [=<] 0\.\d{3}/);
+    await expect(compare).toContainText('Not enough data — interpret with caution (n = 2, 1 failure)');
     await expect(compare).toContainText('Use the R script for patient-clustered models.');
 
     // The R script downloads on its own.

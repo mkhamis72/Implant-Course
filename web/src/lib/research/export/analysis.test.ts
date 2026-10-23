@@ -52,6 +52,20 @@ describe('analysis.R', () => {
     for (const c of [...inSurv, ...inStrata, ...cluster, ...formulas, ...lists]) expect(allowed(c), c).toBe(true);
   });
 
+  it('uses only exported (or derived) columns where it names them as strings: row filters and the merge key', () => {
+    const lines = script.split(/\r?\n/).filter((l) => /complete\.cases\(|merge\(/.test(l));
+    expect(lines).toHaveLength(2);
+    const named = lines.flatMap((l) => [...l.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]));
+    expect(named).toEqual(expect.arrayContaining(['patient_code', 'follow_up_days', 'placing_delegate_code']));
+    for (const c of named) expect(allowed(c), c).toBe(true);
+  });
+
+  it('tabulates the ICOI grade distribution overall and per group', () => {
+    expect(script).toContain('d$latest_grade');
+    expect(script).toContain('table(grade_of(implants))');
+    expect(script).toContain('table(d$group, grade_of(d)');
+  });
+
   it('states the app loading thresholds and thin-data limits', () => {
     expect(constant('LOADING_IMMEDIATE_DAYS')).toBe(LOADING_IMMEDIATE_DAYS);
     expect(constant('LOADING_EARLY_MONTHS')).toBe(LOADING_EARLY_MONTHS);

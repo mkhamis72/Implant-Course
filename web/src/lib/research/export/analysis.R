@@ -2,7 +2,7 @@
 #
 # How to run
 #   1. Unpack the CSV export (.zip) into a folder; this script is one of its files.
-#   2. In R, once:  install.packages("survival")   (the script uses base R plus survival only)
+#   2. In R, once:  install.packages("survival")   (base R plus survival >= 3.0 only)
 #   3. setwd("<that folder>"); source("analysis.R")
 #      or in a terminal:  Rscript analysis.R <that folder>
 #
@@ -10,6 +10,7 @@
 #   - Kaplan-Meier implant survival, overall and per group, with 95% CIs (log-log transform, as on
 #     the Research page) at 1 year (day 365) and 2 years (day 730), and the full table overall.
 #   - A log-rank test (survdiff) per group variable.
+#   - The ICOI health-grade distribution (latest_grade), overall and per group.
 #   - The loading table, without a test (the comparison is biased).
 #   - Cox models, one variable at a time and then combined, stratified by course, adjusted for the
 #     placing delegate, with robust standard errors clustered on the patient.
@@ -30,6 +31,8 @@
 # Column meanings, units and allowed values: data_dictionary.csv.
 
 suppressPackageStartupMessages(library(survival))
+# The Cox models use coxph(..., cluster = ), added in survival 3.0.
+if (packageVersion("survival") < "3.0") stop("This script needs survival 3.0 or later: install.packages(\"survival\")")
 
 args <- commandArgs(trailingOnly = TRUE)
 folder <- if (length(args) >= 1) args[1] else "."
@@ -75,7 +78,7 @@ read_export <- function(name) {
   if (!file.exists(path)) stop("Can't find ", path, ". Run this script in the folder of the unpacked CSV export.")
   df <- read.csv(path, fileEncoding = "UTF-8-BOM", colClasses = "character", na.strings = "", check.names = FALSE)
   # The export puts an apostrophe before text a spreadsheet would read as a formula: take it off.
-  for (col in names(df)) df[[col]] <- sub("^'([-=+@])", "\\1", df[[col]])
+  for (col in names(df)) df[[col]] <- sub("^'([-=+@\t\r])", "\\1", df[[col]])
   df
 }
 
@@ -149,6 +152,13 @@ group_of <- function(d, var) {
   droplevels(x)
 }
 
+# The ICOI grade of each implant's latest assessable visit (labelled from the dictionary); empty = not graded yet.
+grade_of <- function(d) {
+  g <- addNA(d$latest_grade, ifany = FALSE)
+  levels(g)[is.na(levels(g))] <- "Not graded"
+  g
+}
+
 # The same day of the month `months` later, clamped to the last day of a shorter month.
 add_months <- function(date, months) {
   lt <- as.POSIXlt(date)
@@ -204,6 +214,10 @@ if (nrow(km) < THIN_AT_RISK || sum(km$event) < THIN_EVENTS) cat(thin_warning(nro
 cat("\nFull table (time in months):\n")
 print(summary(overall))
 
+cat("\n== ICOI health grade (latest assessable visit), all implants ==\n")
+grades <- table(grade_of(implants))
+print(cbind(implants = grades, percent = round(100 * grades / max(sum(grades), 1), 1)))
+
 # ---- Group comparisons ---------------------------------------------------------------------------
 
 log_rank <- function(km) {
@@ -212,7 +226,11 @@ log_rank <- function(km) {
   events <- sum(tested$event)
   if (nlevels(tested$group) < 2) return(cat("Log-rank test:", DASH, "(needs at least two groups to compare)\n"))
   if (events == 0) return(cat("Log-rank test:", DASH, paste0("(", NO_FAILURES_NOTE, ")"), "\n"))
-  lr <- survdiff(Surv(months, event) ~ group, data = tested)
+  lr <- tryCatch(survdiff(Surv(months, event) ~ group, data = tested), error = function(e) {
+    cat("Log-rank test:", DASH, "(could not be computed:", conditionMessage(e), ")\n")
+    NULL
+  })
+  if (is.null(lr)) return(invisible(NULL))
   df <- length(lr$n) - 1
   p <- pchisq(lr$chisq, df, lower.tail = FALSE)
   cat(sprintf("Log-rank test on %d implants, %d failure%s: %s (chi-square = %.2f, df = %d)\n",
@@ -233,6 +251,8 @@ compare_groups <- function(title, group, test = TRUE) {
     row.names = levels(d$group)
   )
   print(counts)
+  cat("ICOI health grade (latest assessable visit):\n")
+  print(table(d$group, grade_of(d), dnn = c(title, "ICOI grade")))
   unknown_date_note(sum(is_unknown_date(d)))
   km <- km_rows(d)
   if (nrow(km) == 0) return(cat("No implants with a known failure date.\n"))
@@ -288,7 +308,7 @@ fit_cox <- function(vars, title) {
               fit$n, fit$nevent, dropped + nrow(d) - fit$n))
   epv <- fit$nevent / max(params, 1)
   if (epv < EPV_MIN) {
-    cat(sprintf("\u26a0 %.1f events per variable (fewer than %d): the estimates are unstable; interpret with caution.\n", epv, EPV_MIN))
+    cat(sprintf("\u26a0 %.1f events per estimated coefficient, delegate terms included (fewer than %d): the estimates are unstable; interpret with caution.\n", epv, EPV_MIN))
   }
   # Hazard ratios of the variables (the delegate terms are adjustment only), with robust 95% CIs.
   cf <- summary(fit)$coefficients
