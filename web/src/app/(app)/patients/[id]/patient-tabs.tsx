@@ -9,6 +9,7 @@ export function PatientTabs({ patientId }: { patientId: string }) {
         { href: base, label: 'Chart' },
         { href: `${base}/implants`, label: 'Implants' },
         { href: `${base}/xrays`, label: 'X-rays' },
+        { href: `${base}/consent`, label: 'Consent' },
         { href: `${base}/overview`, label: 'Overview' },
         { href: `${base}/notes`, label: 'Notes' },
         { href: `${base}/history`, label: 'History' },
