@@ -40,7 +40,8 @@ export function SurvivalChart({ points, atRisk, endMonth }: {
   const last = points[points.length - 1].survival;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img"
+    <div className="overflow-x-auto">
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full min-w-[32rem]" role="img"
       aria-label={`Survival curve: ${(last * 100).toFixed(1)}% at ${Math.round(endMonth)} months. Number at risk: ${atRisk.map((a) => `${a.n} at ${a.month} months`).join(', ')}.`}>
       <g fontSize="12" fill="var(--color-muted)">
         {yTicks.map((s) => (
@@ -63,5 +64,6 @@ export function SurvivalChart({ points, atRisk, endMonth }: {
         ))}
       </g>
     </svg>
+    </div>
   );
 }
