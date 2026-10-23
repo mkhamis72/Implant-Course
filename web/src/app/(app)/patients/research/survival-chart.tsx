@@ -89,7 +89,7 @@ export function SurvivalChart({ curves, band = [], atRisk, endMonth }: {
             ))}
             <text x={W - R} y={AXIS_LABEL_Y + 14} textAnchor="end">Months since placement</text>
           </g>
-          {bandPath && <path data-testid="ci-band" d={bandPath} fill="var(--color-accent)" fillOpacity="0.15" stroke="none" />}
+          {bandPath && <path data-testid="ci-band" d={bandPath} fill="var(--color-series-1)" fillOpacity="0.15" stroke="none" />}
           {curves.map((c) => (
             <path key={c.label} d={path(c)} fill="none" stroke={c.color} strokeWidth="2.5" strokeLinejoin="round"
               strokeDasharray={c.dash} />
