@@ -1,5 +1,5 @@
-/** Per-panel access for organizers. Mirrors public.can() / app_private.require_perm() in the database (0030). */
-export const AREAS = ['patients', 'schedule', 'courses', 'checklists', 'inventory', 'delegates'] as const;
+/** Per-panel access for organizers. Mirrors public.can() / app_private.require_perm() in the database (0030, research 0069). */
+export const AREAS = ['patients', 'schedule', 'courses', 'checklists', 'inventory', 'delegates', 'research'] as const;
 export type Area = (typeof AREAS)[number];
 export type Level = 'view' | 'edit';
 export type Permissions = Partial<Record<Area, Level>>;
@@ -12,7 +12,11 @@ export const AREA_LABELS: Record<Area, string> = {
   checklists: 'Checklists',
   inventory: 'Inventory',
   delegates: 'Delegates',
+  research: 'Research',
 };
+
+/** Areas with no Edit level: nothing in them writes (0069). */
+export const VIEW_ONLY_AREAS: readonly Area[] = ['research'];
 
 type Who = { role: Role; permissions: Permissions };
 
