@@ -25,13 +25,22 @@ export type ExportLogRow = {
 
 const describe = (o: Record<string, unknown>, sep: string) => Object.entries(o).filter(([, v]) => v !== null && v !== '').map(([k, v]) => `${k} ${v}`).join(sep);
 
-/** Admins only: who exported what. */
-export function ExportLog({ isAdmin, rows }: { isAdmin: boolean; rows: ExportLogRow[] }) {
+type Names = Record<string, string>;
+
+/** Admins only: who exported what. The log keeps course and delegate ids; they are shown by name. */
+export function ExportLog({ isAdmin, rows, failed = false, courseNames = {}, delegateNames = {} }: {
+  isAdmin: boolean; rows: ExportLogRow[]; failed?: boolean; courseNames?: Names; delegateNames?: Names;
+}) {
   if (!isAdmin) return null;
+  const named = (f: Record<string, string | null>) => ({
+    ...f,
+    ...(f.course ? { course: courseNames[f.course] ?? '(deleted)' } : {}),
+    ...(f.delegate ? { delegate: delegateNames[f.delegate] ?? '(deleted)' } : {}),
+  });
   return (
     <section className="card space-y-3" aria-labelledby="recent-exports">
       <h2 id="recent-exports">Recent exports</h2>
-      {rows.length === 0 ? <p className="text-muted">No exports yet.</p> : (
+      {failed ? <p className="text-bad">Could not load exports.</p> : rows.length === 0 ? <p className="text-muted">No exports yet.</p> : (
         <table className="table">
           <thead><tr><th>When</th><th>Who</th><th>Format</th><th>Filters</th><th>Rows</th></tr></thead>
           <tbody>
@@ -40,7 +49,7 @@ export function ExportLog({ isAdmin, rows }: { isAdmin: boolean; rows: ExportLog
                 <td data-label="When">{formatDateTime(r.exported_at)}</td>
                 <td data-label="Who">{r.exporter ?? 'Unknown'}</td>
                 <td data-label="Format">{r.format === 'xlsx' ? 'Excel' : 'CSV zip'}</td>
-                <td data-label="Filters">{describe(r.filters, ', ') || 'None'}</td>
+                <td data-label="Filters">{describe(named(r.filters), ', ') || 'None'}</td>
                 <td data-label="Rows">{describe(r.row_counts, ', ')}</td>
               </tr>
             ))}

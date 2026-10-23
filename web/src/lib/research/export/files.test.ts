@@ -5,7 +5,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { toCsv } from './csv';
 import { buildXlsx } from './xlsx';
 import { buildZip } from './zip';
-import { CONFIDENTIALITY_NOTE, exportFileName, type ExportMeta } from './assemble';
+import { CONFIDENTIALITY_NOTE, aboutLines, exportFileName, readmeText, type ExportMeta } from './assemble';
 import { TABLE_NAMES, type ExportTables } from './dictionary';
 
 const BOM = '﻿';
@@ -90,6 +90,20 @@ describe('buildZip', () => {
     const t = tables();
     t.visits = [{ notes: 'x' }];
     expect(() => buildZip(t, meta())).toThrow(/visits\.notes/);
+  });
+});
+
+describe('aboutLines', () => {
+  it('shows course and delegate filters as study codes', () => {
+    const m = { ...meta(), filters: { course: 'C-ABC234', delegate: 'D-XYZ789', brand: 'Oxy', from: '2026-01-01' } };
+    const text = readmeText(m);
+    expect(text).toContain('Filter: course: C-ABC234');
+    expect(text).toContain('Filter: delegate: D-XYZ789');
+    expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  });
+  it('refuses a raw id in the filters', () => {
+    const m = { ...meta(), filters: { course: '11111111-2222-4333-8444-555555555555' } };
+    expect(() => aboutLines(m)).toThrow(/raw id/);
   });
 });
 

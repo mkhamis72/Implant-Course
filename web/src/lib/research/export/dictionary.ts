@@ -237,6 +237,18 @@ export const DICTIONARY: Record<TableName, Record<string, DictionaryEntry>> = {
   grafts: GRAFTS_DICTIONARY,
 };
 
+const DATE_FIRST: Partial<Record<TableName, string>> = {
+  implants: 'placed_on', visits: 'date', radiographs: 'taken_on', complications: 'noticed_on',
+  restorations: 'fitted_on', restoration_problems: 'noticed_on', grafts: 'performed_on',
+};
+
+/** The paging order of a table's reader: its date column first (so files read chronologically), then every other column, so the order is total. */
+export function exportOrder(table: TableName): string[] {
+  const cols = Object.keys(DICTIONARY[table]);
+  const first = DATE_FIRST[table];
+  return first ? [first, ...cols.filter((c) => c !== first)] : cols;
+}
+
 /** Throws when any row of any table has a column that is not in DICTIONARY (so free text can never be exported by accident). */
 export function assertAllowlisted(tables: ExportTables): void {
   for (const t of TABLE_NAMES) {

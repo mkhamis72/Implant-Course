@@ -4,10 +4,9 @@ import { getCurrentProfile } from '@/lib/auth/session';
 import { canView } from '@/lib/auth/permissions';
 import { todayIso } from '@/lib/dates';
 import { RESEARCH_FILTER_KEYS, rpcArgs, type ResearchFilters } from '@/lib/research/view';
-import { TABLE_NAMES, assertAllowlisted, type ExportTables } from '@/lib/research/export/dictionary';
+import { TABLE_NAMES, assertAllowlisted, exportOrder, type ExportTables } from '@/lib/research/export/dictionary';
 import type { ExportMeta } from '@/lib/research/export/assemble';
 import { exportFileName } from '@/lib/research/export/assemble';
-import { DICTIONARY } from '@/lib/research/export/dictionary';
 import { fetchAll } from '@/lib/research/export/fetch-all';
 import { buildXlsx } from '@/lib/research/export/xlsx';
 import { buildZip } from '@/lib/research/export/zip';
@@ -28,22 +27,40 @@ export async function GET(req: NextRequest) {
   const args = rpcArgs(filters);
   const supabase = await createClient();
 
-  // The readers insert study codes, so they are volatile: always plain POST calls.
-  const [version, ...results] = await Promise.all([
-    supabase.rpc('outcomes_version'),
-    ...TABLE_NAMES.map((t) => fetchAll(supabase, `research_export_${t}`, args, Object.keys(DICTIONARY[t]))),
+  // Store every study code the readers need in one ordered insert first, then run the readers one at a time:
+  // they only read codes, so exports can't deadlock on first-time code inserts. All plain POST calls (volatile).
+  const assigned = await supabase.rpc('assign_research_codes', args);
+  if (assigned.error) {
+    console.error('Research export failed', assigned.error.message);
+    return new NextResponse('Could not build the export', { status: 500 });
+  }
+  const results: Record<string, unknown>[][] = [];
+  for (const t of TABLE_NAMES) {
+    const r = await fetchAll(supabase, `research_export_${t}`, args, exportOrder(t));
+    if (r.error) {
+      console.error('Research export failed', r.error.message);
+      return new NextResponse('Could not build the export', { status: 500 });
+    }
+    results.push(r.data);
+  }
+  // The files name the course and delegate filters by study code; raw ids go only into the export log.
+  const codeOf = async (entity: 'course' | 'delegate', id: string | null) =>
+    id ? supabase.rpc('research_code', { p_entity: entity, p_id: id }) : { data: null, error: null };
+  const [version, courseCode, delegateCode] = await Promise.all([
+    supabase.rpc('outcomes_version'), codeOf('course', args.p_course), codeOf('delegate', args.p_delegate),
   ]);
-  const failed = version.error ?? results.find((r) => r.error)?.error;
+  const failed = version.error ?? courseCode.error ?? delegateCode.error;
   if (failed) {
     console.error('Research export failed', failed.message);
     return new NextResponse('Could not build the export', { status: 500 });
   }
 
-  const tables = Object.fromEntries(TABLE_NAMES.map((t, i) => [t, (results[i].data ?? []) as Record<string, unknown>[]])) as ExportTables;
+  const tables = Object.fromEntries(TABLE_NAMES.map((t, i) => [t, results[i]])) as ExportTables;
   assertAllowlisted(tables);
   const rowCounts = Object.fromEntries(TABLE_NAMES.map((t) => [t, tables[t].length])) as ExportMeta['rowCounts'];
   const logged = Object.fromEntries(RESEARCH_FILTER_KEYS.map((k) => [k, args[`p_${k}` as keyof typeof args] ?? null]));
-  const meta: ExportMeta = { exportedAt: new Date().toISOString(), filters: logged as ExportMeta['filters'], version: String(version.data ?? ''), rowCounts };
+  const shown = { ...logged, course: (courseCode.data as string | null) ?? null, delegate: (delegateCode.data as string | null) ?? null };
+  const meta: ExportMeta = { exportedAt: new Date().toISOString(), filters: shown, version: String(version.data ?? ''), rowCounts };
 
   const body = format === 'xlsx' ? await buildXlsx(tables, meta) : buildZip(tables, meta);
 

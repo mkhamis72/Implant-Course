@@ -20,6 +20,11 @@ vi.mock('@/lib/auth/session', () => ({ getCurrentProfile: () => profile() }));
 
 import { GET } from './route';
 import { DICTIONARY } from '@/lib/research/export/dictionary';
+import { strFromU8, unzipSync } from 'fflate';
+
+const COURSE = '11111111-2222-4333-8444-555555555555';
+const DELEGATE = '66666666-7777-4888-9999-aaaaaaaaaaaa';
+const UUID_ANY = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 const staff = (patients: 'view' | null, research: 'view' | null = 'view') => ({
   active: true, role: 'organizer', permissions: { patients, research },
@@ -86,6 +91,47 @@ describe('GET /patients/research/export', () => {
     expect(rpc.mock.calls.filter((c) => c[0] === 'research_export_visits')).toHaveLength(2);
     const log = rpc.mock.calls.find((c) => c[0] === 'log_research_export');
     expect(log?.[1].p_row_counts.visits).toBe(1005);
+  });
+
+  it('stores the study codes first, then runs the readers one at a time', async () => {
+    let inFlight = 0;
+    let most = 0;
+    const order: string[] = [];
+    handler.mockImplementation(async (name: string) => {
+      order.push(name);
+      inFlight++;
+      most = Math.max(most, inFlight);
+      await new Promise((r) => setTimeout(r, 1));
+      inFlight--;
+      return name === 'outcomes_version' ? { data: 'v1', error: null } : { data: name.startsWith('research_export_') ? [] : null, error: null };
+    });
+    expect((await GET(req('format=csv&brand=Oxy'))).status).toBe(200);
+    expect(order[0]).toBe('assign_research_codes');
+    expect(rpc.mock.calls[0][1]).toMatchObject({ p_brand: 'Oxy', p_course: null });
+    expect(order.filter((n) => n.startsWith('research_export_'))).toHaveLength(8);
+    expect(most).toBe(1);
+  });
+
+  it('is 500 and logs nothing when the codes cannot be stored', async () => {
+    handler.mockImplementation(async (name: string) => (name === 'assign_research_codes' ? { data: null, error: { message: 'x' } } : { data: [], error: null }));
+    expect((await GET(req('format=csv'))).status).toBe(500);
+    expect(rpc.mock.calls.some((c) => c[0].startsWith('research_export_') || c[0] === 'log_research_export')).toBe(false);
+  });
+
+  it('names the course and delegate filters by study code in the files, and by id only in the log', async () => {
+    handler.mockImplementation(async (name: string, args: { p_entity?: string }) =>
+      name === 'outcomes_version' ? { data: 'v1', error: null }
+        : name === 'research_code' ? { data: args.p_entity === 'course' ? 'C-ABC234' : 'D-XYZ789', error: null }
+          : { data: name.startsWith('research_export_') ? [] : null, error: null });
+    const res = await GET(req(`format=csv&course=${COURSE}&delegate=${DELEGATE}&brand=Oxy`));
+    expect(res.status).toBe(200);
+    const readme = strFromU8(unzipSync(new Uint8Array(await res.arrayBuffer()))['README.txt']);
+    expect(readme).not.toMatch(UUID_ANY);
+    expect(readme).toContain('C-ABC234');
+    expect(readme).toContain('D-XYZ789');
+    expect(readme).toContain('Oxy');
+    const log = rpc.mock.calls.find((c) => c[0] === 'log_research_export');
+    expect(log?.[1].p_filters).toMatchObject({ course: COURSE, delegate: DELEGATE, brand: 'Oxy' });
   });
 
   it('does not log when a reader fails', async () => {

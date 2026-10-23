@@ -30,6 +30,10 @@ export function dictionaryRows(): Record<string, string>[] {
 
 /** The about sheet / README lines as [label, value] pairs: confidentiality note, filters, export time, outcomes version, row counts. */
 export function aboutLines(meta: ExportMeta): [string, string][] {
+  // Course and delegate filters must arrive as study codes: raw ids stay in the export log.
+  for (const [k, v] of Object.entries(meta.filters)) {
+    if (v && /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(v)) throw new Error(`Export filter ${k} is a raw id`);
+  }
   return [
     ['Research export', 'Anonymised implant research data: study codes replace names and ids; free text is never exported.'],
     ['Confidentiality', CONFIDENTIALITY_NOTE],

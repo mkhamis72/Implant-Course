@@ -16,23 +16,43 @@ create table app_private.research_codes (
 );
 revoke all on app_private.research_codes from public, anon, authenticated;
 
--- The code for one entity: P- patient, I- implant, R- restoration, D- delegate, S- supervisor, C- course, then 6
--- characters from an alphabet without 0/O/1/I. Assigned on first use; a collision with another code draws again. Null id = null.
-create function public.research_code(p_entity text, p_id uuid) returns text
-language plpgsql security definer set search_path = '' as $$
+-- A fresh random code for an entity type: P- patient, I- implant, R- restoration, D- delegate, S- supervisor, C- course,
+-- then 6 characters from an alphabet without 0/O/1/I. Volatile: a new draw per call (per row in a query).
+create function app_private.research_code_draw(p_entity text) returns text
+language plpgsql volatile set search_path = '' as $$
 declare
   v_alphabet constant text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   v_prefix text;
   v_bytes bytea;
   v_code text;
 begin
+  v_prefix := case p_entity when 'patient' then 'P-' when 'implant' then 'I-' when 'restoration' then 'R-'
+    when 'delegate' then 'D-' when 'supervisor' then 'S-' when 'course' then 'C-' end;
+  if v_prefix is null then
+    perform app_private.fail(format('Unknown study code entity: %s.', p_entity));
+  end if;
+  -- The first 6 bytes of a v4 uuid are random (strong random source); 256 is a multiple of 32, so unbiased.
+  v_bytes := uuid_send(gen_random_uuid());
+  v_code := v_prefix;
+  for i in 0..5 loop
+    v_code := v_code || substr(v_alphabet, 1 + get_byte(v_bytes, i) % 32, 1);
+  end loop;
+  return v_code;
+end $$;
+revoke all on function app_private.research_code_draw(text) from public, anon, authenticated;
+
+-- The code for one entity, assigned on first use; a collision with another code draws again. Null id = null.
+-- The export stores its codes up front with assign_research_codes; this is the fallback for anything missed.
+create function public.research_code(p_entity text, p_id uuid) returns text
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_code text;
+begin
   perform app_private.require_perm('research', 'view');
   if not public.can('patients', 'view') then
     perform app_private.fail('Research export needs View on Patients');
   end if;
-  v_prefix := case p_entity when 'patient' then 'P-' when 'implant' then 'I-' when 'restoration' then 'R-'
-    when 'delegate' then 'D-' when 'supervisor' then 'S-' when 'course' then 'C-' end;
-  if v_prefix is null then
+  if p_entity is null or p_entity not in ('patient', 'implant', 'restoration', 'delegate', 'supervisor', 'course') then
     perform app_private.fail(format('Unknown study code entity: %s.', p_entity));
   end if;
   if p_id is null then
@@ -43,14 +63,9 @@ begin
     return v_code;
   end if;
   loop
-    -- The first 6 bytes of a v4 uuid are random (strong random source); 256 is a multiple of 32, so unbiased.
-    v_bytes := uuid_send(gen_random_uuid());
-    v_code := v_prefix;
-    for i in 0..5 loop
-      v_code := v_code || substr(v_alphabet, 1 + get_byte(v_bytes, i) % 32, 1);
-    end loop;
     begin
-      insert into app_private.research_codes (entity, entity_id, code) values (p_entity, p_id, v_code)
+      insert into app_private.research_codes (entity, entity_id, code)
+      values (p_entity, p_id, app_private.research_code_draw(p_entity))
       on conflict (entity, entity_id) do nothing;
       exit;
     exception when unique_violation then
@@ -63,6 +78,57 @@ begin
 end $$;
 revoke execute on function public.research_code(text, uuid) from public, anon;
 grant execute on function public.research_code(text, uuid) to authenticated;
+
+-- Stores, in ONE insert ordered by (entity, entity_id), every code the eight readers need for these filters
+-- (patients, implants, courses, placing delegates, supervisors, restorations), plus the filter's own course and
+-- delegate (the files name them by code). The export calls it before the readers, so the readers only read codes:
+-- two exports never insert the same codes in different orders, which could deadlock. A drawn code that collides
+-- with another entity's code redraws the whole insert. Returns nothing, so it reveals no data.
+create function public.assign_research_codes(p_course uuid, p_from date, p_to date, p_delegate uuid,
+  p_brand text, p_system text) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  perform app_private.require_perm('research', 'view');
+  if not public.can('patients', 'view') then
+    perform app_private.fail('Research export needs View on Patients');
+  end if;
+  loop
+    begin
+      with o as (
+        select * from public.implant_outcomes_detail(p_course, p_from, p_to, p_delegate, p_brand, p_system)
+      ), r as (
+        select distinct x.id, x.patient_id, x.delegate_id, x.supervisor_id
+        from public.restorations x
+        join public.restoration_sites rs on rs.restoration_id = x.id
+        where rs.site_id in (select o.site_id from o) and x.voided_at is null
+      ), wanted (entity, entity_id) as (
+        select 'implant', o.site_id from o
+        union select 'patient', o.patient_id from o
+        union select 'course', o.course_id from o
+        union select 'delegate', s.placing_delegate_id from public.implant_sites s where s.id in (select o.site_id from o)
+        union select 'supervisor', s.supervisor_id from public.implant_sites s where s.id in (select o.site_id from o)
+        union select 'restoration', r.id from r
+        union select 'patient', r.patient_id from r
+        union select 'delegate', r.delegate_id from r
+        union select 'supervisor', r.supervisor_id from r
+        union select 'course', p_course
+        union select 'delegate', p_delegate
+      )
+      insert into app_private.research_codes (entity, entity_id, code)
+      select w.entity, w.entity_id, app_private.research_code_draw(w.entity)
+      from wanted w
+      where w.entity_id is not null
+        and not exists (select 1 from app_private.research_codes rc where rc.entity = w.entity and rc.entity_id = w.entity_id)
+      order by w.entity, w.entity_id
+      on conflict (entity, entity_id) do nothing;
+      exit;
+    exception when unique_violation then
+      -- A drawn code belongs to another entity: draw them all again.
+    end;
+  end loop;
+end $$;
+revoke execute on function public.assign_research_codes(uuid, date, date, uuid, text, text) from public, anon;
+grant execute on function public.assign_research_codes(uuid, date, date, uuid, text, text) to authenticated;
 
 -- ── 2. Export log ────────────────────────────────────────────────────────────────────────────
 -- Who exported what. Written only by log_research_export; admins read it; nobody updates or deletes it.
@@ -82,7 +148,7 @@ revoke all on public.research_exports from public, anon, authenticated;
 grant select on public.research_exports to authenticated;
 alter table public.research_exports enable row level security;
 create policy research_exports_select on public.research_exports for select to authenticated
-  using (public.is_admin());
+  using ((select public.is_admin()));
 create policy research_exports_admin_read on public.research_exports as restrictive for select to authenticated
   using ((select public.is_admin()));
 

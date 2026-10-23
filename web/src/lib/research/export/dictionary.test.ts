@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { DICTIONARY, TABLE_NAMES, assertAllowlisted, type ExportTables } from './dictionary';
+import { DICTIONARY, TABLE_NAMES, assertAllowlisted, exportOrder, type ExportTables } from './dictionary';
 import { READER_COLUMNS } from './reader-columns.fixture';
+
+describe('exportOrder', () => {
+  it('reads each file chronologically: its date column first, then every other column (a total order)', () => {
+    const first = { implants: 'placed_on', visits: 'date', radiographs: 'taken_on', complications: 'noticed_on', restorations: 'fitted_on', restoration_problems: 'noticed_on', grafts: 'performed_on', patients: 'patient_code' };
+    for (const t of TABLE_NAMES) {
+      const order = exportOrder(t);
+      expect(order[0], t).toBe(first[t]);
+      expect([...order].sort()).toEqual(Object.keys(DICTIONARY[t]).sort());
+    }
+  });
+});
 
 describe('DICTIONARY', () => {
   it('covers exactly the eight tables', () => {

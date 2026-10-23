@@ -312,6 +312,48 @@ describe('research export: readers', () => {
   });
 });
 
+describe('assign_research_codes', () => {
+  const assign = (c: Client, f: Filters) =>
+    c.query('select public.assign_research_codes($1, $2::date, $3::date, $4, $5, $6)', args(f));
+  const count = async (c: Client) => {
+    await asPostgres(c);
+    return Number((await c.query('select count(*) as n from app_private.research_codes')).rows[0].n);
+  };
+
+  it('stores every code the readers need up front, so the readers insert none', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      for (const f of [{ brand: s.brand }, { brand: s.brand, course: s.course, delegate: s.delegate }] as Filters[]) {
+        const before = await count(c);
+        await actAs(c, users.admin);
+        await assign(c, f);
+        const assigned = await count(c);
+        if (!f.course) expect(assigned).toBeGreaterThan(before);
+        await actAs(c, users.admin);
+        for (const t of READERS) expect((await read(c, t, f)).length, t).toBeGreaterThan(0);
+        // the filter's course and delegate codes too (the files name them by code)
+        await code(c, 'course', s.course);
+        await code(c, 'delegate', s.delegate);
+        expect(await count(c)).toBe(assigned);
+      }
+    });
+  });
+
+  it('needs Research view and Patients view', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      await asPostgres(c);
+      await setPerms(c, users.target, { research: 'view', schedule: 'view' });
+      await actAs(c, users.target);
+      await refused(c, () => assign(c, { brand: s.brand }), /Research export needs View on Patients/);
+      await asPostgres(c);
+      await setPerms(c, users.target, ALL_EDIT);
+      await actAs(c, users.target);
+      await refused(c, () => assign(c, { brand: s.brand }), /permission/);
+    });
+  });
+});
+
 describe('research export log', () => {
   it('is written by log_research_export, read by admins only, and never changed', async () => {
     await withTx(async (c) => {
