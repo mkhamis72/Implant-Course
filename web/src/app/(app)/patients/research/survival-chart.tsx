@@ -8,7 +8,8 @@ export type Curve = {
   label: string;
   /** A design-token colour, e.g. `var(--color-accent)`. */
   color: string;
-  dashed?: boolean;
+  /** SVG dash pattern; omitted = solid. */
+  dash?: string;
   points: Point[];
   /** Longest follow-up in this curve, in months: the line runs to here. */
   end: number;
@@ -91,7 +92,7 @@ export function SurvivalChart({ curves, band = [], atRisk, endMonth }: {
           {bandPath && <path data-testid="ci-band" d={bandPath} fill="var(--color-accent)" fillOpacity="0.15" stroke="none" />}
           {curves.map((c) => (
             <path key={c.label} d={path(c)} fill="none" stroke={c.color} strokeWidth="2.5" strokeLinejoin="round"
-              strokeDasharray={c.dashed ? '6 4' : undefined} />
+              strokeDasharray={c.dash} />
           ))}
           <g fontSize="12">
             <text x={L} y={RISK_TITLE_Y} fill="var(--color-muted)">Number at risk</text>
@@ -106,7 +107,7 @@ export function SurvivalChart({ curves, band = [], atRisk, endMonth }: {
           {curves.map((c) => (
             <li key={c.label} className="flex items-center gap-2">
               <svg width="24" height="8" aria-hidden="true">
-                <line x1="0" x2="24" y1="4" y2="4" stroke={c.color} strokeWidth="2.5" strokeDasharray={c.dashed ? '6 4' : undefined} />
+                <line x1="0" x2="24" y1="4" y2="4" stroke={c.color} strokeWidth="2.5" strokeDasharray={c.dash} />
               </svg>
               {c.label}
             </li>

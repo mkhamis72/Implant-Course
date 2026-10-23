@@ -37,6 +37,13 @@
   /* Surgical technique: free hand uses the accent; guided is violet so the two read apart on the schedule. */
   --color-guided: #5b3fb0;
   --color-guided-soft: #efebfa;
+  /* Categorical series (chart curves): none is a status colour. Light theme only, like the rest of the app. */
+  --color-series-1: #1f5fa8;
+  --color-series-2: #a63d86;
+  --color-series-3: #5b3fb0;
+  --color-series-4: #6b6b13;
+  --color-series-5: #17262b;
+  --color-series-6: #7a8790;
   /* Navigation (sidebar, phone top bar). A company's navigation colour overrides these (src/lib/branding/css.ts). */
   --color-nav: #ffffff;
   --color-nav-ink: #17262b;

@@ -4,6 +4,7 @@ import { complications, crownSummary, formatPct, icoiBreakdown, kaplanMeier, kmE
 import { THIN_AT_RISK } from '@/lib/research/stats';
 import { CLUSTER_NOTE, groupRows, isCompareKey, thinWarning, unknownDateNote, type GroupVars } from '@/lib/research/groups';
 import { GRADE_LABELS, drilldownHref, type DetailRow, type ResearchFilters } from '@/lib/research/view';
+import { curveStyle } from '@/lib/research/curve-style';
 import { SurvivalChart, type Curve } from './survival-chart';
 import { CiText, ComparePanel, Note, Warning } from './compare-panel';
 
@@ -57,7 +58,6 @@ function SurvivalTile({ rows, year, filters }: { rows: DetailRow[]; year: 'year_
   );
 }
 
-const GROUP_COLORS = ['accent', 'ok', 'warn', 'bad', 'ink', 'muted'].map((c) => `var(--color-${c})`);
 const monthsOf = (rows: DetailRow[]) =>
   Math.max(0, ...rows.filter((r) => !r.event_time_unknown).map((r) => r.follow_up_days / MONTH_DAYS));
 
@@ -87,13 +87,12 @@ export function ResearchView({ rows, crowns, filters, groups = [], noProduct }: 
   const byGroup = compare !== null && compare !== 'loading' && grouped.length > 0;
   const curves: Curve[] = byGroup
     ? grouped.map((g, i) => ({
-        label: g.label,
-        color: GROUP_COLORS[i % GROUP_COLORS.length],
-        dashed: i >= GROUP_COLORS.length,
+        label: g.notAssessed ? `${g.label} (not tested)` : g.label,
+        ...curveStyle(i),
         points: kaplanMeier(g.rows).points,
         end: monthsOf(g.rows),
       }))
-    : [{ label: 'All implants', color: GROUP_COLORS[0], points: km.points, end: endMonth }];
+    : [{ label: 'All implants', color: curveStyle(0).color, points: km.points, end: endMonth }];
 
   return (
     <div className="space-y-6">

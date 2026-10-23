@@ -231,7 +231,9 @@ log_rank <- function(km) {
     NULL
   })
   if (is.null(lr)) return(invisible(NULL))
-  df <- length(lr$n) - 1
+  df <- sum(lr$exp > 0) - 1
+  if (df < 1) return(cat("Log-rank test:", DASH, "(fewer than two groups have implants at risk at a failure)
+"))
   p <- pchisq(lr$chisq, df, lower.tail = FALSE)
   cat(sprintf("Log-rank test on %d implants, %d failure%s: %s (chi-square = %.2f, df = %d)\n",
               nrow(tested), events, ifelse(events == 1, "", "s"), format_p(p), lr$chisq, df))

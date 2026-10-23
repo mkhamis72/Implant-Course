@@ -21,6 +21,11 @@ const derived = (() => {
 const allowed = (t: string) => EXPORTED.has(t) || derived.has(t);
 
 describe('analysis.R', () => {
+  it('log-rank df counts only groups with expected failures, as survdiff and the page do', () => {
+    expect(script).toContain('df <- sum(lr$exp > 0) - 1');
+    expect(script).not.toContain('length(lr$n) - 1');
+  });
+
   it('declares its derived columns, none of which shadows an exported column', () => {
     expect(derived.size).toBeGreaterThan(0);
     for (const d of derived) expect(EXPORTED.has(d), d).toBe(false);
