@@ -47,6 +47,7 @@ async function setup(c: Client) {
   const b = await place(c, { patient, tooth: 34, product: prod, lot, delegate, supervisor: users.organizer, placedOn: placed });
 
   await asPostgres(c);
+  const course = (await c.query('select course_id from public.implant_sites where id = $1', [a])).rows[0].course_id as string;
   const phone = `0100${Math.floor(Math.random() * 1e7)}`;
   const fileNo = `ZF${tag}`;
   await c.query(
@@ -107,7 +108,7 @@ async function setup(c: Client) {
   await problem(true);
 
   return {
-    tag, secret, brand, prod, delegate, name, phone, fileNo, patient, placed, a, b, liveVisit, voidVisit, liveXray,
+    tag, secret, brand, prod, delegate, course, name, phone, fileNo, patient, placed, a, b, liveVisit, voidVisit, liveXray,
     voidXray, liveComplication, liveRestoration, voidRestoration,
   };
 }
@@ -128,7 +129,7 @@ describe('research_code', () => {
       expect(await code(c, 'restoration', s.liveRestoration)).toMatch(/^R-[A-HJ-NP-Z2-9]{6}$/);
       expect(await code(c, 'delegate', s.delegate)).toMatch(/^D-[A-HJ-NP-Z2-9]{6}$/);
       expect(await code(c, 'supervisor', users.organizer)).toMatch(/^S-[A-HJ-NP-Z2-9]{6}$/);
-      await refused(c, () => code(c, 'course', s.patient), /Unknown/);
+      await refused(c, () => code(c, 'radiograph', s.patient), /Unknown/);
     });
   });
 });
@@ -204,8 +205,26 @@ describe('research export: readers', () => {
         technique: 'guided', torque_ncm: '35.0', isq: '70.0', bone_type: 'D2', impression_type: 'digital_scan',
         diameter_mm: '4.00', length_mm: '10.0', placing_delegate_code: await code(c, 'delegate', s.delegate),
         supervisor_code: await code(c, 'supervisor', users.organizer), placement_timing: 'delayed', flap: 'crestal',
-        healing: 'submerged',
+        healing: 'submerged', failure_type: null, failed_on: null,
       });
+
+      // The course as a stable C- code (never the raw id).
+      const courseCode = await code(c, 'course', s.course);
+      expect(courseCode).toMatch(/^C-[A-HJ-NP-Z2-9]{6}$/);
+      expect(await code(c, 'course', s.course)).toBe(courseCode);
+      expect(a.course_code).toBe(courseCode);
+      expect(a).not.toHaveProperty('course_id');
+
+      // Failure type and date are exported; the reason and notes are not.
+      await asPostgres(c);
+      await c.query(`update public.implant_sites set state = 'failed', failure_type = 'lost', failure_reason = 'other',
+        failure_notes = 'x', failed_on = $2::date + 50 where id = $1`, [s.a, s.placed]);
+      await actAs(c, users.admin);
+      const [failed] = (await read(c, 'implants', { brand: s.brand })).filter((r) => r.tooth === 36);
+      const failedOn = (await c.query(`select ($1::date + 50) as d`, [s.placed])).rows[0].d;
+      expect(failed).toMatchObject({ failure_type: 'lost', failed_on: failedOn });
+      expect(failed).not.toHaveProperty('failure_reason');
+      expect(failed).not.toHaveProperty('failure_notes');
       const patients = await read(c, 'patients', { brand: s.brand });
       expect(patients).toHaveLength(1);
       const ageAt = (await c.query(`select date_part('year', age($1::date, '1980-06-15'::date))::int as y`, [s.placed])).rows[0].y;
@@ -232,6 +251,31 @@ describe('research export: readers', () => {
     });
   });
 
+  it('lists only the exported implants under a restoration', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      await actAs(c, users.organizer);
+      const otherBrand = `${s.brand} Other`;
+      const prod = (await c.query(
+        `insert into public.products (type, brand, system, diameter_mm, length_mm) values ('implant', $1, 'MD EXT', 4.0, 10) returning id`,
+        [otherBrand])).rows[0].id as string;
+      const lot = await receive(c, prod, 2, `EXO${s.tag}`);
+      const outside = await place(c, { patient: s.patient, tooth: 35, product: prod, lot, delegate: s.delegate, supervisor: users.organizer, placedOn: s.placed });
+      await asPostgres(c);
+      const bridge = (await c.query(
+        `insert into public.restorations (patient_id, stage, type, teeth, fitted_on) values ($1, 'final', 'bridge', '{34,35}', $2::date + 200) returning id`,
+        [s.patient, s.placed])).rows[0].id as string;
+      await c.query('insert into public.restoration_sites (restoration_id, site_id) values ($1, $2), ($1, $3)', [bridge, s.b, outside]);
+
+      await actAs(c, users.admin);
+      const bridgeCode = await code(c, 'restoration', bridge);
+      const [row] = (await read(c, 'restorations', { brand: s.brand })).filter((r) => r.restoration_code === bridgeCode);
+      expect(row.implant_codes).toEqual([await code(c, 'implant', s.b)]);
+      const [all] = (await read(c, 'restorations', {})).filter((r) => r.restoration_code === bridgeCode);
+      expect(all.implant_codes).toEqual([await code(c, 'implant', s.b), await code(c, 'implant', outside)]);
+    });
+  });
+
   it('gives one X-ray row per exported implant on its teeth, empty levels when not measured', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
@@ -249,7 +293,7 @@ describe('research export: readers', () => {
       const s = await setup(c);
       await actAs(c, users.admin);
       const forbidden = [s.secret, s.name, s.phone, s.fileNo, s.patient, s.a, s.b, s.delegate, s.liveRestoration,
-        s.liveVisit, s.liveXray, s.liveComplication, users.organizer, '1980-06-15'];
+        s.liveVisit, s.liveXray, s.liveComplication, s.course, users.organizer, '1980-06-15'];
       const seen: string[] = [];
       const scan = (v: unknown): void => {
         if (v === null || v === undefined) return;

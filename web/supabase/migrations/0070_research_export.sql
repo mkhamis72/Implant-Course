@@ -8,7 +8,7 @@
 -- ── 1. Study codes ───────────────────────────────────────────────────────────────────────────
 -- Random codes, stored once and reused, so an entity has the same code in every export. Never derived from the id.
 create table app_private.research_codes (
-  entity text not null check (entity in ('patient', 'implant', 'restoration', 'delegate', 'supervisor')),
+  entity text not null check (entity in ('patient', 'implant', 'restoration', 'delegate', 'supervisor', 'course')),
   entity_id uuid not null,
   code text not null unique,
   created_at timestamptz not null default now(),
@@ -16,8 +16,8 @@ create table app_private.research_codes (
 );
 revoke all on app_private.research_codes from public, anon, authenticated;
 
--- The code for one entity: P- patient, I- implant, R- restoration, D- delegate, S- supervisor, then 6 characters
--- from an alphabet without 0/O/1/I. Assigned on first use; a collision with another code draws again. Null id = null.
+-- The code for one entity: P- patient, I- implant, R- restoration, D- delegate, S- supervisor, C- course, then 6
+-- characters from an alphabet without 0/O/1/I. Assigned on first use; a collision with another code draws again. Null id = null.
 create function public.research_code(p_entity text, p_id uuid) returns text
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -31,7 +31,7 @@ begin
     perform app_private.fail('Research export needs View on Patients');
   end if;
   v_prefix := case p_entity when 'patient' then 'P-' when 'implant' then 'I-' when 'restoration' then 'R-'
-    when 'delegate' then 'D-' when 'supervisor' then 'S-' end;
+    when 'delegate' then 'D-' when 'supervisor' then 'S-' when 'course' then 'C-' end;
   if v_prefix is null then
     perform app_private.fail(format('Unknown study code entity: %s.', p_entity));
   end if;
@@ -111,25 +111,29 @@ grant execute on function public.log_research_export(text, jsonb, jsonb) to auth
 -- and on Patients, so without them every reader is empty. Volatile, because research_code stores new codes.
 
 -- One row per exported implant: placement, product, surgical details, stability, scan / impression and every
--- implant_outcomes column (site_id / patient_id replaced by codes; course_id, a raw id, left out).
+-- implant_outcomes column (site_id, patient_id and course_id replaced by codes), plus failure type and date
+-- (failure_reason and failure_notes are left out).
 create function public.research_export_implants(p_course uuid, p_from date, p_to date, p_delegate uuid,
   p_brand text, p_system text)
-returns table (implant_code text, patient_code text, tooth smallint, jaw text, placed_on date, technique text,
+returns table (implant_code text, patient_code text, course_code text, tooth smallint, jaw text, placed_on date,
+  technique text,
   brand text, system text, diameter_mm numeric, length_mm numeric, placing_delegate_code text, supervisor_code text,
   extraction_date date, placement_timing text, soft_tissue_phenotype text, keratinized_mucosa_mm numeric, flap text,
   torque_type text, healing text, primary_closure text, grafting_performed text, torque_ncm numeric, isq numeric,
-  bone_type text, impression_type text, impression_taken_on date, loaded_on date, last_contact date,
+  bone_type text, impression_type text, impression_taken_on date, failure_type text, failed_on date,
+  loaded_on date, last_contact date,
   follow_up_days int, event boolean, event_on date, event_time_unknown boolean, at_loading text, year_1 text,
   year_2 text, year_3 text, year_5 text, latest_grade text, latest_grade_on date, latest_grade_reason text,
   ungraded_later int, biological_complications int, mechanical_complications int, version text)
 language sql security invoker set search_path = '' as $$
-  select public.research_code('implant', o.site_id), public.research_code('patient', o.patient_id), o.tooth,
+  select public.research_code('implant', o.site_id), public.research_code('patient', o.patient_id),
+         public.research_code('course', o.course_id), o.tooth,
          case when o.tooth / 10 in (1, 2) then 'maxilla' when o.tooth / 10 in (3, 4) then 'mandible' end,
          o.placed_on, s.technique, o.brand, o.system, p.diameter_mm, p.length_mm,
          public.research_code('delegate', s.placing_delegate_id), public.research_code('supervisor', s.supervisor_id),
          su.extraction_date, su.placement_timing, su.soft_tissue_phenotype, su.keratinized_mucosa_mm, su.flap,
          su.torque_type, su.healing, su.primary_closure, su.grafting_performed, s.torque_ncm, s.isq, s.bone_type,
-         s.impression_type, s.impression_taken_on, o.loaded_on, o.last_contact, o.follow_up_days, o.event, o.event_on,
+         s.impression_type, s.impression_taken_on, s.failure_type, s.failed_on, o.loaded_on, o.last_contact, o.follow_up_days, o.event, o.event_on,
          o.event_time_unknown, o.at_loading, o.year_1, o.year_2, o.year_3, o.year_5, o.latest_grade, o.latest_grade_on,
          o.latest_grade_reason, o.ungraded_later, o.biological_complications, o.mechanical_complications, o.version
   from public.implant_outcomes_detail(p_course, p_from, p_to, p_delegate, p_brand, p_system) o
@@ -217,27 +221,26 @@ language sql security invoker set search_path = '' as $$
 $$;
 
 -- One row per non-voided restoration on at least one exported implant (all stages and types, current or ended),
--- with the codes of all its implants. Notes and the end reason are free text: only end_kind is exported.
+-- with the codes of its exported implants. Notes and the end reason are free text: only end_kind is exported.
 create function public.research_export_restorations(p_course uuid, p_from date, p_to date, p_delegate uuid,
   p_brand text, p_system text)
 returns table (restoration_code text, patient_code text, implant_codes text[], stage text, type text,
   teeth smallint[], fitted_on date, retention text, material text, delegate_code text, supervisor_code text,
   ended_on date, end_kind text)
 language sql security invoker set search_path = '' as $$
-  with chosen as (
-    select distinct rs.restoration_id
+  with linked as (
+    select rs.restoration_id, o.site_id, o.tooth
     from public.implant_outcomes_detail(p_course, p_from, p_to, p_delegate, p_brand, p_system) o
     join public.restoration_sites rs on rs.site_id = o.site_id
   )
   select public.research_code('restoration', r.id), public.research_code('patient', r.patient_id),
-         (select array_agg(public.research_code('implant', s.id) order by s.tooth)
-          from public.restoration_sites rs join public.implant_sites s on s.id = rs.site_id
-          where rs.restoration_id = r.id),
+         (select array_agg(public.research_code('implant', linked.site_id) order by linked.tooth)
+          from linked where linked.restoration_id = r.id),
          r.stage, r.type, r.teeth, r.fitted_on, r.retention, r.material,
          public.research_code('delegate', r.delegate_id), public.research_code('supervisor', r.supervisor_id),
          r.ended_on, r.end_kind
   from public.restorations r
-  where r.id in (select chosen.restoration_id from chosen) and r.voided_at is null
+  where r.id in (select linked.restoration_id from linked) and r.voided_at is null
     and (select public.can('research', 'view'))
   order by r.fitted_on, r.patient_id, r.teeth;
 $$;
