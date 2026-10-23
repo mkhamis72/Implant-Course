@@ -8,7 +8,24 @@ export type ExportMeta = {
   rowCounts: Record<TableName, number>;
   /** Research consent of the exported patients. */
   consent: ConsentCounts;
+  /** The study the export is for (a label only: it doesn't change the implants), or null. */
+  study: StudyAbout | null;
 };
+
+/** The study fields that may go into the file. Notes are free text and never exported. */
+export type StudyAbout = { title: string; committee: string | null; approval_number: string | null; protocol_version: string | null };
+
+const orDash = (v: string | null | undefined) => (v && v.trim() ? v : '—');
+
+/** The about sheet / README study rows; every field '—' when empty or without a study. */
+export function studyAboutRows(study: StudyAbout | null): [string, string][] {
+  return [
+    ['Study', orDash(study?.title)],
+    ['Ethics committee', orDash(study?.committee)],
+    ['Approval number', orDash(study?.approval_number)],
+    ['Protocol version', orDash(study?.protocol_version)],
+  ];
+}
 
 export const CONFIDENTIALITY_NOTE =
   'Exact dates combined with tooth, sex and age can identify a patient in a small course. Handle this file as confidential.';
@@ -31,7 +48,7 @@ export function dictionaryRows(): Record<string, string>[] {
   );
 }
 
-/** The about sheet / README lines as [label, value] pairs: confidentiality note, filters, export time, outcomes version, row counts, research consent. */
+/** The about sheet / README lines as [label, value] pairs: confidentiality note, export time, outcomes version, study, filters, row counts, research consent. */
 export function aboutLines(meta: ExportMeta): [string, string][] {
   // Course and delegate filters must arrive as study codes: raw ids stay in the export log.
   for (const [k, v] of Object.entries(meta.filters)) {
@@ -42,6 +59,7 @@ export function aboutLines(meta: ExportMeta): [string, string][] {
     ['Confidentiality', CONFIDENTIALITY_NOTE],
     ['Exported at', meta.exportedAt],
     ['Outcomes version', meta.version],
+    ...studyAboutRows(meta.study),
     ...Object.entries(meta.filters).map(([k, v]): [string, string] => [`Filter: ${k}`, v ?? 'all']),
     ...TABLE_NAMES.map((t): [string, string] => [`Rows: ${t}`, String(meta.rowCounts[t] ?? 0)]),
     ['Research consent', consentLine(meta.consent)],

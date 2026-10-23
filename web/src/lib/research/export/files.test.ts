@@ -5,7 +5,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { toCsv } from './csv';
 import { buildXlsx } from './xlsx';
 import { buildZip } from './zip';
-import { CONFIDENTIALITY_NOTE, aboutLines, exportFileName, readmeText, type ExportMeta } from './assemble';
+import { CONFIDENTIALITY_NOTE, aboutLines, exportFileName, readmeText, studyAboutRows, type ExportMeta } from './assemble';
 import { TABLE_NAMES, type ExportTables } from './dictionary';
 
 const BOM = '﻿';
@@ -49,6 +49,7 @@ const meta = (): ExportMeta => ({
   exportedAt: '2026-10-23T10:00:00Z', filters: { course: null, brand: 'Oxy' }, version: 'outcomes-v1',
   rowCounts: Object.fromEntries(TABLE_NAMES.map((n) => [n, n === 'implants' || n === 'grafts' ? 1 : 0])) as ExportMeta['rowCounts'],
   consent: { patients: 40, yes: 28, no: 4, not_recorded: 8 },
+  study: null,
 });
 
 describe('buildXlsx', () => {
@@ -109,6 +110,31 @@ describe('aboutLines', () => {
   it('refuses a raw id in the filters', () => {
     const m = { ...meta(), filters: { course: '11111111-2222-4333-8444-555555555555' } };
     expect(() => aboutLines(m)).toThrow(/raw id/);
+  });
+});
+
+describe('studyAboutRows', () => {
+  const study = { title: 'Short implants RCT', committee: 'Cairo University REC', approval_number: 'REC-2026-17', protocol_version: '2.1', notes: 'internal only' };
+  it('gives the four study rows', () => {
+    expect(studyAboutRows(study)).toEqual([
+      ['Study', 'Short implants RCT'],
+      ['Ethics committee', 'Cairo University REC'],
+      ['Approval number', 'REC-2026-17'],
+      ['Protocol version', '2.1'],
+    ]);
+  });
+  it('shows — for empty fields and for no study', () => {
+    expect(studyAboutRows({ title: 'T', committee: null, approval_number: '', protocol_version: null })).toEqual([
+      ['Study', 'T'], ['Ethics committee', '—'], ['Approval number', '—'], ['Protocol version', '—'],
+    ]);
+    expect(studyAboutRows(null).map(([, v]) => v)).toEqual(['—', '—', '—', '—']);
+  });
+  it('never carries the notes into the about sheet / README', () => {
+    const text = readmeText({ ...meta(), study });
+    expect(text).toContain('Study: Short implants RCT');
+    expect(text).toContain('Ethics committee: Cairo University REC');
+    expect(text).not.toContain('internal only');
+    expect(JSON.stringify(studyAboutRows(study))).not.toContain('internal only');
   });
 });
 

@@ -16,6 +16,17 @@ describe('<ExportForm>', () => {
     expect(screen.getByRole('radio', { name: /Excel/ })).toBeChecked();
     expect(screen.getByRole('radio', { name: /CSV/ })).not.toBeChecked();
   });
+  it('offers an optional study (blank = none) as a visible select', () => {
+    render(<ExportForm filters={filters} studies={[{ id: 's1', title: 'Short implants RCT' }, { id: 's2', title: 'Sinus lift' }]} />);
+    const select = screen.getByRole('combobox', { name: 'Study' }) as HTMLSelectElement;
+    expect(select.name).toBe('study');
+    expect(select.value).toBe('');
+    expect(Array.from(select.options).map((o) => [o.value, o.text])).toEqual([['', 'None'], ['s1', 'Short implants RCT'], ['s2', 'Sinus lift']]);
+  });
+  it('has no study select when there are no studies', () => {
+    render(<ExportForm filters={filters} studies={[]} />);
+    expect(screen.queryByRole('combobox', { name: 'Study' })).not.toBeInTheDocument();
+  });
 });
 
 describe('<ExportLog>', () => {
@@ -37,6 +48,12 @@ describe('<ExportLog>', () => {
     expect(screen.getByText('course Spring course, delegate Dr Bob, brand Oxy')).toBeInTheDocument();
     expect(screen.getByText('course (deleted)')).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/);
+  });
+  it('names the study by title', () => {
+    const study = '0f0f0f0f-1111-4222-8333-444444444444';
+    render(<ExportLog isAdmin rows={[{ ...rows[0], filters: { brand: 'Oxy', study } }, { ...rows[0], id: '2', filters: { study: 'gone' } }]} studyTitles={{ [study]: 'Short implants RCT' }} />);
+    expect(screen.getByText('brand Oxy, study Short implants RCT')).toBeInTheDocument();
+    expect(screen.getByText('study (deleted)')).toBeInTheDocument();
   });
   it('says the log could not be loaded instead of "No exports yet"', () => {
     render(<ExportLog isAdmin rows={[]} failed />);

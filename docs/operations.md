@@ -64,7 +64,7 @@ All commands are run with `ENV_FILE=.env.prod` (see the top of this page).
   - On the delegate's page (admin only), click **Create login**. The delegate needs an email address first.
   - A delegate login sees only **My schedule** and **My report**: their own surgery bookings, the talks of the courses they are enrolled in, and their own implants.
 - **Organizer permissions:**
-  - In Admin → Users → **Permissions** on an organizer's row, set **None / View / Edit** for each panel: Patients, Schedule, Courses, Checklists, Inventory, Delegates.
+  - In Admin → Users → **Permissions** on an organizer's row, set **None / View / Edit** for each panel: Patients, Schedule, Courses, Checklists, Inventory, Delegates, Research (Edit adds and edits studies).
   - New organizers start with View everywhere.
   - The database enforces these permissions, not just the menus.
 - **From the command line:**

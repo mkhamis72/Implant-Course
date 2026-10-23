@@ -3,32 +3,11 @@
 import { useState, useTransition } from 'react';
 import { todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
-import { JPEG_QUALITY, MAX_CONSENT_BYTES, fitWithin } from '@/lib/consent/files';
+import { MAX_CONSENT_BYTES } from '@/lib/consent/files';
+import { prepareScan } from '@/lib/consent/prepare-scan';
 import { CONSENT_ITEMS, CONSENT_LANGUAGES, CONSENT_LANGUAGE_LABELS, type ConsentVersionOption } from '@/lib/consent/labels';
 import { Field } from '../implant-forms';
 import { recordConsent } from './actions';
-
-const RESIZABLE = ['image/jpeg', 'image/png', 'image/webp'];
-
-/** A photo becomes a JPEG at most 2000 px on its longest side; PDFs (and anything the server will refuse) pass through. */
-async function prepareScan(file: File): Promise<File> {
-  if (!RESIZABLE.includes(file.type)) return file;
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  const { w, h } = fitWithin(bitmap.width, bitmap.height);
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('No canvas');
-  // A transparent PNG would turn black as JPEG: paper is white.
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  bitmap.close();
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY));
-  if (!blob) throw new Error('Could not encode');
-  return new File([blob], `${file.name.replace(/\.[^.]*$/, '') || 'consent'}.jpg`, { type: 'image/jpeg' });
-}
 
 /** Records a signed consent form: version, language, date, the four answers (no default) and the scan. */
 export function ConsentForm({ patientId, versions, currentVersionId }: {
@@ -57,7 +36,7 @@ export function ConsentForm({ patientId, versions, currentVersionId }: {
     start(async () => {
       let scan: File;
       try {
-        scan = await prepareScan(file);
+        scan = await prepareScan(file, 'consent');
       } catch {
         setError("This photo couldn't be processed in this browser. Try another browser, or upload a PDF.");
         return;
