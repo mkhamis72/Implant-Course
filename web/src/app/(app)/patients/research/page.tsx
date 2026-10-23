@@ -6,6 +6,7 @@ import { readParams, type PageSearchParams } from '@/lib/search-params';
 import { RESEARCH_FILTER_KEYS, effectiveSystem } from '@/lib/research/view';
 import { loadResearch } from './data';
 import { FilterForm } from './filter-form';
+import { ExportForm, ExportLog, type ExportLogRow } from './export-panel';
 import { NoPatientsNote, ResearchView } from './research-view';
 
 const distinct = (values: (string | null)[]) => [...new Set(values.filter((v): v is string => Boolean(v)))].sort();
@@ -48,6 +49,16 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
   const filters = { ...requested, system };
   const { version, rows, base, crowns } = system === requested.system ? first : await loadResearch(filters);
 
+  const isAdmin = profile.role === 'admin';
+  let exportLog: ExportLogRow[] = [];
+  if (isAdmin) {
+    const { data: log } = await supabase.from('research_exports').select('id, exported_by, exported_at, format, filters, row_counts').order('exported_at', { ascending: false }).limit(20);
+    const ids = [...new Set((log ?? []).map((r) => r.exported_by))];
+    const { data: people } = ids.length ? await supabase.from('profiles').select('user_id, full_name').in('user_id', ids) : { data: [] };
+    const names = new Map((people ?? []).map((p) => [p.user_id, p.full_name]));
+    exportLog = (log ?? []).map((r) => ({ ...r, exporter: names.get(r.exported_by) ?? null })) as ExportLogRow[];
+  }
+
   // Delegates the user can't list (no Delegates view) still appear when they placed an implant in range.
   const delegateNames = new Map<string, string>();
   for (const d of delegates.data ?? []) delegateNames.set(d.id, d.full_name);
@@ -67,6 +78,8 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
         systems={systems}
       />
       <ResearchView rows={rows} crowns={crowns} filters={filters} noProduct={base.filter((r) => r.product_id === null).length} />
+      <ExportForm filters={filters} />
+      <ExportLog isAdmin={isAdmin} rows={exportLog} />
     </div>
   );
 }
