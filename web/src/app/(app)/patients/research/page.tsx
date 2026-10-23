@@ -6,6 +6,7 @@ import { readParams, type PageSearchParams } from '@/lib/search-params';
 import { RESEARCH_FILTER_KEYS, effectiveSystem } from '@/lib/research/view';
 import { loadResearch } from './data';
 import { FilterForm } from './filter-form';
+import { ExportForm, ExportLog, type ExportLogRow } from './export-panel';
 import { NoPatientsNote, ResearchView } from './research-view';
 
 const distinct = (values: (string | null)[]) => [...new Set(values.filter((v): v is string => Boolean(v)))].sort();
@@ -48,11 +49,24 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
   const filters = { ...requested, system };
   const { version, rows, base, crowns } = system === requested.system ? first : await loadResearch(filters);
 
+  const isAdmin = profile.role === 'admin';
+  let exportLog: ExportLogRow[] = [];
+  let exportLogFailed = false;
+  if (isAdmin) {
+    const { data: log, error: logError } = await supabase.from('research_exports').select('id, exported_by, exported_at, format, filters, row_counts').order('exported_at', { ascending: false }).limit(20);
+    const ids = [...new Set((log ?? []).map((r) => r.exported_by))];
+    const { data: people } = ids.length ? await supabase.from('profiles').select('user_id, full_name').in('user_id', ids) : { data: [] };
+    const names = new Map((people ?? []).map((p) => [p.user_id, p.full_name]));
+    exportLogFailed = Boolean(logError);
+    exportLog = (log ?? []).map((r) => ({ ...r, exporter: names.get(r.exported_by) ?? null })) as ExportLogRow[];
+  }
+
   // Delegates the user can't list (no Delegates view) still appear when they placed an implant in range.
   const delegateNames = new Map<string, string>();
   for (const d of delegates.data ?? []) delegateNames.set(d.id, d.full_name);
   for (const r of base) if (r.placing_delegate_id && r.placing_delegate) delegateNames.set(r.placing_delegate_id, r.placing_delegate);
   const delegateOptions = [...delegateNames].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  const courseList = ((courses.data ?? []) as { id: string; name: string }[]).map((c) => ({ id: c.id, name: c.name }));
   const brands = distinct([...base.map((r) => r.brand), filters.brand]);
   const systems = distinct([...base.filter((r) => !filters.brand || r.brand === filters.brand).map((r) => r.system), filters.system]);
 
@@ -61,12 +75,20 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
       {header(version)}
       <FilterForm
         filters={filters}
-        courses={((courses.data ?? []) as { id: string; name: string }[]).map((c) => ({ id: c.id, name: c.name }))}
+        courses={courseList}
         delegates={delegateOptions}
         brands={brands}
         systems={systems}
       />
       <ResearchView rows={rows} crowns={crowns} filters={filters} noProduct={base.filter((r) => r.product_id === null).length} />
+      <ExportForm filters={filters} />
+      <ExportLog
+        isAdmin={isAdmin}
+        rows={exportLog}
+        failed={exportLogFailed}
+        courseNames={Object.fromEntries(courseList.map((c) => [c.id, c.name]))}
+        delegateNames={Object.fromEntries(delegateNames)}
+      />
     </div>
   );
 }
