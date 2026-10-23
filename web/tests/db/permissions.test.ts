@@ -262,6 +262,8 @@ describe('permissions: guard rails', () => {
         'set_user_permissions', 'delete_user', 'my_schedule', 'my_report', 'my_restorations', 'next_file_no',
         // Branding (0040): public readers for the signed-out login page; admin-only writers.
         'branding_public', 'branding_logo', 'update_branding', 'set_branding_logo', 'clear_branding_logo',
+        // Consent (0072): reads a scan from the closed stored_files table; checks can('patients','view') itself.
+        'consent_file',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
@@ -276,7 +278,9 @@ describe('permissions: guard rails', () => {
                           and pp.permissive = 'RESTRICTIVE')`);
       const shared = new Set(['profiles', 'settings', 'user_permissions', 'chairs', 'supervisors', 'lecturers', 'stock_lots',
         // Branding (0040): closed tables (no grants), reached only through the definer functions.
-        'branding', 'branding_logos']);
+        'branding', 'branding_logos',
+        // Consent (0072): uploaded file bytes, closed to every role, reached only through definer readers.
+        'stored_files']);
       expect(rows.map((r) => r.relname).filter((n) => !shared.has(n)).sort()).toEqual([]);
     });
   });

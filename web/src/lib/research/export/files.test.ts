@@ -48,6 +48,7 @@ const tables = (): ExportTables => {
 const meta = (): ExportMeta => ({
   exportedAt: '2026-10-23T10:00:00Z', filters: { course: null, brand: 'Oxy' }, version: 'outcomes-v1',
   rowCounts: Object.fromEntries(TABLE_NAMES.map((n) => [n, n === 'implants' || n === 'grafts' ? 1 : 0])) as ExportMeta['rowCounts'],
+  consent: { patients: 40, yes: 28, no: 4, not_recorded: 8 },
 });
 
 describe('buildXlsx', () => {
@@ -100,6 +101,10 @@ describe('aboutLines', () => {
     expect(text).toContain('Filter: course: C-ABC234');
     expect(text).toContain('Filter: delegate: D-XYZ789');
     expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  });
+  it('has the Research consent line', () => {
+    expect(aboutLines(meta())).toContainEqual(['Research consent', '28 yes, 4 no, 8 not recorded (of 40 patients)']);
+    expect(readmeText(meta())).toContain('Research consent: 28 yes, 4 no, 8 not recorded (of 40 patients)');
   });
   it('refuses a raw id in the filters', () => {
     const m = { ...meta(), filters: { course: '11111111-2222-4333-8444-555555555555' } };

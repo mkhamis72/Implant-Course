@@ -50,7 +50,7 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
   // A line that isn't one of the selected brand's is dropped (and the figures reloaded without it).
   const system = effectiveSystem(requested.brand, requested.system, first.base);
   const filters = { ...requested, system, compare: compare ?? '' };
-  const { version, rows, base, crowns, groups } = system === requested.system ? first : await loadResearch(filters, withGroups);
+  const { version, rows, base, crowns, groups, consent } = system === requested.system ? first : await loadResearch(filters, withGroups);
 
   const isAdmin = profile.role === 'admin';
   let exportLog: ExportLogRow[] = [];
@@ -83,7 +83,7 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
         brands={brands}
         systems={systems}
       />
-      <ResearchView rows={rows} crowns={crowns} filters={filters} groups={groups} noProduct={base.filter((r) => r.product_id === null).length} />
+      <ResearchView rows={rows} crowns={crowns} filters={filters} groups={groups} consent={consent} noProduct={base.filter((r) => r.product_id === null).length} />
       <ExportForm filters={filters} />
       <ExportLog
         isAdmin={isAdmin}

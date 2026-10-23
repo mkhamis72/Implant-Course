@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
     '/patients/research/export': ['./src/lib/research/export/analysis.R'],
     '/patients/research/analysis.R': ['./src/lib/research/export/analysis.R'],
   },
+  // Signed consent scans (≤ 2 MB) go through a server action; as form data 2 MB is about 2.7 MB (Vercel allows 4.5 MB).
+  experimental: {
+    serverActions: { bodySizeLimit: '3mb' },
+  },
   async headers() {
     // The CSP depends on the company and is set per request by the middleware.
     return [{ source: '/:path*', headers: staticSecurityHeaders() }];
