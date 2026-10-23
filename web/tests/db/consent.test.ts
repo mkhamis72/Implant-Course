@@ -97,6 +97,7 @@ describe('consent form versions', () => {
       await asPostgres(c);
       const v = await v1(c);
       await c.query('delete from public.patient_consents where version_id = $1', [v]);
+      await c.query('update public.consent_form_versions set first_signed_at = null where id = $1', [v]);
       const before = (await c.query('select text_en, text_ar from public.consent_form_versions where id = $1', [v])).rows[0];
 
       await actAs(c, users.admin);
@@ -129,6 +130,19 @@ describe('consent form versions', () => {
       await refused(c, () => saveVersion(c, null, 'Zz blank', '2020-01-01', ' ', 'نص'), /English and Arabic/);
       await refused(c, () => c.query(`insert into public.consent_form_versions (label, effective_on, text_en, text_ar)
                                       values ('Zz direct', '2020-01-01', 'a', 'b')`), /permission denied/);
+      await refused(c, () => c.query(`update public.consent_form_versions set text_en = 'changed' where label = 'v1'`), /permission denied/);
+    });
+  });
+
+  it('a version stays locked after the only patient who signed it is deleted', async () => {
+    await withTx(async (c) => {
+      const { early, patient } = await setup(c);
+      await record(c, { patient, version: early });
+      await c.query('select public.delete_patient($1)', [patient]);
+      await actAs(c, users.admin);
+      const v = await c.query('select in_use from public.consent_versions() where id = $1', [early]);
+      expect(v.rows[0].in_use).toBe(true);
+      await refused(c, () => saveVersion(c, early, 'Zz early', '2020-01-01', 'Changed'), /signed by patients and can't be changed/);
     });
   });
 });
@@ -156,7 +170,6 @@ describe('record_consent / void_consent', () => {
       const { early, patient } = await setup(c);
       const first = await record(c, { patient, version: early, signedOn: await daysAgo(c, 10) });
       const second = await record(c, { patient, version: early, signedOn: await daysAgo(c, 2), answers: [true, false, false, true] });
-      // Same date signed: the one recorded later wins.
       let rows = await history(c, patient);
       expect(rows.map((r) => [r.id, r.is_current])).toEqual([[second, true], [first, false]]);
 
@@ -168,6 +181,7 @@ describe('record_consent / void_consent', () => {
       expect(rows[1].voided_at).not.toBeNull();
       await refused(c, () => voidIt(c, second, 'Again'), /not found/);
 
+      // Same date signed as the first: the one recorded later wins.
       const third = await record(c, { patient, version: early, signedOn: await daysAgo(c, 10) });
       rows = await history(c, patient);
       expect(rows[0]).toMatchObject({ id: third, is_current: true });
@@ -237,7 +251,31 @@ describe('consent readers', () => {
       await setPerms(c, users.target, { schedule: 'edit', research: 'view' });
       await actAs(c, users.target);
       expect(await read()).toEqual({ records: 0, versions: false, current: 0, file: 0 });
-      expect((await c.query('select count(*)::int as n from public.stored_files')).rows[0].n).toBe(0);
+    });
+  });
+
+  it('stored files are never read directly, only through consent_file', async () => {
+    await withTx(async (c) => {
+      const { early, patient } = await setup(c);
+      await record(c, { patient, version: early });
+      for (const u of [users.admin, users.organizer]) {
+        await actAs(c, u);
+        await refused(c, () => c.query('select id from public.stored_files limit 1'), /permission denied/);
+        await refused(c, () => c.query('select bytes from public.stored_files limit 1'), /permission denied/);
+      }
+    });
+  });
+
+  it('consent_file returns nothing to a delegate login or an inactive user', async () => {
+    await withTx(async (c) => {
+      const { early, patient } = await setup(c);
+      await record(c, { patient, version: early });
+      const file = (await history(c, patient))[0].file_id as string;
+      for (const u of [users.delegate, users.inactive]) {
+        await actAs(c, u);
+        const r = await c.query('select count(*)::int as n from public.consent_file($1, $2)', [patient, file]);
+        expect(r.rows[0].n).toBe(0);
+      }
     });
   });
 

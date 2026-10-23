@@ -4,8 +4,9 @@
 --
 -- stored_files holds uploaded bytes (consent scans now; study approval letters in 8b). Like branding_logos (0040) it has
 -- no audit trigger, so audit_log never stores file bytes; the records that reference a file are audited (file id only).
+-- It is closed to every role: bytes are read only through definer readers that check the area (consent_file here).
 -- consent_form_versions holds the form text, seeded with v1 from docs/consent/consent-form-v1.md. A version is editable
--- until a consent record (voided or not) references it. patient_consents are never edited, only voided with a reason;
+-- until a patient first signs it (first_signed_at, kept even if that patient is later deleted). patient_consents are never edited, only voided with a reason;
 -- the current consent is the latest non-voided record by date signed, then recorded time.
 create table public.stored_files (
   id uuid primary key default gen_random_uuid(),
@@ -24,7 +25,9 @@ create table public.consent_form_versions (
   text_ar text not null check (length(trim(text_ar)) between 1 and 50000),
   -- clock_timestamp, not now(): versions made in one transaction still order by when they were made.
   created_at timestamptz not null default clock_timestamp(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  -- Set by the first record_consent on this version; from then on the version is locked.
+  first_signed_at timestamptz
 );
 
 create table public.patient_consents (
@@ -65,9 +68,9 @@ end $$;
 create trigger patient_consents_delete_file after delete on public.patient_consents
   for each row execute function app_private.delete_consent_file();
 
--- Reads obey RLS (View on Patients); nobody writes these tables directly.
+-- Versions and records: reads obey RLS (View on Patients). stored_files: no access at all. Nobody writes directly.
 revoke all on public.stored_files, public.consent_form_versions, public.patient_consents from public, anon, authenticated;
-grant select on public.stored_files, public.consent_form_versions, public.patient_consents to authenticated;
+grant select on public.consent_form_versions, public.patient_consents to authenticated;
 alter table public.stored_files enable row level security;
 alter table public.consent_form_versions enable row level security;
 alter table public.patient_consents enable row level security;
@@ -81,13 +84,6 @@ create policy consent_form_versions_select on public.consent_form_versions for s
   using (public.is_active_user());
 create policy consent_form_versions_area_read on public.consent_form_versions as restrictive for select to authenticated
   using ((select public.can('patients', 'view')));
-
--- A file is readable only as the scan of a consent record the reader can see.
-create policy stored_files_select on public.stored_files for select to authenticated
-  using (public.is_active_user());
-create policy stored_files_area_read on public.stored_files as restrictive for select to authenticated
-  using ((select public.can('patients', 'view'))
-         and exists (select 1 from public.patient_consents pc where pc.file_id = stored_files.id));
 
 -- v1, from the draft (English and Arabic sections; headings, the draft note and the footer line left out).
 insert into public.consent_form_versions (label, effective_on, text_en, text_ar) values (
@@ -185,8 +181,8 @@ begin
   if not exists (select 1 from public.patients where id = p_patient) then
     perform app_private.fail('Patient not found.');
   end if;
-  -- Share lock: a version can't be edited while a record referencing it is being made.
-  select effective_on into v_effective from public.consent_form_versions where id = p_version for share;
+  -- The version row is locked: it can't be edited while it is being signed, and first_signed_at is set once.
+  select effective_on into v_effective from public.consent_form_versions where id = p_version for update;
   if not found then
     perform app_private.fail('Choose the form version that was signed.');
   end if;
@@ -217,6 +213,7 @@ begin
     perform app_private.fail('Upload a JPEG image or a PDF.');
   end if;
 
+  update public.consent_form_versions set first_signed_at = now() where id = p_version and first_signed_at is null;
   insert into public.stored_files (bytes, content_type) values (p_file, p_content_type) returning id into v_file;
   insert into public.patient_consents (patient_id, version_id, language, signed_on, treatment, research, teaching_images,
                                        follow_up, file_id)
@@ -242,7 +239,7 @@ begin
   where id = p_id;
 end $$;
 
--- Adds (p_id null) or edits a form version. Admin only; a version some record references is locked.
+-- Adds (p_id null) or edits a form version. Admin only; a version a patient has signed is locked.
 create function public.save_consent_version(
   p_id uuid, p_label text, p_effective_on date, p_text_en text, p_text_ar text
 ) returns uuid
@@ -259,7 +256,8 @@ begin
   if p_id is not null then
     perform 1 from public.consent_form_versions where id = p_id for update;
     if not found then perform app_private.fail('Form version not found.'); end if;
-    if exists (select 1 from public.patient_consents where version_id = p_id) then
+    if exists (select 1 from public.consent_form_versions where id = p_id and first_signed_at is not null)
+       or exists (select 1 from public.patient_consents where version_id = p_id) then
       perform app_private.fail('This form version has been signed by patients and can''t be changed. Add a new version instead.');
     end if;
   end if;
@@ -304,13 +302,13 @@ grant execute on function public.void_consent(uuid, text) to authenticated;
 revoke execute on function public.save_consent_version(uuid, text, date, text, text) from public, anon;
 grant execute on function public.save_consent_version(uuid, text, date, text, text) to authenticated;
 
--- Every form version, newest effective first; in_use = a consent record (voided or not) references it (then it's locked).
+-- Every form version, newest effective first; in_use = a patient has signed it (then it's locked).
 create function public.consent_versions()
 returns table (id uuid, label text, effective_on date, text_en text, text_ar text, created_at timestamptz,
                updated_at timestamptz, in_use boolean)
 language sql stable security invoker set search_path = '' as $$
   select v.id, v.label, v.effective_on, v.text_en, v.text_ar, v.created_at, v.updated_at,
-         exists (select 1 from public.patient_consents pc where pc.version_id = v.id) as in_use
+         v.first_signed_at is not null as in_use
   from public.consent_form_versions v
   order by v.effective_on desc, v.created_at desc;
 $$;
@@ -329,8 +327,7 @@ $$;
 -- A patient's consent records, voided ones included, current first then newest first. No file bytes.
 create function public.patient_consents_for(p_patient uuid)
 returns table (id uuid, version_id uuid, version_label text, language text, signed_on date, treatment boolean,
-               research boolean, teaching_images boolean, follow_up boolean, file_id uuid, file_content_type text,
-               file_size_bytes int, recorded_by_name text, created_at timestamptz, voided_at timestamptz,
+               research boolean, teaching_images boolean, follow_up boolean, file_id uuid, recorded_by_name text, created_at timestamptz, voided_at timestamptz,
                voided_by_name text, voided_reason text, is_current boolean)
 language sql stable security invoker set search_path = '' as $$
   with current_record as (
@@ -340,26 +337,27 @@ language sql stable security invoker set search_path = '' as $$
     limit 1
   )
   select pc.id, pc.version_id, v.label, pc.language, pc.signed_on, pc.treatment, pc.research, pc.teaching_images,
-         pc.follow_up, pc.file_id, f.content_type, f.size_bytes,
+         pc.follow_up, pc.file_id,
          coalesce(nullif(rb.full_name, ''), rb.email), pc.created_at, pc.voided_at,
          coalesce(nullif(vb.full_name, ''), vb.email), pc.voided_reason,
          pc.id in (select id from current_record) as is_current
   from public.patient_consents pc
   join public.consent_form_versions v on v.id = pc.version_id
-  left join public.stored_files f on f.id = pc.file_id
   left join public.profiles rb on rb.user_id = pc.recorded_by
   left join public.profiles vb on vb.user_id = pc.voided_by
   where pc.patient_id = p_patient
   order by pc.id in (select id from current_record) desc, pc.signed_on desc, pc.created_at desc;
 $$;
 
--- The scan of one of this patient's consent records; no row for any other file.
+-- The scan of one of this patient's consent records; no row for any other file, or without View on Patients.
+-- Definer because stored_files is closed to every role; the area check is explicit.
 create function public.consent_file(p_patient uuid, p_file uuid)
 returns table (bytes bytea, content_type text)
-language sql stable security invoker set search_path = '' as $$
+language sql stable security definer set search_path = '' as $$
   select f.bytes, f.content_type
   from public.stored_files f
-  where f.id = p_file
+  where (select public.can('patients', 'view'))
+    and f.id = p_file
     and exists (select 1 from public.patient_consents pc where pc.file_id = f.id and pc.patient_id = p_patient);
 $$;
 
