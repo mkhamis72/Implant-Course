@@ -54,6 +54,7 @@ const CALC = `Calculated (${OUTCOMES})`;
 const STUDY_CODE = 'Study code: random, stable between exports, unrelated to any database id or name.';
 
 const MILESTONE = labels(MILESTONE_LABELS);
+const SURVIVAL = Object.fromEntries(Object.entries(MILESTONE).filter(([k]) => k !== 'not_loaded'));
 const MILESTONE_NOTE = (n: string) => outcome(`survival at ${n}: failed, survived, not reached yet, or lost to follow-up (never surviving past the last contact).`);
 
 const IMPLANT_DICTIONARY: Record<string, DictionaryEntry> = {
@@ -93,10 +94,10 @@ const IMPLANT_DICTIONARY: Record<string, DictionaryEntry> = {
   event_on: date('Event date', CALC, outcome('the failure date, or the earliest failed visit when an old failure has no date.')),
   event_time_unknown: bool('Event date unknown', CALC, outcome('true for an event with no known date; such implants are unknown at every milestone.')),
   at_loading: coded('Survival at loading', MILESTONE, CALC, outcome('failed before or at loading, survived after it, or not loaded yet when there is no event and no restoration.')),
-  year_1: coded('Survival at 1 year', MILESTONE, CALC, MILESTONE_NOTE('the 12-month review window')),
-  year_2: coded('Survival at 2 years', MILESTONE, CALC, MILESTONE_NOTE('the 2-year review window')),
-  year_3: coded('Survival at 3 years', MILESTONE, CALC, MILESTONE_NOTE('the 3-year review window')),
-  year_5: coded('Survival at 5 years', MILESTONE, CALC, MILESTONE_NOTE('the 5-year review window')),
+  year_1: coded('Survival at 1 year', SURVIVAL, CALC, MILESTONE_NOTE('the 12-month review window')),
+  year_2: coded('Survival at 2 years', SURVIVAL, CALC, MILESTONE_NOTE('the 2-year review window')),
+  year_3: coded('Survival at 3 years', SURVIVAL, CALC, MILESTONE_NOTE('the 3-year review window')),
+  year_5: coded('Survival at 5 years', SURVIVAL, CALC, MILESTONE_NOTE('the 5-year review window')),
   latest_grade: coded('Latest ICOI health grade', labels(GRADE_LABELS), CALC, outcome('ICOI 2008 (Misch) scale of the latest assessable attended visit; the worst criterion wins and missing data never gives a better grade.')),
   latest_grade_on: date('Latest grade date', CALC, outcome('the date of the visit that gave the latest assessable grade.')),
   latest_grade_reason: {
@@ -135,14 +136,15 @@ const FINDING = (label: string): DictionaryEntry => coded(label, YES_NO, VISITS,
 
 const VISIT_KEYS: Record<string, string> = {
   early_review: 'Early review (suture removal)', osseointegration: 'Osseointegration check', month_6: '6-month review',
-  month_12: '12-month review', year_2: 'Year-2 review', year_3: 'Year-3 review', year_4: 'Year-4 review', year_5: 'Year-5 review',
+  month_12: '12-month review',
+  ...Object.fromEntries(Array.from({ length: 98 }, (_, i) => [`year_${i + 2}`, `Year-${i + 2} review`])),
 };
 
 const VISITS_DICTIONARY: Record<string, DictionaryEntry> = {
   implant_code: code('Implant study code', VISITS, `${STUDY_CODE} Prefix I-.`),
   patient_code: code('Patient study code', VISITS, `${STUDY_CODE} Prefix P-.`),
   date: date('Visit date', VISITS),
-  visit_key: coded('Scheduled visit', VISIT_KEYS, VISITS, 'Empty for an unscheduled visit. Later yearly reviews continue the pattern year_N (N up to 99).'),
+  visit_key: coded('Scheduled visit', VISIT_KEYS, VISITS, 'Empty for an unscheduled visit. Yearly reviews are year_N, listed here from year_2 up to year_99.'),
   attendance: coded('Attendance', labels(ATTENDANCE_LABELS), VISITS, 'Empty on old visits recorded before attendance existed; the outcome rules count those as attended.'),
   outcome: coded('Visit outcome', labels(OUTCOME_LABELS), VISITS, 'Empty when not attended.'),
   pain_score: num('Pain score', 'score 0-10', VISITS, 'Numeric rating 0 to 10. Empty when not recorded.'),

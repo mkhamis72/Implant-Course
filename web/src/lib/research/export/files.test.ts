@@ -27,6 +27,13 @@ describe('toCsv', () => {
   it('joins arrays with semicolons and writes dates as given', () => {
     expect(toCsv([{ a: ['I-AAA222', 'I-BBB333'], b: '2026-10-23' }], ['a', 'b'])).toContain('I-AAA222;I-BBB333,2026-10-23');
   });
+  it('guards text a spreadsheet would read as a formula, but not numbers', () => {
+    const out = toCsv([{ a: '=SUM(A1)', b: '+1', c: '@x', d: '-1+2', e: -1 }], ['a', 'b', 'c', 'd', 'e']);
+    expect(out).toContain("\r\n'=SUM(A1),'+1,'@x,'-1+2,-1\r\n");
+  });
+  it('guards header cells too', () => {
+    expect(toCsv([], ['=x'])).toBe(BOM + "'=x\r\n");
+  });
   it('writes only the header for no rows', () => {
     expect(toCsv([], ['a'])).toBe(BOM + 'a\r\n');
   });
