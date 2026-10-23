@@ -112,6 +112,12 @@ export function isCrownList(list: DrilldownList): boolean {
   return list.startsWith('crowns');
 }
 
+/** The Research page with these filters and compare (the drill-down's link back). */
+export function researchHref(f: ResearchFilters): string {
+  const q = filterQuery(f);
+  return `/patients/research${q ? `?${q}` : ''}`;
+}
+
 export function drilldownHref(list: DrilldownList, f: ResearchFilters): string {
   const rest = filterQuery(f);
   return `/patients/research/drilldown?list=${encodeURIComponent(list)}${rest ? `&${rest}` : ''}`;

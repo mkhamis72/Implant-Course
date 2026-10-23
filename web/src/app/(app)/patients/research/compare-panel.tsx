@@ -35,6 +35,7 @@ function EstimateCell({ e }: { e: Estimate }) {
       <div className="font-medium">{pct(e.surv)}</div>
       <div className="text-xs"><CiText e={e} /></div>
       <div className="text-xs text-muted">{`at risk ${e.nRisk}`}</div>
+      {e.nRisk < THIN_AT_RISK && <div className="text-xs text-warn">{thinWarning(e.nRisk, e.events)}</div>}
     </div>
   );
 }
@@ -46,13 +47,13 @@ function GroupTable({ compare, groups, tested }: { compare: CompareKey; groups: 
       <table className="table">
         <thead>
           <tr>
-            <th>{label}</th>
-            <th>Implants</th>
-            <th>Failures</th>
-            <th>Failure date unknown</th>
-            <th>Survival at 1 year</th>
-            <th>Survival at 2 years</th>
-            <th>ICOI I + II</th>
+            <th scope="col">{label}</th>
+            <th scope="col">Implants</th>
+            <th scope="col">Failures</th>
+            <th scope="col">Failure date unknown</th>
+            <th scope="col">Survival at 1 year</th>
+            <th scope="col">Survival at 2 years</th>
+            <th scope="col">ICOI I + II</th>
           </tr>
         </thead>
         <tbody>
@@ -63,8 +64,8 @@ function GroupTable({ compare, groups, tested }: { compare: CompareKey; groups: 
                 <td data-label={label}>
                   <div>{g.label}</div>
                   {tested && g.notAssessed && <div className="text-xs text-muted">not in the test</div>}
-                  {/* A group is an estimate with fewer than THIN_AT_RISK implants at risk from the start. */}
-                  {s.implants < THIN_AT_RISK && <div className="text-xs text-warn">{thinWarning(s.implants, s.failures)}</div>}
+                  {/* The group's KM population (known failure date) under THIN_AT_RISK at the start: thin, which also covers THIN_GROUP. */}
+                  {s.y1.n < THIN_AT_RISK && <div className="text-xs text-warn">{thinWarning(s.y1.n, s.failures)}</div>}
                 </td>
                 <td data-label="Implants">{s.implants}</td>
                 <td data-label="Failures">{s.failures}</td>

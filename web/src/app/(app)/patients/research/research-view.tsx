@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { complications, crownSummary, formatPct, icoiBreakdown, kaplanMeier, kmEstimate, survivalAt, type CrownRow } from '@/lib/research/summary';
+import { complications, crownSummary, formatPct, icoiBreakdown, kaplanMeier, kmEstimate, MILESTONE_DAYS, survivalAt, type CrownRow } from '@/lib/research/summary';
 import { THIN_AT_RISK } from '@/lib/research/stats';
 import { CLUSTER_NOTE, groupRows, isCompareKey, thinWarning, unknownDateNote, type GroupVars } from '@/lib/research/groups';
 import { GRADE_LABELS, drilldownHref, type DetailRow, type ResearchFilters } from '@/lib/research/view';
@@ -29,7 +29,7 @@ function Tile({ title, children }: { title: string; children: ReactNode }) {
 // The KM estimate at 12 / 24 months (the same fit as the curve), its 95% CI and number at risk, then the SQL
 // milestone breakdown with no % of its own. Thin = fewer than THIN_AT_RISK at risk at that point.
 function SurvivalTile({ rows, year, filters }: { rows: DetailRow[]; year: 'year_1' | 'year_2'; filters: ResearchFilters }) {
-  const e = kmEstimate(rows, year === 'year_1' ? 12 : 24);
+  const e = kmEstimate(rows, MILESTONE_DAYS[year]);
   const s = survivalAt(rows, year);
   return (
     <Tile title={year === 'year_1' ? 'Survival at 1 year' : 'Survival at 2 years'}>

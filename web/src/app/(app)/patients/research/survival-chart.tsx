@@ -5,13 +5,13 @@ type Point = { month: number; survival: number };
 type BandPoint = { month: number; lower: number | null; upper: number | null };
 
 export type Curve = {
-  label: string
+  label: string;
   /** A design-token colour, e.g. `var(--color-accent)`. */
-  color: string
-  dashed?: boolean
-  points: Point[]
+  color: string;
+  dashed?: boolean;
+  points: Point[];
   /** Longest follow-up in this curve, in months: the line runs to here. */
-  end: number
+  end: number;
 };
 
 const W = 640;
@@ -113,7 +113,7 @@ export function SurvivalChart({ curves, band = [], atRisk, endMonth }: {
           ))}
         </ul>
       )}
-      {bandPath &&<p className="text-xs text-muted">Shaded: 95% CI</p>}
+      {bandPath && <p className="text-xs text-muted">Shaded: 95% CI</p>}
     </div>
   );
 }

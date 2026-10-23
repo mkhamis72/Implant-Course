@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { ComparePanel } from './compare-panel';
-import { CLUSTER_NOTE, LOADING_BIAS_NOTE, OPERATOR_NOTE, groupRows, type GroupVars } from '@/lib/research/groups';
+import { CLUSTER_NOTE, LOADING_BIAS_NOTE, NO_FAILURES_NOTE, OPERATOR_NOTE, groupRows, type GroupVars } from '@/lib/research/groups';
 import type { DetailRow, ResearchFilters } from '@/lib/research/view';
 
 const base: ResearchFilters = { course: 'c1', from: '', to: '', delegate: '', brand: '', system: '' };
@@ -57,6 +57,36 @@ describe('<ComparePanel>', () => {
     expect(within(p).getByText('Conventional')).toBeInTheDocument();
     expect(within(p).getByText(CLUSTER_NOTE)).toBeInTheDocument();
     expect(within(p).getByText(OPERATOR_NOTE)).toBeInTheDocument();
+  });
+
+  it('warns on an estimate with fewer than 30 at risk even in a large group', () => {
+    // 40 guided: 1 failure at 100 days, 34 followed 400 days, 5 followed 800 days. 40 free hand followed 800 days.
+    const big = Array.from({ length: 80 }, (_, i) =>
+      row(i, { event: i === 0, follow_up_days: i === 0 ? 100 : i < 35 ? 400 : 800 }));
+    const v = big.map((r, i) => ({ site_id: r.site_id, technique: i < 40 ? 'guided' : 'free_hand', bone_type: null, smoking: null, diabetes_status: null, periodontitis_history: null }));
+    render(<ComparePanel compare="technique" groups={groupRows(big, v, 'technique')} filters={base} />);
+    const guided = screen.getByRole('cell', { name: /^Guided/ }).closest('tr')!;
+    expect(within(guided).getByText('⚠ Not enough data — interpret with caution (n = 5, 1 failure)')).toBeInTheDocument();
+    expect(within(guided).queryByText(/n = 40/)).toBeNull();
+    const free = screen.getByRole('cell', { name: /^Free hand/ }).closest('tr')!;
+    expect(within(free).queryByText(/Not enough data/)).toBeNull();
+  });
+
+  it('counts only implants with a known failure date in a group warning', () => {
+    const few = [row(1), row(2, { event: true, follow_up_days: 100 }), row(3, { event: true, event_time_unknown: true, follow_up_days: 0 })];
+    const v = few.map((r) => ({ site_id: r.site_id, technique: 'guided', bone_type: null, smoking: null, diabetes_status: null, periodontitis_history: null }));
+    render(<ComparePanel compare="technique" groups={groupRows(few, v, 'technique')} filters={base} />);
+    const guided = screen.getByRole('cell', { name: /^Guided/ });
+    expect(within(guided).getByText('⚠ Not enough data — interpret with caution (n = 2, 1 failure)')).toBeInTheDocument();
+  });
+
+  it('shows 100% with the CI not estimable for a group with no failures', () => {
+    // Followed 400 days: the 1-year estimate is 100%, the 2-year one is past follow-up.
+    const none = [row(1, { follow_up_days: 400 }), row(2, { follow_up_days: 400 })];
+    const v = none.map((r) => ({ site_id: r.site_id, technique: 'free_hand', bone_type: null, smoking: null, diabetes_status: null, periodontitis_history: null }));
+    render(<ComparePanel compare="technique" groups={groupRows(none, v, 'technique')} filters={base} />);
+    const cell = screen.getByRole('cell', { name: /^100\.0%/ });
+    expect(within(cell).getByText(NO_FAILURES_NOTE)).toBeInTheDocument();
   });
 
   it('keeps the filters in the compare form', () => {

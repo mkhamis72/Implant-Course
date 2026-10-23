@@ -5,6 +5,7 @@ import {
   formatPct,
   icoiBreakdown,
   kaplanMeier,
+  kmEstimate,
   survivalAt,
   type CrownRow,
   type ImplantRow,
@@ -110,6 +111,21 @@ describe('kaplanMeier', () => {
     expect(r.atRisk).toEqual([
       { month: 0, n: 3 },
       { month: 12, n: 2 },
+      { month: 24, n: 1 },
+    ])
+  })
+})
+
+describe('kmEstimate at the milestone days', () => {
+  it('counts an implant followed exactly 365 / 730 days as at risk at day 365 / 730 (as R n.risk)', () => {
+    const rows = [row({ follow_up_days: 365 }), row({ follow_up_days: 365 }), row({ follow_up_days: 730 })]
+    const y1 = kmEstimate(rows, 365)
+    expect(y1.defined).toBe(true)
+    expect(y1.nRisk).toBe(3)
+    expect(kmEstimate(rows, 730).nRisk).toBe(1)
+    expect(kaplanMeier(rows).atRisk).toEqual([
+      { month: 0, n: 3 },
+      { month: 12, n: 3 },
       { month: 24, n: 1 },
     ])
   })

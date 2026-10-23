@@ -5,7 +5,7 @@ import { canView } from '@/lib/auth/permissions';
 import { formatDate } from '@/lib/format';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
 import {
-  DRILLDOWN_TITLES, MILESTONE_LABELS, RESEARCH_FILTER_KEYS, filterQuery, gradeLabel, isCrownList, isDrilldownList,
+  DRILLDOWN_TITLES, MILESTONE_LABELS, RESEARCH_FILTER_KEYS, researchHref, gradeLabel, isCrownList, isDrilldownList,
   milestoneKey, selectCrowns, selectImplants, type DetailRow,
 } from '@/lib/research/view';
 import { loadResearch } from '../data';
@@ -32,14 +32,13 @@ export default async function ResearchDrilldownPage({ searchParams }: { searchPa
   const profile = await requirePermission('research');
   const { list, ...filters } = await readParams(searchParams, 'list', ...RESEARCH_FILTER_KEYS, 'compare'); // compare: kept for the link back
   if (!isDrilldownList(list)) notFound();
-  const query = filterQuery(filters);
   const header = (
     <div className="page-header">
       <div>
         <h1>{DRILLDOWN_TITLES[list]}</h1>
         <p className="text-muted">Research · the records behind the number</p>
       </div>
-      <Link href={`/patients/research${query ? `?${query}` : ''}`} className="btn-secondary btn">Research</Link>
+      <Link href={researchHref(filters)} className="btn-secondary btn">Research</Link>
     </div>
   );
   if (!canView(profile, 'patients')) {

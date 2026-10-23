@@ -92,14 +92,22 @@ export function kaplanMeier(rows: ImplantRow[]) {
   return {
     points,
     band,
-    atRisk: ([0, 12, 24] as const).map((month) => ({ month, n: survivalAtTime(fit, month).nRisk })),
+    atRisk: ([[0, 0], [12, MILESTONE_DAYS.year_1], [24, MILESTONE_DAYS.year_2]] as const).map(([month, days]) => ({
+      month,
+      n: survivalAtTime(fit, days / MONTH_DAYS).nRisk,
+    })),
     excludedUnknownTime: rows.length - known.length,
   }
 }
 
-// The KM estimate at `months` (12 = the 1-year tile), from the same fit as the curve. `defined` is false past the
-// last follow-up (nobody left at risk and the curve hasn't reached 0); `events` are the failures up to that time.
-export function kmEstimate(rows: ImplantRow[], months: number) {
+// The tiles' milestones: day 365 and day 730 (the curve labels them 12 and 24 months).
+export const MILESTONE_DAYS = { year_1: 365, year_2: 730 } as const
+
+// The KM estimate at day `days` (365 = the 1-year tile), from the same fit as the curve. `defined` is false past the
+// last follow-up (nobody left at risk and the curve hasn't reached 0); `events` are the failures up to that time;
+// `n` is the implants in the fit (known failure date).
+export function kmEstimate(rows: ImplantRow[], days: number) {
+  const months = days / MONTH_DAYS
   const known = rows.filter((r) => !r.event_time_unknown)
   const fit = kmFit(known.map((r) => ({ months: r.follow_up_days / MONTH_DAYS, event: r.event })))
   const at = survivalAtTime(fit, months)
@@ -107,7 +115,7 @@ export function kmEstimate(rows: ImplantRow[], months: number) {
   fit.times.forEach((t, i) => {
     if (t <= months) events += fit.nEvent[i]
   })
-  return { ...at, events, defined: known.length > 0 && (at.nRisk > 0 || at.surv === 0) }
+  return { ...at, events, n: known.length, defined: known.length > 0 && (at.nRisk > 0 || at.surv === 0) }
 }
 
 export function formatPct(pct: number | null): string {

@@ -46,12 +46,12 @@ describe('<ResearchView>', () => {
     expect(within(tile('Crowns remade')).getByText('1')).toBeInTheDocument();
   });
 
-  it('shows the same survival at 1 year as the curve at 12 months', () => {
+  it('shows the same survival at 1 year as the curve at day 365', () => {
     const rows = Array.from({ length: 40 }, (_, i) =>
       row(i, { event: i % 7 === 0, follow_up_days: i % 7 === 0 ? 30 + i * 9 : 50 + i * 20 }),
     );
     const { points } = kaplanMeier(rows);
-    const atTwelve = points.filter((p) => p.month <= 12).at(-1)!.survival;
+    const atTwelve = points.filter((p) => p.month <= 365 / 30.4375).at(-1)!.survival;
     render(<ResearchView rows={rows} crowns={[]} filters={filters} noProduct={0} />);
     expect(within(tile('Survival at 1 year')).getByText(formatPct(atTwelve * 100))).toBeInTheDocument();
     expect(atTwelve).toBeLessThan(1);

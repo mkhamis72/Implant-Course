@@ -3,7 +3,7 @@
 import { LOADING_LABELS, loadingFrom } from '@/lib/restorations/restorations';
 import { TECHNIQUE_LABELS } from '@/lib/inventory/types';
 import { logRank, thinData } from './stats';
-import { kmEstimate, type ImplantRow } from './summary';
+import { MILESTONE_DAYS, kmEstimate, type ImplantRow } from './summary';
 
 const MONTH_DAYS = 30.4375;
 
@@ -31,20 +31,20 @@ export function needsGroupVars(key: CompareKey | null): boolean {
 
 /** One row of implant_outcomes_groups (0071); null = not recorded. */
 export type GroupVars = {
-  site_id: string
-  technique: string | null
-  bone_type: string | null
-  smoking: string | null
-  diabetes_status: string | null
-  periodontitis_history: string | null
+  site_id: string;
+  technique: string | null;
+  bone_type: string | null;
+  smoking: string | null;
+  diabetes_status: string | null;
+  periodontitis_history: string | null;
 };
 
 export type GroupableRow = ImplantRow & {
-  site_id: string
-  placed_on: string
-  loaded_on?: string | null
-  brand: string | null
-  system: string | null
+  site_id: string;
+  placed_on: string;
+  loaded_on?: string | null;
+  brand: string | null;
+  system: string | null;
 };
 
 export type Group<R> = { label: string; rows: R[]; notAssessed: boolean };
@@ -109,8 +109,8 @@ export function groupSummary(rows: ImplantRow[]) {
     implants: rows.length,
     failures: known(rows).filter((r) => r.event).length,
     unknownDate: rows.filter((r) => r.event_time_unknown).length,
-    y1: kmEstimate(rows, 12),
-    y2: kmEstimate(rows, 24),
+    y1: kmEstimate(rows, MILESTONE_DAYS.year_1),
+    y2: kmEstimate(rows, MILESTONE_DAYS.year_2),
     icoiGood,
     icoiPct: rows.length === 0 ? null : (icoiGood / rows.length) * 100,
   };
