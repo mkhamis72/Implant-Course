@@ -67,4 +67,14 @@ describe('ConsentForm', () => {
     fireEvent.submit(screen.getByRole('button', { name: 'Record consent' }).closest('form')!);
     expect(await screen.findByRole('alert')).toHaveTextContent('before this form version took effect');
   });
+
+  it('says when the browser cannot process the photo', async () => {
+    render(<ConsentForm patientId="p1" versions={versions} currentVersionId="v2" />);
+    fill();
+    const photo = new File([new Uint8Array([0xff, 0xd8, 0xff])], 'scan.jpg', { type: 'image/jpeg' });
+    fireEvent.change(screen.getByLabelText(/Signed form/), { target: { files: [photo] } });
+    fireEvent.submit(screen.getByRole('button', { name: 'Record consent' }).closest('form')!);
+    expect(await screen.findByRole('alert')).toHaveTextContent("This photo couldn't be processed in this browser. Try another browser, or upload a PDF.");
+    expect(recordConsent).not.toHaveBeenCalled();
+  });
 });

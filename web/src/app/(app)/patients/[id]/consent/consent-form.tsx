@@ -59,7 +59,7 @@ export function ConsentForm({ patientId, versions, currentVersionId }: {
       try {
         scan = await prepareScan(file);
       } catch {
-        setError('Upload a JPEG photo or a PDF.');
+        setError("This photo couldn't be processed in this browser. Try another browser, or upload a PDF.");
         return;
       }
       if (scan.size > MAX_CONSENT_BYTES) {

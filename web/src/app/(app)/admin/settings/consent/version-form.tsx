@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useId } from 'react';
+import { useActionState, useId, useRef } from 'react';
 import { valueOf, type FormState } from '@/lib/patients/form-state';
 import { saveConsentVersion } from './actions';
 
@@ -17,13 +17,18 @@ const LOCKED = "This form version has been signed by patients and can't be chang
 export function VersionForm({ version, start }: { version?: ConsentVersion; start?: { text_en: string; text_ar: string } }) {
   const [state, action, pending] = useActionState<FormState, FormData>(saveConsentVersion, {});
   const id = useId();
+  // A successful add remounts the form (new key) so it starts clean and a second submit can't re-add.
+  const added = useRef({ state, count: 0 });
+  if (added.current.state !== state) {
+    added.current = { state, count: added.current.count + (state.ok && !version ? 1 : 0) };
+  }
   const locked = Boolean(version?.in_use);
   // A failed save keeps what was typed; otherwise the saved version (or, when adding, the starting text).
   const value = (key: 'label' | 'effective_on' | 'text_en' | 'text_ar', fallback: string | undefined) =>
     valueOf(state, key, version?.[key] ?? fallback);
 
   return (
-    <form action={action} className="space-y-3">
+    <form key={added.current.count} action={action} className="space-y-3">
       {version && <input type="hidden" name="id" value={version.id} />}
       {locked && <p className="rounded-md border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{LOCKED}</p>}
       <div className="flex flex-wrap gap-3">

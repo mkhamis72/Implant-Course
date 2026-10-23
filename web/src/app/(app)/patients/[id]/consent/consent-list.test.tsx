@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 
 vi.mock('./actions', () => ({ recordConsent: vi.fn(), voidConsent: vi.fn() }));
 import { ConsentList } from './consent-list';
+import { voidConsent } from './actions';
 import type { ConsentRecord } from '@/lib/consent/labels';
 
 const record = (over: Partial<ConsentRecord>): ConsentRecord => ({
@@ -16,7 +17,7 @@ describe('ConsentList', () => {
     render(<ConsentList patientId="p1" editable={false} records={[record({ is_current: true })]} />);
     const card = screen.getByTestId('current-consent');
     expect(within(card).getAllByText('Yes')).toHaveLength(3);
-    expect(within(card).getByText('No')).toHaveClass('badge-warn');
+    expect(within(card).getByText('No')).toHaveClass('badge', 'badge-warn');
     const link = within(card).getByRole('link', { name: /View signed form/ });
     expect(link).toHaveAttribute('href', '/patients/p1/consent/file/f1');
     expect(link).toHaveAttribute('target', '_blank');
@@ -37,5 +38,14 @@ describe('ConsentList', () => {
   it('says when there is no current record', () => {
     render(<ConsentList patientId="p1" editable records={[]} />);
     expect(screen.getByText('No current consent record.')).toBeInTheDocument();
+  });
+
+  it('asks for a reason before voiding', () => {
+    render(<ConsentList patientId="p1" editable records={[record({ is_current: true })]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Void' }));
+    fireEvent.change(screen.getByLabelText('Reason for voiding'), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Void record' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a reason for voiding.');
+    expect(voidConsent).not.toHaveBeenCalled();
   });
 });

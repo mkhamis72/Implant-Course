@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { VersionForm } from './version-form';
+import { saveConsentVersion } from './actions';
 
 vi.mock('./actions', () => ({ saveConsentVersion: vi.fn() }));
 
@@ -31,5 +32,14 @@ describe('VersionForm', () => {
     expect(screen.getByRole('textbox', { name: 'Label' })).toHaveValue('');
     expect(screen.getByRole('textbox', { name: 'English text' })).toHaveValue('English');
     expect(screen.getByRole('button', { name: 'Add version' })).toBeEnabled();
+  });
+
+  it('remounts the add form after a successful add', async () => {
+    vi.mocked(saveConsentVersion).mockResolvedValue({ ok: 'Form version added.' });
+    const { container } = render(<VersionForm start={{ text_en: 'English', text_ar: 'عربي' }} />);
+    const before = container.querySelector('form');
+    fireEvent.submit(before!);
+    await screen.findByRole('status');
+    await waitFor(() => expect(container.querySelector('form')).not.toBe(before));
   });
 });

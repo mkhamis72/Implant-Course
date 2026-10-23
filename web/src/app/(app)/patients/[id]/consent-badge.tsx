@@ -5,7 +5,7 @@ export function ConsentBadge({ patientId, hasCurrent }: { patientId: string; has
   if (hasCurrent) return null;
   return (
     <Link href={`/patients/${patientId}/consent`}>
-      <span className="badge-warn" data-testid="no-consent-badge">No consent on file</span>
+      <span className="badge badge-warn" data-testid="no-consent-badge">No consent on file</span>
     </Link>
   );
 }

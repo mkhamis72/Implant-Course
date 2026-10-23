@@ -8,7 +8,7 @@ import { voidConsent } from './actions';
 const fileHref = (patientId: string, r: ConsentRecord) => `/patients/${patientId}/consent/file/${r.file_id}`;
 
 function Answer({ yes }: { yes: boolean }) {
-  return <span className={yes ? 'badge-ok' : 'badge-warn'}>{yes ? 'Yes' : 'No'}</span>;
+  return <span className={yes ? 'badge badge-ok' : 'badge badge-warn'}>{yes ? 'Yes' : 'No'}</span>;
 }
 
 function SignedFormLink({ patientId, r }: { patientId: string; r: ConsentRecord }) {
@@ -27,6 +27,10 @@ function VoidConsent({ patientId, id }: { patientId: string; id: string }) {
   const [pending, setPending] = useState(false);
 
   async function submit() {
+    if (!reason.trim()) {
+      setError('Enter a reason for voiding.');
+      return;
+    }
     setPending(true);
     setError(null);
     const result = await voidConsent(patientId, id, reason);
