@@ -60,4 +60,16 @@ describe('StudyForm', () => {
     submit();
     expect(await screen.findByRole('alert')).toHaveTextContent("The approval date can't be in the future.");
   });
+
+  it('edits the study it just saved when only the letter failed, so a retry adds no duplicate', async () => {
+    vi.mocked(saveStudy).mockResolvedValueOnce({ error: 'The study was saved, but not the letter: x', savedId: 's9' });
+    render(<StudyForm courses={courses} />);
+    fireEvent.change(screen.getByRole('textbox', { name: /Title/ }), { target: { value: 'T' } });
+    submit();
+    await screen.findByRole('alert');
+    submit();
+    await waitFor(() => expect(saveStudy).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(saveStudy).mock.calls[0][0]).toBeNull();
+    expect(vi.mocked(saveStudy).mock.calls[1][0]).toBe('s9');
+  });
 });

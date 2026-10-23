@@ -38,6 +38,8 @@ export function StudyForm({ study, courses, onDone }: { study?: StudyRow; course
   const [pending, start] = useTransition();
   // Remounted after a save so a new study's fields and the file input clear; a refusal keeps what was typed.
   const [formKey, setFormKey] = useState(0);
+  // A new study saved without its letter: further submits edit it instead of adding a duplicate.
+  const [savedId, setSavedId] = useState<string | null>(null);
   const chosen = new Set((study?.courses ?? []).map((c) => c.id));
   // A course the study names but the picker doesn't list (none should be missing) still shows, so saving keeps it.
   const options = [...courses, ...(study?.courses ?? []).filter((c) => !courses.some((o) => o.id === c.id))];
@@ -69,10 +71,12 @@ export function StudyForm({ study, courses, onDone }: { study?: StudyRow; course
       } else {
         fd.delete('letter');
       }
-      const result = await saveStudy(study?.id ?? null, fd);
+      const result = await saveStudy(study?.id ?? savedId, fd);
       if (result.error) {
+        if (result.savedId) setSavedId(result.savedId);
         setError(result.error);
       } else {
+        setSavedId(null);
         setFormKey((k) => k + 1);
         onDone?.();
       }

@@ -7,7 +7,8 @@ import { userMessage } from '@/lib/db-errors';
 import { encodeBytea } from '@/lib/branding/image';
 import { consentFileProblem, sniffConsentFile } from '@/lib/consent/files';
 
-type Result = { error?: string };
+/** `savedId`: the study was saved but a later step failed, so the form edits it on the next submit. */
+type Result = { error?: string; savedId?: string };
 
 const text = (fd: FormData, key: string) => {
   const v = fd.get(key);
@@ -54,7 +55,7 @@ export async function saveStudy(id: string | null, formData: FormData): Promise<
     });
     if (e) {
       done();
-      return { error: `The study was saved, but not the letter: ${userMessage(e)}` };
+      return { error: `The study was saved, but not the letter: ${userMessage(e)}`, savedId: studyId as string };
     }
   } else if (id && formData.get('remove_letter') === 'on') {
     const { error: e } = await supabase.rpc('clear_study_letter', { p_study: id });
