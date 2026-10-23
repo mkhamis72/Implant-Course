@@ -145,9 +145,27 @@ describe('crown_outcomes', () => {
       const site = await s.placeAt(36);
       const first = await restore(c, s.patient, [site], await s.day(60));
       await restore(c, s.patient, [site], await s.day(100), { reason: 'Fractured' });
-      await legacyFailure(c, site, await s.day(300), users.organizer);
+      // Removed with no failure details and no failed visit: the event date is unknown.
+      await asPostgres(c);
+      await c.query(`update public.implant_sites set state = 'removed' where id = $1`, [site]);
+      await actAs(c, users.organizer);
       const row = (await crowns(c)).find((x) => x.restoration_id === first);
       expect(row).toMatchObject({ remade: true, remade_on: await s.day(100), censored_by_implant_event: false });
+    });
+  });
+
+  it('a legacy failure under the crown censors it at the first failed visit (owner decision 2026-10-23)', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const a = await s.placeAt(36);
+      const b = await s.placeAt(37);
+      const r = await restore(c, s.patient, [a, b], await s.day(60), { teeth: [36, 37] });
+      await legacyFailure(c, a, await s.day(250), users.organizer);
+      await visit(c, b, await s.day(350));
+      const row = (await crowns(c)).find((x) => x.restoration_id === r);
+      expect(row).toMatchObject({
+        censored_by_implant_event: true, remade: false, last_contact: await s.day(250), follow_up_days: 190,
+      });
     });
   });
 

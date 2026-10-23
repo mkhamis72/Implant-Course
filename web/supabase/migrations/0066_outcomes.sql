@@ -11,20 +11,24 @@ $$;
 revoke execute on function public.outcomes_version() from public, anon;
 grant execute on function public.outcomes_version() to authenticated;
 
--- The ICOI cut-offs live only here. Missing pain, mobility, suppuration or bone loss gives not_assessable, never a
--- better grade; a failed or removed implant is IV regardless. Pain 1-3 is "sensitivity" (III), 4 or more is pain on
--- function (IV). Bone loss < 2 mm I, 2-4 mm II, > 4 mm III, more than half the implant length IV (with an unknown
--- length, bone loss over 4 mm is not_assessable: IV can't be ruled out). Probing is optional: any recorded depth > 7 mm gives III. The worst grade wins.
+-- The ICOI cut-offs live only here. A failed or removed implant is IV regardless. Pain 1-3 is "sensitivity" (III),
+-- 4 or more is pain on function (IV). Bone loss < 2 mm I, 2-4 mm II, > 4 mm III, more than half the implant length IV
+-- (with an unknown length, bone loss over 4 mm is not_assessable: IV can't be ruled out). Probing is optional: any
+-- recorded depth > 7 mm gives III. The worst grade wins. Missing data never gives a better grade (owner decision
+-- 2026-10-23): mobility or pain >= 4 proves IV on its own; otherwise pain, mobility and suppuration must all be
+-- recorded, and then a sign of III (pain 1-3, suppuration, probing > 7 mm) grades III without an X-ray. Only a visit
+-- that could still be I or II needs the bone loss; without it the visit is not_assessable.
 create or replace function public.icoi_grade(p_failed boolean, p_pain int, p_mobility text, p_suppuration text,
   p_bone_loss_mm numeric, p_implant_length_mm numeric, p_max_probing_mm numeric) returns text
 language sql immutable set search_path = '' as $$
   select case
     when coalesce(p_failed, false) then 'IV'
-    when p_pain is null or p_mobility is null or p_suppuration is null or p_bone_loss_mm is null then 'not_assessable'
     when p_pain >= 4 or p_mobility = 'yes' then 'IV'
+    when p_pain is null or p_mobility is null or p_suppuration is null then 'not_assessable'
     when p_implant_length_mm is not null and p_bone_loss_mm > p_implant_length_mm / 2 then 'IV'
     when p_implant_length_mm is null and p_bone_loss_mm > 4 then 'not_assessable'
     when p_pain >= 1 or p_suppuration = 'yes' or p_bone_loss_mm > 4 or p_max_probing_mm > 7 then 'III'
+    when p_bone_loss_mm is null then 'not_assessable'
     when p_bone_loss_mm >= 2 then 'II'
     else 'I'
   end;
@@ -34,19 +38,21 @@ grant execute on function public.icoi_grade(boolean, int, text, text, numeric, n
 
 -- Survival at one milestone (days from placement: the visit window start and target of visit_schedule). An event
 -- with an unknown date is unknown; an event on or before the target day is failed; a contact on or after the
--- window start is survived; otherwise unknown (never surviving past the last contact).
+-- window start is survived; a target day still after p_today is not_reached; otherwise unknown (lost to follow-up:
+-- never surviving past the last contact).
 create or replace function public.survival_at(p_placed_on date, p_event boolean, p_event_on date, p_last_contact date,
-  p_window_start int, p_target_day int) returns text
+  p_window_start int, p_target_day int, p_today date) returns text
 language sql immutable set search_path = '' as $$
   select case
     when p_event and p_event_on is null then 'unknown'
     when p_event and p_event_on <= p_placed_on + p_target_day then 'failed'
     when p_last_contact >= p_placed_on + p_window_start then 'survived'
+    when p_placed_on + p_target_day > p_today then 'not_reached'
     else 'unknown'
   end;
 $$;
-revoke execute on function public.survival_at(date, boolean, date, date, int, int) from public, anon;
-grant execute on function public.survival_at(date, boolean, date, date, int, int) to authenticated;
+revoke execute on function public.survival_at(date, boolean, date, date, int, int, date) from public, anon;
+grant execute on function public.survival_at(date, boolean, date, date, int, int, date) to authenticated;
 
 -- One row per attended visit (old visits without attendance count as attended) of the placed implants of the given
 -- patients (null = every patient). Bone loss = the worse of mesial/distal of (follow-up - baseline), for sides
@@ -61,7 +67,8 @@ language sql stable security invoker set search_path = '' as $$
          case
            when m.failed then
              case s.failure_type when 'failed_in_place' then 'failed in place' when 'lost' then 'implant lost'
-               when 'removed' then 'implant removed' else 'implant failed' end
+               when 'removed' then 'implant removed'
+               else case when s.state = 'removed' then 'implant removed' else 'implant failed' end end
            when g.grade = 'not_assessable' then
              case
                when b.taken_on is null then 'no baseline X-ray'
@@ -126,23 +133,32 @@ grant execute on function public.visit_grades(uuid[]) to authenticated;
 -- One row per placed implant. Null parameters = no filter; the course is implant_sites.course_id, else (as in
 -- course_report) placed during the course by a delegate enrolled in it; from/to are on placed_on.
 -- Survival events: failure_type lost or removed, state removed, and old failures without details (type unknown).
--- failed_in_place survives (and is graded IV). Last contact = the latest attended visit, measured X-ray of the
--- implant or event date. follow_up_days is the curve time: to the event date for an event, else to the last
--- contact (0 when never seen); an event without a date (event_time_unknown) belongs out of the curve.
--- Loading = the earliest non-voided restoration (temporary or final). At loading: an event and no loading date is
--- failed (early failure); with a loading date, an event on or before it is failed, after it survived; no event and
--- no restoration is not_loaded. Latest grade = the most recent assessable
--- grade (a failed implant is IV from its failure date); ungraded_later counts not-assessable visits after it.
+-- failed_in_place survives (and is graded IV). The event date is failed_on; an old failure without it takes the
+-- earliest non-voided failed visit (owner decision 2026-10-23), and only with neither is it event_time_unknown (out
+-- of the curve, unknown at every milestone). Last contact = the latest attended visit, measured X-ray of the implant
+-- or event date. follow_up_days is the curve time: to the event date for an event, else to the last contact (0 when
+-- never seen). Milestones: failed, survived, not_reached (still in the future, no event yet) or unknown (lost to
+-- follow-up). Loading = the earliest non-voided restoration (temporary or final). At loading: an event and no loading
+-- date is failed (early failure); with a loading date, an event on or before it is failed, after it survived; no
+-- event and no restoration is not_loaded. Latest grade = the most recent assessable grade (a failed implant is IV
+-- from its failure date) with its reason; ungraded_later counts not-assessable visits after it.
 create or replace function public.implant_outcomes(p_course uuid, p_from date, p_to date)
 returns table (site_id uuid, patient_id uuid, tooth smallint, course_id uuid, placed_on date, loaded_on date,
   last_contact date, follow_up_days int, event boolean, event_on date, event_time_unknown boolean, at_loading text,
-  year_1 text, year_2 text, year_3 text, year_5 text, latest_grade text, latest_grade_on date, ungraded_later int,
-  biological_complications int, mechanical_complications int, version text)
+  year_1 text, year_2 text, year_3 text, year_5 text, latest_grade text, latest_grade_on date,
+  latest_grade_reason text, ungraded_later int, biological_complications int, mechanical_complications int,
+  version text)
 language sql stable security invoker set search_path = '' as $$
-  with sel as (
+  with base as (
     select s.*,
            coalesce(s.failure_type in ('lost', 'removed') or s.state = 'removed'
-                    or (s.state = 'failed' and s.failure_type is null), false) as is_event
+                    or (s.state = 'failed' and s.failure_type is null), false) as is_event,
+           coalesce(s.failed_on,
+             (select min(f.date) from public.implant_followups f
+              where f.site_id = s.id and f.voided_at is null and f.outcome = 'failed')) as fail_on,
+           case s.failure_type when 'failed_in_place' then 'failed in place' when 'lost' then 'implant lost'
+             when 'removed' then 'implant removed'
+             else case when s.state = 'removed' then 'implant removed' else 'implant failed' end end as fail_reason
     from public.implant_sites s
     where s.placed_on is not null
       and (select public.can('patients', 'view'))
@@ -156,6 +172,9 @@ language sql stable security invoker set search_path = '' as $$
                    and exists (select 1 from public.enrollments e
                                where e.course_id = c.id and e.delegate_id = s.placing_delegate_id))))
   ),
+  sel as (
+    select b.*, case when b.is_event then b.fail_on end as ev_on from base b
+  ),
   g as (
     select * from public.visit_grades(coalesce((select array_agg(distinct sel.patient_id) from sel), '{}'::uuid[]))
   ),
@@ -167,29 +186,31 @@ language sql stable security invoker set search_path = '' as $$
            max(v.window_start) filter (where v.visit_key = 'year_3') as y3_start,
            max(v.target_day) filter (where v.visit_key = 'year_3') as y3_target,
            max(v.window_start) filter (where v.visit_key = 'year_5') as y5_start,
-           max(v.target_day) filter (where v.visit_key = 'year_5') as y5_target
+           max(v.target_day) filter (where v.visit_key = 'year_5') as y5_target,
+           public.cairo_today() as today
     from public.visit_schedule(5) v
   )
   select s.id, s.patient_id, s.tooth::smallint, coalesce(s.course_id, p_course), s.placed_on, ld.loaded_on,
          lc.last_contact,
-         (coalesce(case when s.is_event then s.failed_on end, lc.last_contact, s.placed_on) - s.placed_on)::int,
+         (coalesce(s.ev_on, lc.last_contact, s.placed_on) - s.placed_on)::int,
          s.is_event,
-         case when s.is_event then s.failed_on end,
-         s.is_event and s.failed_on is null,
+         s.ev_on,
+         s.is_event and s.ev_on is null,
          case
            -- Lost before it was ever loaded: an early failure.
            when s.is_event and ld.loaded_on is null then 'failed'
-           when s.is_event and s.failed_on is null then 'unknown'
+           when s.is_event and s.ev_on is null then 'unknown'
            when ld.loaded_on is null then 'not_loaded'
-           when s.is_event and s.failed_on <= ld.loaded_on then 'failed'
+           when s.is_event and s.ev_on <= ld.loaded_on then 'failed'
            else 'survived'
          end,
-         public.survival_at(s.placed_on, s.is_event, s.failed_on, lc.last_contact, w.y1_start, w.y1_target),
-         public.survival_at(s.placed_on, s.is_event, s.failed_on, lc.last_contact, w.y2_start, w.y2_target),
-         public.survival_at(s.placed_on, s.is_event, s.failed_on, lc.last_contact, w.y3_start, w.y3_target),
-         public.survival_at(s.placed_on, s.is_event, s.failed_on, lc.last_contact, w.y5_start, w.y5_target),
+         public.survival_at(s.placed_on, s.is_event, s.ev_on, lc.last_contact, w.y1_start, w.y1_target, w.today),
+         public.survival_at(s.placed_on, s.is_event, s.ev_on, lc.last_contact, w.y2_start, w.y2_target, w.today),
+         public.survival_at(s.placed_on, s.is_event, s.ev_on, lc.last_contact, w.y3_start, w.y3_target, w.today),
+         public.survival_at(s.placed_on, s.is_event, s.ev_on, lc.last_contact, w.y5_start, w.y5_target, w.today),
          case when s.state in ('failed', 'removed') then 'IV' else lg.grade end,
          lg.on_date,
+         case when s.state in ('failed', 'removed') then s.fail_reason else lg.reason end,
          (select count(*) from g where g.site_id = s.id and g.grade = 'not_assessable'
             and (lg.on_date is null or g.visit_date > lg.on_date))::int,
          (select count(*) from public.implant_complications k
@@ -212,15 +233,15 @@ language sql stable security invoker set search_path = '' as $$
       (select max(r.taken_on) from public.radiographs r
        join public.radiograph_bone_levels l on l.radiograph_id = r.id and l.site_id = s.id
        where r.voided_at is null and r.purpose <> 'planning' and r.taken_on >= s.placed_on),
-      case when s.is_event then s.failed_on end
+      s.ev_on
     ) as last_contact
   ) lc
   left join lateral (
-    select c.grade, c.on_date
+    select c.grade, c.on_date, c.reason
     from (
-      select g.grade, g.visit_date as on_date from g where g.site_id = s.id and g.grade <> 'not_assessable'
+      select g.grade, g.visit_date as on_date, g.reason from g where g.site_id = s.id and g.grade <> 'not_assessable'
       union all
-      select 'IV', s.failed_on where s.state in ('failed', 'removed') and s.failed_on is not null
+      select 'IV', s.fail_on, s.fail_reason where s.state in ('failed', 'removed') and s.fail_on is not null
     ) c
     order by c.on_date desc, (c.grade = 'IV') desc
     limit 1

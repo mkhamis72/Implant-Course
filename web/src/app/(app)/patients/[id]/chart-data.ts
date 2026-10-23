@@ -93,7 +93,8 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supabase.rpc('radiographs_for', { p_patient: patientId }),
     supabase.rpc('data_quality_issues', { p_patient: patientId }),
   ]);
-  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, issues]) {
+  // The Date problem badge fails soft (no badge), like the patient header: it must never take the chart down.
+  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs]) {
     if (r.error) throw new Error('Could not load the chart');
   }
   const statusMap: Partial<Record<number, ToothState>> = {};
@@ -113,7 +114,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     restorations: ((restorations.data ?? []) as unknown as RestorationRow[]).map(toRestoration),
     courses: (courses.data ?? []) as CourseOption[],
     radiographs: (radiographs.data ?? []) as unknown as Radiograph[],
-    issues: (issues.data ?? []) as DataQualityIssue[],
+    issues: (issues.error ? [] : (issues.data ?? [])) as DataQualityIssue[],
     today: todayIso(),
     me: me?.user_id ?? '',
     editable: me ? canEdit(me, 'patients') : false,

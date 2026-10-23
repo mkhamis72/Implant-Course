@@ -1,8 +1,8 @@
 -- Research part 5a: crown (restoration) survival, read only. One row per non-voided final restoration; temporaries
 -- are not listed. The event is end_kind = 'remade' at ended_on. Otherwise the crown is censored at the latest contact
 -- across its implants (same contacts as implant_outcomes: attended visits and measured, non-planning X-rays), or at
--- the first survival event among its implants (lost or removed, state removed, old failures without details), when
--- that comes first. Null parameters = no filter; the course is restorations.course_id, else the course_restorations
+-- the first survival event among its implants (lost or removed, state removed, old failures without details, dated
+-- by failed_on or else the earliest failed visit), when that comes first. Null parameters = no filter; the course is restorations.course_id, else the course_restorations
 -- rule (fitted during the course by a delegate enrolled in it); from/to are on fitted_on. Additive: a new function.
 create or replace function public.crown_outcomes(p_course uuid, p_from date, p_to date)
 returns table (restoration_id uuid, patient_id uuid, type text, teeth smallint[], fitted_on date, last_contact date,
@@ -24,7 +24,10 @@ language sql stable security invoker set search_path = '' as $$
            min(x.failed_on) filter (where x.is_event) as event_on,
            max(x.contact) as contact
     from (
-      select s.failed_on,
+      -- An old failure without failed_on takes its earliest failed visit (owner decision 2026-10-23).
+      select coalesce(s.failed_on,
+               (select min(f.date) from public.implant_followups f
+                where f.site_id = s.id and f.voided_at is null and f.outcome = 'failed')) as failed_on,
              coalesce(s.failure_type in ('lost', 'removed') or s.state = 'removed'
                       or (s.state = 'failed' and s.failure_type is null), false) as is_event,
              greatest(

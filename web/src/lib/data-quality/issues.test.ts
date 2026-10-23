@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { issueLink, issuesForSite, sortIssues, type DataQualityIssue } from './issues';
+import { issueLink, issuesForTooth, sortIssues, type DataQualityIssue } from './issues';
 
 const base: DataQualityIssue = {
   patient_id: 'p1', patient_name: 'A', file_no: 'P00001', site_id: 's1', tooth: 36, kind: 'before_placement',
@@ -20,10 +20,18 @@ describe('issueLink', () => {
   });
 });
 
-describe('issuesForSite', () => {
-  it('keeps only the matching site', () => {
-    expect(issuesForSite([base, { ...base, site_id: 's2' }, { ...base, site_id: null }], 's1')).toHaveLength(1);
-    expect(issuesForSite(undefined, 's1')).toEqual([]);
+describe('issuesForTooth', () => {
+  it('keeps issues of any implant on the tooth, and tooth issues without an implant', () => {
+    const sites = [{ id: 's1', tooth: 36 }, { id: 's0', tooth: 36 }, { id: 's2', tooth: 46 }];
+    const rows = [
+      base,
+      { ...base, site_id: 's0', record_id: 'failed' },
+      { ...base, site_id: 's2', tooth: 46 },
+      { ...base, site_id: null, record_id: 'xray' },
+      { ...base, site_id: null, tooth: 46 },
+    ];
+    expect(issuesForTooth(rows, sites, 36).map((i) => i.record_id)).toEqual(['r1', 'failed', 'xray']);
+    expect(issuesForTooth(undefined, sites, 36)).toEqual([]);
   });
 });
 

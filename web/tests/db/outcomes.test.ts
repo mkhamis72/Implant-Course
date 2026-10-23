@@ -56,7 +56,7 @@ const outcome = async (c: Client, site: string, course: string | null = null, fr
   (await c.query(
     `select site_id, patient_id, tooth, course_id, placed_on::text, loaded_on::text, last_contact::text, follow_up_days,
             event, event_on::text, event_time_unknown, at_loading, year_1, year_2, year_3, year_5,
-            latest_grade, latest_grade_on::text, ungraded_later, biological_complications, mechanical_complications, version
+            latest_grade, latest_grade_on::text, latest_grade_reason, ungraded_later, biological_complications, mechanical_complications, version
      from public.implant_outcomes($1, $2::date, $3::date) where site_id = $4`, [course, from, to, site])).rows[0];
 
 const icoi = async (c: Client, failed: boolean, pain: number | null, mobility: string | null, suppuration: string | null,
@@ -101,6 +101,23 @@ describe('icoi_grade', () => {
       expect(await icoi(c, false, 0, 'no', 'no', 4.0, null, null)).toBe('II');
       expect(await icoi(c, false, 0, 'no', 'no', 4.1, null, null)).toBe('not_assessable');
       expect(await icoi(c, true, null, null, null, null, null, null)).toBe('IV');
+    });
+  });
+
+  it('grades the worst signs without an X-ray (owner decision 2026-10-23)', async () => {
+    await withTx(async (c) => {
+      await actAs(c, users.organizer);
+      expect(await icoi(c, false, 0, 'yes', null, null, 10, null)).toBe('IV');
+      expect(await icoi(c, false, null, 'yes', null, null, null, null)).toBe('IV');
+      expect(await icoi(c, false, 4, null, null, null, 10, null)).toBe('IV');
+      expect(await icoi(c, false, 4, 'no', 'no', null, 10, null)).toBe('IV');
+      expect(await icoi(c, false, 2, 'no', 'no', null, 10, null)).toBe('III');
+      expect(await icoi(c, false, 0, 'no', 'yes', null, 10, null)).toBe('III');
+      expect(await icoi(c, false, 0, 'no', 'no', null, 10, 7.5)).toBe('III');
+      expect(await icoi(c, false, 0, 'no', 'no', null, 10, null)).toBe('not_assessable');
+      // A III sign needs all three signs recorded: a missing one could still prove IV.
+      expect(await icoi(c, false, 2, 'no', null, null, 10, null)).toBe('not_assessable');
+      expect(await icoi(c, false, 0, null, 'yes', null, 10, null)).toBe('not_assessable');
     });
   });
 });
@@ -170,7 +187,7 @@ describe('implant_outcomes', () => {
       await visit(c, site, await s.day(360), { attendance: 'did_not_attend' });
       expect(await outcome(c, site)).toMatchObject({
         last_contact: await s.day(200), follow_up_days: 200, event: false, event_on: null, event_time_unknown: false,
-        year_1: 'unknown', year_2: 'unknown',
+        year_1: 'unknown', year_2: 'not_reached',
       });
     });
   });
@@ -180,7 +197,7 @@ describe('implant_outcomes', () => {
       const s = await setup(c, 400);
       const seen = await s.placeAt(36);
       await visit(c, seen, await s.day(305), { findings: fullFindings });
-      expect(await outcome(c, seen)).toMatchObject({ year_1: 'survived', year_2: 'unknown', follow_up_days: 305 });
+      expect(await outcome(c, seen)).toMatchObject({ year_1: 'survived', year_2: 'not_reached', follow_up_days: 305 });
       const early = await s.placeAt(46);
       await visit(c, early, await s.day(304), { findings: fullFindings });
       expect((await outcome(c, early)).year_1).toBe('unknown');
@@ -201,7 +218,8 @@ describe('implant_outcomes', () => {
         { site_id: site, visit_date: await s.day(310), bone_loss_mm: null, grade: 'IV', reason: 'failed in place' },
       ]);
       expect(await outcome(c, site)).toMatchObject({
-        event: false, event_on: null, year_1: 'survived', latest_grade: 'IV', latest_grade_on: await s.day(310), ungraded_later: 0,
+        event: false, event_on: null, year_1: 'survived', latest_grade: 'IV', latest_grade_on: await s.day(310),
+        latest_grade_reason: 'failed in place', ungraded_later: 0,
       });
     });
   });
@@ -217,6 +235,7 @@ describe('implant_outcomes', () => {
       expect(await outcome(c, late)).toMatchObject({
         event: true, event_on: await s.day(500), event_time_unknown: false, follow_up_days: 500, last_contact: await s.day(500),
         at_loading: 'failed', year_1: 'survived', year_2: 'failed', year_3: 'failed', year_5: 'failed', latest_grade: 'IV',
+        latest_grade_reason: 'implant lost',
       });
       // Lost on day 330 after a contact on day 310: within the first year, so failed at one year.
       const early = await s.placeAt(46);
@@ -226,11 +245,12 @@ describe('implant_outcomes', () => {
       });
       expect(await outcome(c, early)).toMatchObject({
         event: true, event_on: await s.day(330), follow_up_days: 330, last_contact: await s.day(340), year_1: 'failed', year_2: 'failed',
+        latest_grade: 'IV', latest_grade_on: await s.day(340), latest_grade_reason: 'implant removed',
       });
     });
   });
 
-  it('legacy failure without a date has event_time_unknown and unknown milestones', async () => {
+  it('legacy failure without a date takes the first failed visit date (owner decision 2026-10-23)', async () => {
     await withTx(async (c) => {
       const s = await setup(c, 400);
       const site = await s.placeAt(36);
@@ -242,8 +262,9 @@ describe('implant_outcomes', () => {
       await visit(c, site, await s.day(350), { findings: fullFindings });
       await legacyFailure(c, site, await s.day(380), users.organizer);
       expect(await outcome(c, site)).toMatchObject({
-        event: true, event_on: null, event_time_unknown: true, last_contact: await s.day(380),
-        at_loading: 'unknown', year_1: 'unknown', year_2: 'unknown', year_3: 'unknown', year_5: 'unknown', latest_grade: 'IV',
+        event: true, event_on: await s.day(380), event_time_unknown: false, last_contact: await s.day(380), follow_up_days: 380,
+        at_loading: 'survived', year_1: 'survived', year_2: 'failed', year_3: 'failed', year_5: 'failed', latest_grade: 'IV',
+        latest_grade_on: await s.day(380), latest_grade_reason: 'implant failed',
       });
     });
   });
@@ -320,10 +341,10 @@ describe('implant_outcomes', () => {
       expect(await outcome(c, on366)).toMatchObject({ event_on: await s.day(366), year_1: 'survived', year_2: 'failed' });
       const seen670 = await s.placeAt(26);
       await visit(c, seen670, await s.day(670), { findings: fullFindings });
-      expect(await outcome(c, seen670)).toMatchObject({ year_1: 'survived', year_2: 'survived', year_3: 'unknown' });
+      expect(await outcome(c, seen670)).toMatchObject({ year_1: 'survived', year_2: 'survived', year_3: 'not_reached' });
       const seen669 = await s.placeAt(16);
       await visit(c, seen669, await s.day(669), { findings: fullFindings });
-      expect(await outcome(c, seen669)).toMatchObject({ year_1: 'survived', year_2: 'unknown' });
+      expect(await outcome(c, seen669)).toMatchObject({ year_1: 'survived', year_2: 'not_reached' });
     });
   });
 
@@ -386,7 +407,9 @@ describe('implant_outcomes', () => {
       expect(await grades(c, s.patient)).toEqual([
         { site_id: site, visit_date: await s.day(310), bone_loss_mm: 0.5, grade: 'I', reason: 'bone loss 0.5 mm' },
       ]);
-      expect(await outcome(c, site)).toMatchObject({ last_contact: await s.day(310), year_1: 'survived', latest_grade: 'I' });
+      expect(await outcome(c, site)).toMatchObject({
+        last_contact: await s.day(310), year_1: 'survived', latest_grade: 'I', latest_grade_reason: 'bone loss 0.5 mm',
+      });
     });
   });
 
@@ -400,7 +423,43 @@ describe('implant_outcomes', () => {
       await actAs(c, users.organizer);
       expect(await outcome(c, site)).toMatchObject({
         event: true, event_on: null, event_time_unknown: true, last_contact: await s.day(320), at_loading: 'failed',
-        year_1: 'unknown', latest_grade: 'IV',
+        year_1: 'unknown', year_2: 'unknown', latest_grade: 'IV', latest_grade_on: null,
+        latest_grade_reason: 'implant removed',
+      });
+    });
+  });
+
+  it('a milestone still in the future is not_reached; unknown means lost to follow-up', async () => {
+    await withTx(async (c) => {
+      const young = await setup(c, 364);
+      const a = await young.placeAt(36);
+      expect(await outcome(c, a)).toMatchObject({
+        last_contact: null, year_1: 'not_reached', year_2: 'not_reached', year_3: 'not_reached', year_5: 'not_reached',
+        latest_grade: null, latest_grade_on: null, latest_grade_reason: null,
+      });
+      // Lost early: failed at every milestone, reached or not.
+      await visit(c, a, await young.day(100), {
+        outcome: 'failed', findings: { failure_type: 'lost', failure_reason: 'no_osseointegration' },
+      });
+      expect(await outcome(c, a)).toMatchObject({ year_1: 'failed', year_5: 'failed' });
+      const due = await setup(c, 365, 'Zz Outcome Patient Due');
+      const b = await due.placeAt(36);
+      expect(await outcome(c, b)).toMatchObject({ year_1: 'unknown', year_2: 'not_reached' });
+    });
+  });
+
+  it('grades a visit with mobility or suppuration even without an X-ray', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c, 400);
+      const mobile = await s.placeAt(36);
+      await visit(c, mobile, await s.day(100), { findings: { pain_score: 0, mobility: 'yes', suppuration: 'no' } });
+      const pus = await s.placeAt(46);
+      await visit(c, pus, await s.day(100), { findings: { pain_score: 0, mobility: 'no', suppuration: 'yes' } });
+      const rows = await grades(c, s.patient);
+      expect(rows.find((r) => r.site_id === mobile)).toMatchObject({ bone_loss_mm: null, grade: 'IV', reason: 'mobility' });
+      expect(rows.find((r) => r.site_id === pus)).toMatchObject({ bone_loss_mm: null, grade: 'III', reason: 'suppuration' });
+      expect(await outcome(c, mobile)).toMatchObject({
+        latest_grade: 'IV', latest_grade_on: await s.day(100), latest_grade_reason: 'mobility',
       });
     });
   });
