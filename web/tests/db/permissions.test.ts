@@ -264,6 +264,8 @@ describe('permissions: guard rails', () => {
         'branding_public', 'branding_logo', 'update_branding', 'set_branding_logo', 'clear_branding_logo',
         // Consent (0072): reads a scan from the closed stored_files table; checks can('patients','view') itself.
         'consent_file',
+        // Studies (0073): reads a letter from stored_files; checks can('research','view') and can('patients','view') itself.
+        'study_letter',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
