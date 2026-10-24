@@ -55,6 +55,17 @@ describe('decideRedirect', () => {
   it('never redirects the confirm route (invite links must work while signed in)', () => {
     expect(decideRedirect({ path: '/auth/confirm', hasUser: true, aal: aal2 })).toBeNull();
   });
+  it('sends a user who must set up 2FA again to Account → Security from any other page', () => {
+    for (const path of ['/', '/admin/users', '/patients', '/my', '/account/set-password']) {
+      expect(decideRedirect({ path, hasUser: true, aal: aal1, mfaSetupRequired: true })).toBe('/account/security');
+    }
+  });
+  it('lets them reach Account → Security, sign-in pages and the deactivated page', () => {
+    for (const path of ['/account/security', '/login/forgot', '/auth/confirm', '/deactivated']) {
+      expect(decideRedirect({ path, hasUser: true, aal: aal1, mfaSetupRequired: true })).toBeNull();
+    }
+    expect(decideRedirect({ path: '/login', hasUser: true, aal: aal1, mfaSetupRequired: true })).toBe('/');
+  });
 });
 
 describe('verifiedAal (C1: never trust factors from the session cookie)', () => {

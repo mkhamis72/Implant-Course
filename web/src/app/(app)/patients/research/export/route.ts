@@ -17,7 +17,7 @@ const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 export async function GET(req: NextRequest) {
   const profile = await getCurrentProfile();
-  if (!profile?.active || !canView(profile, 'research')) return new NextResponse('Not allowed', { status: 403 });
+  if (!profile?.active || profile.mfa_setup_required || !canView(profile, 'research')) return new NextResponse('Not allowed', { status: 403 });
   // The readers are security invoker over patient tables: without Patients view the file would be silently empty.
   if (!canView(profile, 'patients')) return new NextResponse('Research export needs View on Patients', { status: 403 });
 

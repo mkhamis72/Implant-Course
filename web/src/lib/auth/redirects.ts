@@ -14,9 +14,15 @@ function needsMfa(aal: Aal): boolean {
   return aal?.next === 'aal2' && aal.current !== 'aal2';
 }
 
-/** Returns the path to redirect to, or null to let the request through. */
-export function decideRedirect(input: { path: string; hasUser: boolean; aal: Aal }): string | null {
-  const { path, hasUser, aal } = input;
+// Open while an admin's 2FA reset requires set-up again (sign-in pages are public; /deactivated avoids a loop).
+const MFA_SETUP_PATHS = new Set(['/account/security', '/deactivated']);
+
+/**
+ * Returns the path to redirect to, or null to let the request through. `mfaSetupRequired`: the profile's
+ * "must set up 2FA again" flag, when the caller has it (the session guards enforce it regardless).
+ */
+export function decideRedirect(input: { path: string; hasUser: boolean; aal: Aal; mfaSetupRequired?: boolean }): string | null {
+  const { path, hasUser, aal, mfaSetupRequired } = input;
   const kind = classifyPath(path);
   if (kind === 'public') {
     if (path === '/login' && hasUser) return needsMfa(aal) ? '/login/mfa' : '/';
@@ -24,7 +30,8 @@ export function decideRedirect(input: { path: string; hasUser: boolean; aal: Aal
   }
   if (!hasUser) return '/login';
   if (kind === 'mfa') return needsMfa(aal) ? null : '/';
-  return needsMfa(aal) ? '/login/mfa' : null;
+  if (needsMfa(aal)) return '/login/mfa';
+  return mfaSetupRequired && !MFA_SETUP_PATHS.has(path) ? '/account/security' : null;
 }
 
 /**

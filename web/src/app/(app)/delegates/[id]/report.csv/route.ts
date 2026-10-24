@@ -11,7 +11,7 @@ import { restorationsCsvSection, type MyRestorationRow } from '@/lib/delegate-po
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
-  if (!profile?.active || !canView(profile, 'delegates')) return new NextResponse('Not allowed', { status: 403 });
+  if (!profile?.active || profile.mfa_setup_required || !canView(profile, 'delegates')) return new NextResponse('Not allowed', { status: 403 });
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) return new NextResponse('Not found', { status: 404 });
   const supabase = await createClient();

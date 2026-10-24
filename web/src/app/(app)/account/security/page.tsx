@@ -5,7 +5,7 @@ import { confirmEnroll, removeFactor, startEnroll } from './actions';
 import { requireSignedIn } from '@/lib/auth/session';
 
 export default async function SecurityPage() {
-  await requireSignedIn(); // staff and delegate logins alike
+  await requireSignedIn({ allowMfaSetup: true }); // staff and delegate logins alike; the one page open while 2FA set-up is required
   const supabase = await createClient();
   const { data } = await supabase.auth.mfa.listFactors();
   const verified = (data?.totp ?? []).filter((f) => f.status === 'verified');

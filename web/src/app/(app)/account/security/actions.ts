@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { mapAuthError } from '@/lib/auth/errors';
+import { userMessage } from '@/lib/db-errors';
 
 export type Enrollment = { factorId: string; qrCode: string; secret: string };
 
@@ -24,7 +25,11 @@ export async function confirmEnroll(factorId: string, code: string): Promise<{ o
   const supabase = await createClient();
   const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: code.replace(/\s/g, '') });
   if (error) return { error: mapAuthError(error) };
-  revalidatePath('/account/security');
+  // The verify put the aal2 session on this client (and its cookies), which mfa_setup_done checks:
+  // it clears an admin's "must set up 2FA again" (a no-op for everyone else).
+  const { error: doneError } = await supabase.rpc('mfa_setup_done');
+  if (doneError) return { error: userMessage(doneError)! };
+  revalidatePath('/', 'layout');
   return { ok: true };
 }
 

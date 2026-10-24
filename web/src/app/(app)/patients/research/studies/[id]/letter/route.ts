@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   try {
     const { id } = await params;
     const profile = await getCurrentProfile();
-    if (!profile?.active || !canView(profile, 'research') || !canView(profile, 'patients')) return notFound();
+    if (!profile?.active || profile.mfa_setup_required || !canView(profile, 'research') || !canView(profile, 'patients')) return notFound();
     if (!uuid.safeParse(id).success) return notFound();
 
     const supabase = await createClient();
