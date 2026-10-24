@@ -62,7 +62,7 @@ export const getSettings = cache(async (): Promise<Settings> => {
 });
 
 /**
- * Any active account, staff or delegate. `allowMfaSetup`: only Account → Security, the one page a user who must
+ * Any active account, staff or delegate. `allowMfaSetup`: only Account → Security and Set password, the pages a user who must
  * set up 2FA again may use.
  */
 export async function requireSignedIn(options: { allowMfaSetup?: boolean } = {}): Promise<Profile> {

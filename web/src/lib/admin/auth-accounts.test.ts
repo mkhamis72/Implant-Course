@@ -33,6 +33,12 @@ describe('changeAuthEmail', () => {
     admin.updateUserById.mockResolvedValue({ data: {}, error: null });
     expect(await changeAuthEmail('u1', 'new@example.com')).toEqual({ previous: { email: 'old@example.com', signedInBefore: false } });
   });
+  it('leaves a never-confirmed invite unconfirmed, so the invite can still be resent', async () => {
+    admin.getUserById.mockResolvedValue(user({ last_sign_in_at: null, email_confirmed_at: null }));
+    admin.updateUserById.mockResolvedValue({ data: {}, error: null });
+    expect(await changeAuthEmail('u1', 'fixed@example.com')).toEqual({ previous: { email: 'old@example.com', signedInBefore: false } });
+    expect(admin.updateUserById).toHaveBeenCalledWith('u1', { email: 'fixed@example.com' });
+  });
   it('refuses an address another account uses', async () => {
     admin.getUserById.mockResolvedValue(user());
     admin.updateUserById.mockResolvedValue({ data: null, error: { code: 'email_exists', message: 'exists', status: 422 } });

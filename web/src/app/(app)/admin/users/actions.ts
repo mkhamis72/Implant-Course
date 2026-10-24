@@ -11,7 +11,9 @@ import {
 import { createLogin } from '@/lib/admin/create-login';
 import { userMessage } from '@/lib/db-errors';
 import { updateProblem } from '@/lib/admin/results';
-import { changeAuthEmail, deleteAuthUser, inviteLink, resetAuthFactors, setTemporaryPassword } from '@/lib/admin/auth-accounts';
+import {
+  changeAuthEmail, deleteAuthUser, hasVerifiedFactor, inviteLink, resetAuthFactors, setTemporaryPassword,
+} from '@/lib/admin/auth-accounts';
 import { emailChangedNotice, inviteEmail } from '@/lib/admin/notices';
 import { sendEmail } from '@/lib/email/send';
 import { getBranding } from '@/lib/branding/get';
@@ -155,21 +157,26 @@ export async function changeEmail(_prev: ActionState, formData: FormData): Promi
   return sessionProblem ? { error: sessionProblem + warning } : { ok: `Email changed to ${email}.${warning}` };
 }
 
-/** Removes every factor, then requires set-up again before the user can work, then signs them out everywhere. */
+/** Requires set-up again before the user can work, then removes every factor, then signs them out everywhere. */
 export async function resetTwoFactor(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const me = await requireAdmin();
   const userId = String(formData.get('user_id') ?? '');
   if (userId === me.user_id) return { error: SELF_MESSAGE };
   if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
 
-  const problem = await resetAuthFactors(userId);
-  if (problem) return { error: problem };
+  // Not a way to require 2FA of someone who never set it up.
+  if (!(await hasVerifiedFactor(userId))) return { error: 'This user has no two-factor authentication to reset.' };
+  // The flag first: whatever fails after it, the user can't work without setting up 2FA again.
   const supabase = await createClient();
   const { error } = await supabase.rpc('admin_require_mfa_setup', { p_user: userId });
-  if (error) {
-    return { error: `Two-factor authentication was removed, but setting it up again couldn't be required: ${userMessage(error)}` };
-  }
+  if (error) return { error: userMessage(error)! };
   revalidatePath('/admin/users');
+  const problem = await resetAuthFactors(userId);
+  if (problem) {
+    return {
+      error: `Setting up two-factor authentication again is now required, but the old authenticator couldn't be removed: ${problem} Try Reset 2FA again.`,
+    };
+  }
   const sessionProblem = await endSessions(supabase, userId);
   return sessionProblem
     ? { error: sessionProblem }

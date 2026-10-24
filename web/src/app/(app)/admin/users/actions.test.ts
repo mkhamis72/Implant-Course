@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { createLogin, rpc, deleteAuthUser, setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink, sendEmail } = vi.hoisted(() => ({
+const { createLogin, rpc, deleteAuthUser, setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink, sendEmail, hasVerifiedFactor } = vi.hoisted(() => ({
   createLogin: vi.fn(), rpc: vi.fn(), deleteAuthUser: vi.fn(), setTemporaryPassword: vi.fn(),
-  changeAuthEmail: vi.fn(), resetAuthFactors: vi.fn(), inviteLink: vi.fn(), sendEmail: vi.fn(),
+  changeAuthEmail: vi.fn(), resetAuthFactors: vi.fn(), inviteLink: vi.fn(), sendEmail: vi.fn(), hasVerifiedFactor: vi.fn(),
 }));
 vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: 'me' })) }));
 vi.mock('@/lib/admin/create-login', () => ({ createLogin }));
-vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink }));
+vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink, hasVerifiedFactor }));
 vi.mock('@/lib/email/send', () => ({ sendEmail }));
 vi.mock('@/lib/branding/get', () => ({ getBranding: vi.fn(async () => ({ name: 'Academy' })) }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
@@ -185,7 +185,8 @@ describe('changeEmail', () => {
 
 describe('resetTwoFactor', () => {
   const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
-  it('deletes every factor, then requires set-up, then ends sessions', async () => {
+  it('requires set-up first, then deletes every factor, then ends sessions', async () => {
+    hasVerifiedFactor.mockResolvedValue(true);
     resetAuthFactors.mockResolvedValue(null);
     rpcAnswers({});
     expect(await resetTwoFactor({}, form({ user_id: id }))).toEqual({
@@ -196,14 +197,34 @@ describe('resetTwoFactor', () => {
       ['admin_require_mfa_setup', { p_user: id }],
       ['admin_end_sessions', { p_user: id }],
     ]);
-    expect(resetAuthFactors.mock.invocationCallOrder[0]).toBeLessThan(rpc.mock.invocationCallOrder[0]);
+    const [flag, sessions] = rpc.mock.invocationCallOrder;
+    const factors = resetAuthFactors.mock.invocationCallOrder[0];
+    expect(flag).toBeLessThan(factors);
+    expect(factors).toBeLessThan(sessions);
   });
-  it('stops when the factors could not be deleted', async () => {
-    resetAuthFactors.mockResolvedValue('This user has no two-factor authentication to reset.');
+  it('refuses a user without a verified factor before setting anything', async () => {
+    hasVerifiedFactor.mockResolvedValue(false);
     expect(await resetTwoFactor({}, form({ user_id: id }))).toEqual({ error: 'This user has no two-factor authentication to reset.' });
     expect(rpc).not.toHaveBeenCalled();
+    expect(resetAuthFactors).not.toHaveBeenCalled();
+  });
+  it('touches no factor when the flag could not be set', async () => {
+    hasVerifiedFactor.mockResolvedValue(true);
+    rpcAnswers({ admin_require_mfa_setup: { message: 'Only an admin can do this.', hint: 'user' } });
+    expect(await resetTwoFactor({}, form({ user_id: id }))).toEqual({ error: 'Only an admin can do this.' });
+    expect(resetAuthFactors).not.toHaveBeenCalled();
+  });
+  it('says so when the factors could not be deleted, and ends no sessions', async () => {
+    hasVerifiedFactor.mockResolvedValue(true);
+    resetAuthFactors.mockResolvedValue('Something went wrong. Please try again.');
+    rpcAnswers({});
+    expect(await resetTwoFactor({}, form({ user_id: id }))).toEqual({
+      error: "Setting up two-factor authentication again is now required, but the old authenticator couldn't be removed: Something went wrong. Please try again. Try Reset 2FA again.",
+    });
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(['admin_require_mfa_setup']);
   });
   it('says when sessions could not be ended', async () => {
+    hasVerifiedFactor.mockResolvedValue(true);
     resetAuthFactors.mockResolvedValue(null);
     rpcAnswers({ admin_end_sessions: { message: 'nope' } });
     expect(await resetTwoFactor({}, form({ user_id: id }))).toEqual({ error: 'Changed, but existing sessions could not be ended: nope' });
@@ -211,6 +232,7 @@ describe('resetTwoFactor', () => {
   it('refuses your own account', async () => {
     expect(await resetTwoFactor({}, form({ user_id: 'me' }))).toEqual({ error: SELF });
     expect(resetAuthFactors).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
 

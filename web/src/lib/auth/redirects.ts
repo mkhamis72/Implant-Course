@@ -15,7 +15,7 @@ function needsMfa(aal: Aal): boolean {
 }
 
 // Open while an admin's 2FA reset requires set-up again (sign-in pages are public; /deactivated avoids a loop).
-const MFA_SETUP_PATHS = new Set(['/account/security', '/deactivated']);
+const MFA_SETUP_PATHS = new Set(['/account/security', '/account/set-password', '/deactivated']);
 
 /**
  * Returns the path to redirect to, or null to let the request through. `mfaSetupRequired`: the profile's

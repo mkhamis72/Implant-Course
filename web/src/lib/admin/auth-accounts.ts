@@ -40,7 +40,7 @@ async function adminAuth() {
 export type PreviousAccount = { email: string; signedInBefore: boolean };
 
 /**
- * Sets a login's sign-in email, already confirmed (Auth moves the email identity with it). Returns the address it
+ * Sets a login's sign-in email (Auth moves the email identity with it). Returns the address it
  * had, so the caller can put it back, and whether the user ever signed in.
  */
 export async function changeAuthEmail(userId: string, email: string): Promise<{ previous: PreviousAccount } | { error: string }> {
@@ -50,7 +50,8 @@ export async function changeAuthEmail(userId: string, email: string): Promise<{ 
     if (readError || !data?.user) return { error: mapAuthError(readError) };
     const previous = { email: data.user.email ?? '', signedInBefore: !!data.user.last_sign_in_at };
     if (previous.email.toLowerCase() === email) return { error: 'That is already their sign-in email.' };
-    const { error } = await auth.updateUserById(userId, { email, email_confirm: true });
+    // Confirmed only if it was: a pending invite stays pending, so it can be resent to the corrected address.
+    const { error } = await auth.updateUserById(userId, data.user.email_confirmed_at ? { email, email_confirm: true } : { email });
     if (error) {
       const message = mapAuthError(error);
       return { error: message === mapAuthError('email_exists') ? 'Another account already uses that email.' : message };
@@ -114,7 +115,7 @@ export async function inviteLink(userId: string): Promise<{ email: string; link:
     if (readError || !data?.user?.email) return { error: mapAuthError(readError) };
     const { user } = data;
     if (user.last_sign_in_at) return { error: 'This user has already signed in.' };
-    // Confirmed already (made while email was off, or its email was changed): Auth won't invite the address again.
+    // Confirmed already (made while email was off): Auth won't invite the address again.
     if (user.email_confirmed_at) {
       return { error: "This login's email is already confirmed, so there is no invite to resend. Use Reset password instead." };
     }
