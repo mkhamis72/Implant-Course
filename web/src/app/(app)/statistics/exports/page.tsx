@@ -12,6 +12,7 @@ export default async function RecentExportsPage() {
     supabase.from('delegates').select('id, full_name'),
     supabase.from('studies').select('id, title'),
   ]);
+  if (courses.error || delegates.error || studies.error) throw new Error('Could not load the export names');
   const ids = [...new Set((log ?? []).map((r) => r.exported_by))];
   const { data: people } = ids.length ? await supabase.from('profiles').select('user_id, full_name').in('user_id', ids) : { data: [] };
   const names = new Map((people ?? []).map((p) => [p.user_id, p.full_name]));
@@ -20,7 +21,8 @@ export default async function RecentExportsPage() {
   return (
     <div className="space-y-6">
       <div className="page-header">
-        <h1>Recent exports</h1>
+        <h1>Exports</h1>
+        <p className="text-muted">Who exported which anonymised research data, newest first.</p>
       </div>
       <ExportLog
         isAdmin

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ALL_COURSES, defaultCourse, drilldownHref, effectiveSystem, filterQuery, researchHref, rpcArgs, selectImplants, isDrilldownList, type DetailRow } from './view';
+import { ALL_COURSES, defaultCourse, drilldownFilters, drilldownHref, effectiveSystem, filterQuery, researchHref, rpcArgs, selectImplants, isDrilldownList, type DetailRow } from './view';
 
 const row = (over: Partial<DetailRow> = {}): DetailRow => ({
   site_id: 's', patient_id: 'p', tooth: 11, placed_on: '2025-01-01', year_1: 'survived', year_2: 'not_reached',
@@ -88,5 +88,13 @@ describe('defaultCourse', () => {
   it('treats all courses as no course filter, and keeps it in links', () => {
     expect(rpcArgs({ course: 'all', from: '', to: '', delegate: '', brand: '', system: '' }).p_course).toBeNull();
     expect(filterQuery({ course: 'all', from: '', to: '', delegate: '', brand: '', system: '' })).toBe('course=all');
+  });
+});
+
+describe('drilldownFilters', () => {
+  it('reads a missing course as all courses, so the list and its link back agree', () => {
+    const f = { course: '', from: '', to: '', delegate: '', brand: 'Oxy', system: '' };
+    expect(drilldownFilters(f)).toEqual({ ...f, course: 'all' });
+    expect(drilldownFilters({ ...f, course: 'c1' }).course).toBe('c1');
   });
 });

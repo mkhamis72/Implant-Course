@@ -19,6 +19,21 @@ beforeEach(() => {
 const tick = (tooth: number) => fireEvent.click(screen.getByRole('checkbox', { name: String(tooth) }));
 
 describe('RadiographForm', () => {
+  it('ignores a removed implant for baseline, loading and follow-up, but not for other', () => {
+    const reimplanted: XraySite[] = [
+      { id: 'old', tooth: 36, state: 'removed', placed_on: '2025-01-01' },
+      { id: 'new', tooth: 36, state: 'placed', placed_on: '2026-05-01' },
+    ];
+    render(<RadiographForm patientId="p1" sites={reimplanted} onDone={() => {}} />);
+    tick(36);
+    const purpose = screen.getByRole('combobox', { name: /Purpose/ });
+    fireEvent.change(purpose, { target: { value: 'follow_up' } });
+    expect(screen.getByLabelText(/^Date/)).toHaveAttribute('min', '2026-05-01');
+    fireEvent.change(purpose, { target: { value: 'other' } });
+    expect(screen.getByLabelText(/^Date/)).toHaveAttribute('min', '2025-01-01');
+  });
+
+
   it('keeps a stored date that is now outside the limits when editing', () => {
     const old = { id: 'x1', taken_on: '2025-12-01', type: 'periapical', purpose: 'baseline', teeth: [36], link: null, notes: '', levels: [], updated_at: 't' };
     render(<RadiographForm patientId="p1" sites={sites} radiograph={old as never} onDone={() => {}} />);

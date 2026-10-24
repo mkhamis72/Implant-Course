@@ -5,7 +5,6 @@ import type { FailureReason, FailureType } from '@/lib/implants/failure';
 import type { Attendance, VisitFindings, VisitRow } from '@/lib/visits/visits';
 import type { CourseOption, Restoration } from '@/lib/restorations/restorations';
 import type { Radiograph } from '@/lib/radiographs/radiographs';
-import type { DataQualityIssue } from '@/lib/data-quality/issues';
 
 export const PRODUCT_TYPES = [
   'implant', 'cover_screw', 'healing_abutment', 'graft', 'membrane', 'ti_base', 'multi_unit',
@@ -169,8 +168,6 @@ export type ChartData = {
   restorations: Restoration[];
   /** The patient's X-rays (voided ones left out) with their bone levels, from radiographs_for. */
   radiographs: Radiograph[];
-  /** Impossible dates on this patient's records (data_quality_issues). */
-  issues: DataQualityIssue[];
   /** Course pickers (placement, corrections, restoration), from course_options(): newest first. */
   courses: CourseOption[];
   today: string;

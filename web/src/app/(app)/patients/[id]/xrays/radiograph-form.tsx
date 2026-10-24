@@ -25,7 +25,7 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
   });
   const [teeth, setTeeth] = useState<number[]>(radiograph?.teeth ?? prefillTeeth ?? []);
   // Only a planning X-ray may come before the implants on its teeth were placed (0075).
-  const firstPlaced = v.purpose && v.purpose !== 'planning' ? earliestDate(sites.filter((s) => teeth.includes(s.tooth)).map((s) => s.placed_on)) : undefined;
+  const firstPlaced = v.purpose && v.purpose !== 'planning' ? earliestDate(sites.filter((s) => teeth.includes(s.tooth) && (v.purpose === 'other' || (MEASURABLE_STATES as readonly string[]).includes(s.state))).map((s) => s.placed_on)) : undefined;
   const [levels, setLevels] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const l of radiograph?.levels ?? []) {
