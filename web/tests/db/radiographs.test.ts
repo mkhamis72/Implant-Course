@@ -348,3 +348,23 @@ describe('radiograph permissions', () => {
     });
   });
 });
+
+describe('save_radiograph dates against placement (0075)', () => {
+  it('refuses an "other" X-ray before the first placement on its teeth; planning and implant-free teeth are fine', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      await s.placeAt(16);
+      const before = await daysAgo(c, 31);
+      await refused(c, () => save(c, { patient: s.patient, takenOn: before, purpose: 'other', teeth: [16] }),
+        new RegExp(`A non-planning X-ray can't be before the placement date \\(${s.placedOn}\\)\\.`));
+      await refused(c, () => save(c, { patient: s.patient, takenOn: before, purpose: 'other', teeth: [15, 16] }),
+        /A non-planning X-ray can't be before the placement date/);
+      // Baseline / loading / follow-up were already refused without an implant placed by then (0064).
+      await refused(c, () => save(c, { patient: s.patient, takenOn: before, purpose: 'baseline', teeth: [16] }),
+        /needs an implant placed by its date/);
+      expect(await save(c, { patient: s.patient, takenOn: before, purpose: 'planning', teeth: [16] })).toBeTruthy();
+      expect(await save(c, { patient: s.patient, takenOn: before, purpose: 'other', teeth: [17] })).toBeTruthy();
+      expect(await save(c, { patient: s.patient, takenOn: s.placedOn, purpose: 'other', teeth: [16] })).toBeTruthy();
+    });
+  });
+});
