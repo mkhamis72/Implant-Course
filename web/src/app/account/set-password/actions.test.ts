@@ -7,11 +7,13 @@ vi.mock('next/navigation', () => ({
     throw new Error(`REDIRECT ${to}`);
   },
 }));
-vi.mock('@/lib/auth/session', () => ({ requireSignedIn: async () => ({}) }));
+const requireSignedIn = vi.hoisted(() => vi.fn<(options?: { allowMfaSetup?: boolean }) => Promise<object>>(async () => ({})));
+vi.mock('@/lib/auth/session', () => ({ requireSignedIn }));
 const auth = { updateUser: vi.fn(async () => ({ error: null as unknown })) };
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ auth }) }));
 
 import { setPassword } from './actions';
+import SetPasswordPage from './page';
 
 const form = (password: string, confirm = password) => {
   const fd = new FormData();
@@ -37,5 +39,16 @@ describe('setPassword', () => {
     expect(await setPassword({}, form('short'))).toEqual({ error: 'Use at least 10 characters.' });
     expect(await setPassword({}, form('long-enough-1', 'long-enough-2'))).toEqual({ error: 'The passwords do not match.' });
     expect(auth.updateUser).not.toHaveBeenCalled();
+  });
+  it("stays open while an admin's 2FA reset requires set-up again", async () => {
+    await expect(setPassword({}, form('long-enough-1'))).rejects.toThrow('REDIRECT /');
+    expect(requireSignedIn).toHaveBeenCalledWith({ allowMfaSetup: true });
+  });
+});
+
+describe('SetPasswordPage', () => {
+  it("stays open while an admin's 2FA reset requires set-up again", async () => {
+    await SetPasswordPage();
+    expect(requireSignedIn).toHaveBeenCalledWith({ allowMfaSetup: true });
   });
 });

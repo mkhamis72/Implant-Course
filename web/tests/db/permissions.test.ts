@@ -266,6 +266,8 @@ describe('permissions: guard rails', () => {
         'consent_file',
         // Studies (0073): reads a letter from stored_files; checks can('research','view') and can('patients','view') itself.
         'study_letter',
+        // Admin user tools (0074): the user clears their own 2FA-setup flag; checks aal2 and a verified factor itself.
+        'mfa_setup_done',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
@@ -282,7 +284,9 @@ describe('permissions: guard rails', () => {
         // Branding (0040): closed tables (no grants), reached only through the definer functions.
         'branding', 'branding_logos',
         // Consent (0072): uploaded file bytes, closed to every role, reached only through definer readers.
-        'stored_files']);
+        'stored_files',
+        // Admin user tools (0074): select for admins only, written only by the admin_* definer functions.
+        'admin_events']);
       expect(rows.map((r) => r.relname).filter((n) => !shared.has(n)).sort()).toEqual([]);
     });
   });

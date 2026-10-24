@@ -8,7 +8,7 @@ import { courseReportCsv, type CourseReportRow, type CourseRestorationRow } from
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
-  if (!profile?.active || !canView(profile, 'courses')) return new NextResponse('Not allowed', { status: 403 });
+  if (!profile?.active || profile.mfa_setup_required || !canView(profile, 'courses')) return new NextResponse('Not allowed', { status: 403 });
   // An empty file would read as "nothing placed".
   if (!canSeeImplants(profile)) return new NextResponse('Implant records need access to Patients or Schedule.', { status: 403 });
   const { id } = await params;

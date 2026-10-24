@@ -2,7 +2,8 @@ import { requireSignedIn } from '@/lib/auth/session';
 import { SetPasswordForm } from './form';
 
 export default async function SetPasswordPage() {
-  await requireSignedIn(); // staff and delegate logins (invite, temporary password, recovery)
+  // Staff and delegate logins (invite, temporary password, recovery); open while 2FA set-up is required too.
+  await requireSignedIn({ allowMfaSetup: true });
   return (
     <main className="mx-auto mt-10 max-w-sm px-4 sm:mt-24">
       <div className="card space-y-4">
