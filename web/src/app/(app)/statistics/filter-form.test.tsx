@@ -15,4 +15,11 @@ describe('<FilterForm>', () => {
     render(<FilterForm filters={filters} courses={[]} delegates={[]} brands={[]} systems={[]} />);
     expect(screen.getByRole('form', { name: 'Filters' }).querySelector('input[name=compare]')).toBeNull();
   });
+
+  it('offers All courses as course=all, course first, and every filter visible', () => {
+    render(<FilterForm filters={filters} courses={[{ id: 'c1', name: 'Spring' }]} delegates={[]} brands={[]} systems={[]} />);
+    expect(screen.getByRole('option', { name: 'All courses' })).toHaveValue('all');
+    const fields = [...screen.getByRole('form', { name: 'Filters' }).querySelectorAll('select, input:not([type=hidden])')].map((e) => e.getAttribute('name'));
+    expect(fields).toEqual(['course', 'from', 'to', 'delegate', 'brand', 'system']);
+  });
 });

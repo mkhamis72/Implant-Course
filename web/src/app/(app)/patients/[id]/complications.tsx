@@ -1,5 +1,6 @@
 'use client';
 
+import { todayIso } from '@/lib/dates';
 import { useState, useTransition } from 'react';
 import type { ImplantSite } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
@@ -125,7 +126,7 @@ function ComplicationForm({ site, patientId, complication, onDone }: {
       )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Noticed on" required>
-          <input className="input" type="date" aria-required="true" value={v.noticedOn} onChange={(e) => set('noticedOn')(e.target.value)} />
+          <input className="input" type="date" aria-required="true" min={site.placed_on ?? undefined} max={todayIso()} value={v.noticedOn} onChange={(e) => set('noticedOn')(e.target.value)} />
         </Field>
         <Field label="Severity">
           <select className="input" value={v.severity} onChange={(e) => set('severity')(e.target.value)}>
@@ -134,7 +135,7 @@ function ComplicationForm({ site, patientId, complication, onDone }: {
           </select>
         </Field>
         <Field label="Resolved on">
-          <input className="input" type="date" value={v.resolvedOn} onChange={(e) => set('resolvedOn')(e.target.value)} />
+          <input className="input" type="date" min={v.noticedOn || undefined} max={todayIso()} value={v.resolvedOn} onChange={(e) => set('resolvedOn')(e.target.value)} />
         </Field>
         <Field label="Found at visit">
           <select className="input" value={v.followupId} onChange={(e) => set('followupId')(e.target.value)}>

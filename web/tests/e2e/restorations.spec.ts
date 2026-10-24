@@ -48,6 +48,9 @@ test('records a temporary then a final crown and shows the loading', async ({ pa
   await setup(page, [36]);
   await openRestoration(page, 36);
   await addRestoration(page, 'temporary', 'single_crown');
+  // The picker offers only days from the placement (today here) to today.
+  const placedToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date());
+  await expect(panel(page).getByLabel(/Date fitted/)).toHaveAttribute('min', placedToday);
   await panel(page).getByRole('button', { name: 'Save restoration' }).click();
   await expect(panel(page).getByTestId('restoration')).toHaveCount(1);
 

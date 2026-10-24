@@ -26,7 +26,7 @@ describe('StudyList', () => {
     expect(card).toHaveTextContent('2.1');
     expect(card).toHaveTextContent('Spring course');
     expect(card).toHaveTextContent('Recruiting from the spring course');
-    expect(within(card).getByRole('link', { name: /Approval letter/ })).toHaveAttribute('href', '/patients/research/studies/s1/letter');
+    expect(within(card).getByRole('link', { name: /Approval letter/ })).toHaveAttribute('href', '/statistics/studies/s1/letter');
   });
 
   it('hides every edit control from View users', () => {

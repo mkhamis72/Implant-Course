@@ -140,7 +140,7 @@ test('prints the consent form, records signed forms (JPEG and PDF), voids them, 
   const adminPage = await adminCtx.newPage();
   try {
     await login(adminPage, TEST_USERS.admin.email);
-    await adminPage.goto(`/patients/research?brand=${encodeURIComponent(brand)}`);
+    await adminPage.goto(`/statistics?course=all&brand=${encodeURIComponent(brand)}`);
     await expect(adminPage.getByText('⚠ 1 of 1 patients have no research consent on file (1 not recorded, 0 refused)')).toBeVisible();
 
     // Admin → Settings → Consent: the signed version is locked; the blank form prints in Arabic.

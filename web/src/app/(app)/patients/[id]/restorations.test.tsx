@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import type { ChartData, ImplantSite } from '@/lib/inventory/types';
 import type { Restoration } from '@/lib/restorations/restorations';
+import { todayIso } from '@/lib/dates';
 
 vi.mock('./implant-actions', () => ({ fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), receiveStockForPlacement: vi.fn() }));
 vi.mock('./restoration-actions', () => ({ addRestoration: vi.fn(), updateRestoration: vi.fn(), voidRestoration: vi.fn(),
@@ -76,6 +77,28 @@ describe('<Restorations>', () => {
     }));
   });
 
+  it('limits the date fitted to the latest placement of the ticked implants, and today', () => {
+    const later = { ...s34, placed_on: '2026-02-20' } as ImplantSite;
+    render(<Restorations site={s36} patientId="pt" data={{ ...data([]), sites: [s36, later, s16] } as ChartData} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add restoration' }));
+    const fitted = screen.getByLabelText(/Date fitted/);
+    expect(fitted).toHaveAttribute('min', '2026-01-10');
+    expect(fitted).toHaveAttribute('max', todayIso());
+    const implants = screen.getByRole('group', { name: 'Implants' });
+    fireEvent.click(within(implants).getByRole('checkbox', { name: '34' }));
+    expect(fitted).toHaveAttribute('min', '2026-02-20');
+    fireEvent.click(within(implants).getByRole('checkbox', { name: '34' }));
+    expect(fitted).toHaveAttribute('min', '2026-01-10');
+  });
+
+  it('limits a problem date to the fitting date and today', () => {
+    render(<Restorations site={s36} patientId="pt" data={data([final])} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Record a problem' }));
+    const noticed = screen.getByLabelText(/Noticed on/);
+    expect(noticed).toHaveAttribute('min', final.fitted_on);
+    expect(noticed).toHaveAttribute('max', todayIso());
+  });
+
   it('asks for a remake reason only when a current final is covered, and says what it replaces', () => {
     const { unmount } = render(<Restorations site={s36} patientId="pt" data={data([temp])} />);
     fireEvent.click(screen.getByRole('button', { name: 'Add restoration' }));
@@ -144,5 +167,13 @@ describe('<Restorations>', () => {
     unmount();
     render(<Restorations site={s36} patientId="pt" data={data([remade, newer], false)} />);
     expect(screen.queryByRole('button', { name: 'Record a problem' })).toBeNull();
+  });
+});
+
+describe('replacement restoration date limit', () => {
+  it('starts the date fitted at the fitting of the restoration it replaces', () => {
+    render(<Restorations site={s36} patientId="pt" data={data([final])} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add restoration' }));
+    expect(screen.getByLabelText(/Date fitted/)).toHaveAttribute('min', final.fitted_on);
   });
 });

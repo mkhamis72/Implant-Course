@@ -12,7 +12,7 @@ export const AREA_LABELS: Record<Area, string> = {
   checklists: 'Checklists',
   inventory: 'Inventory',
   delegates: 'Delegates',
-  research: 'Research',
+  research: 'Statistics',
 };
 
 type Who = { role: Role; permissions: Permissions };

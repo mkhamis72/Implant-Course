@@ -1,0 +1,6 @@
+# Schedule
+
+Feature rules for this folder, split out of the root `CLAUDE.md` (its conventions still apply). Numbers in brackets are migrations in `web/supabase/migrations/`; the SQL is the source of truth.
+
+- `implant_sites.technique` is `guided` / `free_hand`, nullable in the DB (older rows and the previous app version) but required by the app's Zod schemas; the schedule colours bookings by it (`bookingTechnique`). Bookings are edited in place with `update_surgery_slot` (same day only) and completed/reopened with `set_slot_status` (0027). Bookings need a surgery session that day: Schedule editors add one from the Schedule page ("Add surgery day") through `add_surgery_session`, which needs Edit on Schedule and only creates `surgery` sessions (0039); other session types are still added under Courses (Edit on Courses).
+- **Lectures & workshops (0028):** `sessions.type` lecture/workshop sessions hold `talks` (time, `lecturers` row, topic), written only via `create_talk` / `update_talk` / `delete_talk`, which refuse times outside the session, overlaps in the session and double-booked lecturers. UI: `schedule/lectures|workshops`, sharing `schedule/_talks/`. Sessions have an optional `room`.

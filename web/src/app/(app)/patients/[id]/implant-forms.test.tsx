@@ -174,3 +174,15 @@ describe('<PlaceForm> course', () => {
     await vi.waitFor(() => expect(vi.mocked(placeImplant)).toHaveBeenCalledWith(expect.objectContaining({ courseId: '' })));
   });
 });
+
+describe('implant date limits', () => {
+  it('placement no later than today; a component from placement to today', () => {
+    const { unmount } = render(<PlaceForm patientId="pt" tooth={36} data={data} onDone={() => {}} plannedProductId="p1" />);
+    expect(screen.getByLabelText(/Placement date/)).toHaveAttribute('max', data.today);
+    unmount();
+    const site = { id: 's1', tooth: 36, state: 'placed', placed_on: '2026-03-10', components: [] } as unknown as Parameters<typeof ComponentForm>[0]['site'];
+    render(<ComponentForm patientId="pt" site={site} data={data} onDone={() => {}} />);
+    expect(screen.getByLabelText(/Fitted on/)).toHaveAttribute('min', '2026-03-10');
+    expect(screen.getByLabelText(/Fitted on/)).toHaveAttribute('max', data.today);
+  });
+});

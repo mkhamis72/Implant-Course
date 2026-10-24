@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { canEdit, canView } from '@/lib/auth/permissions';
@@ -14,7 +13,6 @@ export default async function StudiesPage() {
         <h1>Studies</h1>
         <p className="text-muted">Ethics approvals and protocols. Choose a study when exporting to name it in the file.</p>
       </div>
-      <Link href="/patients/research" className="btn-secondary btn">Research</Link>
     </div>
   );
 

@@ -144,7 +144,7 @@ function ReceiveHere({ patientId, productId, today, onReceived }: {
           <input className="input" type="date" value={f.expiry} onChange={field('expiry')} />
         </Field>
         <Field label="Received on" required>
-          <input className="input" type="date" aria-required="true" value={f.received_on} onChange={field('received_on')} />
+          <input className="input" type="date" aria-required="true" max={today} value={f.received_on} onChange={field('received_on')} />
         </Field>
       </div>
       {error && <p role="alert" className="text-sm text-bad">{error}</p>}
@@ -322,7 +322,7 @@ export function PlaceForm({
       />
       <TechniqueField value={v.technique} onChange={set('technique')} />
       <Field label="Placement date" required>
-        <input className="input" type="date" aria-required="true" value={v.placedOn} onChange={(e) => set('placedOn')(e.target.value)} />
+        <input className="input" type="date" aria-required="true" max={data.today} value={v.placedOn} onChange={(e) => set('placedOn')(e.target.value)} />
       </Field>
       <Field label="Course" required>
         <select className="input" aria-required="true" value={v.courseId} onChange={(e) => set('courseId')(e.target.value)}>
@@ -396,7 +396,7 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
       </Field>
       {v.productId && <BatchSelect data={data} productId={v.productId} usedOn={v.fittedOn} value={v.lotId} onChange={set('lotId')} />}
       <Field label="Fitted on">
-        <input className="input" type="date" value={v.fittedOn} onChange={(e) => set('fittedOn')(e.target.value)} />
+        <input className="input" type="date" min={site.placed_on ?? undefined} max={data.today} value={v.fittedOn} onChange={(e) => set('fittedOn')(e.target.value)} />
       </Field>
       <Field label="Fitted by (delegate)">
         <select className="input" value={v.byDelegateId} onChange={(e) => set('byDelegateId')(e.target.value)}>

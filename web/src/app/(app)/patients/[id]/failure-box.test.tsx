@@ -51,3 +51,13 @@ describe('<FailureBox>', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+import { todayIso as todayForLimits } from '@/lib/dates';
+describe('failure date limits', () => {
+  it('from placement to today', () => {
+    render(<FailureBox site={failed()} patientId="pt" editable restorations={[]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add failure details' }));
+    expect(screen.getByLabelText(/Failure date/)).toHaveAttribute('min', '2026-03-10');
+    expect(screen.getByLabelText(/Failure date/)).toHaveAttribute('max', todayForLimits());
+  });
+});

@@ -36,7 +36,7 @@ const UUID_ANY = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 const staff = (patients: 'view' | null, research: 'view' | null = 'view') => ({
   active: true, role: 'organizer', permissions: { patients, research },
 });
-const req = (qs: string) => new Request(`http://localhost:3000/patients/research/export?${qs}`) as never;
+const req = (qs: string) => new Request(`http://localhost:3000/statistics/export?${qs}`) as never;
 
 beforeEach(() => {
   rpc.mockClear();
@@ -49,7 +49,7 @@ beforeEach(() => {
   handler.mockImplementation(async (name: string) => (name === 'outcomes_version' ? { data: 'v1', error: null } : { data: name.startsWith('research_export_') ? [] : 'log-id', error: null }));
 });
 
-describe('GET /patients/research/export', () => {
+describe('GET /statistics/export', () => {
   it('sends an xlsx with download headers and logs the export once with row counts', async () => {
     const res = await GET(req('format=xlsx&course=&brand=Oxy'));
     expect(res.status).toBe(200);

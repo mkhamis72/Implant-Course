@@ -79,3 +79,17 @@ describe('<Complications>', () => {
     expect(vi.mocked(saveComplication)).toHaveBeenCalledWith(expect.objectContaining({ complicationId: 'c1', followupId: '' }));
   });
 });
+
+import { todayIso as todayForLimits } from '@/lib/dates';
+describe('complication date limits', () => {
+  it('noticed from placement to today; resolved from noticed to today', () => {
+    render(<Complications site={site([])} patientId="pt" editable />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add complication' }));
+    const noticed = screen.getByLabelText(/Noticed on/);
+    expect(noticed).toHaveAttribute('min', '2026-03-10');
+    expect(noticed).toHaveAttribute('max', todayForLimits());
+    fireEvent.change(noticed, { target: { value: '2026-04-01' } });
+    expect(screen.getByLabelText(/Resolved on/)).toHaveAttribute('min', '2026-04-01');
+    expect(screen.getByLabelText(/Resolved on/)).toHaveAttribute('max', todayForLimits());
+  });
+});

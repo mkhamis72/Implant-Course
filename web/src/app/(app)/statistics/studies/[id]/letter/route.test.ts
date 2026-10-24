@@ -13,7 +13,7 @@ const staff = (research: 'view' | 'edit' | null, patients: 'view' | null = 'view
   active: true, role: 'organizer', permissions: { research, patients },
 });
 const get = (id = STUDY) =>
-  GET(new Request(`http://localhost:3000/patients/research/studies/${id}/letter`), { params: Promise.resolve({ id }) });
+  GET(new Request(`http://localhost:3000/statistics/studies/${id}/letter`), { params: Promise.resolve({ id }) });
 
 beforeEach(() => {
   rpc.mockClear();

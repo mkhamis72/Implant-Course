@@ -16,8 +16,8 @@ const text = (fd: FormData, key: string) => {
 };
 
 function done(): Result {
-  revalidatePath('/patients/research/studies');
-  revalidatePath('/patients/research');
+  revalidatePath('/statistics/studies');
+  revalidatePath('/statistics');
   return {};
 }
 

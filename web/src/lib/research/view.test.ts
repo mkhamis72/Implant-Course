@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { drilldownHref, effectiveSystem, filterQuery, researchHref, rpcArgs, selectImplants, isDrilldownList, type DetailRow } from './view';
+import { ALL_COURSES, defaultCourse, drilldownHref, effectiveSystem, filterQuery, researchHref, rpcArgs, selectImplants, isDrilldownList, type DetailRow } from './view';
 
 const row = (over: Partial<DetailRow> = {}): DetailRow => ({
   site_id: 's', patient_id: 'p', tooth: 11, placed_on: '2025-01-01', year_1: 'survived', year_2: 'not_reached',
@@ -23,18 +23,18 @@ describe('rpcArgs', () => {
 describe('drilldownHref', () => {
   it('carries the non-empty filters', () => {
     expect(drilldownHref('year_1_failed', { course: 'c1', from: '2025-01-01', to: '', delegate: '', brand: 'Oxy', system: '' }))
-      .toBe('/patients/research/drilldown?list=year_1_failed&course=c1&from=2025-01-01&brand=Oxy');
+      .toBe('/statistics/drilldown?list=year_1_failed&course=c1&from=2025-01-01&brand=Oxy');
   });
   it('carries the compare choice, and drops an unknown one', () => {
     const f = { course: '', from: '', to: '', delegate: '', brand: '', system: '' };
-    expect(drilldownHref('implants', { ...f, compare: 'technique' })).toBe('/patients/research/drilldown?list=implants&compare=technique');
+    expect(drilldownHref('implants', { ...f, compare: 'technique' })).toBe('/statistics/drilldown?list=implants&compare=technique');
     expect(filterQuery({ ...f, course: 'c1', compare: 'smoking' })).toBe('course=c1&compare=smoking');
     expect(filterQuery({ ...f, compare: 'nope' })).toBe('');
   });
   it('links back from a drill-down to the Research page with the filters and compare', () => {
     const f = { course: 'c1', from: '', to: '', delegate: '', brand: '', system: '' };
-    expect(researchHref({ ...f, compare: 'bone_type' })).toBe('/patients/research?course=c1&compare=bone_type');
-    expect(researchHref({ ...f, course: '' })).toBe('/patients/research');
+    expect(researchHref({ ...f, compare: 'bone_type' })).toBe('/statistics?course=c1&compare=bone_type');
+    expect(researchHref({ ...f, course: '' })).toBe('/statistics');
   });
 });
 
@@ -73,5 +73,20 @@ describe('calendar dates and effectiveSystem', () => {
     expect(effectiveSystem('Oxy', 'PSK', rows)).toBe('PSK');
     expect(effectiveSystem('', 'ZZ', rows)).toBe('ZZ');
     expect(effectiveSystem('Oxy', '', rows)).toBe('');
+  });
+});
+
+describe('defaultCourse', () => {
+  it('picks the most recent course that has started', () => {
+    expect(defaultCourse([{ id: 'b', start_date: '2026-12-01' }, { id: 'a', start_date: '2026-10-01' }], '2026-10-24')).toBe('a');
+    expect(defaultCourse([{ id: 'a', start_date: '2026-10-24' }], '2026-10-24')).toBe('a');
+  });
+  it('falls back to all courses when none has started', () => {
+    expect(defaultCourse([{ id: 'b', start_date: '2026-12-01' }], '2026-10-24')).toBe(ALL_COURSES);
+    expect(defaultCourse([], '2026-10-24')).toBe('all');
+  });
+  it('treats all courses as no course filter, and keeps it in links', () => {
+    expect(rpcArgs({ course: 'all', from: '', to: '', delegate: '', brand: '', system: '' }).p_course).toBeNull();
+    expect(filterQuery({ course: 'all', from: '', to: '', delegate: '', brand: '', system: '' })).toBe('course=all');
   });
 });

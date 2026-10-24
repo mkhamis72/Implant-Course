@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import type { ChartData, ImplantSite, Option } from '@/lib/inventory/types';
-import { todayIso } from '@/lib/dates';
+import { latestDate, todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
 import {
   ARCH_ORDER, LOADING_LABELS, MATERIALS, MATERIAL_LABELS, PROBLEM_ACTIONS, PROBLEM_ACTION_LABELS, PROBLEM_TYPES, PROBLEM_TYPE_LABELS, RESTORATION_STAGES,
@@ -192,7 +192,7 @@ function ProblemForm({ r, p, patientId, onDone }: { r: Restoration; p?: Restorat
           </select>
         </Field>
         <Field label="Noticed on" required>
-          <input className="input" type="date" aria-required="true" value={v.noticedOn} onChange={(e) => setV({ ...v, noticedOn: e.target.value })} />
+          <input className="input" type="date" aria-required="true" min={r.fitted_on} max={r.ended_on && r.ended_on < today ? r.ended_on : today} value={v.noticedOn} onChange={(e) => setV({ ...v, noticedOn: e.target.value })} />
         </Field>
         <Field label="Action taken" required>
           <select className="input" aria-required="true" value={v.action} onChange={(e) => setV({ ...v, action: e.target.value })}>
@@ -388,7 +388,7 @@ export function RestorationForm({ site, patientId, data, onDone }: { site: Impla
         </fieldset>
       )}
       <Field label="Date fitted" required>
-        <input className="input" type="date" aria-required="true" value={v.fittedOn} onChange={(e) => setV({ ...v, fittedOn: e.target.value })} />
+        <input className="input" type="date" aria-required="true" min={latestDate([...chosen.map((s) => s.placed_on), ...ending.map((r) => r.fitted_on)])} max={todayIso()} value={v.fittedOn} onChange={(e) => setV({ ...v, fittedOn: e.target.value })} />
       </Field>
       <DetailsFields v={details} set={(key) => (value) => setDetails((cur) => ({ ...cur, [key]: value }))} data={data} fittedOn={v.fittedOn} />
       {ending.map((r) => (

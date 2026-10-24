@@ -1,5 +1,6 @@
 'use client';
 
+import { addDays, todayIso } from '@/lib/dates';
 import { useState, useTransition } from 'react';
 import type { ImplantSite } from '@/lib/inventory/types';
 import {
@@ -130,7 +131,7 @@ function SurgeryForm({ site, patientId, onDone }: { site: ImplantSite; patientId
       <div className="grid gap-3 sm:grid-cols-2">
         <Choice label="Placement timing" value={v.placementTiming} onChange={set('placementTiming')} values={PLACEMENT_TIMINGS} labels={PLACEMENT_TIMING_LABELS} />
         <Field label="Extraction date">
-          <input className="input" type="date" value={v.extractionDate} onChange={(e) => set('extractionDate')(e.target.value)} />
+          <input className="input" type="date" max={site.placed_on ?? todayIso()} value={v.extractionDate} onChange={(e) => set('extractionDate')(e.target.value)} />
         </Field>
       </div>
       {timing && <p className="text-sm text-muted">{PLACEMENT_TIMING_HELP[timing]}</p>}
@@ -236,7 +237,7 @@ function GraftForm({ site, patientId, graft, onDone }: { site: ImplantSite; pati
         </Field>
         {v.timing === 'staged' && (
           <Field label="Graft date">
-            <input className="input" type="date" aria-required="true" value={v.performedOn} onChange={(e) => set('performedOn')(e.target.value)} />
+            <input className="input" type="date" aria-required="true" max={site.placed_on ? addDays(site.placed_on, -1) : todayIso()} value={v.performedOn} onChange={(e) => set('performedOn')(e.target.value)} />
           </Field>
         )}
         <Choice label="Material" value={v.material} onChange={set('material')} values={GRAFT_MATERIALS} labels={GRAFT_MATERIAL_LABELS} />

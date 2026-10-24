@@ -1,33 +1,29 @@
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { canView } from '@/lib/auth/permissions';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
-import { RESEARCH_FILTER_KEYS, effectiveSystem } from '@/lib/research/view';
+import { RESEARCH_FILTER_KEYS, defaultCourse, effectiveSystem } from '@/lib/research/view';
+import { todayIso } from '@/lib/dates';
 import { isCompareKey, needsGroupVars } from '@/lib/research/groups';
 import { loadResearch } from './data';
 import { FilterForm } from './filter-form';
-import { ExportForm, ExportLog, type ExportLogRow } from './export-panel';
+import { ExportForm } from './export-panel';
 import { NoPatientsNote, ResearchView } from './research-view';
 
 const distinct = (values: (string | null)[]) => [...new Set(values.filter((v): v is string => Boolean(v)))].sort();
 
-export default async function ResearchPage({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function StatisticsPage({ searchParams }: { searchParams: PageSearchParams }) {
   const profile = await requirePermission('research');
-  const { compare: compareParam, ...requested } = await readParams(searchParams, ...RESEARCH_FILTER_KEYS, 'compare');
+  const { compare: compareParam, ...params } = await readParams(searchParams, ...RESEARCH_FILTER_KEYS, 'compare');
   const compare = isCompareKey(compareParam) ? compareParam : null;
   const withGroups = needsGroupVars(compare);
   const header = (version: string | null) => (
     <div className="page-header">
       <div>
-        <h1>Research</h1>
+        <h1>Statistics & data analysis</h1>
         <p className="text-muted">
           Implant and crown outcomes for the implants placed in the filter{version && <> · <span className="badge">{version}</span></>}
         </p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Link href="/patients/research/studies" className="btn-secondary btn">Studies</Link>
-        <Link href="/patients" className="btn-secondary btn">Patients</Link>
       </div>
     </div>
   );
@@ -43,13 +39,16 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
   }
 
   const supabase = await createClient();
-  const [first, courses, delegates, studies] = await Promise.all([
+  // Opens on the most recent course that has started; "All courses" is course=all.
+  const courses = await supabase.rpc('course_options');
+  if (courses.error) throw new Error('Could not load the courses');
+  const courseRows = (courses.data ?? []) as { id: string; name: string; start_date: string }[];
+  const requested = { ...params, course: params.course || defaultCourse(courseRows, todayIso()) };
+  const [first, delegates, studies] = await Promise.all([
     loadResearch(requested, withGroups),
-    supabase.rpc('course_options'),
     supabase.from('delegates').select('id, full_name').order('full_name'),
     supabase.from('studies').select('id, title').order('title'),
   ]);
-  if (courses.error) throw new Error('Could not load the courses');
   if (studies.error) throw new Error('Could not load the studies');
   const studyList = (studies.data ?? []) as { id: string; title: string }[];
 
@@ -58,24 +57,12 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
   const filters = { ...requested, system, compare: compare ?? '' };
   const { version, rows, base, crowns, groups, consent } = system === requested.system ? first : await loadResearch(filters, withGroups);
 
-  const isAdmin = profile.role === 'admin';
-  let exportLog: ExportLogRow[] = [];
-  let exportLogFailed = false;
-  if (isAdmin) {
-    const { data: log, error: logError } = await supabase.from('research_exports').select('id, exported_by, exported_at, format, filters, row_counts').order('exported_at', { ascending: false }).limit(20);
-    const ids = [...new Set((log ?? []).map((r) => r.exported_by))];
-    const { data: people } = ids.length ? await supabase.from('profiles').select('user_id, full_name').in('user_id', ids) : { data: [] };
-    const names = new Map((people ?? []).map((p) => [p.user_id, p.full_name]));
-    exportLogFailed = Boolean(logError);
-    exportLog = (log ?? []).map((r) => ({ ...r, exporter: names.get(r.exported_by) ?? null })) as ExportLogRow[];
-  }
-
   // Delegates the user can't list (no Delegates view) still appear when they placed an implant in range.
   const delegateNames = new Map<string, string>();
   for (const d of delegates.data ?? []) delegateNames.set(d.id, d.full_name);
   for (const r of base) if (r.placing_delegate_id && r.placing_delegate) delegateNames.set(r.placing_delegate_id, r.placing_delegate);
   const delegateOptions = [...delegateNames].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  const courseList = ((courses.data ?? []) as { id: string; name: string }[]).map((c) => ({ id: c.id, name: c.name }));
+  const courseList = courseRows.map((c) => ({ id: c.id, name: c.name }));
   const brands = distinct([...base.map((r) => r.brand), filters.brand]);
   const systems = distinct([...base.filter((r) => !filters.brand || r.brand === filters.brand).map((r) => r.system), filters.system]);
 
@@ -91,14 +78,6 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
       />
       <ResearchView rows={rows} crowns={crowns} filters={filters} groups={groups} consent={consent} noProduct={base.filter((r) => r.product_id === null).length} />
       <ExportForm filters={filters} studies={studyList} />
-      <ExportLog
-        isAdmin={isAdmin}
-        rows={exportLog}
-        failed={exportLogFailed}
-        courseNames={Object.fromEntries(courseList.map((c) => [c.id, c.name]))}
-        delegateNames={Object.fromEntries(delegateNames)}
-        studyTitles={Object.fromEntries(studyList.map((s) => [s.id, s.title]))}
-      />
     </div>
   );
 }

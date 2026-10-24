@@ -38,7 +38,7 @@ test('an admin records a study with a course and an approval letter, then export
   const page = await ctx.newPage();
   try {
     await login(page, TEST_USERS.admin.email);
-    await page.goto('/patients/research');
+    await page.goto('/statistics');
     await page.getByRole('link', { name: 'Studies' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Studies' })).toBeVisible();
 
@@ -66,7 +66,7 @@ test('an admin records a study with a course and an approval letter, then export
     expect((await letter.body()).subarray(0, 5).toString('latin1')).toBe('%PDF-');
 
     // Export for the study: the about sheet names it (never the notes).
-    await page.goto(`/patients/research?brand=${encodeURIComponent(brand)}`);
+    await page.goto(`/statistics?course=all&brand=${encodeURIComponent(brand)}`);
     const exportForm = page.getByRole('form', { name: 'Export' });
     await exportForm.getByRole('combobox', { name: 'Study' }).selectOption({ label: title });
     await exportForm.getByLabel(/Excel/).check();
@@ -83,9 +83,9 @@ test('an admin records a study with a course and an approval letter, then export
     expect(texts.join('\n')).not.toContain(notes);
 
     // Recent exports names the study by title; once exported it can no longer be deleted.
-    await page.goto(`/patients/research?brand=${encodeURIComponent(brand)}`);
+    await page.goto('/statistics/exports');
     await expect(page.getByRole('region', { name: 'Recent exports' }).locator('tbody tr').filter({ hasText: brand }).first()).toContainText(`study ${title}`);
-    await page.goto('/patients/research/studies');
+    await page.goto('/statistics/studies');
     const exported = page.locator('article').filter({ has: page.getByRole('heading', { name: title }) });
     await expect(exported).toContainText('Named on an export');
     await expect(exported.getByRole('button', { name: 'Delete' })).toHaveCount(0);

@@ -101,7 +101,7 @@ export function RecordVisitForm({ patientId, site, data, onDone }: {
           </Field>
         )}
         <Field label="Date">
-          <input className="input" type="date" value={v.date} onChange={(e) => set('date')(e.target.value)} />
+          <input className="input" type="date" min={site.placed_on ?? undefined} max={data.today} value={v.date} onChange={(e) => set('date')(e.target.value)} />
         </Field>
       </div>
       <div role="radiogroup" aria-label="Attendance" className="flex flex-wrap gap-x-4 gap-y-1">
@@ -130,7 +130,7 @@ export function RecordVisitForm({ patientId, site, data, onDone }: {
             {yesNo('mobility', 'Mobility')}
           </div>
           {needsFailure && (
-            <FailureFields values={{ ...v, failedOn: v.failedOn || v.date }} set={(k) => set(k)} />
+            <FailureFields values={{ ...v, failedOn: v.failedOn || v.date }} set={(k) => set(k)} placedOn={site.placed_on} maxOn={v.date || data.today} />
           )}
           <fieldset>
             <legend className="label">Probing depth (mm) and bleeding</legend>

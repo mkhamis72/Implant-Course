@@ -9,7 +9,7 @@ describe('<ExportForm>', () => {
   it('is a GET form to the export route carrying the current filters', () => {
     render(<ExportForm filters={filters} />);
     const form = screen.getByRole('form', { name: 'Export' });
-    expect(form).toHaveAttribute('action', '/patients/research/export');
+    expect(form).toHaveAttribute('action', '/statistics/export');
     expect(form).toHaveAttribute('method', 'get');
     const hidden = Array.from(form.querySelectorAll('input[type=hidden]')).map((i) => [(i as HTMLInputElement).name, (i as HTMLInputElement).value]);
     expect(hidden).toEqual([['course', 'c1'], ['from', '2025-01-01'], ['brand', 'Oxy']]);
@@ -48,6 +48,10 @@ describe('<ExportLog>', () => {
     expect(screen.getByText('course Spring course, delegate Dr Bob, brand Oxy')).toBeInTheDocument();
     expect(screen.getByText('course (deleted)')).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/);
+  });
+  it('shows course=all as All courses', () => {
+    render(<ExportLog isAdmin rows={[{ ...rows[0], filters: { course: 'all', brand: 'Oxy' } }]} />);
+    expect(screen.getByText('course All courses, brand Oxy')).toBeInTheDocument();
   });
   it('names the study by title', () => {
     const study = '0f0f0f0f-1111-4222-8333-444444444444';

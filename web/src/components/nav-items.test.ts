@@ -6,11 +6,13 @@ const labels = (p: Parameters<typeof visibleNavItems>[0]) => visibleNavItems(p).
 describe('visibleNavItems', () => {
   it('shows everything and Admin to admins', () => {
     expect(labels({ role: 'admin', permissions: {} })).toEqual([
-      'Dashboard', 'Patients', 'Schedule', 'Courses', 'Checklists', 'Inventory', 'Delegates', 'Admin',
+      'Dashboard', 'Patients', 'Schedule', 'Courses', 'Checklists', 'Inventory', 'Delegates', 'Statistics', 'Admin',
     ]);
   });
   it('shows organizers the panels they can view, never Admin', () => {
     expect(labels({ role: 'organizer', permissions: { inventory: 'view', courses: 'edit' } })).toEqual(['Dashboard', 'Courses', 'Inventory']);
+    expect(labels({ role: 'organizer', permissions: { patients: 'view' } })).not.toContain('Statistics');
+    expect(labels({ role: 'organizer', permissions: { research: 'view' } })).toContain('Statistics');
   });
   it('gives delegates their own menu', () => {
     expect(labels({ role: 'delegate', permissions: {} })).toEqual(DELEGATE_NAV.map((i) => i.label));

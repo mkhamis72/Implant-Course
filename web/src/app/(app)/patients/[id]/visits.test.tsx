@@ -116,3 +116,21 @@ describe('<RecordVisitForm> failure', () => {
     expect(screen.queryByRole('combobox', { name: 'Failure type' })).not.toBeInTheDocument();
   });
 });
+
+describe('visit date limits', () => {
+  it('from placement to today', () => {
+    render(<RecordVisitForm patientId="pt" site={site} data={data} onDone={() => {}} />);
+    expect(screen.getByLabelText(/^Date/)).toHaveAttribute('min', '2026-03-10');
+    expect(screen.getByLabelText(/^Date/)).toHaveAttribute('max', '2026-06-01');
+  });
+});
+
+describe('failure date inside a visit', () => {
+  it('ends at the visit date', () => {
+    render(<RecordVisitForm patientId="pt" site={site} data={data} onDone={() => {}} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Outcome' }), { target: { value: 'failed' } });
+    fireEvent.change(screen.getByLabelText(/^Date/), { target: { value: '2026-05-01' } });
+    expect(screen.getByLabelText(/Failure date/)).toHaveAttribute('max', '2026-05-01');
+    expect(screen.getByLabelText(/Failure date/)).toHaveAttribute('min', '2026-03-10');
+  });
+});

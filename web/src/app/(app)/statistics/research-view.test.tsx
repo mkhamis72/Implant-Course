@@ -116,7 +116,7 @@ describe('<ResearchView>', () => {
   it('links each number to its drill-down with the filters', () => {
     render(<ResearchView rows={big} crowns={crowns} filters={filters} noProduct={0} />);
     const link = within(tile('Survival at 1 year')).getByRole('link', { name: '2 failed' });
-    expect(link).toHaveAttribute('href', '/patients/research/drilldown?list=year_1_failed&course=c1&from=2025-01-01');
+    expect(link).toHaveAttribute('href', '/statistics/drilldown?list=year_1_failed&course=c1&from=2025-01-01');
   });
 
   it('shows the no-product note and the number at risk', () => {

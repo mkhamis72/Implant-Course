@@ -16,7 +16,7 @@ describe('PermissionGrid', () => {
 
   it('offers Research with None / View / Edit', () => {
     render(<PermissionGrid userId={id} permissions={{ research: 'view' }} />);
-    const research = screen.getByRole('group', { name: 'Research' });
+    const research = screen.getByRole('group', { name: 'Statistics' });
     expect(within(research).getAllByRole('radio').map((r) => (r as HTMLInputElement).value)).toEqual(['none', 'view', 'edit']);
     expect(within(research).getByRole('radio', { name: 'View' })).toBeChecked();
     expect(within(research).getByRole('radio', { name: 'View' })).toHaveAttribute('name', 'perm_research');
@@ -24,6 +24,6 @@ describe('PermissionGrid', () => {
 
   it('defaults Research to None', () => {
     render(<PermissionGrid userId={id} permissions={{}} />);
-    expect(within(screen.getByRole('group', { name: 'Research' })).getByRole('radio', { name: 'None' })).toBeChecked();
+    expect(within(screen.getByRole('group', { name: 'Statistics' })).getByRole('radio', { name: 'None' })).toBeChecked();
   });
 });

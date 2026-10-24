@@ -12,7 +12,7 @@ beforeEach(() => {
   requirePermission.mockResolvedValue({ active: true, role: 'admin' });
 });
 
-describe('GET /patients/research/analysis.R', () => {
+describe('GET /statistics/analysis.R', () => {
   it('needs Research view', async () => {
     await GET();
     expect(requirePermission).toHaveBeenCalledWith('research');

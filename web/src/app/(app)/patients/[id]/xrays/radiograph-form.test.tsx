@@ -19,6 +19,28 @@ beforeEach(() => {
 const tick = (tooth: number) => fireEvent.click(screen.getByRole('checkbox', { name: String(tooth) }));
 
 describe('RadiographForm', () => {
+  it('keeps a stored date that is now outside the limits when editing', () => {
+    const old = { id: 'x1', taken_on: '2025-12-01', type: 'periapical', purpose: 'baseline', teeth: [36], link: null, notes: '', levels: [], updated_at: 't' };
+    render(<RadiographForm patientId="p1" sites={sites} radiograph={old as never} onDone={() => {}} />);
+    expect(screen.getByLabelText(/^Date/)).toHaveValue('2025-12-01');
+    expect(screen.getByLabelText(/^Date/)).toHaveAttribute('min', '2026-01-10');
+  });
+
+
+  it('limits a non-planning X-ray to the first placement on its teeth; a planning one only to today', () => {
+    render(<RadiographForm patientId="p1" sites={sites} onDone={() => {}} />);
+    const date = screen.getByLabelText(/^Date/);
+    const purpose = screen.getByRole('combobox', { name: /Purpose/ });
+    tick(36);
+    fireEvent.change(purpose, { target: { value: 'baseline' } });
+    expect(date).toHaveAttribute('min', '2026-01-10');
+    expect(date).toHaveAttribute('max', todayIso());
+    fireEvent.change(purpose, { target: { value: 'planning' } });
+    expect(date).not.toHaveAttribute('min');
+    expect(date).toHaveAttribute('max', todayIso());
+  });
+
+
   it('shows a bone-level row only for ticked teeth with an implant', () => {
     render(<RadiographForm patientId="p1" sites={sites} onDone={() => {}} />);
     expect(screen.queryByLabelText('Mesial 36')).toBeNull();

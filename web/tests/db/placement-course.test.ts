@@ -109,6 +109,37 @@ describe('placement records its course', () => {
     });
   });
 
+  it('correct_placement_v2 refuses a placement date after a non-planning X-ray or the scan (0075)', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const xraySite = await placeV3(c, s, { tooth: 36, course: s.course });
+      const scanSite = await placeV3(c, s, { tooth: 46, course: s.course });
+      const correct = (site: string, placedOn: string) =>
+        c.query(
+          `select public.correct_placement_v2(p_site => $1, p_placed_on => $2::date, p_placing_delegate => $3,
+             p_assisting_delegate => null, p_supervisor => $4, p_course => $5, p_graft => '', p_notes => '')`,
+          [site, placedOn, s.delegate, users.organizer, s.course],
+        );
+      const xray = (purpose: string, on: string) =>
+        c.query(
+          `select public.save_radiograph(p_id => null, p_patient => $1, p_taken_on => $2::date, p_type => 'periapical',
+             p_purpose => $3, p_teeth => array[36]::smallint[], p_link => null, p_notes => null, p_levels => '[]'::jsonb,
+             p_expected_updated_at => null)`,
+          [s.patient, on, purpose],
+        );
+      // A planning X-ray never limits the placement date; a baseline one does.
+      await xray('planning', '2026-03-01');
+      await xray('baseline', '2026-03-05');
+      await correct(xraySite, '2026-03-05');
+      await refused(c, () => correct(xraySite, '2026-03-06'), /can't be placed after its first .*X-ray.*\(2026-03-05\)/);
+
+      const v = (await c.query('select updated_at::text as v from public.implant_sites where id = $1', [scanSite])).rows[0].v;
+      await c.query(`select public.record_impression($1, 'digital_scan', $2::date, $3::timestamptz)`, [scanSite, '2026-03-04', v]);
+      await refused(c, () => correct(scanSite, '2026-03-05'), /can't be placed after its first .*scan.*\(2026-03-04\)/);
+      await correct(scanSite, '2026-03-04');
+    });
+  });
+
   it('needs Edit on Patients', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
