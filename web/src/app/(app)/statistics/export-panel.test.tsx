@@ -49,6 +49,10 @@ describe('<ExportLog>', () => {
     expect(screen.getByText('course (deleted)')).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/);
   });
+  it('shows course=all as All courses', () => {
+    render(<ExportLog isAdmin rows={[{ ...rows[0], filters: { course: 'all', brand: 'Oxy' } }]} />);
+    expect(screen.getByText('course All courses, brand Oxy')).toBeInTheDocument();
+  });
   it('names the study by title', () => {
     const study = '0f0f0f0f-1111-4222-8333-444444444444';
     render(<ExportLog isAdmin rows={[{ ...rows[0], filters: { brand: 'Oxy', study } }, { ...rows[0], id: '2', filters: { study: 'gone' } }]} studyTitles={{ [study]: 'Short implants RCT' }} />);

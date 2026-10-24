@@ -47,6 +47,14 @@ export function effectiveSystem(brand: string, system: string, rows: { brand: st
   return rows.some((r) => r.brand === brand && r.system === system) ? system : "";
 }
 
+/** The course filter value for every course (an empty one is replaced by the default course). */
+export const ALL_COURSES = 'all';
+
+/** The course the Statistics page opens on: the most recent that has started (courses come ordered start date desc). */
+export function defaultCourse(courses: { id: string; start_date: string }[], today: string): string {
+  return courses.find((c) => c.start_date <= today)?.id ?? ALL_COURSES;
+}
+
 /** Arguments for implant_outcomes_detail / crown_outcomes_detail; empty or malformed filters mean "all". */
 export function rpcArgs(f: ResearchFilters) {
   return {

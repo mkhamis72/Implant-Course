@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { ResearchFilters } from '@/lib/research/view';
+import { ALL_COURSES, type ResearchFilters } from '@/lib/research/view';
 import { isCompareKey } from '@/lib/research/groups';
 
 type Option = { id: string; name: string };
@@ -18,7 +18,7 @@ export function FilterForm({ filters, courses, delegates, brands, systems }: {
       <label className="block">
         <span className="label">Course</span>
         <select className="input" name="course" defaultValue={filters.course}>
-          <option value="">All courses</option>
+          <option value={ALL_COURSES}>All courses</option>
           {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </label>

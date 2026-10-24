@@ -57,7 +57,7 @@ test('the research page counts placed implants, drills down, compares by techniq
     for (const name of names) await expect(adminPage.getByText(name).first()).toBeVisible();
 
     // Compare by technique: two groups of one implant each and one failure, so a p-value, the thin-data warning and the clustering note.
-    await adminPage.goto(`/statistics?brand=${encodeURIComponent(brand)}&compare=technique`);
+    await adminPage.goto(`/statistics?course=all&brand=${encodeURIComponent(brand)}&compare=technique`);
     const compare = adminPage.getByRole('region', { name: 'Compare groups' });
     await expect(compare.getByRole('cell', { name: /^Guided/ })).toBeVisible();
     await expect(compare.getByRole('cell', { name: /^Free hand/ })).toBeVisible();
@@ -78,4 +78,25 @@ test('the research page counts placed implants, drills down, compares by techniq
   } finally {
     await adminCtx.close();
   }
+});
+
+test('Statistics opens on the most recent course that has started, and keeps All courses once chosen', async ({ page }) => {
+  const api = await apiAs(TEST_USERS.admin.email);
+  const cairoToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date());
+  const { data: courses, error } = await api.rpc('course_options');
+  expect(error).toBeNull();
+  const expected = (courses as { id: string; start_date: string }[]).find((c) => c.start_date <= cairoToday);
+
+  // A brand with no implants keeps the All courses load small.
+  const brand = uniqueName('Default course');
+  await login(page, TEST_USERS.admin.email);
+  await page.goto(`/statistics?brand=${encodeURIComponent(brand)}`);
+  const course = page.getByRole('combobox', { name: 'Course' });
+  await expect(course).toHaveValue(expected?.id ?? 'all');
+
+  await course.selectOption({ label: 'All courses' });
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await expect(page).toHaveURL(/course=all&.*brand=/);
+  await page.reload();
+  await expect(page.getByRole('combobox', { name: 'Course' })).toHaveValue('all');
 });

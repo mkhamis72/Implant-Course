@@ -11,7 +11,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const EXCLUDED_HEADERS = ['dob', 'notes', 'full_name', 'phone', 'file_no', 'link'];
 
 async function downloadExport(page: Page, brand: string, label: RegExp, extra = ''): Promise<string> {
-  await page.goto(`/statistics?brand=${encodeURIComponent(brand)}${extra}`);
+  await page.goto(`/statistics?course=all&brand=${encodeURIComponent(brand)}${extra}`);
   await expect(page.getByRole('heading', { level: 1, name: 'Statistics & data analysis' })).toBeVisible();
   await page.getByRole('form', { name: 'Export' }).getByLabel(label).check();
   const [download] = await Promise.all([
@@ -107,7 +107,7 @@ test('an admin exports anonymised research data as Excel and CSV, and the export
     for (const id of identifiers) expect(csvAll).not.toContain(id);
 
     // Export log
-    await adminPage.goto(`/statistics?brand=${encodeURIComponent(brand)}`);
+    await adminPage.goto("/statistics/exports");
     const logRows = adminPage.getByRole('region', { name: 'Recent exports' }).locator('tbody tr').filter({ hasText: brand });
     await expect(logRows).toHaveCount(3);
     await expect(logRows.filter({ hasText: delegateName })).toHaveCount(1);

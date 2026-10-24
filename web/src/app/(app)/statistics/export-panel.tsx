@@ -1,4 +1,4 @@
-import { RESEARCH_FILTER_KEYS, type ResearchFilters } from '@/lib/research/view';
+import { ALL_COURSES, RESEARCH_FILTER_KEYS, type ResearchFilters } from '@/lib/research/view';
 import { formatDateTime } from '@/lib/format';
 
 export type StudyOption = { id: string; title: string };
@@ -46,7 +46,7 @@ export function ExportLog({ isAdmin, rows, failed = false, courseNames = {}, del
   if (!isAdmin) return null;
   const named = (f: Record<string, string | null>) => ({
     ...f,
-    ...(f.course ? { course: courseNames[f.course] ?? '(deleted)' } : {}),
+    ...(f.course ? { course: f.course === ALL_COURSES ? 'All courses' : courseNames[f.course] ?? '(deleted)' } : {}),
     ...(f.delegate ? { delegate: delegateNames[f.delegate] ?? '(deleted)' } : {}),
     ...(f.study ? { study: studyTitles[f.study] ?? '(deleted)' } : {}),
   });

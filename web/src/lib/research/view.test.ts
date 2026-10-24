@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { drilldownHref, effectiveSystem, filterQuery, researchHref, rpcArgs, selectImplants, isDrilldownList, type DetailRow } from './view';
+import { ALL_COURSES, defaultCourse, drilldownHref, effectiveSystem, filterQuery, researchHref, rpcArgs, selectImplants, isDrilldownList, type DetailRow } from './view';
 
 const row = (over: Partial<DetailRow> = {}): DetailRow => ({
   site_id: 's', patient_id: 'p', tooth: 11, placed_on: '2025-01-01', year_1: 'survived', year_2: 'not_reached',
@@ -73,5 +73,20 @@ describe('calendar dates and effectiveSystem', () => {
     expect(effectiveSystem('Oxy', 'PSK', rows)).toBe('PSK');
     expect(effectiveSystem('', 'ZZ', rows)).toBe('ZZ');
     expect(effectiveSystem('Oxy', '', rows)).toBe('');
+  });
+});
+
+describe('defaultCourse', () => {
+  it('picks the most recent course that has started', () => {
+    expect(defaultCourse([{ id: 'b', start_date: '2026-12-01' }, { id: 'a', start_date: '2026-10-01' }], '2026-10-24')).toBe('a');
+    expect(defaultCourse([{ id: 'a', start_date: '2026-10-24' }], '2026-10-24')).toBe('a');
+  });
+  it('falls back to all courses when none has started', () => {
+    expect(defaultCourse([{ id: 'b', start_date: '2026-12-01' }], '2026-10-24')).toBe(ALL_COURSES);
+    expect(defaultCourse([], '2026-10-24')).toBe('all');
+  });
+  it('treats all courses as no course filter, and keeps it in links', () => {
+    expect(rpcArgs({ course: 'all', from: '', to: '', delegate: '', brand: '', system: '' }).p_course).toBeNull();
+    expect(filterQuery({ course: 'all', from: '', to: '', delegate: '', brand: '', system: '' })).toBe('course=all');
   });
 });
