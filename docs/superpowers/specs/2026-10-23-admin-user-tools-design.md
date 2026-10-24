@@ -34,7 +34,7 @@ Admins keep running into account problems the app can't fix: a delegate's email 
 - **The 2FA flag** is a new column, `profiles.mfa_setup_required boolean default false`.
   - It is set by `admin_require_mfa_setup` and cleared by a definer function, `mfa_setup_done()`. The user calls it after verifying a factor; it checks that the user really has a verified factor at aal2.
   - Enforcement is described in "Settled after the builder check".
-  - The flag doesn't affect RLS. Without a factor, `is_active_user()` already allows aal1.
+  - RLS refuses a flagged user too (ruling during Task 3): `app_private.mfa_satisfied()` is false while the flag is set, so an access token issued before the reset can't read data until it expires. Their own profile, permissions and settings stay readable.
 - **History** comes from `audit_log`: the profile and delegate rows' changes are already audited.
   - The 2FA reset and the resent invite are recorded with a small `admin_events` table (user, kind, actor, at), which is audited too.
   - The Users page reads history through an admin-only reader, `admin_user_history(user)`, which merges both sources into labelled lines.

@@ -2,9 +2,35 @@
 -- (a "must set up 2FA" flag), end their sessions, and a short per-user history of admin changes.
 
 -- ── 1. The 2FA flag ─────────────────────────────────────────────────────────────────────────
--- Set by admin_require_mfa_setup, cleared by mfa_setup_done. It doesn't affect RLS: the app's
--- session guards send a flagged user to Account → Security.
+-- Set by admin_require_mfa_setup, cleared by mfa_setup_done. The app's session guards send a flagged
+-- user to Account → Security; RLS refuses them too (below), since an access token issued before the
+-- reset stays valid until it expires.
 alter table public.profiles add column mfa_setup_required boolean not null default false;
+
+-- The one gate behind is_active_user(), is_admin() and is_delegate_user() (latest definitions in 0003
+-- and 0030 call it): a flagged user hasn't satisfied 2FA, whatever their token's aal. Their own profile
+-- row stays readable (profiles_select: user_id = auth.uid()), and so do their own permissions.
+create or replace function app_private.mfa_satisfied() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select (
+      coalesce(auth.jwt() ->> 'aal', 'aal1') = 'aal2'
+      or not exists (
+        select 1 from auth.mfa_factors f
+        where f.user_id = auth.uid() and f.status = 'verified'
+      )
+    )
+    and not exists (
+      select 1 from public.profiles p
+      where p.user_id = auth.uid() and p.mfa_setup_required
+    );
+$$;
+
+-- The app layout reads the idle timeout on the security page too, where a flagged user must still get it.
+alter policy settings_select on public.settings
+  using (
+    public.is_active_user() or public.is_delegate_user()
+    or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.active and p.mfa_setup_required)
+  );
 
 -- Admins updated profiles through the table-level privilege; narrow it to the existing columns so
 -- the flag can only change through the functions below.

@@ -6,7 +6,7 @@ const { auth, rpc } = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ auth, rpc }) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-import { confirmEnroll } from './actions';
+import { confirmEnroll, finishMfaSetup } from './actions';
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -28,5 +28,17 @@ describe('confirmEnroll', () => {
     auth.mfa.challengeAndVerify.mockResolvedValue({ data: {}, error: null });
     rpc.mockResolvedValue({ error: { message: 'Finish setting up two-factor authentication first.', hint: 'user' } });
     expect(await confirmEnroll('f1', '123456')).toEqual({ error: 'Finish setting up two-factor authentication first.' });
+  });
+});
+
+describe('finishMfaSetup', () => {
+  it('clears the flag for a user who already has a verified factor', async () => {
+    rpc.mockResolvedValue({ error: null });
+    expect(await finishMfaSetup()).toEqual({});
+    expect(rpc).toHaveBeenCalledWith('mfa_setup_done');
+  });
+  it('shows the database refusal', async () => {
+    rpc.mockResolvedValue({ error: { message: 'Finish setting up two-factor authentication first.', hint: 'user' } });
+    expect(await finishMfaSetup()).toEqual({ error: 'Finish setting up two-factor authentication first.' });
   });
 });

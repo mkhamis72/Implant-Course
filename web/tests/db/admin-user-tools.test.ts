@@ -1,6 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
+import { setPerms } from './fixtures';
 
 const users = inject('testUsers');
 const SELF = "You can't do this to your own account here. Use Account → Security.";
@@ -145,6 +146,41 @@ describe('2FA reset flag', () => {
       await c.query('select public.mfa_setup_done()');
       await asPostgres(c);
       expect((await profile(c, users.target)).mfa_setup_required).toBe(false);
+    });
+  });
+
+  it('RLS refuses a flagged user (even at aal2 with a factor) but keeps their own profile and settings readable', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      await setPerms(c, users.target, { patients: 'view' });
+      const patient = (await c.query(`insert into public.patients (full_name) values ('Zz Flag Patient') returning id`)).rows[0].id;
+      await addVerifiedFactor(c, users.target);
+      const seesPatient = async () =>
+        (await c.query('select 1 from public.patients where id = $1', [patient])).rows.length === 1;
+
+      await actAs(c, users.target, { aal: 'aal2' });
+      expect(await seesPatient()).toBe(true);
+
+      await actAs(c, users.admin);
+      await c.query('select public.admin_require_mfa_setup($1)', [users.target]);
+      await actAs(c, users.target, { aal: 'aal2' });
+      expect(await seesPatient()).toBe(false);
+      expect((await c.query('select public.is_active_user() as v')).rows[0].v).toBe(false);
+      const own = await c.query('select mfa_setup_required from public.profiles where user_id = $1', [users.target]);
+      expect(own.rows).toEqual([{ mfa_setup_required: true }]);
+      expect((await c.query('select 1 from public.settings')).rows).toHaveLength(1);
+
+      await c.query('select public.mfa_setup_done()');
+      expect(await seesPatient()).toBe(true);
+    });
+  });
+
+  it('a flagged admin loses admin access until the flag is cleared', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      await c.query('update public.profiles set mfa_setup_required = true where user_id = $1', [users.admin]);
+      await actAs(c, users.admin);
+      expect((await c.query('select public.is_admin() as v')).rows[0].v).toBe(false);
     });
   });
 

@@ -19,7 +19,8 @@ const MFA_SETUP_PATHS = new Set(['/account/security', '/account/set-password', '
 
 /**
  * Returns the path to redirect to, or null to let the request through. `mfaSetupRequired`: the profile's
- * "must set up 2FA again" flag, when the caller has it (the session guards enforce it regardless).
+ * "must set up 2FA again" flag, when the caller has it. The middleware doesn't pass it yet (that would be a
+ * database read per request); the session guards and RLS enforce the flag regardless.
  */
 export function decideRedirect(input: { path: string; hasUser: boolean; aal: Aal; mfaSetupRequired?: boolean }): string | null {
   const { path, hasUser, aal, mfaSetupRequired } = input;

@@ -79,6 +79,10 @@ describe('hasVerifiedFactor', () => {
     admin.mfa.listFactors.mockResolvedValueOnce({ data: { factors: [{ id: 'f1', status: 'unverified' }] }, error: null });
     expect(await hasVerifiedFactor('u1')).toBe(false);
   });
+  it('is null when Auth cannot say', async () => {
+    admin.mfa.listFactors.mockResolvedValueOnce({ data: null, error: { message: 'down' } });
+    expect(await hasVerifiedFactor('u1')).toBeNull();
+  });
 });
 
 describe('listSignIns', () => {

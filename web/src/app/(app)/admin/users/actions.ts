@@ -112,6 +112,8 @@ export async function resetPassword(_prev: ActionState, formData: FormData): Pro
 
 const SELF_MESSAGE = "You can't do this to your own account here. Use Account → Security.";
 type Db = Awaited<ReturnType<typeof createClient>>;
+/** Ids compared as uuids: an upper-cased copy of your own id is still you. */
+const isSelf = (userId: string, myId: string) => userId.toLowerCase() === myId.toLowerCase();
 
 /** Signs the user out everywhere, last step of a change. Returns the message for a failure, or null. */
 async function endSessions(supabase: Db, userId: string): Promise<string | null> {
@@ -125,10 +127,10 @@ async function endSessions(supabase: Db, userId: string): Promise<string | null>
  */
 export async function changeEmail(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const me = await requireAdmin();
-  if (formData.get('user_id') === me.user_id) return { error: SELF_MESSAGE };
   const parsed = changeEmailSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { user_id, email } = parsed.data;
+  if (isSelf(user_id, me.user_id)) return { error: SELF_MESSAGE };
 
   const changed = await changeAuthEmail(user_id, email);
   if ('error' in changed) return changed;
@@ -139,7 +141,8 @@ export async function changeEmail(_prev: ActionState, formData: FormData): Promi
   if (error) {
     const undone = await changeAuthEmail(user_id, previous.email);
     if ('error' in undone) {
-      await supabase.rpc('admin_record_event', { p_user: user_id, p_kind: 'email_change_incomplete' });
+      const { error: eventError } = await supabase.rpc('admin_record_event', { p_user: user_id, p_kind: 'email_change_incomplete' });
+      if (eventError) console.error('Recording email_change_incomplete failed:', eventError.message);
       return { error: `The sign-in email was changed to ${email} but the app record wasn't. Ask your developer to fix user ${user_id}.` };
     }
     return { error: userMessage(error)! };
@@ -161,11 +164,13 @@ export async function changeEmail(_prev: ActionState, formData: FormData): Promi
 export async function resetTwoFactor(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const me = await requireAdmin();
   const userId = String(formData.get('user_id') ?? '');
-  if (userId === me.user_id) return { error: SELF_MESSAGE };
   if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
+  if (isSelf(userId, me.user_id)) return { error: SELF_MESSAGE };
 
   // Not a way to require 2FA of someone who never set it up.
-  if (!(await hasVerifiedFactor(userId))) return { error: 'This user has no two-factor authentication to reset.' };
+  const factor = await hasVerifiedFactor(userId);
+  if (factor === null) return { error: "Couldn't check this user's two-factor authentication. Try again." };
+  if (!factor) return { error: 'This user has no two-factor authentication to reset.' };
   // The flag first: whatever fails after it, the user can't work without setting up 2FA again.
   const supabase = await createClient();
   const { error } = await supabase.rpc('admin_require_mfa_setup', { p_user: userId });

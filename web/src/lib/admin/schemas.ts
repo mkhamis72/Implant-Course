@@ -18,7 +18,7 @@ export const editNameSchema = z.object({
   full_name: z.string().trim().min(1, { message: 'Enter a name.' }).max(120, { message: 'Keep the name to 120 characters or fewer.' }),
 });
 
-export const setRoleSchema =z.object({ user_id: z.string().uuid(), role });
+export const setRoleSchema = z.object({ user_id: z.string().uuid(), role });
 
 export const setActiveSchema = z.object({
   user_id: z.string().uuid(),

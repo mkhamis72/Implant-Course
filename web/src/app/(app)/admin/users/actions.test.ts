@@ -4,7 +4,8 @@ const { createLogin, rpc, deleteAuthUser, setTemporaryPassword, changeAuthEmail,
   createLogin: vi.fn(), rpc: vi.fn(), deleteAuthUser: vi.fn(), setTemporaryPassword: vi.fn(),
   changeAuthEmail: vi.fn(), resetAuthFactors: vi.fn(), inviteLink: vi.fn(), sendEmail: vi.fn(), hasVerifiedFactor: vi.fn(),
 }));
-vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: 'me' })) }));
+const { ME } = vi.hoisted(() => ({ ME: '9c1d6e2a-3b4f-4a5e-8d7c-1f2e3d4c5b6a' }));
+vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: ME })) }));
 vi.mock('@/lib/admin/create-login', () => ({ createLogin }));
 vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink, hasVerifiedFactor }));
 vi.mock('@/lib/email/send', () => ({ sendEmail }));
@@ -85,7 +86,7 @@ describe('resetPassword', () => {
     expect(setTemporaryPassword).toHaveBeenCalledWith(id);
   });
   it('is not for your own account', async () => {
-    expect(await resetPassword({}, form({ user_id: 'me' }))).toHaveProperty('error');
+    expect(await resetPassword({}, form({ user_id: ME }))).toHaveProperty('error');
     expect(setTemporaryPassword).not.toHaveBeenCalled();
   });
 });
@@ -146,8 +147,8 @@ describe('changeEmail', () => {
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
-  it('refuses your own account before touching anything', async () => {
-    expect(await changeEmail({}, form({ user_id: 'me', email: 'new@example.com' }))).toEqual({ error: SELF });
+  it('refuses your own account before touching anything, whatever the case of the id', async () => {
+    expect(await changeEmail({}, form({ user_id: ME.toUpperCase(), email: 'new@example.com' }))).toEqual({ error: SELF });
     expect(changeAuthEmail).not.toHaveBeenCalled();
     expect(rpc).not.toHaveBeenCalled();
   });
@@ -208,6 +209,11 @@ describe('resetTwoFactor', () => {
     expect(rpc).not.toHaveBeenCalled();
     expect(resetAuthFactors).not.toHaveBeenCalled();
   });
+  it('says so when Auth cannot tell whether there is a factor', async () => {
+    hasVerifiedFactor.mockResolvedValue(null);
+    expect(await resetTwoFactor({}, form({ user_id: id }))).toEqual({ error: "Couldn't check this user's two-factor authentication. Try again." });
+    expect(rpc).not.toHaveBeenCalled();
+  });
   it('touches no factor when the flag could not be set', async () => {
     hasVerifiedFactor.mockResolvedValue(true);
     rpcAnswers({ admin_require_mfa_setup: { message: 'Only an admin can do this.', hint: 'user' } });
@@ -229,8 +235,8 @@ describe('resetTwoFactor', () => {
     rpcAnswers({ admin_end_sessions: { message: 'nope' } });
     expect(await resetTwoFactor({}, form({ user_id: id }))).toEqual({ error: 'Changed, but existing sessions could not be ended: nope' });
   });
-  it('refuses your own account', async () => {
-    expect(await resetTwoFactor({}, form({ user_id: 'me' }))).toEqual({ error: SELF });
+  it('refuses your own account, whatever the case of the id', async () => {
+    expect(await resetTwoFactor({}, form({ user_id: ME.toUpperCase() }))).toEqual({ error: SELF });
     expect(resetAuthFactors).not.toHaveBeenCalled();
     expect(rpc).not.toHaveBeenCalled();
   });

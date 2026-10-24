@@ -39,3 +39,15 @@ export async function removeFactor(formData: FormData): Promise<void> {
   if (error) throw new Error(mapAuthError(error));
   revalidatePath('/account/security');
 }
+
+/**
+ * For a user who must set up 2FA again but already has a verified factor (the clear after their verify was refused,
+ * or an old factor survived a reset): clears the flag at aal2, which mfa_setup_done checks.
+ */
+export async function finishMfaSetup(): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('mfa_setup_done');
+  if (error) return { error: userMessage(error)! };
+  revalidatePath('/', 'layout');
+  return {};
+}

@@ -71,6 +71,9 @@ All commands are run with `ENV_FILE=.env.prod` (see the top of this page).
   - Staff: `npm run create-user -- dr@example.com "Dr Name" [--role admin]`.
   - Delegate: `npm run create-user -- d@example.com "Dr Name" --role delegate --delegate <delegate id>`.
 - **Reset a password** (lost, or never received): Admin → Users → **Reset password**, or **Reset password** in the Login section of a delegate's page. It shows a new one-time password to hand over, whether email is on or off. From the command line, run the same `create-user` command again for that email.
+- **Change a sign-in email** (typo, new address): Admin → Users → **Change email** on the user's row. It changes the sign-in address and the app record together (and the linked delegate's email), signs them out everywhere, and emails a notice (no link) to the new address, and to the old one if they have signed in before. Don't edit `auth.users` or `profiles` in the Supabase dashboard: the two would disagree. You can't change your own here; use Account → Security.
+- **Lost authenticator (company users):** Admin → Users → **Reset 2FA** (shown only when the user has one). It removes their authenticator and signs them out everywhere; at their next sign-in they must set up a new one before the app (or the database) lets them do anything else.
+- **Invite never arrived:** Admin → Users → **Resend invite**, shown while email is on and the user has never signed in. Each row's **History** lists the last email, name and 2FA changes made by admins.
 - **Deactivate, or change role:** Admin → Users in the app. Delegate logins are deactivated there too.
 - **Delete** a user or delegate added by mistake: Admin → Users → **Delete user**, or **Delete delegate** on the delegate's page (this also deletes their login and course enrollments). Anyone with records — implants, stock, notes, checklist work, surgery bookings — can't be deleted: deactivate them, or set the delegate Inactive.
 

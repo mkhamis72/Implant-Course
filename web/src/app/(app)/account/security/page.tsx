@@ -3,9 +3,10 @@ import { createClient } from '@/lib/supabase/server';
 import { EnrollTotp } from './enroll-totp';
 import { confirmEnroll, removeFactor, startEnroll } from './actions';
 import { requireSignedIn } from '@/lib/auth/session';
+import { FinishSetup } from './finish-setup';
 
 export default async function SecurityPage() {
-  await requireSignedIn({ allowMfaSetup: true }); // staff and delegate logins alike; the one page open while 2FA set-up is required
+  const profile = await requireSignedIn({ allowMfaSetup: true }); // staff and delegate logins alike; the one page open while 2FA set-up is required
   const supabase = await createClient();
   const { data } = await supabase.auth.mfa.listFactors();
   const verified = (data?.totp ?? []).filter((f) => f.status === 'verified');
@@ -14,10 +15,16 @@ export default async function SecurityPage() {
     <div className="max-w-xl space-y-6">
       <h1>Account security</h1>
       <section className="card space-y-4">
-        <h2 className="font-semibold">Two-factor authentication (optional)</h2>
+        <h2 className="font-semibold">Two-factor authentication{profile.mfa_setup_required ? '' : ' (optional)'}</h2>
+        {profile.mfa_setup_required && (
+          <p role="status" className="rounded-md border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">
+            An administrator reset your two-factor authentication. Set up an authenticator to continue using the app.
+          </p>
+        )}
         {verified.length > 0 ? (
           <div className="space-y-3">
             <p className="text-ok">Authenticator active</p>
+            {profile.mfa_setup_required && <FinishSetup />}
             {verified.map((factor) => (
               <form key={factor.id} action={removeFactor}>
                 <input type="hidden" name="factor_id" value={factor.id} />

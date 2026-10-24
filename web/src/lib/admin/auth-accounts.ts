@@ -80,13 +80,14 @@ export async function resetAuthFactors(userId: string): Promise<string | null> {
   }
 }
 
-/** Whether the login has a verified 2FA factor (Reset 2FA is offered only then). False when Auth can't say. */
-export async function hasVerifiedFactor(userId: string): Promise<boolean> {
+/** Whether the login has a verified 2FA factor (Reset 2FA is offered only then); null when Auth can't say. */
+export async function hasVerifiedFactor(userId: string): Promise<boolean | null> {
   try {
     const { data, error } = await (await adminAuth()).mfa.listFactors({ userId });
-    return !error && (data?.factors ?? []).some((f) => f.status === 'verified');
+    if (error) return null;
+    return (data?.factors ?? []).some((f) => f.status === 'verified');
   } catch {
-    return false;
+    return null;
   }
 }
 
