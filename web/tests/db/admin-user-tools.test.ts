@@ -16,11 +16,12 @@ async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp | 
 const profile = async (c: Client, id: string) =>
   (await c.query('select email, full_name, mfa_setup_required from public.profiles where user_id = $1', [id])).rows[0];
 
-async function addVerifiedFactor(c: Client, userId: string) {
+/** createdAt is SQL: clock_timestamp() (default) is later than anything recorded earlier in the transaction (now()). */
+async function addVerifiedFactor(c: Client, userId: string, createdAt = 'clock_timestamp()') {
   await asPostgres(c);
   await c.query(
     `insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret)
-     values (gen_random_uuid(), $1, 'zz-admin-tools', 'totp', 'verified', now(), now(), 'x')`,
+     values (gen_random_uuid(), $1, 'zz-admin-tools-' || gen_random_uuid(), 'totp', 'verified', ${createdAt}, ${createdAt}, 'x')`,
     [userId],
   );
 }
@@ -53,12 +54,17 @@ describe('admin user tools: guards', () => {
     });
   });
 
-  it('the flag column cannot be written directly, even by an admin', async () => {
+  it('the flag and the email cannot be written directly, even by an admin', async () => {
     await withTx(async (c) => {
       await actAs(c, users.admin);
       await refused(
         c,
         () => c.query('update public.profiles set mfa_setup_required = true where user_id = $1', [users.target]),
+        /permission denied/,
+      );
+      await refused(
+        c,
+        () => c.query("update public.profiles set email = 'zz-direct@example.com' where user_id = $1", [users.target]),
         /permission denied/,
       );
     });
@@ -154,7 +160,7 @@ describe('2FA reset flag', () => {
       await asPostgres(c);
       await setPerms(c, users.target, { patients: 'view' });
       const patient = (await c.query(`insert into public.patients (full_name) values ('Zz Flag Patient') returning id`)).rows[0].id;
-      await addVerifiedFactor(c, users.target);
+      await addVerifiedFactor(c, users.target, "now() - interval '1 day'");
       const seesPatient = async () =>
         (await c.query('select 1 from public.patients where id = $1', [patient])).rows.length === 1;
 
@@ -170,8 +176,25 @@ describe('2FA reset flag', () => {
       expect(own.rows).toEqual([{ mfa_setup_required: true }]);
       expect((await c.query('select 1 from public.settings')).rows).toHaveLength(1);
 
+      await addVerifiedFactor(c, users.target); // a new authenticator, after the reset
+      await actAs(c, users.target, { aal: 'aal2' });
       await c.query('select public.mfa_setup_done()');
       expect(await seesPatient()).toBe(true);
+    });
+  });
+
+  it('mfa_setup_done refuses a factor that survived the reset and accepts one created after it', async () => {
+    await withTx(async (c) => {
+      await addVerifiedFactor(c, users.target, "now() - interval '1 day'");
+      await actAs(c, users.admin);
+      await c.query('select public.admin_require_mfa_setup($1)', [users.target]);
+      await actAs(c, users.target, { aal: 'aal2' });
+      await refused(c, () => c.query('select public.mfa_setup_done()'), /two-factor/);
+      await addVerifiedFactor(c, users.target);
+      await actAs(c, users.target, { aal: 'aal2' });
+      await c.query('select public.mfa_setup_done()');
+      await asPostgres(c);
+      expect((await profile(c, users.target)).mfa_setup_required).toBe(false);
     });
   });
 

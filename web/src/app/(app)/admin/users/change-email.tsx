@@ -7,7 +7,11 @@ import { changeEmail } from './actions';
 /** Change email: opens an in-page confirmation that says what happens, then changes the sign-in address. */
 export function ChangeEmail({ userId, email }: { userId: string; email: string }) {
   const [open, setOpen] = useState(false);
-  const [state, action, pending] = useActionState<ActionState, FormData>(changeEmail, {});
+  // React 19 resets the form after the action: keep what was typed (and remount the input) so an error doesn't lose it.
+  const [state, action, pending] = useActionState<ActionState & { typed?: string; attempt?: number }, FormData>(
+    async (prev, formData) => ({ ...(await changeEmail(prev, formData)), typed: String(formData.get('email') ?? ''), attempt: (prev.attempt ?? 0) + 1 }),
+    {},
+  );
   useEffect(() => {
     if (state.ok) setOpen(false);
   }, [state]);
@@ -28,7 +32,7 @@ export function ChangeEmail({ userId, email }: { userId: string; email: string }
       <input type="hidden" name="user_id" value={userId} />
       <label className="block">
         <span className="label">New email</span>
-        <input className="input py-1" name="email" type="email" maxLength={120} required autoComplete="off" />
+        <input key={state.attempt ?? 0} className="input py-1" name="email" type="email" maxLength={120} required autoComplete="off" defaultValue={state.error ? state.typed : undefined} />
       </label>
       <p>
         They will be signed out everywhere and must sign in with the new address. A notice goes to the new address (and to {email}{' '}

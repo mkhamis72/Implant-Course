@@ -7,7 +7,11 @@ import { editName } from './actions';
 /** The user's name, with an in-place form to change it (your own included). */
 export function EditName({ userId, name, isSelf }: { userId: string; name: string; isSelf: boolean }) {
   const [editing, setEditing] = useState(false);
-  const [state, action, pending] = useActionState<ActionState, FormData>(editName, {});
+  // React 19 resets the form after the action: keep what was typed (and remount the input) so an error doesn't lose it.
+  const [state, action, pending] = useActionState<ActionState & { typed?: string; attempt?: number }, FormData>(
+    async (prev, formData) => ({ ...(await editName(prev, formData)), typed: String(formData.get('full_name') ?? ''), attempt: (prev.attempt ?? 0) + 1 }),
+    {},
+  );
   useEffect(() => {
     if (state.ok) setEditing(false);
   }, [state]);
@@ -28,7 +32,7 @@ export function EditName({ userId, name, isSelf }: { userId: string; name: strin
       <input type="hidden" name="user_id" value={userId} />
       <label className="block">
         <span className="label">Name</span>
-        <input className="input py-1" name="full_name" defaultValue={name} maxLength={120} required />
+        <input key={state.attempt ?? 0} className="input py-1" name="full_name" defaultValue={state.error ? state.typed : name} maxLength={120} required />
       </label>
       <div className="flex gap-2">
         <button className="btn py-1" disabled={pending}>Save name</button>

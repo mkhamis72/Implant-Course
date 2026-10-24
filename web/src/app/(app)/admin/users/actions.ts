@@ -115,10 +115,14 @@ type Db = Awaited<ReturnType<typeof createClient>>;
 /** Ids compared as uuids: an upper-cased copy of your own id is still you. */
 const isSelf = (userId: string, myId: string) => userId.toLowerCase() === myId.toLowerCase();
 
-/** Signs the user out everywhere, last step of a change. Returns the message for a failure, or null. */
+/** Signs the user out everywhere, last step of a change. Returns the database error for a failure, or null. */
 async function endSessions(supabase: Db, userId: string): Promise<string | null> {
   const { error } = await supabase.rpc('admin_end_sessions', { p_user: userId });
-  return error ? `Changed, but existing sessions could not be ended: ${error.message}` : null;
+  return error ? error.message : null;
+}
+
+function sessionsMessage(problem: string): string {
+  return `Changed, but existing sessions could not be ended: ${problem}`;
 }
 
 /**
@@ -157,7 +161,7 @@ export async function changeEmail(_prev: ActionState, formData: FormData): Promi
     if ((await sendEmail({ to, ...notice })) === 'failed') unsent.push(to);
   }
   const warning = unsent.length ? ` The notice to ${unsent.join(' and ')} couldn't be sent.` : '';
-  return sessionProblem ? { error: sessionProblem + warning } : { ok: `Email changed to ${email}.${warning}` };
+  return sessionProblem ? { error: sessionsMessage(sessionProblem) + warning } : { ok: `Email changed to ${email}.${warning}` };
 }
 
 /** Requires set-up again before the user can work, then removes every factor, then signs them out everywhere. */
@@ -167,24 +171,31 @@ export async function resetTwoFactor(_prev: ActionState, formData: FormData): Pr
   if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
   if (isSelf(userId, me.user_id)) return { error: SELF_MESSAGE };
 
-  // Not a way to require 2FA of someone who never set it up.
+  // Not a way to require 2FA of someone who never set it up, except to retry a reset that half-failed.
   const factor = await hasVerifiedFactor(userId);
   if (factor === null) return { error: "Couldn't check this user's two-factor authentication. Try again." };
-  if (!factor) return { error: 'This user has no two-factor authentication to reset.' };
-  // The flag first: whatever fails after it, the user can't work without setting up 2FA again.
   const supabase = await createClient();
+  if (!factor) {
+    const { data: target } = await supabase.from('profiles').select('mfa_setup_required').eq('user_id', userId).maybeSingle();
+    if (!target?.mfa_setup_required) return { error: 'This user has no two-factor authentication to reset.' };
+  }
+  // The flag first: whatever fails after it, the user can't work without setting up 2FA again.
   const { error } = await supabase.rpc('admin_require_mfa_setup', { p_user: userId });
   if (error) return { error: userMessage(error)! };
   revalidatePath('/admin/users');
   const problem = await resetAuthFactors(userId);
+  // Always end the sessions once flagged: a session left on the lost phone mustn't keep working.
+  const sessionProblem = await endSessions(supabase, userId);
   if (problem) {
+    const factorsMessage = `Setting up two-factor authentication again is now required, but the old authenticator couldn't be removed: ${problem} Try Reset 2FA again.`;
     return {
-      error: `Setting up two-factor authentication again is now required, but the old authenticator couldn't be removed: ${problem} Try Reset 2FA again.`,
+      error: sessionProblem
+        ? `${factorsMessage} Existing sessions could not be ended either: ${sessionProblem}`
+        : factorsMessage,
     };
   }
-  const sessionProblem = await endSessions(supabase, userId);
   return sessionProblem
-    ? { error: sessionProblem }
+    ? { error: sessionsMessage(sessionProblem) }
     : { ok: 'Two-factor authentication reset. They must set it up again when they next sign in.' };
 }
 

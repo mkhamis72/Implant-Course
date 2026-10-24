@@ -32,10 +32,10 @@ alter policy settings_select on public.settings
     or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.active and p.mfa_setup_required)
   );
 
--- Admins updated profiles through the table-level privilege; narrow it to the existing columns so
--- the flag can only change through the functions below.
+-- Admins updated profiles through the table-level privilege; narrow it to the columns the app writes
+-- directly, so the flag and the email (kept in step with Auth) change only through the functions below.
 revoke update on public.profiles from authenticated;
-grant update (full_name, email, role, active, delegate_id) on public.profiles to authenticated;
+grant update (full_name, role, active, delegate_id) on public.profiles to authenticated;
 
 -- ── 2. Admin events (things audit_log can't show: a 2FA reset, a resent invite, a failed email change) ──
 create table public.admin_events (
@@ -199,8 +199,16 @@ begin
   if auth.uid() is null then
     perform app_private.fail('Sign in first.');
   end if;
+  -- The factor must be newer than the latest reset: one that survived it (a failed deletion) is the
+  -- lost phone's, and must not lift the requirement.
   if coalesce(auth.jwt() ->> 'aal', '') <> 'aal2'
-     or not exists (select 1 from auth.mfa_factors f where f.user_id = auth.uid() and f.status = 'verified') then
+     or not exists (
+       select 1 from auth.mfa_factors f
+       where f.user_id = auth.uid() and f.status = 'verified'
+         and f.created_at > coalesce(
+           (select max(e.at) from public.admin_events e where e.user_id = auth.uid() and e.kind = 'mfa_reset'),
+           '-infinity'::timestamptz)
+     ) then
     perform app_private.fail('Finish setting up two-factor authentication first.');
   end if;
   update public.profiles set mfa_setup_required = false where user_id = auth.uid();

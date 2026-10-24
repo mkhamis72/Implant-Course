@@ -60,10 +60,11 @@ describe('resetAuthFactors', () => {
     expect(admin.mfa.deleteFactor).toHaveBeenCalledWith({ id: 'f1', userId: 'u1' });
     expect(admin.mfa.deleteFactor).toHaveBeenCalledWith({ id: 'f2', userId: 'u1' });
   });
-  it('refuses when there is no verified factor (it is not a way to require 2FA)', async () => {
+  it('deletes leftover unverified factors on a retry (the action decides whether a reset is allowed)', async () => {
     admin.mfa.listFactors.mockResolvedValue({ data: { factors: [{ id: 'f2', status: 'unverified' }] }, error: null });
-    expect(await resetAuthFactors('u1')).toBe('This user has no two-factor authentication to reset.');
-    expect(admin.mfa.deleteFactor).not.toHaveBeenCalled();
+    admin.mfa.deleteFactor.mockResolvedValue({ data: {}, error: null });
+    expect(await resetAuthFactors('u1')).toBeNull();
+    expect(admin.mfa.deleteFactor).toHaveBeenCalledWith({ id: 'f2', userId: 'u1' });
   });
   it('stops at a failed delete', async () => {
     admin.mfa.listFactors.mockResolvedValue({ data: { factors: [{ id: 'f1', status: 'verified' }] }, error: null });

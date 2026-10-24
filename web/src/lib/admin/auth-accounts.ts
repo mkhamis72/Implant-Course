@@ -62,15 +62,16 @@ export async function changeAuthEmail(userId: string, email: string): Promise<{ 
   }
 }
 
-/** Deletes every factor of a login that has a verified one (Reset 2FA). Returns an error message, or null. */
+/**
+ * Deletes every factor of a login (Reset 2FA; the action decides whether a reset is allowed). Returns an error
+ * message, or null.
+ */
 export async function resetAuthFactors(userId: string): Promise<string | null> {
   try {
     const auth = await adminAuth();
     const { data, error } = await auth.mfa.listFactors({ userId });
     if (error) return mapAuthError(error);
-    const factors = data?.factors ?? [];
-    if (!factors.some((f) => f.status === 'verified')) return 'This user has no two-factor authentication to reset.';
-    for (const factor of factors) {
+    for (const factor of data?.factors ?? []) {
       const { error: deleteError } = await auth.mfa.deleteFactor({ id: factor.id, userId });
       if (deleteError) return mapAuthError(deleteError);
     }

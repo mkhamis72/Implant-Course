@@ -113,7 +113,7 @@ test('an admin resets 2FA: the user must set it up again before the app works', 
     await expect(row.getByText(/signed out everywhere/)).toBeVisible();
     await row.getByRole('button', { name: 'Reset 2FA', exact: true }).click();
     await expect(row.getByText('Two-factor authentication reset. They must set it up again when they next sign in.')).toBeVisible();
-    await expect(row.getByRole('button', { name: `Reset 2FA for ${email}` })).toHaveCount(0);
+    await expect(row.getByText('2FA set-up pending')).toBeVisible();
     await row.getByText('History').click();
     await expect(row.getByText(/^2FA reset by Test Admin · /)).toBeVisible();
 

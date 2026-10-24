@@ -65,6 +65,7 @@ export function UserRow({ user, isSelf, account, emailOn }: { user: Profile; isS
       <td data-label="Status" className="py-2 pr-4">
         <div>{user.active ? 'Active' : 'Inactive'}</div>
         <div className="text-sm text-muted">Last sign-in: {lastSignInText(account.lastSignIn)}</div>
+        {user.mfa_setup_required && <span className="badge badge-warn">2FA set-up pending</span>}
       </td>
       <td data-label="Actions" className="py-2">
         {!isSelf && (
@@ -79,7 +80,8 @@ export function UserRow({ user, isSelf, account, emailOn }: { user: Profile; isS
         {!isSelf && (
           <div className="mt-2 space-y-2">
             <ResetPassword userId={user.user_id} label={`Reset password for ${user.email}`} />
-            <ResetTwoFactor userId={user.user_id} email={user.email} available={account.hasFactor} />
+            {/* While set-up is still required, a reset that half-failed can be retried. */}
+            <ResetTwoFactor userId={user.user_id} email={user.email} available={account.hasFactor || user.mfa_setup_required} />
             {account.lastSignIn === null && emailOn && (
               <form action={inviteAction}>
                 <input type="hidden" name="user_id" value={user.user_id} />

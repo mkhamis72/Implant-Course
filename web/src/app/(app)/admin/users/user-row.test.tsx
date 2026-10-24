@@ -43,6 +43,16 @@ describe('UserRow', () => {
     expect(screen.queryByRole('button', { name: /Reset 2FA/ })).not.toBeInTheDocument();
   });
 
+  it('offers Reset 2FA again, with a pending badge, while the user must still set it up', () => {
+    render(
+      <table><tbody>
+        <UserRow user={{ ...user, mfa_setup_required: true }} isSelf={false} account={account({ hasFactor: false })} emailOn />
+      </tbody></table>,
+    );
+    expect(screen.getByText('2FA set-up pending')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reset 2FA for org@example.com' })).toBeInTheDocument();
+  });
+
   it('shows Resend invite only for a never-signed-in user with email on', () => {
     renderRow({ account: account({ lastSignIn: null }) });
     expect(screen.getByRole('button', { name: 'Resend invite to org@example.com' })).toBeInTheDocument();

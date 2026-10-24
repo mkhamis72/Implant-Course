@@ -11,11 +11,16 @@ vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, setTemporaryPasswo
 vi.mock('@/lib/email/send', () => ({ sendEmail }));
 vi.mock('@/lib/branding/get', () => ({ getBranding: vi.fn(async () => ({ name: 'Academy' })) }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc })) }));
+const { flagged } = vi.hoisted(() => ({ flagged: { value: false } }));
+const profilesQuery: { select: () => unknown; eq: () => unknown; maybeSingle: () => Promise<unknown> } = { select: () => profilesQuery, eq: () => profilesQuery, maybeSingle: async () => ({ data: { mfa_setup_required: flagged.value }, error: null }) };
+vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc, from: () => profilesQuery })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 import { changeEmail, editName, inviteUser, removeUser, resendInvite, resetPassword, resetTwoFactor, savePermissions } from './actions';
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  flagged.value = false;
+});
 
 const form = (fields: Record<string, string>) => {
   const f = new FormData();
@@ -220,14 +225,33 @@ describe('resetTwoFactor', () => {
     expect(await resetTwoFactor({}, form({ user_id: id }))).toEqual({ error: 'Only an admin can do this.' });
     expect(resetAuthFactors).not.toHaveBeenCalled();
   });
-  it('says so when the factors could not be deleted, and ends no sessions', async () => {
+  it('still ends sessions when the factors could not be deleted', async () => {
     hasVerifiedFactor.mockResolvedValue(true);
     resetAuthFactors.mockResolvedValue('Something went wrong. Please try again.');
     rpcAnswers({});
     expect(await resetTwoFactor({}, form({ user_id: id }))).toEqual({
       error: "Setting up two-factor authentication again is now required, but the old authenticator couldn't be removed: Something went wrong. Please try again. Try Reset 2FA again.",
     });
-    expect(rpc.mock.calls.map((c) => c[0])).toEqual(['admin_require_mfa_setup']);
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(['admin_require_mfa_setup', 'admin_end_sessions']);
+  });
+  it('reports both problems when factors and sessions both fail', async () => {
+    hasVerifiedFactor.mockResolvedValue(true);
+    resetAuthFactors.mockResolvedValue('Boom.');
+    rpcAnswers({ admin_end_sessions: { message: 'nope' } });
+    expect(await resetTwoFactor({}, form({ user_id: id }))).toEqual({
+      error: "Setting up two-factor authentication again is now required, but the old authenticator couldn't be removed: Boom. Try Reset 2FA again. Existing sessions could not be ended either: nope",
+    });
+  });
+  it('retries for a user still required to set up 2FA, even with no verified factor left, and ends sessions', async () => {
+    hasVerifiedFactor.mockResolvedValue(false);
+    flagged.value = true;
+    resetAuthFactors.mockResolvedValue(null);
+    rpcAnswers({});
+    expect(await resetTwoFactor({}, form({ user_id: id }))).toEqual({
+      ok: 'Two-factor authentication reset. They must set it up again when they next sign in.',
+    });
+    expect(resetAuthFactors).toHaveBeenCalledWith(id);
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(['admin_require_mfa_setup', 'admin_end_sessions']);
   });
   it('says when sessions could not be ended', async () => {
     hasVerifiedFactor.mockResolvedValue(true);
