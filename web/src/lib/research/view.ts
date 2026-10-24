@@ -55,6 +55,11 @@ export function defaultCourse(courses: { id: string; start_date: string }[], tod
   return courses.find((c) => c.start_date <= today)?.id ?? ALL_COURSES;
 }
 
+/** A drill-down with no course lists every course (old links had none); its link back then says so too. */
+export function drilldownFilters<F extends ResearchFilters>(f: F): F {
+  return { ...f, course: f.course || ALL_COURSES };
+}
+
 /** Arguments for implant_outcomes_detail / crown_outcomes_detail; empty or malformed filters mean "all". */
 export function rpcArgs(f: ResearchFilters) {
   return {

@@ -44,7 +44,6 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
         <h1>Patients</h1>
         <div className="flex flex-wrap gap-2">
           <Link href="/patients/recall" className="btn-secondary btn">Recall list</Link>
-          <Link href="/patients/data-quality" className="btn-secondary btn">Data quality</Link>
           {editable && (
             <Link href="/patients/new" className="btn">
               New patient

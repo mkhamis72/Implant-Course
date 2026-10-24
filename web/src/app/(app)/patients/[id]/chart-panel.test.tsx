@@ -91,37 +91,13 @@ describe('ChartPanel', () => {
     expect(screen.queryByRole('tab', { name: /^Restoration/ })).toBeNull();
   });
 
-  it('shows the Date problem badge only for the implant whose site has an issue', () => {
+  it('shows no Date problem badge (impossible dates are refused at entry)', () => {
     const site = {
       id: 's1', tooth: 36, state: 'placed', placed_on: '2030-03-10', technique: 'guided', torque_ncm: null, isq: null, bone_type: null,
       graft: '', product: null, lot: null, stock_lot_id: null, placing: null, assisting: null, supervisor: null, slot: null,
       components: [], followups: [], complications: [], surgery: null, grafts: [],
     };
-    const issue = (site_id: string | null) => ({
-      patient_id: 'pt', patient_name: 'A', file_no: 'P1', site_id, tooth: 36, kind: 'before_placement', record_table: 'implant_followups',
-      record_id: 'r', record_date: '2030-01-01', reference_date: '2030-03-10', message: 'm',
-    });
-    const withIssues = (issues: unknown[]) =>
-      ({ ...data(true), statuses: { 36: 'implant_placed' }, sites: [site], issues }) as unknown as ChartData;
-    const { unmount } = render(<ChartPanel patientId="pt" data={withIssues([issue('s1')])} initialTooth={36} />);
-    expect(screen.getByText('Date problem')).toBeInTheDocument();
-    unmount();
-    render(<ChartPanel patientId="pt" data={withIssues([issue('other')])} initialTooth={36} />);
+    render(<ChartPanel patientId="pt" data={{ ...data(true), statuses: { 36: 'implant_placed' }, sites: [site] } as unknown as ChartData} initialTooth={36} />);
     expect(screen.queryByText('Date problem')).toBeNull();
-  });
-
-  it('shows the Date problem badge for an issue on a failed implant of the tooth', () => {
-    const failed = {
-      id: 'old', tooth: 36, state: 'failed', placed_on: '2029-03-10', technique: 'guided', torque_ncm: null, isq: null, bone_type: null,
-      graft: '', product: null, lot: null, stock_lot_id: null, placing: null, assisting: null, supervisor: null, slot: null,
-      components: [], followups: [], complications: [], surgery: null, grafts: [],
-    };
-    const issue = {
-      patient_id: 'pt', patient_name: 'A', file_no: 'P1', site_id: 'old', tooth: 36, kind: 'in_future', record_table: 'implant_followups',
-      record_id: 'r', record_date: '2031-01-01', reference_date: null, message: 'm',
-    };
-    const chart = { ...data(true), statuses: { 36: 'failed' }, sites: [failed], issues: [issue] } as unknown as ChartData;
-    render(<ChartPanel patientId="pt" data={chart} initialTooth={36} />);
-    expect(screen.getByText('Date problem')).toBeInTheDocument();
   });
 });

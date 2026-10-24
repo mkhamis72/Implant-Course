@@ -12,8 +12,6 @@ import { cancelPlan } from './implant-actions';
 import { ComponentForm, PlaceForm, PlanForm } from './implant-forms';
 import { RecordVisitForm } from './visits';
 import { ImplantTabs } from './implant-tabs';
-import { DateProblemBadge } from './date-problem-badge';
-import { issuesForTooth } from '@/lib/data-quality/issues';
 import { SiteDetails, TechniqueControl } from './site-details';
 
 type Mode = 'none' | 'plan' | 'place' | 'component' | 'followup';
@@ -33,7 +31,6 @@ export function ImplantSection({ patientId, tooth, status, data, openTab }: {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const site = activeSite(data.sites, tooth);
-  const toothIssues = issuesForTooth(data.issues, data.sites, tooth);
   const earlier = data.sites.filter((s) => s.tooth === tooth && s !== site && s.state !== 'removed');
   const canStart = !site && (isManualState(status) || status === 'failed');
   const actions = nextActions({ canStart, siteState: site?.state ?? null });
@@ -58,7 +55,6 @@ export function ImplantSection({ patientId, tooth, status, data, openTab }: {
     <section aria-label="Implant record" className="space-y-3 border-t border-line pt-4">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="font-semibold">Implant</h3>
-        <DateProblemBadge count={toothIssues.length} title={toothIssues.map((i) => i.message).join(' ')} />
       </div>
       {!site && <p className="text-sm text-muted">No implant on this tooth.</p>}
       {site?.state === 'planned' && (
