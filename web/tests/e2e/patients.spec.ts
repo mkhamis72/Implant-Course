@@ -33,7 +33,7 @@ test('invalid DOB keeps input', async ({ page }) => {
   await page.goto('/patients/new');
   await page.getByLabel('Full name').fill(name);
   await page.getByLabel('Phone').fill('0100');
-  await page.getByLabel('Date of birth').fill('2999-01-01');
+  await page.getByLabel('Date of birth').fill('1800-01-01'); // a future date is already refused by the picker (max today)
   await page.getByRole('button', { name: 'Save patient' }).click();
   await expect(page.getByRole('main').getByRole('alert')).toHaveText('Enter a real date of birth (not in the future, after 1900).');
   await expect(page.getByLabel('Full name')).toHaveValue(name);

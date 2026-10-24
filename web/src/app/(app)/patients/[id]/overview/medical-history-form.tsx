@@ -1,5 +1,6 @@
 'use client';
 
+import { todayIso } from '@/lib/dates';
 import { useActionState, useState } from 'react';
 import type { MedicalHistory } from '@/lib/patients/types';
 import { RISK_QUESTIONS, notAssessedCount } from '@/lib/patients/risk-factors';
@@ -85,7 +86,7 @@ function RiskFactors({ history, state }: { history: MedicalHistory; state: FormS
         </label>
         <label className="block">
           <span className="label">HbA1c date</span>
-          <input className="input" type="date" name="hba1c_date" defaultValue={valueOf(state, 'hba1c_date', history.hba1c_date)} />
+          <input className="input" type="date" name="hba1c_date" max={todayIso()} defaultValue={valueOf(state, 'hba1c_date', history.hba1c_date)} />
         </label>
       </div>
     </div>

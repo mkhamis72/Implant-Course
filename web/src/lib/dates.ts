@@ -16,3 +16,15 @@ export function addDays(iso: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+const dates = (values: (string | null | undefined)[]) => values.filter((v): v is string => Boolean(v)).sort();
+
+/** The latest of some ISO dates (they sort as text), ignoring empty ones. */
+export function latestDate(values: (string | null | undefined)[]): string | undefined {
+  return dates(values).at(-1);
+}
+
+/** The earliest of some ISO dates, ignoring empty ones. */
+export function earliestDate(values: (string | null | undefined)[]): string | undefined {
+  return dates(values)[0];
+}

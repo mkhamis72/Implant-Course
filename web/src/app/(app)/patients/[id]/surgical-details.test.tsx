@@ -126,3 +126,11 @@ describe('<SurgicalDetails>', () => {
     expect(screen.queryByRole('button', { name: 'Add graft' })).not.toBeInTheDocument();
   });
 });
+
+describe('surgery date limits', () => {
+  it('extraction no later than placement', () => {
+    render(<SurgicalDetails site={site()} patientId="pt" editable />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit surgical details' }));
+    expect(screen.getByLabelText(/Extraction date/)).toHaveAttribute('max', '2026-03-10');
+  });
+});

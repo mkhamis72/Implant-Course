@@ -69,7 +69,7 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="block">
           <span className="label">Placement date</span>
-          <input className="input" type="date" value={v.placedOn} onChange={set('placedOn')} />
+          <input className="input" type="date" max={data.today} value={v.placedOn} onChange={set('placedOn')} />
         </label>
         <label className="block">
           <span className="label">Placed by</span>

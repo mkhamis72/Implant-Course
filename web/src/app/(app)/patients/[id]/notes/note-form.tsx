@@ -1,5 +1,6 @@
 'use client';
 
+import { todayIso } from '@/lib/dates';
 import { useActionState } from 'react';
 import { valueOf, type FormState } from '@/lib/patients/form-state';
 import { addNote } from './actions';
@@ -13,7 +14,7 @@ export function NoteForm({ patientId, today }: { patientId: string; today: strin
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="label">Visit date</span>
-          <input className="input" name="visit_date" type="date" defaultValue={valueOf(state, 'visit_date', today)} />
+          <input className="input" name="visit_date" type="date" max={todayIso()} defaultValue={valueOf(state, 'visit_date', today)} />
         </label>
         <label className="block">
           <span className="label">Teeth (optional)</span>

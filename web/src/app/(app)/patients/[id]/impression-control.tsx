@@ -41,6 +41,7 @@ export function ImpressionControl({ site, patientId, editable }: { site: Implant
                 className="input w-auto py-1"
                 name="takenOn"
                 type="date"
+                min={site.placed_on ?? undefined}
                 max={todayIso()}
                 defaultValue={valueOf(state, 'takenOn', site.impression_taken_on ?? (site.impression_type ? '' : todayIso()))}
               />

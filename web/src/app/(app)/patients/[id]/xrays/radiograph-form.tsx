@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { todayIso } from '@/lib/dates';
+import { earliestDate, todayIso } from '@/lib/dates';
 import { ARCH_ORDER } from '@/lib/restorations/restorations';
 import {
   MEASURABLE_STATES, RADIOGRAPH_PURPOSES, RADIOGRAPH_PURPOSE_LABELS, RADIOGRAPH_TYPES, RADIOGRAPH_TYPE_LABELS,
@@ -24,6 +24,8 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
     link: radiograph?.link ?? '', notes: radiograph?.notes ?? '',
   });
   const [teeth, setTeeth] = useState<number[]>(radiograph?.teeth ?? prefillTeeth ?? []);
+  // Only a planning X-ray may come before the implants on its teeth were placed (0075).
+  const firstPlaced = v.purpose && v.purpose !== 'planning' ? earliestDate(sites.filter((s) => teeth.includes(s.tooth)).map((s) => s.placed_on)) : undefined;
   const [levels, setLevels] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const l of radiograph?.levels ?? []) {
@@ -69,7 +71,7 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
     }}>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Date" required>
-          <input className="input" type="date" aria-required="true" max={todayIso()} value={v.takenOn} onChange={(e) => setV({ ...v, takenOn: e.target.value })} />
+          <input className="input" type="date" aria-required="true" min={firstPlaced} max={todayIso()} value={v.takenOn} onChange={(e) => setV({ ...v, takenOn: e.target.value })} />
         </Field>
         <Field label="Type" required>
           <select className="input" aria-required="true" value={v.type} onChange={(e) => setV({ ...v, type: e.target.value as typeof v.type })}>

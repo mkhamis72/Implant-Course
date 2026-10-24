@@ -42,3 +42,12 @@ describe('ImpressionControl', () => {
     expect(screen.getByLabelText(/date/i)).toHaveValue('2026-10-01');
   });
 });
+
+describe('scan date limits', () => {
+  it('from placement to today', () => {
+    const saved = { ...site, placed_on: '2026-03-10', impression_type: 'digital_scan', impression_taken_on: '2026-10-01' } as unknown as ImplantSite;
+    render(<ImpressionControl site={saved} patientId="p1" editable />);
+    expect(screen.getByLabelText(/date/i)).toHaveAttribute('min', '2026-03-10');
+    expect(screen.getByLabelText(/date/i)).toHaveAttribute('max', todayIso());
+  });
+});

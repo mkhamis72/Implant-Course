@@ -1,5 +1,6 @@
 'use client';
 
+import { todayIso } from '@/lib/dates';
 import { useActionState } from 'react';
 import type { Patient } from '@/lib/patients/types';
 import { valueOf, type FormState } from '@/lib/patients/form-state';
@@ -30,7 +31,7 @@ export function PatientForm({ action, patient }: Props) {
       </label>
       <label className="block">
         <span className="label">Date of birth</span>
-        <input className="input" name="dob" type="date" defaultValue={v('dob')} />
+        <input className="input" name="dob" type="date" max={todayIso()} defaultValue={v('dob')} />
       </label>
       <label className="block">
         <span className="label">Sex</span>

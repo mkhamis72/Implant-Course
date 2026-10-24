@@ -1,5 +1,6 @@
 'use client';
 
+import { todayIso } from '@/lib/dates';
 import { useState } from 'react';
 import type { ImplantSite } from '@/lib/inventory/types';
 import type { Restoration } from '@/lib/restorations/restorations';
@@ -43,21 +44,22 @@ function FailureForm({ site, patientId, onDone }: { site: ImplantSite; patientId
   const { error, pending, submit } = useSubmit(saveFailure, onDone);
   return (
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ siteId: site.id, patientId, expectedUpdatedAt: version, ...v }); }}>
-      <FailureFields values={v} set={set} />
+      <FailureFields values={v} set={set} placedOn={site.placed_on} />
       <Footer error={error} pending={pending} saveLabel="Save failure details" onCancel={onDone} />
     </form>
   );
 }
 
 /** Failure date, type, reason and notes, shared with the Record visit form. */
-export function FailureFields({ values, set }: {
+export function FailureFields({ values, set, placedOn }: {
   values: { failedOn: string; failureType: string; failureReason: string; failureNotes: string };
   set: (key: 'failedOn' | 'failureType' | 'failureReason' | 'failureNotes') => (value: string) => void;
+  placedOn: string | null;
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <Field label="Failure date" required>
-        <input className="input" type="date" aria-required="true" value={values.failedOn} onChange={(e) => set('failedOn')(e.target.value)} />
+        <input className="input" type="date" aria-required="true" min={placedOn ?? undefined} max={todayIso()} value={values.failedOn} onChange={(e) => set('failedOn')(e.target.value)} />
       </Field>
       <Field label="Failure type" required>
         <select className="input" aria-required="true" value={values.failureType} onChange={(e) => set('failureType')(e.target.value)}>
