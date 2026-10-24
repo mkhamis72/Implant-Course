@@ -9,7 +9,7 @@ test('header shows age and medical alerts; tabs are present', async ({ page }) =
   const header = page.getByTestId('patient-header');
   await expect(header).toContainText(/Age \d+/);
   await expect(page.getByRole('navigation', { name: 'Patient sections' }).getByRole('link')).toHaveText([
-    'Chart', 'Implants', 'X-rays', 'Consent', 'Overview', 'Notes', 'History',
+    'Chart', 'Implants', 'Overview', 'X-rays', 'Consent', 'Notes', 'History',
   ]);
 
   await page.getByRole('link', { name: 'Overview' }).click();
