@@ -4,7 +4,7 @@ function cell(value: Cell): string {
   if (value === null || value === undefined) return '';
   let s = String(value);
   // Prevent spreadsheet formula execution (CSV injection).
-  if (/^[=+\-@]/.test(s)) s = `'${s}`;
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

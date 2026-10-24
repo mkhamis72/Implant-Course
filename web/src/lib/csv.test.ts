@@ -15,6 +15,10 @@ describe('toCsv', () => {
       '﻿A\r\n"\'=HYPERLINK(""x"")"\r\n\'+1\r\n\'-2\r\n\'@cmd\r\n',
     );
   });
+
+  it('neutralizes a leading tab or carriage return', () => {
+    expect(toCsv(['A'], [['\t=1'], ['\r=1']])).toBe('﻿A\r\n\'\t=1\r\n"\'\r=1"\r\n');
+  });
 });
 
 describe('csvFilename (C1)', () => {
