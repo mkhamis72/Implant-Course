@@ -67,6 +67,8 @@ describe('StudyForm', () => {
     fireEvent.change(screen.getByRole('textbox', { name: /Title/ }), { target: { value: 'T' } });
     submit();
     await screen.findByRole('alert');
+    // Under load the alert can render while the button still reads "Saving…".
+    await screen.findByRole('button', { name: /Save study/ });
     submit();
     await waitFor(() => expect(saveStudy).toHaveBeenCalledTimes(2));
     expect(vi.mocked(saveStudy).mock.calls[0][0]).toBeNull();
