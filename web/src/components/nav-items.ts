@@ -13,6 +13,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/checklists', label: 'Checklists', area: 'checklists' },
   { href: '/inventory', label: 'Inventory', area: 'inventory' },
   { href: '/delegates', label: 'Delegates', area: 'delegates' },
+  { href: '/statistics', label: 'Statistics', area: 'research' },
   { href: '/admin/users', label: 'Admin', adminOnly: true },
 ];
 

@@ -7,7 +7,6 @@ import type { Patient } from '@/lib/patients/types';
 import { PATIENT_FILTERS, PATIENT_FILTER_LABELS, SCAN_FILTERS, TOOTH_FILTERS, parseStages, teethByPatient, toothBoundFilters, type StageSite } from '@/lib/patients/stages';
 import { firstParam, type PageSearchParams } from '@/lib/search-params';
 import { DeletePatient } from './delete-patient';
-import { ResearchLink } from './research-link';
 
 export default async function PatientsPage({ searchParams }: { searchParams: PageSearchParams }) {
   const profile = await requirePermission('patients');
@@ -46,7 +45,6 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
         <div className="flex flex-wrap gap-2">
           <Link href="/patients/recall" className="btn-secondary btn">Recall list</Link>
           <Link href="/patients/data-quality" className="btn-secondary btn">Data quality</Link>
-          <ResearchLink profile={profile} />
           {editable && (
             <Link href="/patients/new" className="btn">
               New patient

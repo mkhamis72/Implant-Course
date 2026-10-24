@@ -38,7 +38,7 @@ export default async function ResearchDrilldownPage({ searchParams }: { searchPa
         <h1>{DRILLDOWN_TITLES[list]}</h1>
         <p className="text-muted">Research · the records behind the number</p>
       </div>
-      <Link href={researchHref(filters)} className="btn-secondary btn">Research</Link>
+      <Link href={researchHref(filters)} className="btn-secondary btn">Statistics</Link>
     </div>
   );
   if (!canView(profile, 'patients')) {

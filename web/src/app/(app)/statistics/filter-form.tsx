@@ -53,7 +53,7 @@ export function FilterForm({ filters, courses, delegates, brands, systems }: {
       </label>
       <div className="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-span-3">
         <button className="btn">Apply</button>
-        <Link href="/patients/research" className="text-accent hover:underline">Clear filters</Link>
+        <Link href="/statistics" className="text-accent hover:underline">Clear filters</Link>
       </div>
     </form>
   );

@@ -20,13 +20,13 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
   const header = (version: string | null) => (
     <div className="page-header">
       <div>
-        <h1>Research</h1>
+        <h1>Statistics & data analysis</h1>
         <p className="text-muted">
           Implant and crown outcomes for the implants placed in the filter{version && <> · <span className="badge">{version}</span></>}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Link href="/patients/research/studies" className="btn-secondary btn">Studies</Link>
+        <Link href="/statistics/studies" className="btn-secondary btn">Studies</Link>
         <Link href="/patients" className="btn-secondary btn">Patients</Link>
       </div>
     </div>

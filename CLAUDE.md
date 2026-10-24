@@ -63,7 +63,7 @@ First-time setup (`web/README.md`): `npm install`, `npm run db:start`, `cp .env.
   - Staff-picker lists (checklist assignee, lead organizer, fitted by organizer) filter `role in ('admin','organizer')`: an active profile may be a delegate login. `check_assignee` enforces it for checklists (0037).
 - **Feature rules live next to the code** and load when you work in that folder — read the one for the feature before writing its SQL or TS:
   - `web/src/app/(app)/patients/CLAUDE.md`: implant picker, receiving stock while placing, patient list filter, placement and course reports, restorations, scan / impression, research capture (risk factors, surgical details, grafts), follow-up visits, radiographs, outcomes and data quality, consent, complications and failure.
-  - `web/src/app/(app)/patients/research/CLAUDE.md`: Research page, export (dictionary allowlist, study codes), studies, statistics.
+  - `web/src/app/(app)/statistics/CLAUDE.md`: Statistics module (formerly Patients → Research): results page, export (dictionary allowlist, study codes), studies, statistics.
   - `web/src/app/(app)/schedule/CLAUDE.md`: bookings and technique, surgery days, lectures and workshops.
   - `web/src/app/(app)/admin/CLAUDE.md`: admin user tools (email change, Reset 2FA and the `mfa_setup_required` flag, history).
 - Don't add an overload of a function with defaulted parameters: PostgREST's named-argument calls become ambiguous. `app_private` functions can't be called from security-invoker functions (no schema usage for `authenticated`).

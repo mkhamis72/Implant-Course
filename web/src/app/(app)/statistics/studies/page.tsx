@@ -14,7 +14,7 @@ export default async function StudiesPage() {
         <h1>Studies</h1>
         <p className="text-muted">Ethics approvals and protocols. Choose a study when exporting to name it in the file.</p>
       </div>
-      <Link href="/patients/research" className="btn-secondary btn">Research</Link>
+      <Link href="/statistics" className="btn-secondary btn">Statistics</Link>
     </div>
   );
 

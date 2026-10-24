@@ -35,26 +35,29 @@ test('the research page counts placed implants, drills down, compares by techniq
     }
   }
 
-  // The test organizer has no Research permission: refused.
-  await page.goto('/patients/research');
-  await expect(page).not.toHaveURL(/\/patients\/research/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Research' })).toHaveCount(0);
+  // The test organizer has no Research permission: no Statistics in the menu, and the page refuses.
+  await expect(page.getByRole('link', { name: 'Statistics' })).toHaveCount(0);
+  await page.goto('/statistics');
+  await expect(page).not.toHaveURL(/\/statistics/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Statistics & data analysis' })).toHaveCount(0);
 
   const adminCtx = await browser.newContext({ acceptDownloads: true });
   const adminPage = await adminCtx.newPage();
   try {
     await login(adminPage, TEST_USERS.admin.email);
-    await adminPage.goto(`/patients/research?brand=${encodeURIComponent(brand)}`);
-    await expect(adminPage.getByRole('heading', { level: 1, name: 'Research' })).toBeVisible();
+    // The old Patients → Research address redirects to the Statistics module, keeping the filters.
+    await adminPage.goto(`/patients/research?course=all&brand=${encodeURIComponent(brand)}`);
+    await expect(adminPage).toHaveURL(/\/statistics\?course=all&brand=/);
+    await expect(adminPage.getByRole('heading', { level: 1, name: 'Statistics & data analysis' })).toBeVisible();
     const tile = adminPage.locator('a[href*="list=implants"]').first();
     await expect(tile).toHaveText('2');
 
     await tile.click();
-    await expect(adminPage).toHaveURL(/\/patients\/research\/drilldown\?list=implants/);
+    await expect(adminPage).toHaveURL(/\/statistics\/drilldown\?list=implants/);
     for (const name of names) await expect(adminPage.getByText(name).first()).toBeVisible();
 
     // Compare by technique: two groups of one implant each and one failure, so a p-value, the thin-data warning and the clustering note.
-    await adminPage.goto(`/patients/research?brand=${encodeURIComponent(brand)}&compare=technique`);
+    await adminPage.goto(`/statistics?brand=${encodeURIComponent(brand)}&compare=technique`);
     const compare = adminPage.getByRole('region', { name: 'Compare groups' });
     await expect(compare.getByRole('cell', { name: /^Guided/ })).toBeVisible();
     await expect(compare.getByRole('cell', { name: /^Free hand/ })).toBeVisible();

@@ -9,7 +9,7 @@ describe('<ExportForm>', () => {
   it('is a GET form to the export route carrying the current filters', () => {
     render(<ExportForm filters={filters} />);
     const form = screen.getByRole('form', { name: 'Export' });
-    expect(form).toHaveAttribute('action', '/patients/research/export');
+    expect(form).toHaveAttribute('action', '/statistics/export');
     expect(form).toHaveAttribute('method', 'get');
     const hidden = Array.from(form.querySelectorAll('input[type=hidden]')).map((i) => [(i as HTMLInputElement).name, (i as HTMLInputElement).value]);
     expect(hidden).toEqual([['course', 'c1'], ['from', '2025-01-01'], ['brand', 'Oxy']]);

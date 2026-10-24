@@ -115,12 +115,12 @@ export function isCrownList(list: DrilldownList): boolean {
 /** The Research page with these filters and compare (the drill-down's link back). */
 export function researchHref(f: ResearchFilters): string {
   const q = filterQuery(f);
-  return `/patients/research${q ? `?${q}` : ''}`;
+  return `/statistics${q ? `?${q}` : ''}`;
 }
 
 export function drilldownHref(list: DrilldownList, f: ResearchFilters): string {
   const rest = filterQuery(f);
-  return `/patients/research/drilldown?list=${encodeURIComponent(list)}${rest ? `&${rest}` : ''}`;
+  return `/statistics/drilldown?list=${encodeURIComponent(list)}${rest ? `&${rest}` : ''}`;
 }
 
 export function selectImplants<R extends DetailRow>(list: DrilldownList, rows: R[]): R[] {

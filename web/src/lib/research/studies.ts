@@ -14,4 +14,4 @@ export type StudyRow = {
   courses: { id: string; name: string; start_date: string }[];
 };
 
-export const studyLetterHref = (id: string) => `/patients/research/studies/${id}/letter`;
+export const studyLetterHref = (id: string) => `/statistics/studies/${id}/letter`;

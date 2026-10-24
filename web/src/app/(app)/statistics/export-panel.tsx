@@ -6,7 +6,7 @@ export type StudyOption = { id: string; title: string };
 /** GET form to the export route; the current filters ride along as hidden fields. The study (optional) only labels the file. */
 export function ExportForm({ filters, studies = [] }: { filters: ResearchFilters; studies?: StudyOption[] }) {
   return (
-    <form className="card flex flex-wrap items-center gap-4" action="/patients/research/export" method="get" aria-label="Export">
+    <form className="card flex flex-wrap items-center gap-4" action="/statistics/export" method="get" aria-label="Export">
       {RESEARCH_FILTER_KEYS.filter((k) => filters[k]).map((k) => <input key={k} type="hidden" name={k} value={filters[k]} />)}
       <span className="label !mb-0">Export these implants (anonymised)</span>
       {studies.length > 0 && (
@@ -21,7 +21,7 @@ export function ExportForm({ filters, studies = [] }: { filters: ResearchFilters
       <label className="flex items-center gap-2"><input type="radio" name="format" value="xlsx" defaultChecked /> Excel (.xlsx)</label>
       <label className="flex items-center gap-2"><input type="radio" name="format" value="csv" /> CSV files (.zip)</label>
       <button className="btn">Export</button>
-      <a className="text-accent" href="/patients/research/analysis.R" download>Download R script</a>
+      <a className="text-accent" href="/statistics/analysis.R" download>Download R script</a>
     </form>
   );
 }
