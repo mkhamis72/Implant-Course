@@ -130,7 +130,7 @@ export function RecordVisitForm({ patientId, site, data, onDone }: {
             {yesNo('mobility', 'Mobility')}
           </div>
           {needsFailure && (
-            <FailureFields values={{ ...v, failedOn: v.failedOn || v.date }} set={(k) => set(k)} placedOn={site.placed_on} />
+            <FailureFields values={{ ...v, failedOn: v.failedOn || v.date }} set={(k) => set(k)} placedOn={site.placed_on} maxOn={v.date || data.today} />
           )}
           <fieldset>
             <legend className="label">Probing depth (mm) and bleeding</legend>

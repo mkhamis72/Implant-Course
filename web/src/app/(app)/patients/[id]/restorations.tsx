@@ -388,7 +388,7 @@ export function RestorationForm({ site, patientId, data, onDone }: { site: Impla
         </fieldset>
       )}
       <Field label="Date fitted" required>
-        <input className="input" type="date" aria-required="true" min={latestDate(chosen.map((s) => s.placed_on))} max={todayIso()} value={v.fittedOn} onChange={(e) => setV({ ...v, fittedOn: e.target.value })} />
+        <input className="input" type="date" aria-required="true" min={latestDate([...chosen.map((s) => s.placed_on), ...ending.map((r) => r.fitted_on)])} max={todayIso()} value={v.fittedOn} onChange={(e) => setV({ ...v, fittedOn: e.target.value })} />
       </Field>
       <DetailsFields v={details} set={(key) => (value) => setDetails((cur) => ({ ...cur, [key]: value }))} data={data} fittedOn={v.fittedOn} />
       {ending.map((r) => (

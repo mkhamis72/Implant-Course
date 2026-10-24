@@ -134,3 +134,12 @@ describe('surgery date limits', () => {
     expect(screen.getByLabelText(/Extraction date/)).toHaveAttribute('max', '2026-03-10');
   });
 });
+
+describe('staged graft date limit', () => {
+  it('ends the day before the placement', () => {
+    render(<SurgicalDetails site={site()} patientId="pt" editable />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add graft' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Graft timing' }), { target: { value: 'staged' } });
+    expect(screen.getByLabelText(/Graft date/)).toHaveAttribute('max', '2026-03-09');
+  });
+});

@@ -51,15 +51,17 @@ function FailureForm({ site, patientId, onDone }: { site: ImplantSite; patientId
 }
 
 /** Failure date, type, reason and notes, shared with the Record visit form. */
-export function FailureFields({ values, set, placedOn }: {
+export function FailureFields({ values, set, placedOn, maxOn }: {
   values: { failedOn: string; failureType: string; failureReason: string; failureNotes: string };
   set: (key: 'failedOn' | 'failureType' | 'failureReason' | 'failureNotes') => (value: string) => void;
   placedOn: string | null;
+  /** The latest possible failure date (the visit date when recorded with a visit); today otherwise. */
+  maxOn?: string;
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <Field label="Failure date" required>
-        <input className="input" type="date" aria-required="true" min={placedOn ?? undefined} max={todayIso()} value={values.failedOn} onChange={(e) => set('failedOn')(e.target.value)} />
+        <input className="input" type="date" aria-required="true" min={placedOn ?? undefined} max={maxOn ?? todayIso()} value={values.failedOn} onChange={(e) => set('failedOn')(e.target.value)} />
       </Field>
       <Field label="Failure type" required>
         <select className="input" aria-required="true" value={values.failureType} onChange={(e) => set('failureType')(e.target.value)}>

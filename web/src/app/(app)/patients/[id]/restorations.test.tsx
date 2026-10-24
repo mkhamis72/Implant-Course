@@ -169,3 +169,11 @@ describe('<Restorations>', () => {
     expect(screen.queryByRole('button', { name: 'Record a problem' })).toBeNull();
   });
 });
+
+describe('replacement restoration date limit', () => {
+  it('starts the date fitted at the fitting of the restoration it replaces', () => {
+    render(<Restorations site={s36} patientId="pt" data={data([final])} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add restoration' }));
+    expect(screen.getByLabelText(/Date fitted/)).toHaveAttribute('min', final.fitted_on);
+  });
+});

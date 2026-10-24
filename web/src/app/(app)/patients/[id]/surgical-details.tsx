@@ -1,6 +1,6 @@
 'use client';
 
-import { todayIso } from '@/lib/dates';
+import { addDays, todayIso } from '@/lib/dates';
 import { useState, useTransition } from 'react';
 import type { ImplantSite } from '@/lib/inventory/types';
 import {
@@ -237,7 +237,7 @@ function GraftForm({ site, patientId, graft, onDone }: { site: ImplantSite; pati
         </Field>
         {v.timing === 'staged' && (
           <Field label="Graft date">
-            <input className="input" type="date" aria-required="true" max={todayIso()} value={v.performedOn} onChange={(e) => set('performedOn')(e.target.value)} />
+            <input className="input" type="date" aria-required="true" max={site.placed_on ? addDays(site.placed_on, -1) : todayIso()} value={v.performedOn} onChange={(e) => set('performedOn')(e.target.value)} />
           </Field>
         )}
         <Choice label="Material" value={v.material} onChange={set('material')} values={GRAFT_MATERIALS} labels={GRAFT_MATERIAL_LABELS} />
