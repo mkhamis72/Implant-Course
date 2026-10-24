@@ -5,13 +5,14 @@ import { canView } from '@/lib/auth/permissions';
 import { todayIso } from '@/lib/dates';
 import { RESEARCH_FILTER_KEYS, rpcArgs, type ResearchFilters } from '@/lib/research/view';
 import { TABLE_NAMES, assertAllowlisted, exportOrder, type ExportTables } from '@/lib/research/export/dictionary';
-import type { ExportMeta } from '@/lib/research/export/assemble';
+import type { ExportMeta, StudyAbout } from '@/lib/research/export/assemble';
 import { exportFileName } from '@/lib/research/export/assemble';
 import { fetchAll } from '@/lib/research/export/fetch-all';
 import { consentCounts, mergeConsent } from '@/lib/research/consent';
 import { buildXlsx } from '@/lib/research/export/xlsx';
 import { buildZip } from '@/lib/research/export/zip';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export async function GET(req: NextRequest) {
@@ -27,6 +28,21 @@ export async function GET(req: NextRequest) {
   const filters = Object.fromEntries(RESEARCH_FILTER_KEYS.map((k) => [k, params.get(k) ?? ''])) as ResearchFilters;
   const args = rpcArgs(filters);
   const supabase = await createClient();
+
+  // The study is a label only: it names the export in the about sheet and the log, and doesn't change the implants.
+  // Only the four exported fields are read (never the notes).
+  const studyId = params.get('study')?.trim() || null;
+  let study: StudyAbout | null = null;
+  if (studyId) {
+    if (!UUID.test(studyId)) return new NextResponse('Study not found', { status: 400 });
+    const { data, error } = await supabase.from('studies').select('title, committee, approval_number, protocol_version').eq('id', studyId).maybeSingle<StudyAbout>();
+    if (error) {
+      console.error('Research export failed', error.message);
+      return new NextResponse('Could not build the export', { status: 500 });
+    }
+    if (!data) return new NextResponse('Study not found', { status: 400 });
+    study = data;
+  }
 
   // Store every study code the readers need in one ordered insert first, then run the readers one at a time:
   // they only read codes, so exports can't deadlock on first-time code inserts. All plain POST calls (volatile).
@@ -68,11 +84,11 @@ export async function GET(req: NextRequest) {
   const rowCounts = Object.fromEntries(TABLE_NAMES.map((t) => [t, tables[t].length])) as ExportMeta['rowCounts'];
   const logged = Object.fromEntries(RESEARCH_FILTER_KEYS.map((k) => [k, args[`p_${k}` as keyof typeof args] ?? null]));
   const shown = { ...logged, course: (courseCode.data as string | null) ?? null, delegate: (delegateCode.data as string | null) ?? null };
-  const meta: ExportMeta = { exportedAt: new Date().toISOString(), filters: shown, version: String(version.data ?? ''), rowCounts, consent: consentCounts(tables.patients) };
+  const meta: ExportMeta = { exportedAt: new Date().toISOString(), filters: shown, version: String(version.data ?? ''), rowCounts, consent: consentCounts(tables.patients), study };
 
   const body = format === 'xlsx' ? await buildXlsx(tables, meta) : buildZip(tables, meta);
 
-  const { error } = await supabase.rpc('log_research_export', { p_format: format, p_filters: logged, p_row_counts: rowCounts });
+  const { error } = await supabase.rpc('log_research_export', { p_format: format, p_filters: { ...logged, study: studyId }, p_row_counts: rowCounts });
   if (error) return new NextResponse('Could not record the export', { status: 500 });
 
   return new NextResponse(body as BodyInit, {

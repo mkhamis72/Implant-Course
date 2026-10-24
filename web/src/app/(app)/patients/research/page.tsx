@@ -25,7 +25,10 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
           Implant and crown outcomes for the implants placed in the filter{version && <> · <span className="badge">{version}</span></>}
         </p>
       </div>
-      <Link href="/patients" className="btn-secondary btn">Patients</Link>
+      <div className="flex flex-wrap gap-2">
+        <Link href="/patients/research/studies" className="btn-secondary btn">Studies</Link>
+        <Link href="/patients" className="btn-secondary btn">Patients</Link>
+      </div>
     </div>
   );
 
@@ -40,12 +43,15 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
   }
 
   const supabase = await createClient();
-  const [first, courses, delegates] = await Promise.all([
+  const [first, courses, delegates, studies] = await Promise.all([
     loadResearch(requested, withGroups),
     supabase.rpc('course_options'),
     supabase.from('delegates').select('id, full_name').order('full_name'),
+    supabase.from('studies').select('id, title').order('title'),
   ]);
   if (courses.error) throw new Error('Could not load the courses');
+  if (studies.error) throw new Error('Could not load the studies');
+  const studyList = (studies.data ?? []) as { id: string; title: string }[];
 
   // A line that isn't one of the selected brand's is dropped (and the figures reloaded without it).
   const system = effectiveSystem(requested.brand, requested.system, first.base);
@@ -84,13 +90,14 @@ export default async function ResearchPage({ searchParams }: { searchParams: Pag
         systems={systems}
       />
       <ResearchView rows={rows} crowns={crowns} filters={filters} groups={groups} consent={consent} noProduct={base.filter((r) => r.product_id === null).length} />
-      <ExportForm filters={filters} />
+      <ExportForm filters={filters} studies={studyList} />
       <ExportLog
         isAdmin={isAdmin}
         rows={exportLog}
         failed={exportLogFailed}
         courseNames={Object.fromEntries(courseList.map((c) => [c.id, c.name]))}
         delegateNames={Object.fromEntries(delegateNames)}
+        studyTitles={Object.fromEntries(studyList.map((s) => [s.id, s.title]))}
       />
     </div>
   );

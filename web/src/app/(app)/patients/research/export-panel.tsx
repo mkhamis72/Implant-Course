@@ -1,12 +1,23 @@
 import { RESEARCH_FILTER_KEYS, type ResearchFilters } from '@/lib/research/view';
 import { formatDateTime } from '@/lib/format';
 
-/** GET form to the export route; the current filters ride along as hidden fields. */
-export function ExportForm({ filters }: { filters: ResearchFilters }) {
+export type StudyOption = { id: string; title: string };
+
+/** GET form to the export route; the current filters ride along as hidden fields. The study (optional) only labels the file. */
+export function ExportForm({ filters, studies = [] }: { filters: ResearchFilters; studies?: StudyOption[] }) {
   return (
     <form className="card flex flex-wrap items-center gap-4" action="/patients/research/export" method="get" aria-label="Export">
       {RESEARCH_FILTER_KEYS.filter((k) => filters[k]).map((k) => <input key={k} type="hidden" name={k} value={filters[k]} />)}
       <span className="label !mb-0">Export these implants (anonymised)</span>
+      {studies.length > 0 && (
+        <span className="flex items-center gap-2">
+          <label htmlFor="export-study">Study</label>
+          <select id="export-study" name="study" className="input w-auto" defaultValue="">
+            <option value="">None</option>
+            {studies.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+          </select>
+        </span>
+      )}
       <label className="flex items-center gap-2"><input type="radio" name="format" value="xlsx" defaultChecked /> Excel (.xlsx)</label>
       <label className="flex items-center gap-2"><input type="radio" name="format" value="csv" /> CSV files (.zip)</label>
       <button className="btn">Export</button>
@@ -28,15 +39,16 @@ const describe = (o: Record<string, unknown>, sep: string) => Object.entries(o).
 
 type Names = Record<string, string>;
 
-/** Admins only: who exported what. The log keeps course and delegate ids; they are shown by name. */
-export function ExportLog({ isAdmin, rows, failed = false, courseNames = {}, delegateNames = {} }: {
-  isAdmin: boolean; rows: ExportLogRow[]; failed?: boolean; courseNames?: Names; delegateNames?: Names;
+/** Admins only: who exported what. The log keeps course, delegate and study ids; they are shown by name / title. */
+export function ExportLog({ isAdmin, rows, failed = false, courseNames = {}, delegateNames = {}, studyTitles = {} }: {
+  isAdmin: boolean; rows: ExportLogRow[]; failed?: boolean; courseNames?: Names; delegateNames?: Names; studyTitles?: Names;
 }) {
   if (!isAdmin) return null;
   const named = (f: Record<string, string | null>) => ({
     ...f,
     ...(f.course ? { course: courseNames[f.course] ?? '(deleted)' } : {}),
     ...(f.delegate ? { delegate: delegateNames[f.delegate] ?? '(deleted)' } : {}),
+    ...(f.study ? { study: studyTitles[f.study] ?? '(deleted)' } : {}),
   });
   return (
     <section className="card space-y-3" aria-labelledby="recent-exports">

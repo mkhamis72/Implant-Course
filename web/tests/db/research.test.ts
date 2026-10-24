@@ -9,12 +9,6 @@ const ALL_EDIT = { patients: 'edit', schedule: 'edit', courses: 'edit', checklis
 const daysAgo = async (c: Client, n: number) =>
   (await c.query('select (public.cairo_today() - $1::int)::text as d', [n])).rows[0].d as string;
 
-async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp) {
-  await c.query('savepoint s');
-  await expect(fn()).rejects.toThrow(pattern);
-  await c.query('rollback to savepoint s');
-}
-
 async function product(c: Client, brand: string, system: string): Promise<string> {
   const { rows } = await c.query(
     `insert into public.products (type, brand, system, diameter_mm, length_mm) values ('implant', $1, $2, 4.0, 10) returning id`,
@@ -76,7 +70,7 @@ async function setup(c: Client) {
 const ids = (rows: { site_id: string }[]) => rows.map((r) => r.site_id);
 
 describe('research permission', () => {
-  it('a new organizer has no Research row; Research is None or View only', async () => {
+  it('a new organizer has no Research row; Research is None, View or Edit (0073)', async () => {
     await withTx(async (c) => {
       const { rows } = await c.query(
         `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-research-new@example.com') returning id`,
@@ -85,18 +79,16 @@ describe('research permission', () => {
       expect(perms.rows.map((r) => r.area)).not.toContain('research');
 
       await actAs(c, users.admin);
-      await refused(
-        c, () => c.query(`select public.set_user_permissions($1, '{"research": "edit"}'::jsonb)`, [users.target]),
-        /Research can only be None or View/,
-      );
       await c.query(`select public.set_user_permissions($1, '{"research": "view", "patients": "view"}'::jsonb)`, [users.target]);
       await asPostgres(c);
       const saved = await c.query('select area, level from public.user_permissions where user_id = $1 order by area', [users.target]);
       expect(saved.rows).toEqual([{ area: 'patients', level: 'view' }, { area: 'research', level: 'view' }]);
-      await refused(
-        c, () => c.query(`update public.user_permissions set level = 'edit' where user_id = $1 and area = 'research'`, [users.target]),
-        /user_permissions_research_view_only/,
-      );
+
+      await actAs(c, users.admin);
+      await c.query(`select public.set_user_permissions($1, '{"research": "edit"}'::jsonb)`, [users.target]);
+      await asPostgres(c);
+      const edit = await c.query('select area, level from public.user_permissions where user_id = $1', [users.target]);
+      expect(edit.rows).toEqual([{ area: 'research', level: 'edit' }]);
     });
   });
 

@@ -48,9 +48,9 @@ describe('permissionsSchema', () => {
       perms: { patients: 'edit', schedule: 'view', courses: null, checklists: null, inventory: 'view', delegates: null, research: null },
     });
   });
-  it('Research is None or View only', () => {
+  it('Research is None, View or Edit', () => {
     expect(permissionsSchema.parse({ ...grid, perm_research: 'view' }).perms.research).toBe('view');
-    expect(permissionsSchema.safeParse({ ...grid, perm_research: 'edit' }).success).toBe(false);
+    expect(permissionsSchema.parse({ ...grid, perm_research: 'edit' }).perms.research).toBe('edit');
   });
   it('rejects unknown levels and missing panels', () => {
     expect(permissionsSchema.safeParse({ ...grid, perm_patients: 'all' }).success).toBe(false);

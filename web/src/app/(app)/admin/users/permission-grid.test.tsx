@@ -14,10 +14,10 @@ describe('PermissionGrid', () => {
     expect(within(patients).getByRole('radio', { name: 'Edit' })).toBeChecked();
   });
 
-  it('offers Research with None / View only', () => {
+  it('offers Research with None / View / Edit', () => {
     render(<PermissionGrid userId={id} permissions={{ research: 'view' }} />);
     const research = screen.getByRole('group', { name: 'Research' });
-    expect(within(research).getAllByRole('radio').map((r) => (r as HTMLInputElement).value)).toEqual(['none', 'view']);
+    expect(within(research).getAllByRole('radio').map((r) => (r as HTMLInputElement).value)).toEqual(['none', 'view', 'edit']);
     expect(within(research).getByRole('radio', { name: 'View' })).toBeChecked();
     expect(within(research).getByRole('radio', { name: 'View' })).toHaveAttribute('name', 'perm_research');
   });

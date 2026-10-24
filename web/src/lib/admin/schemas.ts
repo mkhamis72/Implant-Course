@@ -30,9 +30,7 @@ export const settingsSchema = z.object({
 
 const levelField = z.enum(['none', 'view', 'edit']).transform((v) => (v === 'none' ? null : v));
 
-const viewOnlyField = z.enum(['none', 'view']).transform((v) => (v === 'none' ? null : v));
-
-/** The permission grid: one None/View/Edit radio group per panel (None/View for Research). */
+/** The permission grid: one None/View/Edit radio group per panel. */
 export const permissionsSchema = z
   .object({
     user_id: z.string().uuid(),
@@ -42,7 +40,7 @@ export const permissionsSchema = z
     perm_checklists: levelField,
     perm_inventory: levelField,
     perm_delegates: levelField,
-    perm_research: viewOnlyField,
+    perm_research: levelField,
   })
   .transform(({ user_id, ...rest }) => ({
     user_id,

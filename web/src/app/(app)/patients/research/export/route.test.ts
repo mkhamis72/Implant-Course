@@ -15,7 +15,13 @@ const rpc = vi.fn((name: string, args?: any, ...rest: unknown[]) => { // eslint-
   return b;
 });
 const profile = vi.fn();
-vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc }) }));
+// studies: .from('studies').select(cols).eq('id', id).maybeSingle() resolves to studyRow().
+const studyRow = vi.fn();
+const from = vi.fn((table: string) => {
+  const q = { select: (cols: string) => { q.cols = cols; return q; }, eq: () => q, maybeSingle: async () => studyRow(table, q.cols), cols: '' };
+  return q;
+});
+vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc, from }) }));
 vi.mock('@/lib/auth/session', () => ({ getCurrentProfile: () => profile() }));
 
 import { GET } from './route';
@@ -34,6 +40,9 @@ const req = (qs: string) => new Request(`http://localhost:3000/patients/research
 
 beforeEach(() => {
   rpc.mockClear();
+  from.mockClear();
+  studyRow.mockReset();
+  studyRow.mockResolvedValue({ data: null, error: null });
   handler.mockReset();
   profile.mockReset();
   profile.mockResolvedValue(staff('view'));
@@ -180,5 +189,41 @@ describe('GET /patients/research/export', () => {
     handler.mockImplementation(async (name: string) => (name === 'research_export_visits' ? { data: null, error: { message: 'x' } } : { data: [], error: null }));
     expect((await GET(req('format=csv'))).status).toBe(500);
     expect(rpc.mock.calls.some((c) => c[0] === 'log_research_export')).toBe(false);
+  });
+
+  const STUDY = '0f0f0f0f-1111-4222-8333-444444444444';
+  it('names the study in the about sheet (title, committee, approval, protocol version; never notes) and logs its id', async () => {
+    studyRow.mockImplementation(async (_t: string, cols: string) => ({
+      data: { title: 'Short implants RCT', committee: 'Cairo University REC', approval_number: null, protocol_version: '2.1', ...(cols.includes('notes') ? { notes: 'secret note' } : {}) },
+      error: null,
+    }));
+    const res = await GET(req(`format=csv&brand=Oxy&study=${STUDY}`));
+    expect(res.status).toBe(200);
+    expect(from).toHaveBeenCalledWith('studies');
+    const readme = strFromU8(unzipSync(new Uint8Array(await res.arrayBuffer()))['README.txt']);
+    expect(readme).toContain('Study: Short implants RCT');
+    expect(readme).toContain('Ethics committee: Cairo University REC');
+    expect(readme).toContain('Approval number: —');
+    expect(readme).toContain('Protocol version: 2.1');
+    expect(readme).not.toContain('secret note');
+    expect(readme).not.toMatch(UUID_ANY);
+    const log = rpc.mock.calls.find((c) => c[0] === 'log_research_export');
+    expect(log?.[1].p_filters).toMatchObject({ brand: 'Oxy', study: STUDY });
+    // The study is a label only: the readers get the same arguments as without it.
+    expect(rpc.mock.calls.find((c) => c[0] === 'assign_research_codes')?.[1]).not.toHaveProperty('p_study');
+  });
+
+  it('shows — for the study rows without a study, and logs none', async () => {
+    const res = await GET(req('format=csv'));
+    const readme = strFromU8(unzipSync(new Uint8Array(await res.arrayBuffer()))['README.txt']);
+    expect(readme).toContain('Study: —');
+    expect(from).not.toHaveBeenCalled();
+    expect(rpc.mock.calls.find((c) => c[0] === 'log_research_export')?.[1].p_filters.study).toBeNull();
+  });
+
+  it('is 400 for an unknown or malformed study and builds nothing', async () => {
+    expect((await GET(req(`format=csv&study=${STUDY}`))).status).toBe(400);
+    expect((await GET(req('format=csv&study=nope'))).status).toBe(400);
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
