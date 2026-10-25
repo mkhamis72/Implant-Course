@@ -33,6 +33,13 @@ export const PROBING_SITES = [
   { key: 'lingual', short: 'L', label: 'lingual', depth: 'probing_lingual', bop: 'bop_lingual', depthField: 'probingLingual', bopField: 'bopLingual' },
 ] as const;
 
+/** The three recession sites (0076), with their column names (database) and field names (form). */
+export const RECESSION_SITES = [
+  { key: 'facial', short: 'F', label: 'facial', column: 'recession_facial_mm', field: 'recessionFacial' },
+  { key: 'mesial', short: 'M', label: 'mesial', column: 'recession_mesial_mm', field: 'recessionMesial' },
+  { key: 'distal', short: 'D', label: 'distal', column: 'recession_distal_mm', field: 'recessionDistal' },
+] as const;
+
 /** One row of implant_visits (0046). Status is calculated in the database only. */
 export type VisitRow = {
   site_id: string;
@@ -65,6 +72,9 @@ export type VisitFindings = {
   prosthesis_status: ProsthesisStatus | null;
   radiograph_taken: YesNo | null;
   recommended_treatment: string;
+  recession_facial_mm: number | null;
+  recession_mesial_mm: number | null;
+  recession_distal_mm: number | null;
 };
 
 export function visitResult(f: { outcome: FollowupOutcome | null; attendance: Attendance | null }): string {
@@ -94,9 +104,11 @@ export function prepickVisit(rows: VisitRow[], siteId: string): string {
 export function summarizeFindings(f: VisitFindings): string {
   const depths = PROBING_SITES.filter((s) => f[s.depth] !== null).map((s) => `${s.short} ${f[s.depth]}`);
   const bleeding = PROBING_SITES.filter((s) => f[s.bop] === 'yes').map((s) => s.short);
+  const recession = RECESSION_SITES.filter((s) => f[s.column] !== null).map((s) => `${s.short} ${f[s.column]}`);
   return [
     f.pain_score !== null ? `Pain ${f.pain_score}/10` : null,
     depths.length ? `PD ${depths.join(' · ')} mm` : null,
+    recession.length ? `Rec ${recession.join(' · ')} mm` : null,
     bleeding.length ? `BOP ${bleeding.join(', ')}` : null,
     f.isq !== null ? `ISQ ${f.isq}` : null,
     f.swelling === 'yes' ? 'Swelling' : null,
@@ -122,6 +134,8 @@ const yesNo = choice(YES_NO, 'Choose yes or no.');
 const text = (max: number) => z.string().trim().max(max, { message: `Keep it under ${max} characters.` }).default('');
 const PROBING = 'Enter probing depths from 0 to 15 mm.';
 const depth = number(PROBING, (n) => n >= 0 && n <= 15);
+const RECESSION = 'Enter recession from 0 to 15 mm.';
+const recession = number(RECESSION, (n) => n >= 0 && n <= 15);
 const VISIT_KEY = /^(early_review|osseointegration|month_6|month_12|year_([2-9]|[1-9][0-9]))$/;
 
 export const visitSchema = z
@@ -147,6 +161,9 @@ export const visitSchema = z
     bopBuccal: yesNo,
     bopDistal: yesNo,
     bopLingual: yesNo,
+    recessionFacial: recession,
+    recessionMesial: recession,
+    recessionDistal: recession,
     isq: number('Enter an ISQ from 0 to 100.', (n) => n >= 0 && n <= 100),
     prosthesisStatus: choice(PROSTHESIS_STATUSES, 'Choose the prosthesis status from the list.'),
     radiographTaken: yesNo,
@@ -184,6 +201,7 @@ export const visitSchema = z
         ...v, outcome: null, painScore: null, patientConcerns: '', swelling: null, suppuration: null, plaque: null, mobility: null,
         probingMesial: null, probingBuccal: null, probingDistal: null, probingLingual: null,
         bopMesial: null, bopBuccal: null, bopDistal: null, bopLingual: null,
+        recessionFacial: null, recessionMesial: null, recessionDistal: null,
         isq: null, prosthesisStatus: null, radiographTaken: null, recommendedTreatment: '',
       };
     }
@@ -208,6 +226,7 @@ export function toFindings(v: VisitInput): Record<string, string | number> {
     probing_distal: v.probingDistal, probing_lingual: v.probingLingual, bop_mesial: v.bopMesial, bop_buccal: v.bopBuccal,
     bop_distal: v.bopDistal, bop_lingual: v.bopLingual, isq: v.isq, prosthesis_status: v.prosthesisStatus,
     radiograph_taken: v.radiographTaken, recommended_treatment: v.recommendedTreatment,
+    recession_facial_mm: v.recessionFacial, recession_mesial_mm: v.recessionMesial, recession_distal_mm: v.recessionDistal,
     failed_on: v.failedOn, failure_type: v.failureType, failure_reason: v.failureReason, failure_notes: v.failureNotes,
   };
   return Object.fromEntries(Object.entries(all).filter(([, x]) => x !== null && x !== '')) as Record<string, string | number>;

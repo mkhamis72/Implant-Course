@@ -15,6 +15,7 @@ const noFindings: VisitFindings = {
   probing_mesial: null, probing_buccal: null, probing_distal: null, probing_lingual: null,
   bop_mesial: null, bop_buccal: null, bop_distal: null, bop_lingual: null, isq: null, prosthesis_status: null,
   radiograph_taken: null, recommended_treatment: '',
+  recession_facial_mm: null, recession_mesial_mm: null, recession_distal_mm: null,
 };
 
 describe('visit helpers', () => {
@@ -59,6 +60,11 @@ describe('visit helpers', () => {
       .toBe('X-ray · Concerns: Sore · Plan: Crown');
     expect(summarizeFindings({ ...noFindings, radiograph_taken: 'no' })).toBe('');
   });
+  it('summarizes recession after probing', () => {
+    expect(summarizeFindings({ ...noFindings, probing_mesial: 3, recession_facial_mm: 1.5, recession_mesial_mm: 0 }))
+      .toBe('PD M 3 mm · Rec F 1.5 · M 0 mm');
+    expect(summarizeFindings({ ...noFindings, recession_distal_mm: 2 })).toBe('Rec D 2 mm');
+  });
 });
 
 describe('visitSchema', () => {
@@ -91,6 +97,26 @@ describe('visitSchema', () => {
     expect(firstError(visitSchema.safeParse({ ...attended, isq: '101' }))).toBe('Enter an ISQ from 0 to 100.');
     expect(firstError(visitSchema.safeParse({ ...attended, date: '2999-01-01' }))).toBe('Enter the visit date (today or earlier).');
     expect(firstError(visitSchema.safeParse({ ...attended, attendance: '' }))).toBe('Choose whether the patient attended.');
+  });
+  it('parses recession at three sites; blank = not measured', () => {
+    expect(visitSchema.parse({ ...attended, recessionFacial: '1.5', recessionMesial: '', recessionDistal: '0' })).toMatchObject({
+      recessionFacial: 1.5, recessionMesial: null, recessionDistal: 0,
+    });
+  });
+  it('refuses recession outside 0 to 15 mm or written with a comma', () => {
+    for (const bad of ['16', '-1', '1,5']) {
+      const r = visitSchema.safeParse({ ...attended, recessionFacial: bad });
+      expect(r.success).toBe(false);
+      expect(r.error?.issues[0]).toMatchObject({ path: ['recessionFacial'], message: 'Enter recession from 0 to 15 mm.' });
+    }
+  });
+  it('drops recession when the patient did not attend', () => {
+    expect(visitSchema.parse({ ...attended, attendance: 'did_not_attend', recessionFacial: '2' }).recessionFacial).toBeNull();
+  });
+  it('does not infer bleeding from recession', () => {
+    const v = visitSchema.parse({ ...attended, recessionFacial: '2' });
+    expect([v.bopMesial, v.bopBuccal, v.bopDistal, v.bopLingual]).toEqual([null, null, null, null]);
+    expect(toFindings(v)).toEqual({ recession_facial_mm: 2 });
   });
   it('turns the form into the database findings object, leaving out what was not assessed', () => {
     const v = visitSchema.parse({ ...attended, painScore: '0', patientConcerns: ' sore ', probingBuccal: '4', bopBuccal: 'yes', prosthesisStatus: 'stable' });

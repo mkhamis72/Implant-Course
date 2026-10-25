@@ -25,6 +25,7 @@ const oldFollowup = {
   visit_key: null, attendance: null, pain_score: null, patient_concerns: '', swelling: null, suppuration: null, plaque: null,
   mobility: null, probing_mesial: null, probing_buccal: null, probing_distal: null, probing_lingual: null, bop_mesial: null,
   bop_buccal: null, bop_distal: null, bop_lingual: null, isq: null, prosthesis_status: null, radiograph_taken: null, recommended_treatment: '',
+  recession_facial_mm: null, recession_mesial_mm: null, recession_distal_mm: null,
 };
 const site = { id: 's1', tooth: 36, state: 'placed', placed_on: '2026-03-10', followups: [oldFollowup] } as unknown as ImplantSite;
 const data = { today: '2026-06-01', visits, editable: true } as unknown as ChartData;
