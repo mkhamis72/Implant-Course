@@ -56,7 +56,7 @@ export default async function ExplorePage({ searchParams }: { searchParams: Page
       <FilterForm filters={filters} courses={courseList} delegates={delegateOptions}
         brands={distinct([...data.implants.map((r) => r.brand), filters.brand])}
         systems={distinct([...data.implants.filter((r) => !filters.brand || r.brand === filters.brand).map((r) => r.system), filters.system])} />
-      <ExploreWorkspace data={data} labels={labels} today={todayIso()} initial={parseExplore(exploreParams)}
+      <ExploreWorkspace key={JSON.stringify([filters, exploreParams])} data={data} labels={labels} today={todayIso()} initial={parseExplore(exploreParams)}
         base={filters} patients={patients}
         saved={{ items: (saved.data ?? []) as unknown as SavedRow[], canEdit: canEdit(profile, 'research'), userId: profile.user_id,
           isAdmin: profile.role === 'admin', courses: labels.course ?? {} }} />

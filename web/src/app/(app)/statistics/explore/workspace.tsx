@@ -10,6 +10,7 @@ import { windowLabel, type TimepointKey } from '@/lib/analysis/timepoints';
 import { toSavedConfig } from '@/lib/analysis/saved';
 import { exploreQuery, type ExploreState } from '@/lib/analysis/url';
 import Link from 'next/link';
+import { CONFIDENTIALITY_NOTE } from '@/lib/research/export/assemble';
 import { variable } from '@/lib/analysis/variables';
 import { chartOption, chartSummary, DEFAULT_PALETTE, type Palette } from './chart-options';
 import { loadPalette } from './explore-chart-loader';
@@ -90,6 +91,7 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients,
               <input type="checkbox" checked={alt} onChange={(e) => setAlt(e.target.checked)} /> Include the alternative chart
             </label>
             <a className="btn-secondary btn text-sm" href={`/statistics/explore/export?${query}`}>Download data (CSV)</a>
+            <span className="text-xs text-muted">Study codes only. {CONFIDENTIALITY_NOTE}</span>
           </div>
           {result.included === 0 ? (
             <>
