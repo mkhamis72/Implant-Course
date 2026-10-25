@@ -60,6 +60,7 @@ export function findingsFor(r: FindingsInput, l: FindingsLabels): string[] {
     case 'correlation': {
       const rho = r.standardized?.value
       if (rho === undefined) out.push(`Not enough paired values to describe ${l.factor} and ${l.outcome} together.`)
+      else if (!r.test) out.push(`Too few paired values (${r.included}) to test an association between ${l.factor} and ${l.outcome} (Spearman ρ ${fmt(rho)}).`)
       else if (r.test && r.test.p < 0.05) out.push(`An association was observed between ${l.factor} and ${l.outcome} (Spearman ρ ${fmt(rho)}).`)
       else out.push(`No clear association was observed between ${l.factor} and ${l.outcome} (Spearman ρ ${fmt(rho)}).`)
       break

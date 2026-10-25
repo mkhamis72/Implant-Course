@@ -65,11 +65,13 @@ export function warningsFor(r: QualityInput, c: QualityContext): Warning[] {
   return w
 }
 
-/** Records dated before their implant was placed: visits, X-rays, the event and the final restoration. */
+/**
+ * Records dated before their implant was placed: visits, the event and the final restoration. X-rays are not
+ * counted: pre-operative X-rays of the tooth (and those of an earlier implant there) are legitimately older.
+ */
 export function conflictCount(data: AnalysisData): number {
   const sites = new Set(data.implants.map((i) => i.site_id))
   return data.implants.filter((i) => (i.event_on !== null && i.event_on < i.placed_on)
       || (i.final_restoration_on !== null && i.final_restoration_on < i.placed_on)).length
     + data.visits.filter((v) => sites.has(v.site_id) && v.days_since_placement < 0).length
-    + data.radiographs.filter((r) => sites.has(r.site_id) && r.days_since_placement < 0).length
 }

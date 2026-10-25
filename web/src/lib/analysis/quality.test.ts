@@ -51,7 +51,7 @@ describe('data-quality warnings', () => {
     expect(conflictCount({
       implants: [implantRow(), implantRow({ site_id: 's2', event_on: '2024-12-01' }), implantRow({ site_id: 's3', final_restoration_on: '2025-01-01' })],
       visits: [visitRow({ days_since_placement: -3 })],
-      radiographs: [radiographRow({ days_since_placement: 5 })],
-    })).toBe(3)
+      radiographs: [radiographRow({ days_since_placement: 5 }), radiographRow({ radiograph_id: 'pre-op', days_since_placement: -20 })],
+    })).toBe(3) // a pre-operative X-ray of the tooth is not a conflict
   })
 })

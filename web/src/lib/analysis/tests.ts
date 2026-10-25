@@ -140,7 +140,30 @@ function ranks(xs: number[]): { ranks: number[]; ties: number[] } {
   return { ranks: r, ties }
 }
 
-/** Mann–Whitney (Wilcoxon rank-sum) for a vs b: W as R reports it, normal approximation with tie and continuity correction. */
+// P(W ≤ w) for the exact null distribution of W (no ties): counts of subsets by rank-sum, as R's pwilcox.
+function exactWCdf(w: number, n1: number, n2: number): number {
+  // ways[k][u]: ways to pick k of the values seen so far with W = u.
+  let ways: number[][] = Array.from({ length: n1 + 1 }, (_, k) => (k === 0 ? [1] : []))
+  for (let i = 1; i <= n1 + n2; i++) {
+    const next = ways.map((row) => [...row])
+    for (let k = 1; k <= Math.min(i, n1); k++) {
+      const prev = ways[k - 1]
+      // Taking value i as the k-th pick adds i − k to W.
+      prev.forEach((c, u) => { if (c) next[k][u + i - k] = (next[k][u + i - k] ?? 0) + c })
+    }
+    ways = next
+  }
+  const dist = ways[n1]
+  const total = dist.reduce((s, c) => s + (c ?? 0), 0)
+  let below = 0
+  for (let u = 0; u <= Math.floor(w); u++) below += dist[u] ?? 0
+  return below / total
+}
+
+/**
+ * Mann–Whitney (Wilcoxon rank-sum) for a vs b, W as R reports it. As wilcox.test: exact when both groups have fewer
+ * than 50 values and there are no ties, otherwise the normal approximation with tie and continuity correction.
+ */
 export function mannWhitney(a: number[], b: number[]): { w: number; p: number } | null {
   if (a.length === 0 || b.length === 0) return null
   const n1 = a.length
@@ -148,6 +171,10 @@ export function mannWhitney(a: number[], b: number[]): { w: number; p: number } 
   const n = n1 + n2
   const { ranks: r, ties } = ranks([...a, ...b])
   const w = sum(r.slice(0, n1)) - (n1 * (n1 + 1)) / 2
+  if (n1 < 50 && n2 < 50 && ties.length === 0) {
+    const p = w > (n1 * n2) / 2 ? 1 - exactWCdf(w - 1, n1, n2) : exactWCdf(w, n1, n2)
+    return { w, p: Math.min(1, 2 * p) }
+  }
   const sigma = Math.sqrt((n1 * n2 / 12) * (n + 1 - sum(ties.map((t) => t ** 3 - t)) / (n * (n - 1))))
   if (sigma === 0) return null
   const dev = w - (n1 * n2) / 2
@@ -175,18 +202,20 @@ export function kruskalWallis(groups: number[][]): { h: number; df: number; p: n
   return { h, df, p: chiSquareP(h, df) }
 }
 
-/** Pearson chi-square test of independence (no continuity correction). */
+/** Pearson chi-square test of independence; on a 2 × 2 table with Yates' continuity correction, as chisq.test. */
 export function chiSquare(table: number[][]): { chisq: number; df: number; p: number; minExpected: number } | null {
   const rows = table.map(sum)
   const cols = table[0].map((_, j) => sum(table.map((row) => row[j])))
   const n = sum(rows)
   if (n === 0 || rows.length < 2 || cols.length < 2 || rows.some((x) => x === 0) || cols.some((x) => x === 0)) return null
+  const yates = rows.length === 2 && cols.length === 2
   let chisq = 0
   let minExpected = Infinity
   table.forEach((row, i) => row.forEach((o, j) => {
     const e = (rows[i] * cols[j]) / n
     minExpected = Math.min(minExpected, e)
-    chisq += (o - e) ** 2 / e
+    const d = Math.abs(o - e)
+    chisq += (yates ? d - Math.min(0.5, d) : d) ** 2 / e
   }))
   const df = (rows.length - 1) * (cols.length - 1)
   return { chisq, df, p: chiSquareP(chisq, df), minExpected }

@@ -93,6 +93,19 @@ describe('analysis statistics against R', () => {
     expect(tCdf(-2.015048, 5)).toBeCloseTo(0.05, 5)
   })
 
+  it('chiSquare applies the Yates correction on a 2 × 2 table, as chisq.test', () => {
+    const c = chiSquare([[20, 20], [10, 30]])!
+    expect(c.chisq).toBeCloseTo(4.32, 6)
+    expect(c.p).toBeCloseTo(0.0377, 3)
+  })
+
+  it('mannWhitney is exact for small groups without ties, as wilcox.test', () => {
+    expect(mannWhitney([1, 2, 3], [4, 5, 6])).toEqual({ w: 0, p: 0.1 })
+    const m = mannWhitney([1.1, 2.2, 3.3, 7.7], [4.4, 5.5, 6.6, 8.8, 9.9])!
+    expect(m.w).toBe(3)
+    expect(m.p).toBeCloseTo(0.11111, 5) // 2 × P(W ≤ 3) = 2 × 7/126
+  })
+
   it('returns null rather than NaN when a value is undefined', () => {
     expect(describeValues([])).toBeNull()
     expect(describeValues([3])!.sd).toBeNull()

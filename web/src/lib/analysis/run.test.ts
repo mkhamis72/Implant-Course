@@ -37,7 +37,7 @@ describe('runAnalysis', () => {
     expect(r.views[0]).toBe('box')
     expect(r.groups.map((g) => [g.label, g.n, g.tested])).toEqual([['Never', 4, true], ['Current', 4, true], ['Not assessed', 1, false]])
     expect(r.test!.name).toBe('Mann–Whitney U')
-    expect(r.test!.p).toBeCloseTo(0.0304, 3)
+    expect(r.test!.p).toBeCloseTo(2 / 70, 10) // exact, as wilcox.test with 4 vs 4 and no ties
     expect(r.effect!.name).toBe('Mean difference (Current − Never)')
     expect(r.effect!.value).toBeCloseTo(0.6, 10)
     expect(r.missing).toMatchObject({ missing: 1, not_measured: 1, not_applicable: 1 })

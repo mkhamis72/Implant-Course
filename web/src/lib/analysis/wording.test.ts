@@ -38,6 +38,12 @@ describe('plain-language findings', () => {
     expect(unclear[0]).toBe('No clear association was observed between ISQ at placement and Marginal bone change (Spearman ρ 0.1).')
   })
 
+  it('says the sample is too small when the correlation has no p-value', () => {
+    const f = findingsFor(base({ method: 'correlation', included: 8, standardized: { name: 'Spearman ρ', value: 0.95 }, test: null }),
+      { factor: 'ISQ at placement', outcome: 'Marginal bone change' })
+    expect(f[0]).toBe('Too few paired values (8) to test an association between ISQ at placement and Marginal bone change (Spearman ρ 0.95).')
+  })
+
   it('leaves out the causation line without a factor, and never uses a banned word', () => {
     const single = findingsFor(base({ method: 'describe', groups: [numeric('All implants', [0.2, 0.4, 0.6])] }), { ...labels, factor: null })
     expect(single).toEqual(['Median Marginal bone change 0.4 mm across 3 implants.'])
