@@ -39,7 +39,8 @@ export async function recordVisit(c: Client, site: string, v: Visit = {}) {
 const row = async (c: Client, id: string) =>
   (await c.query(
     `select visit_key, check_type, attendance, outcome, pain_score, patient_concerns, swelling, mobility,
-            probing_mesial::float as pm, probing_buccal::float as pb, bop_buccal, bop_mesial, isq::float as isq,
+            probing_mesial::float as pm, probing_buccal::float as pb, recession_facial_mm::float as rf,
+            recession_mesial_mm::float as rm, recession_distal_mm::float as rd, bop_buccal, bop_mesial, isq::float as isq,
             prosthesis_status, radiograph_taken, recommended_treatment, notes
      from public.implant_followups where id = $1`, [id])).rows[0];
 
@@ -81,6 +82,14 @@ describe('record_visit', () => {
     });
   });
 
+  it('records recession at three sites; empty means not measured', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedSite(c);
+      const id = await recordVisit(c, site, { findings: { recession_facial_mm: 1.5, recession_mesial_mm: 0 } });
+      expect(await row(c, id)).toMatchObject({ rf: 1.5, rm: 0, rd: null });
+    });
+  });
+
   it('refuses bad dates, unknown visits, duplicates, missing attendance or outcome, and findings when not attended', async () => {
     await withTx(async (c) => {
       const { site, placedOn } = await placedSite(c);
@@ -93,6 +102,7 @@ describe('record_visit', () => {
       await refused(c, () => recordVisit(c, site, { outcome: null }), /Choose the outcome/);
       await refused(c, () => recordVisit(c, site, { attendance: 'did_not_attend', outcome: 'ok' }), /outcome is recorded only when the patient attended/);
       await refused(c, () => recordVisit(c, site, { attendance: 'did_not_attend', outcome: null, findings: { pain_score: 3 } }), /Findings are recorded only when the patient attended/);
+      await refused(c, () => recordVisit(c, site, { attendance: 'did_not_attend', outcome: null, findings: { recession_facial_mm: 1 } }), /Findings are recorded only when the patient attended/);
       await recordVisit(c, site);
       await refused(c, () => recordVisit(c, site), /Early review \(suture removal\) is already recorded for this implant/);
     });
@@ -106,6 +116,9 @@ describe('record_visit', () => {
       await refused(c, () => bad({ pain_score: 2.5 }), /Enter a pain score from 0 to 10/);
       await refused(c, () => bad({ probing_mesial: 'deep' }), /Enter probing depths from 0 to 15 mm/);
       await refused(c, () => bad({ probing_lingual: 16 }), /Enter probing depths from 0 to 15 mm/);
+      await refused(c, () => bad({ recession_facial_mm: 16 }), /Enter recession from 0 to 15 mm/);
+      await refused(c, () => bad({ recession_distal_mm: -1 }), /Enter recession from 0 to 15 mm/);
+      await refused(c, () => bad({ recession_mesial_mm: 'some' }), /Enter recession from 0 to 15 mm/);
       await refused(c, () => bad({ isq: 101 }), /Enter an ISQ from 0 to 100/);
       await refused(c, () => bad({ swelling: 'maybe' }), /Choose swelling from the list/);
       await refused(c, () => bad({ prosthesis_status: 'wobbly' }), /Choose the prosthesis status from the list/);

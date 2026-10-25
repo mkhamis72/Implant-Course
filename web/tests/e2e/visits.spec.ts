@@ -34,9 +34,11 @@ test('records the early review with probing and bleeding; the schedule and Impla
   await panel(page).getByLabel('Probing depth mesial').fill('3');
   await panel(page).getByLabel('Probing depth buccal').fill('4');
   await panel(page).getByLabel('Bleeding buccal').check();
+  await panel(page).getByLabel('Recession facial').fill('2');
+  await panel(page).getByLabel('Recession distal').fill('1');
   await panel(page).getByRole('button', { name: 'Save visit' }).click();
   await expect(schedule.getByTestId('visit-row').first()).toContainText('Done');
-  await expect(panel(page).getByTestId('visit-records')).toContainText('PD M 3 · B 4 mm · BOP B');
+  await expect(panel(page).getByTestId('visit-records')).toContainText('PD M 3 · B 4 mm · Rec F 2 · D 1 mm · BOP B');
 
   await page.goto(`/patients/${patientId}/implants`);
   await expect(page.getByTestId('next-visit')).toContainText('Osseointegration check');
