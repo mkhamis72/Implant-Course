@@ -251,6 +251,16 @@ describe('research export: readers', () => {
     });
   });
 
+  it('exports recession at three sites; empty means not measured', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      await c.query('update public.implant_followups set recession_facial_mm = 1.5, recession_mesial_mm = 0 where id = $1', [s.liveVisit]);
+      await actAs(c, users.admin);
+      const [v] = await read(c, 'visits', { brand: s.brand });
+      expect({ f: Number(v.recession_facial_mm), m: Number(v.recession_mesial_mm), d: v.recession_distal_mm }).toEqual({ f: 1.5, m: 0, d: null });
+    });
+  });
+
   it('lists only the exported implants under a restoration', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
