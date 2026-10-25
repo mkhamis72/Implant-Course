@@ -116,6 +116,26 @@ describe('chartOption', () => {
   })
 })
 
+describe('tooltips', () => {
+  it('escapes user-entered names in every tooltip (no HTML from a delegate or brand name)', () => {
+    const evil = '<img src=x onerror=alert(1)>'
+    const d = data((i) => ({ placing_delegate_id: i < 4 ? 'd1' : 'd2', event: i === 5 }))
+    const labels = { delegate: { d1: evil, d2: 'Dr A & B' } }
+    const tip = (o: unknown, params: unknown) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((o as any).tooltip.formatter as (p: unknown) => string)(params)
+    const numeric = runAnalysis(d, { factor: 'delegate', outcome: 'bone_change', window: 'm12', filters: [] }, TODAY, labels)
+    const box = chartOption('box', numeric, ctx)!
+    const evilIndex = numeric.groups.filter((g) => g.stats).findIndex((g) => g.label === evil)
+    expect(tip(box, { dataIndex: evilIndex })).not.toContain('<img')
+    expect(tip(box, { dataIndex: evilIndex })).toContain('&lt;img')
+    expect(tip(chartOption('strip', numeric, ctx), { data: [evil, 0.3] })).not.toContain('<img')
+    const counts = runAnalysis(d, { factor: 'delegate', outcome: 'failed', window: 'm12', filters: [] }, TODAY, labels)
+    const bars = chartOption('bar_stacked', counts, { ...ctx, levels: [{ value: 'yes', label: evil }] })!
+    expect(tip(bars, { seriesName: evil, data: { k: 1, n: 2, value: 50 } })).not.toContain('<img')
+  })
+})
+
 describe('chartSummary', () => {
   it('describes the chart in one sentence', () => {
     expect(chartSummary('box', run({}), { outcome: 'Marginal bone change', factor: 'Smoking' }))

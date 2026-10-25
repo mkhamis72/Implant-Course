@@ -114,6 +114,9 @@ describe('saved analyses (0079)', () => {
       expect(new Set(codes.map((r) => r.patient_code)).size).toBe(1);
       const expected = (await c.query(`select public.research_code('implant', $1) as code`, [codes[0].site_id])).rows[0].code;
       expect(codes[0].implant_code).toBe(expected);
+      expect(codes[0].delegate_code).toBe((await c.query(`select public.research_code('delegate', $1) as code`, [delegate])).rows[0].code);
+      expect(codes[0].supervisor_code).toMatch(/^S-[A-HJ-NP-Z2-9]{6}$/);
+      expect(codes[0].course_code).toMatch(/^C-[A-HJ-NP-Z2-9]{6}$/);
 
       await asPostgres(c);
       await setPerms(c, users.target, { patients: 'view' });

@@ -32,6 +32,9 @@ const VIEW_NAMES: Record<View, string> = {
 }
 
 const round = (x: number) => Number(x.toFixed(6))
+// Custom tooltip formatters return HTML: every user-entered text in them (group, delegate, brand, level names) is escaped.
+const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+export const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => ESCAPES[c])
 const colorAt = (p: Palette, i: number) => p.series[i] ?? p.muted
 const withUnit = (x: number, unit?: string) => `${fmt(x)}${unit ? ` ${unit}` : ''}`
 
@@ -74,7 +77,7 @@ export function chartOption(view: View, r: AnalysisResult, ctx: ChartContext): E
           formatter: (x: unknown) => {
             const i = (x as { dataIndex: number }).dataIndex
             const s = withStats[i].stats!
-            return `${withStats[i].label} (n = ${s.n})<br>Median ${withUnit(s.median, ctx.unit)} · IQR ${fmt(s.q1)}–${fmt(s.q3)}<br>Range ${fmt(s.min)}–${fmt(s.max)}`
+            return `${escapeHtml(withStats[i].label)} (n = ${s.n})<br>Median ${withUnit(s.median, ctx.unit)} · IQR ${fmt(s.q1)}–${fmt(s.q3)}<br>Range ${fmt(s.min)}–${fmt(s.max)}`
           },
         },
         series: [{
@@ -91,7 +94,7 @@ export function chartOption(view: View, r: AnalysisResult, ctx: ChartContext): E
         ...f.base,
         xAxis: f.category(labels, ctx.factorLabel ?? undefined),
         yAxis: f.value(f.outcomeAxis),
-        tooltip: { ...f.base.tooltip, formatter: (x: unknown) => { const d = (x as { data: [string, number] }).data; return `${d[0]}: ${withUnit(d[1], ctx.unit)}` } },
+        tooltip: { ...f.base.tooltip, formatter: (x: unknown) => { const d = (x as { data: [string, number] }).data; return `${escapeHtml(String(d[0]))}: ${withUnit(d[1], ctx.unit)}` } },
         series: [{
           type: 'scatter', symbolSize: 8,
           data: r.points.filter((pt) => typeof pt.y === 'number').map((pt) => [String(pt.x), round(pt.y as number)]),
@@ -132,7 +135,7 @@ export function chartOption(view: View, r: AnalysisResult, ctx: ChartContext): E
           ...f.base.tooltip,
           formatter: (x: unknown) => {
             const { seriesName, data } = x as { seriesName: string; data: { k: number; n: number; value: number } }
-            return `${seriesName}: ${data.k} of ${data.n} implants (${fmt(data.value)}%)`
+            return `${escapeHtml(seriesName)}: ${data.k} of ${data.n} implants (${fmt(data.value)}%)`
           },
         },
         series: ordered.map((level, i) => ({

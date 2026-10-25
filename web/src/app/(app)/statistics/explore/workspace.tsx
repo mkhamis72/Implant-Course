@@ -7,8 +7,9 @@ import { trajectories } from '@/lib/analysis/observations';
 import type { AnalysisData } from '@/lib/analysis/rows';
 import { runAnalysis, type AnalysisConfig } from '@/lib/analysis/run';
 import { windowLabel, type TimepointKey } from '@/lib/analysis/timepoints';
-import { toSavedConfig } from '@/lib/analysis/saved';
-import { exploreQuery, type ExploreState } from '@/lib/analysis/url';
+import { toSavedConfig, type SavedConfig } from '@/lib/analysis/saved';
+import { RESEARCH_FILTER_KEYS } from '@/lib/research/view';
+import { exploreQuery, parseExplore, type ExploreState } from '@/lib/analysis/url';
 import Link from 'next/link';
 import { CONFIDENTIALITY_NOTE } from '@/lib/research/export/assemble';
 import { variable } from '@/lib/analysis/variables';
@@ -72,6 +73,13 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients,
   // The current analysis rides along with the research filters form (FilterForm, id research-filters).
   const carried = [...new URLSearchParams(exploreQuery(state, {}).slice(1))];
   const current = toSavedConfig(state, base, alt);
+  // A saved analysis on the same data (same six filters) opens in place; another one reloads through its link.
+  const openSaved = (config: SavedConfig) => {
+    if (!RESEARCH_FILTER_KEYS.every((k) => (config.query[k] ?? '') === (base[k] ?? ''))) return false;
+    update(parseExplore(config.query));
+    setAlt(config.query.alt === '1');
+    return true;
+  };
   const query = exploreQuery(state, base).slice(1);
 
   return (
@@ -120,7 +128,7 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients,
           )}
         </>
       )}
-      {saved && <SavedAnalyses {...saved} current={current} />}
+      {saved && <SavedAnalyses {...saved} current={current} onOpen={openSaved} />}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { canView } from '@/lib/auth/permissions';
 import { todayIso } from '@/lib/dates';
 import { ALL_COURSES, RESEARCH_FILTER_KEYS, rpcArgs, type ResearchFilters } from '@/lib/research/view';
 import { fetchAll } from '@/lib/research/export/fetch-all';
-import { exploreCsv } from '@/lib/analysis/export-csv';
+import { exploreCsv, type ImplantCodes } from '@/lib/analysis/export-csv';
 import { applyFilters } from '@/lib/analysis/filters';
 import { observe } from '@/lib/analysis/observations';
 import { runAnalysis } from '@/lib/analysis/run';
@@ -39,10 +39,13 @@ export async function GET(req: NextRequest) {
   // Store the study codes first (one ordered insert), then only read them.
   const assigned = await supabase.rpc('assign_research_codes', args);
   if (assigned.error) return failed(assigned.error.message);
-  const codeRows = await fetchAll<{ site_id: string; implant_code: string | null; patient_code: string | null }>(supabase, 'analysis_codes', args, ['site_id']);
+  type CodeRow = { site_id: string; implant_code: string | null; patient_code: string | null; delegate_code: string | null;
+    supervisor_code: string | null; course_code: string | null };
+  const codeRows = await fetchAll<CodeRow>(supabase, 'analysis_codes', args, ['site_id']);
   if (codeRows.error) return failed(codeRows.error.message);
-  const codes = new Map(codeRows.data.filter((r) => r.implant_code && r.patient_code)
-    .map((r) => [r.site_id, { implant: r.implant_code!, patient: r.patient_code! }]));
+  const codes = new Map<string, ImplantCodes>(codeRows.data.filter((r) => r.implant_code && r.patient_code).map((r) => [r.site_id, {
+    implant: r.implant_code!, patient: r.patient_code!, delegate: r.delegate_code, supervisor: r.supervisor_code, course: r.course_code,
+  }]));
 
   let loaded;
   try {
@@ -58,8 +61,17 @@ export async function GET(req: NextRequest) {
     const rows = applyFilters(loaded.data.implants, state.config.filters);
     for (const [site, o] of observe({ ...loaded.data, implants: rows }, outcome.measure!, state.config.window, today).values) days.set(site, o.days);
   }
+  // People and courses as the factor are written as study codes (never names), as in the research export.
+  const factor = state.config.factor ? variable(state.config.factor) : undefined;
+  const groupCode = factor && (factor.key === 'delegate' || factor.key === 'supervisor' || factor.key === 'course') ? factor.key : undefined;
+  const notAssessed = new Set(factor ? loaded.data.implants.filter((r) => factor.get(r) === null).map((r) => r.site_id) : []);
+  const survival = outcome.kind === 'survival';
+  const events = survival ? new Map(loaded.data.implants.map((r) => [r.site_id, r.event])) : undefined;
   const csv = exploreCsv(result, codes, {
-    unit: outcome.unit,
+    unit: survival ? 'months' : outcome.unit,
+    groupCode,
+    notAssessed,
+    events,
     timepoint: timed && state.config.window !== 'all' ? windowLabel(state.config.window) : '',
     days,
   });

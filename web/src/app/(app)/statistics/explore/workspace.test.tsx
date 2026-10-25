@@ -132,6 +132,21 @@ describe('ExploreWorkspace', () => {
     expect(csv).toContain('o=failed')
   })
 
+  it('reopens a saved analysis in place, even after the page was edited', () => {
+    const saved = {
+      items: [{ id: 'a1', title: 'Smoking and failure', config: { version: 1 as const, query: { course: 'all', f: 'smoking', o: 'failed', w: 'm12' } },
+        course_id: null, created_by: 'u', created_at: '2026-10-20T10:00:00Z', creator: { full_name: 'Dr A' } }],
+      canEdit: false, userId: 'me', isAdmin: false, courses: {},
+    }
+    render(<ExploreWorkspace data={data} labels={{}} today={TODAY} base={{ course: 'all' }} patients={patients} saved={saved}
+      initial={{ config: { factor: 'smoking', outcome: 'failed', window: 'm12', filters: [] }, view: null }} />)
+    choose('Compare by', 'jaw')
+    expect(screen.getByRole('combobox', { name: 'Compare by' })).toHaveValue('jaw')
+    fireEvent.click(screen.getByRole('link', { name: 'Smoking and failure' }))
+    expect(screen.getByRole('combobox', { name: 'Compare by' })).toHaveValue('smoking')
+    expect(lastUrl()).toContain('f=smoking')
+  })
+
   it('hides the timepoint for implant-level outcomes', () => {
     renderWith({ config: { factor: 'smoking', outcome: 'failed', window: 'm12', filters: [] }, view: null })
     expect(screen.queryByRole('combobox', { name: 'Timepoint' })).not.toBeInTheDocument()

@@ -16,7 +16,13 @@ export type SavedRow = {
   creator: { full_name: string } | null;
 };
 
-function Row({ row, canChange, courses, current }: { row: SavedRow; canChange: boolean; courses: Record<string, string>; current: SavedConfig }) {
+function Row({ row, canChange, courses, current, onOpen }: {
+  row: SavedRow;
+  canChange: boolean;
+  courses: Record<string, string>;
+  current: SavedConfig;
+  onOpen?: (config: SavedConfig) => boolean;
+}) {
   const [mode, setMode] = useState<'view' | 'rename' | 'delete'>('view');
   const [title, setTitle] = useState(row.title);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +36,8 @@ function Row({ row, canChange, courses, current }: { row: SavedRow; canChange: b
   return (
     <li className="space-y-1 border-b border-line py-2 last:border-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Link href={savedHref(row.config)} className="font-medium text-accent hover:underline">{row.title}</Link>
+        <Link href={savedHref(row.config)} className="font-medium text-accent hover:underline"
+          onClick={(e) => { if (onOpen?.(row.config)) e.preventDefault(); }}>{row.title}</Link>
         <span className="text-sm text-muted">
           by {row.creator?.full_name ?? 'a former user'} · {formatDate(row.created_at.slice(0, 10))}
           {row.course_id && courses[row.course_id] ? ` · ${courses[row.course_id]}` : ''}
@@ -63,13 +70,15 @@ function Row({ row, canChange, courses, current }: { row: SavedRow; canChange: b
   );
 }
 
-export function SavedAnalyses({ items, canEdit, userId, isAdmin, courses, current }: {
+export function SavedAnalyses({ items, canEdit, userId, isAdmin, courses, current, onOpen }: {
   items: SavedRow[];
   canEdit: boolean;
   userId: string;
   isAdmin: boolean;
   courses: Record<string, string>;
   current: SavedConfig;
+  /** Opens an analysis in place when it needs no new data; false = follow the link (the server loads it). */
+  onOpen?: (config: SavedConfig) => boolean;
 }) {
   const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +106,7 @@ export function SavedAnalyses({ items, canEdit, userId, isAdmin, courses, curren
         : (
           <ul>
             {items.map((row) => (
-              <Row key={row.id} row={row} courses={courses} current={current}
+              <Row key={row.id} row={row} courses={courses} current={current} onOpen={onOpen}
                 canChange={canEdit && (row.created_by === userId || isAdmin)} />
             ))}
           </ul>

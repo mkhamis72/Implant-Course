@@ -76,11 +76,12 @@ begin
   delete from public.saved_analyses where id = p_id;
 end $$;
 
--- The study codes of the analysed implants and their patients, read only (the Explore export calls
--- assign_research_codes first, so no code is created here). Empty codes = not assigned yet.
+-- The study codes of the analysed implants, their patients, placing delegates, supervisors and courses, read only
+-- (the Explore export calls assign_research_codes first, so no code is created here). Empty = not assigned / none.
 create function public.analysis_codes(p_course uuid, p_from date, p_to date, p_delegate uuid,
   p_brand text, p_system text)
-returns table (site_id uuid, implant_code text, patient_code text)
+returns table (site_id uuid, implant_code text, patient_code text, delegate_code text, supervisor_code text,
+  course_code text)
 language plpgsql stable security definer set search_path = '' as $$
 begin
   perform app_private.require_perm('research', 'view');
@@ -88,10 +89,14 @@ begin
     perform app_private.fail('Research export needs View on Patients');
   end if;
   return query
-    select o.site_id, ci.code, cp.code
+    select o.site_id, ci.code, cp.code, cd.code, cs.code, cc.code
     from public.implant_outcomes_detail(p_course, p_from, p_to, p_delegate, p_brand, p_system) o
+    join public.implant_sites s on s.id = o.site_id
     left join app_private.research_codes ci on ci.entity = 'implant' and ci.entity_id = o.site_id
     left join app_private.research_codes cp on cp.entity = 'patient' and cp.entity_id = o.patient_id
+    left join app_private.research_codes cd on cd.entity = 'delegate' and cd.entity_id = s.placing_delegate_id
+    left join app_private.research_codes cs on cs.entity = 'supervisor' and cs.entity_id = s.supervisor_id
+    left join app_private.research_codes cc on cc.entity = 'course' and cc.entity_id = o.course_id
     order by o.site_id;
 end $$;
 
