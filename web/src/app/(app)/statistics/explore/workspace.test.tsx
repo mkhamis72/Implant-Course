@@ -4,6 +4,7 @@ import type { AnalysisData } from '@/lib/analysis/rows'
 import { implantRow, radiographRow } from '@/lib/analysis/test-rows'
 import type { ExploreState } from '@/lib/analysis/url'
 
+vi.mock('./actions', () => ({ saveAnalysis: vi.fn(), deleteAnalysis: vi.fn() }))
 vi.mock('./explore-chart-loader', () => ({
   ExploreChartLoader: ({ summary }: { summary: string }) => <div data-testid="chart">{summary}</div>,
   loadPalette: async () => ({ series: ['#1', '#2'], ink: '#i', muted: '#m', line: '#l' }),
@@ -116,6 +117,34 @@ describe('ExploreWorkspace', () => {
     const hidden = Object.fromEntries([...container.querySelectorAll('input[type=hidden][form=research-filters]')]
       .map((i) => [(i as HTMLInputElement).name, (i as HTMLInputElement).value]))
     expect(hidden).toMatchObject({ f: 'jaw', o: 'failed', w: 'm12' })
+  })
+
+  it('links the print report (optionally with the alternative chart) and the data download to the current analysis', () => {
+    renderWith({ config: { factor: 'smoking', outcome: 'failed', window: 'm12', filters: [] }, view: null })
+    const print = () => screen.getByRole('link', { name: 'Print report' }).getAttribute('href')!
+    expect(print().startsWith('/statistics/explore/print?')).toBe(true)
+    expect(print()).toContain('f=smoking')
+    expect(print()).not.toContain('alt=1')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include the alternative chart' }))
+    expect(print()).toContain('alt=1')
+    const csv = screen.getByRole('link', { name: 'Download data (CSV)' }).getAttribute('href')!
+    expect(csv.startsWith('/statistics/explore/export?')).toBe(true)
+    expect(csv).toContain('o=failed')
+  })
+
+  it('reopens a saved analysis in place, even after the page was edited', () => {
+    const saved = {
+      items: [{ id: 'a1', title: 'Smoking and failure', config: { version: 1 as const, query: { course: 'all', f: 'smoking', o: 'failed', w: 'm12' } },
+        course_id: null, created_by: 'u', created_at: '2026-10-20T10:00:00Z', creator: { full_name: 'Dr A' } }],
+      canEdit: false, userId: 'me', isAdmin: false, courses: {},
+    }
+    render(<ExploreWorkspace data={data} labels={{}} today={TODAY} base={{ course: 'all' }} patients={patients} saved={saved}
+      initial={{ config: { factor: 'smoking', outcome: 'failed', window: 'm12', filters: [] }, view: null }} />)
+    choose('Compare by', 'jaw')
+    expect(screen.getByRole('combobox', { name: 'Compare by' })).toHaveValue('jaw')
+    fireEvent.click(screen.getByRole('link', { name: 'Smoking and failure' }))
+    expect(screen.getByRole('combobox', { name: 'Compare by' })).toHaveValue('smoking')
+    expect(lastUrl()).toContain('f=smoking')
   })
 
   it('hides the timepoint for implant-level outcomes', () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { MISSING_LABELS, type MissingReason } from '@/lib/analysis/observations';
 import type { AnalysisResult } from '@/lib/analysis/run';
@@ -11,6 +11,7 @@ import { formatP } from '@/lib/research/stats';
 import type { EChartsOption } from 'echarts';
 import { VIEW_NAMES } from './chart-options';
 import { ExploreChartLoader } from './explore-chart-loader';
+import { download, svgToPng } from './chart-download';
 
 export type PatientRef = { patientId: string; fileNo: string; tooth: number };
 
@@ -54,10 +55,26 @@ export function ViewTabs({ views, view, onSelect }: { views: View[]; view: View;
   );
 }
 
-export function ChartCard({ option, summary }: { option: EChartsOption; summary: string }) {
+type ChartHandle = { renderToSVGString(): string; getWidth(): number; getHeight(): number };
+
+export function ChartCard({ option, summary, files }: { option: EChartsOption; summary: string; files: { svg: string; png: string } }) {
+  const chart = useRef<ChartHandle | null>(null);
+  const svg = () => chart.current?.renderToSVGString() ?? null;
   return (
-    <section aria-label="Chart" className="card overflow-x-auto">
-      <div className="min-w-[320px]"><ExploreChartLoader option={option} summary={summary} height={340} /></div>
+    <section aria-label="Chart" className="card space-y-2 overflow-x-auto">
+      <div className="min-w-[320px]">
+        <ExploreChartLoader option={option} summary={summary} height={340} onReady={(c) => { chart.current = c; }} />
+      </div>
+      <div className="flex gap-2 print:hidden">
+        <button type="button" className="btn-secondary btn py-1 text-sm" onClick={() => {
+          const s = svg();
+          if (s) download(new Blob([s], { type: 'image/svg+xml' }), files.svg);
+        }}>Download SVG</button>
+        <button type="button" className="btn-secondary btn py-1 text-sm" onClick={() => {
+          const s = svg();
+          if (s && chart.current) svgToPng(s, chart.current.getWidth(), chart.current.getHeight()).then((b) => download(b, files.png)).catch(() => {});
+        }}>Download PNG</button>
+      </div>
     </section>
   );
 }

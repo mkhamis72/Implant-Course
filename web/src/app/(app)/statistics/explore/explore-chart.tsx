@@ -22,7 +22,13 @@ export function readPalette(): Palette {
   };
 }
 
-export function ExploreChart({ option, summary, height }: { option: EChartsOption; summary: string; height: number }) {
+export function ExploreChart({ option, summary, height, onReady }: {
+  option: EChartsOption;
+  summary: string;
+  height: number;
+  /** The ECharts instance, for downloads. */
+  onReady?: (chart: ECharts | null) => void;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<ECharts | null>(null);
 
@@ -30,13 +36,16 @@ export function ExploreChart({ option, summary, height }: { option: EChartsOptio
     if (!box.current) return;
     const c = init(box.current, undefined, { renderer: 'svg' });
     chart.current = c;
+    onReady?.(c);
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => c.resize());
     observer?.observe(box.current);
     return () => {
       observer?.disconnect();
       c.dispose();
       chart.current = null;
+      onReady?.(null);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the chart is created once; onReady is read at that moment
   }, []);
 
   useEffect(() => {
