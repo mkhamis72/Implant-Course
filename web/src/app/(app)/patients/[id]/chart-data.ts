@@ -27,7 +27,8 @@ export const SITE_SELECT = `
   followups:implant_followups(
     id, date, check_type, outcome, notes, voided_at, voided_reason, visit_key, attendance, pain_score, patient_concerns,
     swelling, suppuration, plaque, mobility, probing_mesial, probing_buccal, probing_distal, probing_lingual,
-    bop_mesial, bop_buccal, bop_distal, bop_lingual, isq, prosthesis_status, radiograph_taken, recommended_treatment
+    bop_mesial, bop_buccal, bop_distal, bop_lingual, isq, prosthesis_status, radiograph_taken, recommended_treatment,
+    recession_facial_mm, recession_mesial_mm, recession_distal_mm
   ),
   surgery:implant_surgery(*),
   grafts:implant_grafts(*),

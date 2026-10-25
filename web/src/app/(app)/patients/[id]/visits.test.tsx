@@ -64,10 +64,12 @@ describe('<RecordVisitForm>', () => {
     fireEvent.change(screen.getByLabelText('Pain (0–10)'), { target: { value: '1' } });
     fireEvent.change(screen.getByLabelText('Probing depth buccal'), { target: { value: '4' } });
     fireEvent.click(screen.getByLabelText('Bleeding buccal'));
+    fireEvent.change(screen.getByLabelText('Recession facial'), { target: { value: '1.5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save visit' }));
     expect(vi.mocked(recordVisit)).toHaveBeenCalledWith(expect.objectContaining({
       siteId: 's1', patientId: 'pt', date: '2026-06-01', visitKey: 'osseointegration', attendance: 'attended', outcome: 'ok',
       painScore: '1', probingBuccal: '4', bopBuccal: 'yes', probingMesial: '', bopMesial: '',
+      recessionFacial: '1.5', recessionMesial: '', recessionDistal: '',
     }));
   });
 

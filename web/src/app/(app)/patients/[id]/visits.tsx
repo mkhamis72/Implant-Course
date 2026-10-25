@@ -5,8 +5,8 @@ import { FOLLOWUP_OUTCOMES, OUTCOME_LABELS, type ChartData, type ImplantSite } f
 import { formatDate } from '@/lib/format';
 import { YES_NO } from '@/lib/patients/risk-factors';
 import {
-  ATTENDANCE, ATTENDANCE_LABELS, PROBING_SITES, PROSTHESIS_LABELS, PROSTHESIS_STATUSES, VISIT_STATUS_BADGE, VISIT_STATUS_LABELS,
-  prepickVisit, recordableVisits, summarizeFindings, visitResult, type VisitRow,
+  ATTENDANCE, ATTENDANCE_LABELS, PROBING_SITES, PROSTHESIS_LABELS, PROSTHESIS_STATUSES, RECESSION_SITES, VISIT_STATUS_BADGE,
+  VISIT_STATUS_LABELS, prepickVisit, recordableVisits, summarizeFindings, visitResult, type VisitRow,
 } from '@/lib/visits/visits';
 import { Field, Footer, useSubmit } from './implant-forms';
 import { FailureFields } from './failure-box';
@@ -59,6 +59,7 @@ const BLANK = {
   painScore: '', patientConcerns: '', swelling: '', suppuration: '', plaque: '', mobility: '',
   probingMesial: '', probingBuccal: '', probingDistal: '', probingLingual: '',
   bopMesial: '', bopBuccal: '', bopDistal: '', bopLingual: '',
+  recessionFacial: '', recessionMesial: '', recessionDistal: '',
   isq: '', prosthesisStatus: '', radiographTaken: '', recommendedTreatment: '',
   failedOn: '', failureType: '', failureReason: '', failureNotes: '',
 };
@@ -151,6 +152,18 @@ export function RecordVisitForm({ patientId, site, data, onDone }: {
                   </div>
                 );
               })}
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend className="label">Recession (mm)</legend>
+            <div className="grid grid-cols-3 gap-2">
+              {RECESSION_SITES.map((s) => (
+                <div key={s.key} className="space-y-1 text-center">
+                  <span className="text-sm font-medium" aria-hidden="true">{s.short}</span>
+                  <input className="input text-center" inputMode="decimal" aria-label={`Recession ${s.label}`}
+                    value={v[s.field]} onChange={(e) => set(s.field)(e.target.value)} />
+                </div>
+              ))}
             </div>
           </fieldset>
           <div className="grid gap-3 sm:grid-cols-2">
