@@ -3,7 +3,8 @@
 
 import { kmFit, logRank, survivalAtTime, type SurvivalRow } from '@/lib/research/stats'
 import { choose } from './choose'
-import { applyFilters, levelLabel, NOT_ASSESSED, type Filter } from './filters'
+import { groupBy, type LevelLabels } from './choices'
+import { applyFilters, NOT_ASSESSED, type Filter } from './filters'
 import { observe, trajectories } from './observations'
 import { conflictCount, MIN_TESTED, warningsFor, type Warning } from './quality'
 import type { AnalysisData, ImplantRow } from './rows'
@@ -12,12 +13,11 @@ import {
 } from './tests'
 import { TIMEPOINTS, type TimepointKey, type Window, windowRange } from './timepoints'
 import type { Effect, GroupSummary, Method, Missing, SurvivalCurve, TestResult, TrendPoint, View } from './types'
-import { sortsByLabel, variable, type Variable } from './variables'
+import { variable, type Variable } from './variables'
 import { findingsFor, fmt } from './wording'
 
 export type AnalysisConfig = { factor: string | null; outcome: string; window: Window | 'all'; filters: Filter[] }
-/** Labels for data-driven levels (delegates, courses, …), by variable key then value. */
-export type LevelLabels = Record<string, Record<string, string>>
+export type { LevelLabels }
 
 export type AnalysisResult = {
   method: Method
@@ -50,24 +50,6 @@ function need(key: string): Variable {
   return v
 }
 
-function labelOf(v: Variable, value: string, labels: LevelLabels): string {
-  return labels[v.key]?.[value] ?? levelLabel(v, value)
-}
-
-// Groups in display order: fixed levels in their order, data-driven ones by label; "Not assessed" last.
-function groupBy<T>(items: T[], key: (t: T) => string | null, v: Variable | null, labels: LevelLabels): { level: string | null; label: string; items: T[] }[] {
-  const map = new Map<string | null, T[]>()
-  for (const t of items) map.set(key(t), [...(map.get(key(t)) ?? []), t])
-  const order = v?.levels?.map((l) => l.value)
-  const levels = [...map.keys()].filter((k): k is string => k !== null)
-  levels.sort((a, b) => order && !sortsByLabel(v!)
-    ? (order.indexOf(a) + 1 || 1e9) - (order.indexOf(b) + 1 || 1e9) || a.localeCompare(b)
-    : (v ? labelOf(v, a, labels) : a).localeCompare(v ? labelOf(v, b, labels) : b))
-  const out: { level: string | null; label: string; items: T[] }[] =
-    levels.map((level) => ({ level, label: v ? labelOf(v, level, labels) : level, items: map.get(level)! }))
-  if (map.has(null)) out.push({ level: null, label: NOT_ASSESSED, items: map.get(null)! })
-  return out
-}
 
 const patientsOf = (rows: ImplantRow[]) => new Set(rows.map((r) => r.patient_id)).size
 const median = (xs: number[]) => describe(xs)?.median ?? null
@@ -139,10 +121,13 @@ export function runAnalysis(data: AnalysisData, config: AnalysisConfig, today: s
     return g
   }
   const testable = () => groups.filter((g) => g.tested && g.n >= MIN_TESTED)
+  const pointsFrom = (gs: { label: string; items: Item[] }[], y: (i: Item) => Value = (i) => i.outcome) =>
+    gs.flatMap((g) => g.items.map((i) => ({ siteId: i.row.site_id, x: g.label, y: y(i) })))
 
   switch (chosen.method) {
     case 'describe':
       groups = [summary('all', 'All implants', items, ov.kind === 'continuous' || ov.kind === 'count')]
+      points = pointsFrom([{ label: 'All implants', items }])
       groups[0].tested = false
       break
 
@@ -151,9 +136,13 @@ export function runAnalysis(data: AnalysisData, config: AnalysisConfig, today: s
       if (factorNumeric) {
         // Groups are the outcome levels; the values compared are the factor.
         const usable = items.filter((i) => i.factor !== null).map((i) => ({ ...i, outcome: i.factor as number, factor: i.outcome }))
-        groups = groupBy(usable, factorKey, ov, labels).map((g) => summary(g.level, `${ov.label}: ${g.label}`, g.items, true))
+        const byOutcome = groupBy(usable, factorKey, ov, labels).map((g) => ({ ...g, label: `${ov.label}: ${g.label}` }))
+        groups = byOutcome.map((g) => summary(g.level, g.label, g.items, true))
+        points = pointsFrom(byOutcome)
       } else {
-        groups = groupBy(items, factorKey, fv, labels).map((g) => summary(g.level, g.label, g.items, true))
+        const byFactor = groupBy(items, factorKey, fv, labels)
+        groups = byFactor.map((g) => summary(g.level, g.label, g.items, true))
+        points = pointsFrom(byFactor)
       }
       const valuesOf = (g: GroupSummary) =>
         (factorNumeric ? items.filter((i) => String(i.outcome) === g.level).map((i) => i.factor as number)
@@ -175,7 +164,9 @@ export function runAnalysis(data: AnalysisData, config: AnalysisConfig, today: s
     }
 
     case 'categorical_by_group': {
-      groups = groupBy(items, factorKey, fv, labels).map((g) => summary(g.level, g.label, g.items, false))
+      const byFactor = groupBy(items, factorKey, fv, labels)
+      groups = byFactor.map((g) => summary(g.level, g.label, g.items, false))
+      points = pointsFrom(byFactor)
       const t = testable()
       const outcomeLevels = [...new Set(t.flatMap((g) => Object.keys(g.counts!)))]
       if (t.length >= 2 && outcomeLevels.length >= 2) {
@@ -228,6 +219,7 @@ export function runAnalysis(data: AnalysisData, config: AnalysisConfig, today: s
         const nulls = items.filter((i) => i.factor === null)
         if (nulls.length) grouped.push({ level: null, label: NOT_ASSESSED, items: nulls })
       } else grouped = groupBy(items, factorKey, fv, labels)
+      points = pointsFrom(grouped, (i) => (i.outcome as number) / MONTH_DAYS)
       groups = grouped.map((g) => ({ level: g.level, label: g.label, n: g.items.length, patients: patientsOf(g.items.map((i) => i.row)), stats: null, tested: g.level !== null && !!fv }))
       if (!fv) groups[0].tested = false
       const rowsOf = (its: Item[]): SurvivalRow[] => its.map((i) => ({ months: (i.outcome as number) / MONTH_DAYS, event: i.row.event }))
