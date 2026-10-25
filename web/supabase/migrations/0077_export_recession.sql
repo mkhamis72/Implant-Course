@@ -1,5 +1,6 @@
--- Explore clinical data, part 1b: recession (0076) in the research export. Shipped one release after 0076 because
--- the previous build's assertAllowlisted refuses columns missing from its dictionary.
+-- Explore clinical data, part 1b: recession (0076) in the research export. Kept out of the 0076 release so that
+-- recording visits never broke; until the new build is live (1-3 min) the previous build's assertAllowlisted refuses
+-- the new columns and research exports fail closed (500, nothing sent or logged). Accepted: exports are rare.
 -- A new return column needs drop + create; latest definition: 0070_research_export.sql.
 
 drop function public.research_export_visits(uuid, date, date, uuid, text, text);
