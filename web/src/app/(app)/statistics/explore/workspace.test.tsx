@@ -4,6 +4,7 @@ import type { AnalysisData } from '@/lib/analysis/rows'
 import { implantRow, radiographRow } from '@/lib/analysis/test-rows'
 import type { ExploreState } from '@/lib/analysis/url'
 
+vi.mock('./actions', () => ({ saveAnalysis: vi.fn(), deleteAnalysis: vi.fn() }))
 vi.mock('./explore-chart-loader', () => ({
   ExploreChartLoader: ({ summary }: { summary: string }) => <div data-testid="chart">{summary}</div>,
   loadPalette: async () => ({ series: ['#1', '#2'], ink: '#i', muted: '#m', line: '#l' }),
@@ -116,6 +117,19 @@ describe('ExploreWorkspace', () => {
     const hidden = Object.fromEntries([...container.querySelectorAll('input[type=hidden][form=research-filters]')]
       .map((i) => [(i as HTMLInputElement).name, (i as HTMLInputElement).value]))
     expect(hidden).toMatchObject({ f: 'jaw', o: 'failed', w: 'm12' })
+  })
+
+  it('links the print report (optionally with the alternative chart) and the data download to the current analysis', () => {
+    renderWith({ config: { factor: 'smoking', outcome: 'failed', window: 'm12', filters: [] }, view: null })
+    const print = () => screen.getByRole('link', { name: 'Print report' }).getAttribute('href')!
+    expect(print().startsWith('/statistics/explore/print?')).toBe(true)
+    expect(print()).toContain('f=smoking')
+    expect(print()).not.toContain('alt=1')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include the alternative chart' }))
+    expect(print()).toContain('alt=1')
+    const csv = screen.getByRole('link', { name: 'Download data (CSV)' }).getAttribute('href')!
+    expect(csv.startsWith('/statistics/explore/export?')).toBe(true)
+    expect(csv).toContain('o=failed')
   })
 
   it('hides the timepoint for implant-level outcomes', () => {
