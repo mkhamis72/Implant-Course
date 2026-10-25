@@ -82,3 +82,14 @@ test('the visit form and its probing grid fit a phone screen', async ({ page }) 
   await expect(page.getByLabel('Probing depth lingual')).toBeVisible();
   await expectNoSideways(page);
 });
+
+test('Explore fits the phone screen without sideways scrolling', async ({ page }) => {
+  test.setTimeout(120_000); // All courses on the local data, and the first compile of the chart route
+  await login(page, TEST_USERS.admin.email);
+  await page.goto('/statistics/explore?course=all&f=delegate&o=failed');
+  await expect(page.getByRole('heading', { level: 1, name: 'Explore clinical data' })).toBeVisible();
+  // Check once the chart and the tables are on the page, not before.
+  await expect(page.getByRole('img', { name: /Stacked bars of Implant failure by Placing delegate/ })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Statistics by group' })).toBeVisible();
+  await expectNoSideways(page);
+});

@@ -50,6 +50,20 @@ describe('runAnalysis', () => {
     expect(hasNaN(r)).toBe(false)
   })
 
+  it('gives one point per included implant, labelled by group', () => {
+    const r = runAnalysis(fixture(withEvent), { factor: 'smoking', outcome: 'bone_change', window: 'm12', filters: [] }, TODAY)
+    expect(r.points).toHaveLength(r.included)
+    expect(new Set(r.points.map((p) => p.x))).toEqual(new Set(['Never', 'Current', 'Not assessed']))
+    const s = runAnalysis(fixture(), { factor: 'smoking', outcome: 'survival', window: 'm12', filters: [] }, TODAY)
+    expect(s.points[0].y).toBeCloseTo(400 / 30.4375, 10)
+  })
+
+  it('names a person missing from the labels Unknown (deleted)', () => {
+    const data = fixture((i) => ({ placing_delegate_id: i < 6 ? 'd1' : 'gone' }))
+    const r = runAnalysis(data, { factor: 'delegate', outcome: 'failed', window: 'm12', filters: [] }, TODAY, { delegate: { d1: 'Zed' } })
+    expect(r.groups.map((g) => g.label)).toEqual(['Unknown (deleted)', 'Zed'])
+  })
+
   it('orders people by name, never by result', () => {
     const data = fixture((i) => ({ placing_delegate_id: i < 6 ? 'd1' : 'd2', event: i >= 6 && i < 9 }))
     const r = runAnalysis(data, { factor: 'delegate', outcome: 'failed', window: 'm12', filters: [] }, TODAY,

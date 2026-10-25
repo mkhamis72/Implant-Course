@@ -13,7 +13,8 @@ export function FilterForm({ filters, courses, delegates, brands, systems }: {
   systems: string[];
 }) {
   return (
-    <form className="card grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Filters">
+    // Explore adds its analysis to this GET with hidden inputs that name the form (id below), so Apply keeps it.
+    <form id="research-filters" className="card grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Filters">
       {isCompareKey(filters.compare) && <input type="hidden" name="compare" value={filters.compare} />}
       <label className="block">
         <span className="label">Course</span>

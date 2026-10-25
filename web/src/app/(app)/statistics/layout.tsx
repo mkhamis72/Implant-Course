@@ -9,6 +9,7 @@ export default async function StatisticsLayout({ children }: { children: React.R
         label="Statistics sections"
         items={[
           { href: '/statistics', label: 'Results' },
+          { href: '/statistics/explore', label: 'Explore' },
           { href: '/statistics/studies', label: 'Studies' },
           ...(profile.role === 'admin' ? [{ href: '/statistics/exports', label: 'Recent exports' }] : []),
         ]}
