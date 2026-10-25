@@ -44,15 +44,6 @@
   --color-series-4: #6b6b13;
   --color-series-5: #17262b;
   --color-series-6: #7a8790;
-  /* Explore charts (Statistics → Explore): categorical slots in fixed order, checked with the dataviz validator on
-     #ffffff (lightness, chroma, colour-blind and normal-vision separation all pass; contrast is relieved by legends
-     and the table view). Never cycled: groups past the sixth use --color-muted. */
-  --color-chart-1: #2a78d6;
-  --color-chart-2: #eb6834;
-  --color-chart-3: #1baf7a;
-  --color-chart-4: #eda100;
-  --color-chart-5: #e87ba4;
-  --color-chart-6: #008300;
   /* Navigation (sidebar, phone top bar). A company's navigation colour overrides these (src/lib/branding/css.ts). */
   --color-nav: #ffffff;
   --color-nav-ink: #17262b;
@@ -71,6 +62,16 @@
 
 :root {
   color-scheme: light;
+  /* Explore charts (Statistics → Explore): categorical slots in fixed order, checked with the dataviz validator on
+     #ffffff (lightness, chroma, colour-blind and normal-vision separation all pass; contrast is relieved by legends
+     and the table view). Never cycled: groups past the sixth use --color-muted.
+     Plain variables, not @theme: no utility class uses them, and Tailwind drops unused theme variables. */
+  --color-chart-1: #2a78d6;
+  --color-chart-2: #eb6834;
+  --color-chart-3: #1baf7a;
+  --color-chart-4: #eda100;
+  --color-chart-5: #e87ba4;
+  --color-chart-6: #008300;
 }
 
 @layer base {

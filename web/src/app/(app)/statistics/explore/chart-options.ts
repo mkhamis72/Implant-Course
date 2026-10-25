@@ -11,6 +11,11 @@ import type { Level } from '@/lib/analysis/variables'
 import { fmt } from '@/lib/analysis/wording'
 
 export type Palette = { series: string[]; ink: string; muted: string; line: string }
+
+/** The validated chart colours (globals.css --color-chart-1…6) and the text/line tokens, for when the page has none. */
+export const DEFAULT_PALETTE: Palette = {
+  series: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'], ink: '#17262b', muted: '#55666b', line: '#d9e2df',
+}
 export type ChartContext = {
   palette: Palette
   unit?: string

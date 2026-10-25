@@ -144,7 +144,7 @@ export function Underlying({ r, patients, levels }: { r: AnalysisResult; patient
   const show = (y: number | string) => (typeof y === 'number' ? fmt(y) : levels?.find((l) => l.value === y)?.label ?? y);
   return (
     <section aria-label="Underlying data" className="card space-y-2">
-      <button type="button" className="btn-secondary text-sm" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button type="button" className="btn-secondary btn text-sm" aria-expanded={open} onClick={() => setOpen(!open)}>
         {open ? 'Hide underlying data' : 'Show underlying data'}
       </button>
       {open && (

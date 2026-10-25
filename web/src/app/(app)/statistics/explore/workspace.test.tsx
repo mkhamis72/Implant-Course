@@ -94,6 +94,12 @@ describe('ExploreWorkspace', () => {
     expect(screen.queryByRole('region', { name: 'Key numbers' })).not.toBeInTheDocument()
   })
 
+  it('says no implant has a value when the filters match implants but none was measured', () => {
+    renderWith({ config: { factor: 'smoking', outcome: 'isq', window: 'm12', filters: [] }, view: null })
+    expect(screen.getByText('None of the 10 implants has a value for ISQ at follow-up at 12 months.')).toBeInTheDocument()
+    expect(screen.queryByText('No implants match these filters.')).not.toBeInTheDocument()
+  })
+
   it('names people, shows warnings and links the underlying rows to their patients', () => {
     renderWith({ config: { factor: 'delegate', outcome: 'bone_change', window: 'm12', filters: [] }, view: 'table' })
     const table = screen.getByRole('table', { name: 'Statistics by group' })

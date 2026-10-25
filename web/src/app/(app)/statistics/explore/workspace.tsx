@@ -9,13 +9,12 @@ import { runAnalysis, type AnalysisConfig } from '@/lib/analysis/run';
 import { windowLabel, type TimepointKey } from '@/lib/analysis/timepoints';
 import { exploreQuery, type ExploreState } from '@/lib/analysis/url';
 import { variable } from '@/lib/analysis/variables';
-import { chartOption, chartSummary, type Palette } from './chart-options';
+import { chartOption, chartSummary, DEFAULT_PALETTE, type Palette } from './chart-options';
 import { loadPalette } from './explore-chart-loader';
 import { FilterChips } from './filter-chips';
 import { QuestionCard } from './question-card';
 import { ChartCard, Findings, Included, KeyNumbers, Quality, StatsTable, Underlying, ViewTabs, type PatientRef } from './results';
 
-const FALLBACK: Palette = { series: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'], ink: '#17262b', muted: '#55666b', line: '#d9e2df' };
 const MAX_TRAJECTORIES = 200;
 
 export function ExploreWorkspace({ data, labels, today, initial, base, patients }: {
@@ -27,7 +26,7 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients 
   patients: Record<string, PatientRef>;
 }) {
   const [state, setState] = useState<ExploreState>(initial);
-  const [palette, setPalette] = useState<Palette>(FALLBACK);
+  const [palette, setPalette] = useState<Palette>(DEFAULT_PALETTE);
   useEffect(() => { loadPalette().then(setPalette).catch(() => {}); }, []);
 
   const update = (next: ExploreState) => {
@@ -72,10 +71,14 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients 
               `${result.implants} implants, ${result.patients} patients`, ...describeFilters(config.filters)].filter(Boolean).join(' · ')}
           </p>
           {result.included === 0 ? (
-            <section className="card space-y-2">
-              <p className="font-semibold">No implants match these filters.</p>
+            <>
+              <p className="card font-semibold">
+                {result.implants === 0
+                  ? 'No implants match these filters.'
+                  : `None of the ${result.implants} implants has a value for ${ov.label}${ov.source !== 'implant' && config.window !== 'all' ? ` at ${windowLabel(config.window).toLowerCase()}` : ''}.`}
+              </p>
               <Included r={result} />
-            </section>
+            </>
           ) : (
             <>
               <KeyNumbers r={result} />

@@ -40,7 +40,7 @@ export function FilterChips({ filters, rows, labels, onChange }: {
               onClick={() => onChange(filters.filter((x) => x.key !== f.key))}>×</button>
           </span>
         ))}
-        {!open && <button type="button" className="btn-secondary text-sm" onClick={() => setOpen(true)}>Add filter</button>}
+        {!open && <button type="button" className="btn-secondary btn text-sm" onClick={() => setOpen(true)}>Add filter</button>}
       </div>
       {open && (
         <div className="card space-y-3">
@@ -75,7 +75,7 @@ export function FilterChips({ filters, rows, labels, onChange }: {
             <button type="button" className="btn text-sm" disabled={!draft} onClick={() => { if (draft) { onChange([...filters, draft]); reset(); } }}>
               Apply filter
             </button>
-            <button type="button" className="btn-secondary text-sm" onClick={reset}>Cancel</button>
+            <button type="button" className="btn-secondary btn text-sm" onClick={reset}>Cancel</button>
           </div>
         </div>
       )}

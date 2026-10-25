@@ -91,7 +91,7 @@ export function QuestionCard({ config, onChange }: { config: AnalysisConfig; onC
           <p className="text-sm text-muted">Or start from an example:</p>
           <div className="flex flex-wrap gap-2">
             {EXAMPLES.map((ex) => (
-              <button key={`${ex.factor}-${ex.outcome}`} type="button" className="btn-secondary text-sm"
+              <button key={`${ex.factor}-${ex.outcome}`} type="button" className="btn-secondary btn text-sm"
                 onClick={() => onChange({ factor: ex.factor, outcome: ex.outcome })}>
                 {variable(ex.factor)!.label} → {variable(ex.outcome)!.label}
               </button>

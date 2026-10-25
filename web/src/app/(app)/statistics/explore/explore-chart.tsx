@@ -6,7 +6,7 @@ import { BarChart, BoxplotChart, LineChart, ScatterChart } from 'echarts/charts'
 import { DataZoomComponent, GridComponent, LegendComponent, MarkLineComponent, TooltipComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 import type { EChartsOption } from 'echarts';
-import type { Palette } from './chart-options';
+import { DEFAULT_PALETTE, type Palette } from './chart-options';
 
 registerEcharts([BarChart, BoxplotChart, LineChart, ScatterChart, DataZoomComponent, GridComponent, LegendComponent, MarkLineComponent, TooltipComponent, SVGRenderer]);
 
@@ -15,10 +15,10 @@ export function readPalette(): Palette {
   const css = getComputedStyle(document.documentElement);
   const token = (name: string) => css.getPropertyValue(name).trim();
   return {
-    series: [1, 2, 3, 4, 5, 6].map((i) => token(`--color-chart-${i}`)).filter(Boolean),
-    ink: token('--color-ink') || '#17262b',
-    muted: token('--color-muted') || '#55666b',
-    line: token('--color-line') || '#d9e2df',
+    series: DEFAULT_PALETTE.series.map((fallback, i) => token(`--color-chart-${i + 1}`) || fallback),
+    ink: token('--color-ink') || DEFAULT_PALETTE.ink,
+    muted: token('--color-muted') || DEFAULT_PALETTE.muted,
+    line: token('--color-line') || DEFAULT_PALETTE.line,
   };
 }
 

@@ -5,16 +5,19 @@ import { isCompareKey } from '@/lib/research/groups';
 type Option = { id: string; name: string };
 
 /** GET form: the filters live in the URL so every number's drill-down link can carry them. */
-export function FilterForm({ filters, courses, delegates, brands, systems }: {
+export function FilterForm({ filters, courses, delegates, brands, systems, keep = {} }: {
   filters: ResearchFilters;
   courses: Option[];
   delegates: Option[];
   brands: string[];
   systems: string[];
+  /** Other parameters the GET keeps (Explore's analysis). */
+  keep?: Record<string, string>;
 }) {
   return (
     <form className="card grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Filters">
       {isCompareKey(filters.compare) && <input type="hidden" name="compare" value={filters.compare} />}
+      {Object.entries(keep).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
       <label className="block">
         <span className="label">Course</span>
         <select className="input" name="course" defaultValue={filters.course}>
