@@ -40,15 +40,13 @@ export default async function ExplorePage({ searchParams }: { searchParams: Page
   const courseList = Object.entries(labels.course ?? {}).map(([id, name]) => ({ id, name }));
   const delegateOptions = Object.entries(labels.delegate ?? {}).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   const patients = Object.fromEntries(data.implants.map((r) => [r.site_id, { patientId: r.patient_id, fileNo: r.file_no, tooth: r.tooth }]));
-  const keep = Object.fromEntries(Object.entries(exploreParams).filter((e): e is [string, string] => !!e[1]));
 
   return (
     <div className="space-y-6">
       {header}
       <FilterForm filters={filters} courses={courseList} delegates={delegateOptions}
         brands={distinct([...data.implants.map((r) => r.brand), filters.brand])}
-        systems={distinct([...data.implants.filter((r) => !filters.brand || r.brand === filters.brand).map((r) => r.system), filters.system])}
-        keep={keep} />
+        systems={distinct([...data.implants.filter((r) => !filters.brand || r.brand === filters.brand).map((r) => r.system), filters.system])} />
       <ExploreWorkspace data={data} labels={labels} today={todayIso()} initial={parseExplore(exploreParams)}
         base={filters} patients={patients} />
     </div>

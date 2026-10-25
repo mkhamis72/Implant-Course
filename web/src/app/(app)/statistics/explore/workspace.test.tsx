@@ -109,6 +109,15 @@ describe('ExploreWorkspace', () => {
     expect(screen.getByRole('link', { name: 'F0' })).toHaveAttribute('href', '/patients/p0?tooth=16')
   })
 
+  it('keeps the current analysis in the filters form, so Apply does not bring back an old question', () => {
+    const { container } = renderWith()
+    choose('Compare by', 'jaw')
+    choose('Outcome', 'failed')
+    const hidden = Object.fromEntries([...container.querySelectorAll('input[type=hidden][form=research-filters]')]
+      .map((i) => [(i as HTMLInputElement).name, (i as HTMLInputElement).value]))
+    expect(hidden).toMatchObject({ f: 'jaw', o: 'failed', w: 'm12' })
+  })
+
   it('hides the timepoint for implant-level outcomes', () => {
     renderWith({ config: { factor: 'smoking', outcome: 'failed', window: 'm12', filters: [] }, view: null })
     expect(screen.queryByRole('combobox', { name: 'Timepoint' })).not.toBeInTheDocument()

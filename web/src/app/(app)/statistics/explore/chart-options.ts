@@ -150,6 +150,7 @@ export function chartOption(view: View, r: AnalysisResult, ctx: ChartContext): E
     }
 
     case 'km':
+      if (!r.survival?.length) return null
       return {
         ...f.base,
         legend: { top: 0, textStyle: { color: p.ink } },

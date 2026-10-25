@@ -52,14 +52,16 @@ test('Explore compares the jaws for implant failure, switches views, and restore
     await expect(table.getByRole('cell', { name: 'Maxilla', exact: true })).toBeVisible();
     await expect(table.getByRole('cell', { name: 'Mandible', exact: true })).toBeVisible();
 
+    // Apply on the research filters (a server GET) keeps the analysis chosen in the browser.
+    await admin.getByRole('button', { name: 'Apply' }).click();
+    await expect(admin).toHaveURL(/f=jaw/);
+    await expect(admin.getByRole('combobox', { name: 'Outcome' })).toHaveValue('failed');
+
     await admin.reload();
     await expect(admin.getByRole('combobox', { name: 'Compare by' })).toHaveValue('jaw');
     await expect(admin.getByRole('combobox', { name: 'Outcome' })).toHaveValue('failed');
     await expect(admin.getByRole('tab', { name: 'Table' })).toHaveAttribute('aria-selected', 'true');
 
-    // The six SQL filters reload the data but keep the analysis.
-    await admin.getByRole('button', { name: 'Apply' }).click();
-    await expect(admin).toHaveURL(/f=jaw/);
     expect(csp).toEqual([]);
   } finally {
     await adminCtx.close();

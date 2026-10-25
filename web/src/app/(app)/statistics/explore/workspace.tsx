@@ -60,8 +60,12 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients 
     palette, unit: ov?.unit, outcomeLabel: ov!.label, factorLabel: fv?.label ?? null, levels: ov?.levels, trajectories: traj,
   }) : null;
 
+  // The current analysis rides along with the research filters form (FilterForm, id research-filters).
+  const carried = [...new URLSearchParams(exploreQuery(state, {}).slice(1))];
+
   return (
     <div className="space-y-4">
+      {carried.map(([k, v]) => <input key={k} type="hidden" form="research-filters" name={k} value={v} />)}
       <QuestionCard config={config} onChange={setConfig} />
       <FilterChips filters={config.filters} rows={data.implants} labels={labels} onChange={(filters) => setConfig({ filters })} />
       {result && ov && view && (

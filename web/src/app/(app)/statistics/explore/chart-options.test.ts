@@ -88,6 +88,10 @@ describe('chartOption', () => {
     expect(series(o)[0]).toMatchObject({ type: 'line', lineStyle: { color: '#muted', width: 1 } })
   })
 
+  it('km is not a chart when there are no curves (a factor that cannot be split)', () => {
+    expect(chartOption('km', run({ factor: 'torque', outcome: 'survival' }, data(() => ({ torque_ncm: 35 }))), ctx)).toBeNull()
+  })
+
   it('summary and table are not charts', () => {
     expect(chartOption('summary', numeric, ctx)).toBeNull()
     expect(chartOption('table', numeric, ctx)).toBeNull()
