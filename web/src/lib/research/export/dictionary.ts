@@ -134,6 +134,8 @@ const PATIENTS_DICTIONARY: Record<string, DictionaryEntry> = {
 
 const BOP = (site: string): DictionaryEntry => coded(`Bleeding on probing, ${site}`, YES_NO, VISITS, 'Empty when not recorded or not attended.');
 const PROBING = (site: string): DictionaryEntry => num(`Probing depth, ${site}`, 'mm', VISITS, 'Empty when not recorded.');
+const RECESSION = (site: string): DictionaryEntry =>
+  num(`Recession, ${site}`, 'mm', VISITS, `Recession at the ${site} site (mm); empty = not measured.`);
 const FINDING = (label: string): DictionaryEntry => coded(label, YES_NO, VISITS, 'Empty when not recorded.');
 
 const VISIT_KEYS: Record<string, string> = {
@@ -162,6 +164,9 @@ const VISITS_DICTIONARY: Record<string, DictionaryEntry> = {
   bop_buccal: BOP('buccal'),
   bop_distal: BOP('distal'),
   bop_lingual: BOP('lingual'),
+  recession_facial_mm: RECESSION('facial'),
+  recession_mesial_mm: RECESSION('mesial'),
+  recession_distal_mm: RECESSION('distal'),
   isq: num('ISQ at the visit', 'ISQ', VISITS, 'Empty when not recorded.'),
   prosthesis_status: coded('Prosthesis status', labels(PROSTHESIS_LABELS), VISITS, 'Empty when not recorded.'),
   radiograph_taken: coded('Radiograph taken at the visit', YES_NO, VISITS, 'Empty when not recorded.'),
