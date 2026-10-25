@@ -1,0 +1,26 @@
+{
+  "source": "Published R output for R's own example datasets (sleep, mtcars, TeaTasting from ?fisher.test, the ?chisq.test table, the ?kruskal.test Hollander & Wolfe example). Written by hand because R is not installed locally; regenerate with scripts/research/gen-analysis-fixture.R. Hedges g is hand-computed: d = 0.8322 x (1 - 3/71).",
+  "sleep": {
+    "g1": [0.7, -1.6, -0.2, -1.2, -0.1, 3.4, 3.7, 0.8, 0.0, 2.0],
+    "g2": [1.9, 0.8, 1.1, 0.1, -0.1, 4.4, 5.5, 1.6, 4.6, 3.4]
+  },
+  "mtcars": {
+    "mpg": [21, 21, 22.8, 21.4, 18.7, 18.1, 14.3, 24.4, 22.8, 19.2, 17.8, 16.4, 17.3, 15.2, 10.4, 10.4, 14.7, 32.4, 30.4, 33.9, 21.5, 15.5, 15.2, 13.3, 19.2, 27.3, 26, 30.4, 15.8, 19.7, 15, 21.4],
+    "wt": [2.62, 2.875, 2.32, 3.215, 3.44, 3.46, 3.57, 3.19, 3.15, 3.44, 3.44, 4.07, 3.73, 3.78, 5.25, 5.424, 5.345, 2.2, 1.615, 1.835, 2.465, 3.52, 3.435, 3.84, 3.845, 1.935, 2.14, 1.513, 3.17, 2.77, 3.57, 2.78]
+  },
+  "tea": [[3, 1], [1, 3]],
+  "chisqTable": [[762, 327, 468], [484, 239, 477]],
+  "hollanderWolfe": [[2.9, 3.0, 2.5, 2.6, 3.2], [3.8, 2.7, 4.0, 2.4], [2.8, 3.4, 3.7, 2.2, 2.0]],
+  "expected": {
+    "welch": { "t": -1.8608, "df": 17.776, "p": 0.07939, "lo": -0.2054832, "hi": 3.3654832, "diff": 1.58 },
+    "mannWhitney": { "w": 25.5, "p": 0.06933 },
+    "pearson": { "r": -0.8676594, "lo": -0.9338264, "hi": -0.7440872, "p": 1.294e-10 },
+    "spearman": { "rho": -0.886422, "p": 1.488e-11 },
+    "ols": { "intercept": 37.2851, "slope": -5.3445 },
+    "fisher": { "p": 0.4857 },
+    "chiSquare": { "chisq": 30.07, "df": 2, "p": 2.954e-7 },
+    "kruskal": { "h": 0.7714, "df": 2, "p": 0.68 },
+    "hedgesG": 0.797,
+    "describeG1": { "n": 10, "mean": 0.75, "sd": 1.78901, "median": 0.35, "q1": -0.175, "q3": 1.7, "min": -1.6, "max": 3.7 }
+  }
+}
