@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
+import { describeLabelled } from './choices'
 import { applyFilters, describeFilters, NONE } from './filters'
+
+describe('describeLabelled', () => {
+  const labels = { course: { c1: 'Spring course', c2: 'Autumn course' } }
+
+  it('names courses instead of showing their ids', () => {
+    expect(describeLabelled([{ key: 'course', values: ['c1', 'c2'] }], labels)).toEqual(['Course: Spring course, Autumn course'])
+  })
+
+  it('keeps Not assessed for no course, and marks a deleted one', () => {
+    expect(describeLabelled([{ key: 'course', values: [NONE, 'gone'] }], labels)).toEqual(['Course: Not assessed, Unknown (deleted)'])
+  })
+})
 import { implantRow } from './test-rows'
 
 const rows = [

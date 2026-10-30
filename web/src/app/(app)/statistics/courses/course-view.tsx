@@ -48,15 +48,19 @@ export function CourseView({ summaries, selected }: { summaries: CourseSummary[]
   const ticked = new Set(selected.map((s) => s.id));
   return (
     <div className="space-y-6">
-      {selected.length >= 2 && (
+      {selected.length >= 1 && (
         <section className="card space-y-3">
-          <h2>Side by side</h2>
-          <p className="text-sm text-muted">Counts describe each course; they are not a ranking. Later courses have had less time for follow-up.</p>
-          {selected.some((s) => s.thin) && (
-            <p className="rounded-md bg-warn-soft p-3 text-sm text-warn">⚠ A course here has under 30 implants: read its counts as a small sample.</p>
+          <h2>{selected.length >= 2 ? 'Side by side' : selected[0].name}</h2>
+          {selected.length >= 2 && (
+            <p className="text-sm text-muted">Counts describe each course; they are not a ranking. Later courses have had less time for follow-up.</p>
           )}
-          <MetricTable label="Side-by-side comparison" summaries={selected} />
-          <Link href={courseExploreHref(selected.map((s) => s.id))} className="text-accent hover:underline">Explore these courses</Link>
+          {selected.some((s) => s.thin) && (
+            <p className="rounded-md bg-warn-soft p-3 text-sm text-warn">⚠ Under 30 implants: read these counts as a small sample.</p>
+          )}
+          <MetricTable label={selected.length >= 2 ? 'Side-by-side comparison' : `${selected[0].name} in detail`} summaries={selected} />
+          {selected.length >= 2 && (
+            <Link href={courseExploreHref(selected.map((s) => s.id))} className="text-accent hover:underline">Explore these courses</Link>
+          )}
         </section>
       )}
       {/* Keyed: a checkbox ticked by hand keeps its state across a re-render of the same route. */}
@@ -70,14 +74,11 @@ export function CourseView({ summaries, selected }: { summaries: CourseSummary[]
           {summaries.map((s) => (
             <li key={s.id} className="card flex items-start gap-3">
               <input type="checkbox" className="mt-1" name="c" value={s.id} defaultChecked={ticked.has(s.id)} aria-label={`Compare ${s.name}`} />
-              <details className="min-w-0 flex-1 space-y-3">
-                <summary className="cursor-pointer">
-                  <CourseLine summary={s} />
-                  {s.thin && <span className="ml-2 text-sm text-warn">⚠ Small sample</span>}
-                </summary>
-                <MetricTable label={`${s.name} in detail`} summaries={[s]} />
-                <Link href={courseExploreHref([s.id])} className="text-accent hover:underline">{`Explore ${s.name}`}</Link>
-              </details>
+              <div className="min-w-0 flex-1 break-words">
+                <CourseLine summary={s} />
+                {s.thin && <span className="ml-2 text-sm text-warn">⚠ Small sample</span>}
+                <Link href={courseExploreHref([s.id])} className="ml-2 text-accent hover:underline">{`Explore ${s.name}`}</Link>
+              </div>
             </li>
           ))}
         </ul>

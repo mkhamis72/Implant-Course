@@ -66,6 +66,7 @@ test('Courses compares two ticked courses and opens them in Explore', async ({ p
     await expect(admin).toHaveURL(/x_course=/);
     await expect(admin.getByRole('heading', { level: 1, name: 'Explore clinical data' })).toBeVisible();
     await expect(admin.getByRole('combobox', { name: 'Compare by' })).toHaveValue('course');
+    await expect(admin.getByText(`Course: ${nameA}, ${nameB}`).first()).toBeVisible();
   } finally {
     await adminCtx.close();
   }

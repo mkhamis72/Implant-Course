@@ -25,11 +25,18 @@ describe('CourseView', () => {
     expect(screen.getByRole('checkbox', { name: 'Compare Old' })).not.toBeChecked();
     expect(screen.getByText(/Old · .* · 2 implants · 1 patient/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Explore Old' })).toHaveAttribute('href', courseExploreHref(['c1']));
-    expect(screen.queryByRole('table', { name: 'Side-by-side comparison' })).toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  // The list must stay light however many courses there are: tables only for ticked courses.
+  it('renders no table for courses that are not ticked', () => {
+    render(<CourseView summaries={summaries} selected={[old]} />);
+    expect(screen.getAllByRole('table')).toHaveLength(1);
+    expect(screen.queryByRole('table', { name: 'New in detail' })).toBeNull();
   });
 
   it('warns on a thin course but still shows its numbers', () => {
-    render(<CourseView summaries={[old]} selected={[]} />);
+    render(<CourseView summaries={[old]} selected={[old]} />);
     expect(screen.getByText(/Small sample/)).toBeInTheDocument();
     expect(screen.getByText(/2 implants/)).toBeInTheDocument();
     expect(within(screen.getByRole('table', { name: 'Old in detail' })).getByRole('cell', { name: '2' })).toBeInTheDocument();
@@ -44,9 +51,10 @@ describe('CourseView', () => {
     expect(screen.getByText('Counts describe each course; they are not a ranking. Later courses have had less time for follow-up.')).toBeInTheDocument();
   });
 
-  it('asks for another course when one is ticked, with no table', () => {
+  it('shows one ticked course in detail and asks for another to compare', () => {
     render(<CourseView summaries={summaries} selected={[old]} />);
     expect(screen.getByText('Tick at least two courses to compare them.')).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Old in detail' })).toBeInTheDocument();
     expect(screen.queryByRole('table', { name: 'Side-by-side comparison' })).toBeNull();
   });
 

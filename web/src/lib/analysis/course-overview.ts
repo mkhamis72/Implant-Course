@@ -13,7 +13,7 @@ export type CourseSummary = {
   id: string; name: string; startDate: string | null; implants: number; patients: number; thin: boolean
   systems: Share[]; dimensions: Share[]; followUp: FollowUpWindow[]
   prosthetic: { done: number; eligible: number }
-  complications: { biological: number; mechanical: number; restorationProblems: number; implantsAffected: number }
+  complications: { biological: number; mechanical: number; implantsWithRestorationProblem: number; implantsAffected: number }
   measurements: { key: MeasurementKey; label: string; recorded: number }[]
 }
 export type MetricRow = { group: string; label: string; values: string[] }
@@ -21,6 +21,7 @@ export type MetricRow = { group: string; label: string; values: string[] }
 /** The Results page's "small sample" rule. */
 const THIN_BELOW = 30
 const NOT_RECORDED = 'Not recorded'
+const COMPLICATIONS = 'Complications (surgical not included)'
 const FOLLOW_UP_WINDOWS: TimepointKey[] = ['early', 'm3', 'm6', 'm12', 'm24']
 const MEASUREMENT_LABELS: Record<MeasurementKey, string> = {
   torque: 'Insertion torque',
@@ -100,7 +101,8 @@ function summarise(id: string, name: string, startDate: string | null, rows: Imp
     complications: {
       biological: sum((r) => r.biological_complications),
       mechanical: sum((r) => r.mechanical_complications),
-      restorationProblems: sum((r) => r.restoration_problems),
+      // Implants, not problems: the reader counts a problem once per implant of its restoration, so a sum would inflate bridges.
+      implantsWithRestorationProblem: has((r) => r.restoration_problems > 0),
       implantsAffected: has((r) => r.biological_complications + r.mechanical_complications + r.restoration_problems > 0),
     },
     measurements: (Object.keys(MEASUREMENT_LABELS) as MeasurementKey[]).map((key) => ({ key, label: MEASUREMENT_LABELS[key], recorded: recorded[key] })),
@@ -144,10 +146,11 @@ export function metricRows(summaries: CourseSummary[]): MetricRow[] {
       return w.pending > 0 ? `${ratio(w.attended, w.due)} · ${w.pending} pending` : ratio(w.attended, w.due)
     })),
     row('Prosthetic', 'Final restoration', (s) => ratio(s.prosthetic.done, s.prosthetic.eligible)),
-    row('Complications', 'Biological', (s) => String(s.complications.biological)),
-    row('Complications', 'Mechanical', (s) => String(s.complications.mechanical)),
-    row('Complications', 'Restoration problems', (s) => String(s.complications.restorationProblems)),
-    row('Complications', 'Implants with any', (s) => ratio(s.complications.implantsAffected, s.implants)),
+    // The Explore reader has no surgical count (0078), so the rows say so rather than read as every complication.
+    row(COMPLICATIONS, 'Biological', (s) => String(s.complications.biological)),
+    row(COMPLICATIONS, 'Mechanical', (s) => String(s.complications.mechanical)),
+    row(COMPLICATIONS, 'Implants with a restoration problem', (s) => ratio(s.complications.implantsWithRestorationProblem, s.implants)),
+    row(COMPLICATIONS, 'Implants with any of these', (s) => ratio(s.complications.implantsAffected, s.implants)),
     ...first.measurements.map(({ key, label }) => row('Measurements recorded', label, (s) => ratio(s.measurements.find((m) => m.key === key)!.recorded, s.implants))),
   ]
 }

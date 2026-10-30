@@ -6,7 +6,7 @@ import { ALL_COURSES, RESEARCH_FILTER_KEYS } from '@/lib/research/view';
 import { todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
 import { getBranding } from '@/lib/branding/get';
-import { describeFilters } from '@/lib/analysis/filters';
+import { describeLabelled } from '@/lib/analysis/choices';
 import { runAnalysis } from '@/lib/analysis/run';
 import { windowLabel } from '@/lib/analysis/timepoints';
 import { parseExplore } from '@/lib/analysis/url';
@@ -76,7 +76,7 @@ export default async function ExplorePrintPage({ searchParams }: { searchParams:
           `Outcome: ${ov.label}`,
           ...(timed ? [`Timepoint: ${state.config.window === 'all' ? 'All timepoints' : windowLabel(state.config.window)}`] : []),
         ]}
-        population={[...sql, ...describeFilters(state.config.filters)]}
+        population={[...sql, ...describeLabelled(state.config.filters, labels)]}
         outcomeLevels={ov.levels}
         unit={ov.unit}
         svg={main?.svg ?? null}

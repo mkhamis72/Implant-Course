@@ -33,10 +33,10 @@ export function levelLabel(v: Variable, value: string): string {
   return v.levels?.find((l) => l.value === value)?.label ?? value
 }
 
-export function describeFilters(filters: Filter[]): string[] {
+export function describeFilters(filters: Filter[], nameOf: (v: Variable, value: string) => string = levelLabel): string[] {
   return filters.map((f) => {
     const v = filterVariable(f.key)
-    if (f.values) return `${v.label}: ${f.values.map((x) => levelLabel(v, x)).join(', ')}`
+    if (f.values) return `${v.label}: ${f.values.map((x) => nameOf(v, x)).join(', ')}`
     const unit = v.unit ? ` ${v.unit}` : ''
     if (f.min !== undefined && f.max !== undefined) return `${v.label} ${f.min}–${f.max}${unit}`
     if (f.min !== undefined) return `${v.label} ≥ ${f.min}${unit}`

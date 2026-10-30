@@ -17,7 +17,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Page
     <div className="page-header">
       <div>
         <h1>Courses</h1>
-        <p className="text-muted">What each course recorded, newest first. Tick courses to see them side by side.</p>
+        <p className="text-muted">What each course recorded, newest first. Tick a course for its full counts, or several to see them side by side.</p>
       </div>
     </div>
   );

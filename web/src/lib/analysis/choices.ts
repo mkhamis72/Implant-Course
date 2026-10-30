@@ -1,7 +1,7 @@
 // Levels of a categorical variable as Explore shows them: fixed levels in their order, data-driven ones (brands,
 // people, courses) by label, "Not assessed" last. Shared by runAnalysis and the filter panel.
 
-import { levelLabel, NONE, NOT_ASSESSED } from './filters'
+import { describeFilters, levelLabel, NONE, NOT_ASSESSED, type Filter } from './filters'
 import type { ImplantRow } from './rows'
 import { sortsByLabel, variable, type Level, type Variable } from './variables'
 
@@ -12,6 +12,11 @@ export const UNKNOWN_NAME = 'Unknown (deleted)'
 const PEOPLE = new Set(['delegate', 'supervisor', 'course'])
 export function labelOf(v: Variable, value: string, labels: LevelLabels): string {
   return labels[v.key]?.[value] ?? (PEOPLE.has(v.key) ? UNKNOWN_NAME : levelLabel(v, value))
+}
+
+/** The filters in words, with names (not ids) for delegates, supervisors and courses. */
+export function describeLabelled(filters: Filter[], labels: LevelLabels): string[] {
+  return describeFilters(filters, (v, value) => (value === NONE ? NOT_ASSESSED : labelOf(v, value, labels)))
 }
 
 // Groups in display order: fixed levels in their order, data-driven ones by label; "Not assessed" last.

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { levelChoices, type LevelLabels } from '@/lib/analysis/choices';
-import { describeFilters, type Filter } from '@/lib/analysis/filters';
+import { describeLabelled, levelChoices, type LevelLabels } from '@/lib/analysis/choices';
+import type { Filter } from '@/lib/analysis/filters';
 import type { ImplantRow } from '@/lib/analysis/rows';
 import { factorChoices, variable } from '@/lib/analysis/variables';
 
@@ -19,7 +19,7 @@ export function FilterChips({ filters, rows, labels, onChange }: {
   const [values, setValues] = useState<string[]>([]);
   const [min, setMin] = useState('');
   const [max, setMax] = useState('');
-  const descriptions = describeFilters(filters);
+  const descriptions = describeLabelled(filters, labels);
   const choices = factorChoices().filter((v) => !filters.some((f) => f.key === v.key));
 
   const reset = () => { setOpen(false); setKey(''); setValues([]); setMin(''); setMax(''); };

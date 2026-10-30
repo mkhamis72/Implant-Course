@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { LevelLabels } from '@/lib/analysis/choices';
-import { applyFilters, describeFilters } from '@/lib/analysis/filters';
+import { applyFilters } from '@/lib/analysis/filters';
+import { describeLabelled, type LevelLabels } from '@/lib/analysis/choices';
 import { trajectories } from '@/lib/analysis/observations';
 import type { AnalysisData } from '@/lib/analysis/rows';
 import { runAnalysis, type AnalysisConfig } from '@/lib/analysis/run';
@@ -91,7 +91,7 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients,
         <>
           <p className="text-sm text-muted" aria-label="Current analysis">
             {[fv ? `Compare by ${fv.label}` : 'All implants', ov.label, ov.source !== 'implant' ? (config.window === 'all' ? 'All timepoints' : windowLabel(config.window)) : null,
-              `${result.implants} implants, ${result.patients} patients`, ...describeFilters(config.filters)].filter(Boolean).join(' · ')}
+              `${result.implants} implants, ${result.patients} patients`, ...describeLabelled(config.filters, labels)].filter(Boolean).join(' · ')}
           </p>
           <div className="flex flex-wrap items-center gap-3 print:hidden" aria-label="Report and export">
             <Link className="btn-secondary btn text-sm" href={`/statistics/explore/print?${query}${alt ? '&alt=1' : ''}`}>Print report</Link>

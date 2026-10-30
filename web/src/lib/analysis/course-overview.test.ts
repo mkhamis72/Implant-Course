@@ -98,7 +98,21 @@ describe('courseOverview', () => {
       implantRow({ site_id: 'b', restoration_problems: 1 }),
       implantRow({ site_id: 'c' }),
     ] })
-    expect(s.complications).toEqual({ biological: 2, mechanical: 1, restorationProblems: 1, implantsAffected: 2 })
+    expect(s.complications).toEqual({ biological: 2, mechanical: 1, implantsWithRestorationProblem: 1, implantsAffected: 2 })
+  })
+
+  // The reader counts a problem once per implant of the restoration: one problem on a bridge of three reads 1 each.
+  it('counts a restoration problem on a bridge as implants, not as three problems', () => {
+    const s = one({ ...none, implants: ['a', 'b', 'c'].map((site_id) => implantRow({ site_id, restoration_problems: 1 })) })
+    const row = metricRows([s]).find((r) => r.label === 'Implants with a restoration problem')!
+    expect(row.values).toEqual(['3 of 3'])
+    expect(metricRows([s]).some((r) => r.label === 'Restoration problems')).toBe(false)
+  })
+
+  it('says surgical complications are not in the complication rows', () => {
+    const rows = metricRows([one({ ...none, implants: [implantRow()] })])
+    expect(rows.find((r) => r.label === 'Biological')!.group).toBe('Complications (surgical not included)')
+    expect(rows.find((r) => r.label === 'Implants with any of these')!.values).toEqual(['0 of 1'])
   })
 
   it('counts each measurement once per implant', () => {
