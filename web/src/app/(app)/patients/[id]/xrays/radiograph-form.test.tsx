@@ -6,6 +6,7 @@ vi.mock('./actions', () => ({ saveRadiograph: vi.fn(), voidRadiograph: vi.fn() }
 import { RadiographForm, type XraySite } from './radiograph-form';
 import { saveRadiograph } from './actions';
 import { todayIso } from '@/lib/dates';
+import { teethForCoverage } from '@/lib/radiographs/radiographs';
 
 const sites: XraySite[] = [
   { id: 's36', tooth: 36, state: 'placed', placed_on: '2026-01-10' },
@@ -65,6 +66,52 @@ describe('RadiographForm', () => {
     expect(screen.getByLabelText('Mesial 36')).toBeTruthy();
     tick(21);
     expect(screen.queryByLabelText('Mesial 21')).toBeNull();
+  });
+
+  it('shows the tooth grid only for specific teeth', () => {
+    render(<RadiographForm patientId="p1" sites={sites} onDone={() => {}} />);
+    expect(screen.getByRole('radio', { name: 'Specific teeth' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: '36' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: 'Lower arch' }));
+    expect(screen.queryByRole('checkbox', { name: '36' })).toBeNull();
+    expect(screen.getByLabelText('Mesial 36')).toBeTruthy();
+  });
+
+  it('saves every tooth of the chosen arch', async () => {
+    render(<RadiographForm patientId="p1" sites={sites} onDone={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/^Type/), { target: { value: 'cbct' } });
+    fireEvent.change(screen.getByLabelText(/^Purpose/), { target: { value: 'planning' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Upper arch' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save X-ray' }));
+    await waitFor(() => expect(saveRadiograph).toHaveBeenCalled());
+    expect(vi.mocked(saveRadiograph).mock.calls[0][0]).toMatchObject({ teeth: teethForCoverage('upper') });
+  });
+
+  it('presets a panorama to the full mouth, which can still be changed', () => {
+    render(<RadiographForm patientId="p1" sites={sites} onDone={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/^Type/), { target: { value: 'panoramic' } });
+    expect(screen.getByRole('radio', { name: 'Full mouth' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: 'Upper arch' }));
+    expect(screen.getByRole('radio', { name: 'Upper arch' })).toBeChecked();
+  });
+
+  it('opens a saved X-ray on its coverage and keeps the teeth when switching to specific teeth', () => {
+    const r = { id: 'x1', taken_on: '2026-02-01', type: 'cbct', purpose: 'planning', teeth: teethForCoverage('lower'), link: null, notes: '', updated_at: 'v1', levels: [] } as never;
+    render(<RadiographForm patientId="p1" sites={sites} radiograph={r} onDone={() => {}} />);
+    expect(screen.getByRole('radio', { name: 'Lower arch' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: 'Specific teeth' }));
+    expect(screen.getByRole('checkbox', { name: '36' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: '21' })).not.toBeChecked();
+  });
+
+  it('refuses a coverage that drops a tooth with a bone level', async () => {
+    const r = { id: 'x1', taken_on: '2026-02-01', type: 'periapical', purpose: 'baseline', teeth: [36], link: null, notes: '', updated_at: 'v1',
+      levels: [{ site: 's36', mesial_mm: 0.5, distal_mm: null }] } as never;
+    render(<RadiographForm patientId="p1" sites={sites} radiograph={r} onDone={() => {}} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Upper arch' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save X-ray' }));
+    expect(await screen.findByText(/Clear the bone level for tooth 36/)).toBeTruthy();
+    expect(saveRadiograph).not.toHaveBeenCalled();
   });
 
   it('pre-ticks prefillTeeth', () => {

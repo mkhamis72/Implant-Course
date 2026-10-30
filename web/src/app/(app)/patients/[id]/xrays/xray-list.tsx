@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { formatDate } from '@/lib/format';
 import {
-  RADIOGRAPH_PURPOSE_LABELS, RADIOGRAPH_TYPE_LABELS, boneLevelLabel, type Radiograph,
+  RADIOGRAPH_PURPOSE_LABELS, RADIOGRAPH_TYPE_LABELS, boneLevelLabel, coverageLabel, type Radiograph,
 } from '@/lib/radiographs/radiographs';
 import { RadiographForm, type XraySite } from './radiograph-form';
 import { voidRadiograph } from './actions';
@@ -55,7 +55,7 @@ export function XrayCard({ r, patientId, sites, editable, onlySite }: {
         <span className="font-medium">{formatDate(r.taken_on)}</span>
         <span>{RADIOGRAPH_TYPE_LABELS[r.type]}</span>
         <span className="badge">{RADIOGRAPH_PURPOSE_LABELS[r.purpose]}</span>
-        <span className="text-muted">Teeth {r.teeth.join(', ')}</span>
+        <span className="text-muted">{coverageLabel(r.teeth)}</span>
         {r.link && <a href={r.link} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Open image ↗</a>}
       </div>
       {r.notes && <p className="whitespace-pre-wrap text-sm">{r.notes}</p>}

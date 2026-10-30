@@ -4,6 +4,24 @@ import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
 import { apiAs, seedDelegate, seedImplantStock, placeImplant } from './api';
 
+test('records a full-mouth panorama without ticking teeth', async ({ page }) => {
+  await login(page, TEST_USERS.organizer.email);
+  const patientId = await createPatientViaUi(page, { full_name: uniqueName('Panorama patient') });
+  await page.goto(`/patients/${patientId}/xrays`);
+  await page.getByRole('button', { name: 'Add X-ray' }).click();
+  await page.getByRole('combobox', { name: /^Type/ }).selectOption({ label: 'Panorama' });
+  await page.getByRole('combobox', { name: /^Purpose/ }).selectOption({ label: 'Planning' });
+  await expect(page.getByRole('radio', { name: 'Full mouth' })).toBeChecked();
+  await page.getByRole('button', { name: 'Save X-ray' }).click();
+  await expect(page.getByRole('button', { name: 'Save X-ray' })).toHaveCount(0);
+
+  await page.reload();
+  const card = page.getByTestId('xray');
+  await expect(card).toContainText('Panorama');
+  await expect(card).toContainText('Full mouth');
+  await expect(card).not.toContainText('Teeth');
+});
+
 test('records an X-ray with a bone level, shows it on the implant, and removes it', async ({ page }) => {
   const api = await apiAs(TEST_USERS.organizer.email);
   const stock = await seedImplantStock(api, { brand: uniqueName('Xray'), qty: 1, lot: `E2E-X${Date.now()}`, expiry: null });

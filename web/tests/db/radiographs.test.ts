@@ -349,6 +349,27 @@ describe('radiograph permissions', () => {
   });
 });
 
+describe('save_radiograph panoramic (0080)', () => {
+  it('saves a panoramic X-ray of the whole mouth, with a bone level', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const site = await s.placeAt(36);
+      const teeth = [11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48];
+      const id = await save(c, { patient: s.patient, type: 'panoramic', purpose: 'follow_up', teeth,
+        levels: [{ site, mesial_mm: 1, distal_mm: null }] });
+      const [row] = await list(c, s.patient);
+      expect(row).toMatchObject({ id, type: 'panoramic', teeth });
+    });
+  });
+
+  it('still refuses an unknown type', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      await refused(c, () => save(c, { patient: s.patient, type: 'mri', teeth: [16] }), /Choose the X-ray type/);
+    });
+  });
+});
+
 describe('save_radiograph dates against placement (0075)', () => {
   it('refuses an "other" X-ray before the first placement on its teeth; planning and implant-free teeth are fine', async () => {
     await withTx(async (c) => {
