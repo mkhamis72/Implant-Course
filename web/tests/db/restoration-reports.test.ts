@@ -153,8 +153,8 @@ describe('restored state belongs to restorations', () => {
     await withTx(async (c) => {
       const s = await setup(c);
       const fit = async (site: string) => (await c.query(
-        `select public.fit_component(p_site => $1, p_type => 'final_restoration', p_fitted_on => public.cairo_today(),
-           p_product => null, p_lot => null, p_by_delegate => $2) as id`, [site, s.delegate])).rows[0].id as string;
+        `select public.fit_component_v2(p_site => $1, p_type => 'final_restoration', p_fitted_on => public.cairo_today(),
+           p_product => null, p_lot => null, p_by_delegate => $2, p_by_organizer => null, p_notes => '', p_course => null) as id`, [site, s.delegate])).rows[0].id as string;
 
       // With a current final restoration the implant stays restored.
       const kept = await s.placeAt(36);

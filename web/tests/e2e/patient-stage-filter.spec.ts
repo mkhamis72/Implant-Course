@@ -28,8 +28,9 @@ test('filters patients by implant stage and shows the matching teeth', async ({ 
     expect(error).toBeNull();
     const product = await seedProduct(api, { type: component, brand: tag });
     const lot = await receiveStock(api, product, 1, null, null);
-    const fit = await api.rpc('fit_component', {
+    const fit = await api.rpc('fit_component_v2', {
       p_site: site, p_type: component, p_fitted_on: today, p_product: product, p_lot: lot, p_by_delegate: delegate,
+      p_by_organizer: null, p_notes: '', p_course: null,
     });
     expect(fit.error).toBeNull();
   };

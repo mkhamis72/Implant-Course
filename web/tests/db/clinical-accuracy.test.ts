@@ -78,7 +78,7 @@ describe('expiry is judged on the day of use', () => {
       const ha = await makeProduct(c, 'healing_abutment');
       const haLot = await receive(c, ha, 1, 'HA-EXP', await day(c, -5));
       await c.query(
-        "select public.fit_component(p_site => $1, p_type => 'healing_abutment', p_fitted_on => $2::date, p_product => $3, p_lot => $4, p_by_delegate => $5)",
+        "select public.fit_component_v2(p_site => $1, p_type => 'healing_abutment', p_fitted_on => $2::date, p_product => $3, p_lot => $4, p_by_delegate => $5, p_by_organizer => null, p_notes => '', p_course => null)",
         [site, await day(c, -10), ha, haLot, delegate],
       );
     });
@@ -121,7 +121,7 @@ describe('recall and history', () => {
       const ha = await makeProduct(c, 'healing_abutment');
       const haLot = await receive(c, ha, 1, 'HA-R');
       await c.query(
-        "select public.fit_component(p_site => $1, p_type => 'healing_abutment', p_fitted_on => public.cairo_today(), p_product => $2, p_lot => $3, p_by_delegate => $4)",
+        "select public.fit_component_v2(p_site => $1, p_type => 'healing_abutment', p_fitted_on => public.cairo_today(), p_product => $2, p_lot => $3, p_by_delegate => $4, p_by_organizer => null, p_notes => '', p_course => null)",
         [site, ha, haLot, fitter],
       );
       const { rows } = await c.query('select placing_delegate from public.lot_usage($1)', [haLot]);
@@ -136,7 +136,7 @@ describe('recall and history', () => {
       const lot = await receive(c, implant, 1);
       const [patient, delegate] = [await makePatient(c), await makeDelegate(c)];
       const site = await place(c, { patient, tooth: 36, product: implant, lot, delegate, supervisor: users.organizer });
-      await c.query("select public.fit_component(p_site => $1, p_type => 'cover_screw', p_fitted_on => public.cairo_today(), p_by_delegate => $2)", [site, delegate]);
+      await c.query("select public.fit_component_v2(p_site => $1, p_type => 'cover_screw', p_fitted_on => public.cairo_today(), p_by_delegate => $2, p_product => null, p_lot => null, p_by_organizer => null, p_notes => '', p_course => null)", [site, delegate]);
       await c.query("select public.record_visit($1, public.cairo_today(), null, 'Review', 'attended', 'integrated', '{}'::jsonb, '')", [site]);
       const { rows } = await c.query('select distinct table_name from public.patient_history($1) order by 1', [patient]);
       expect(rows.map((r) => r.table_name)).toEqual(expect.arrayContaining(['implant_followups', 'site_components']));
