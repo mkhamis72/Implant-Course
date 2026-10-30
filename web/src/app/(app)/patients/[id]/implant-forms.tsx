@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { availableLots } from '@/lib/inventory/lots';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { acceptsProduct } from '@/lib/inventory/components';
+import { delegatesForCourse, keepIfEnrolled } from '@/lib/inventory/enrolled';
 import { coursesForDate } from '@/lib/restorations/restorations';
 import { formatDate } from '@/lib/format';
 import {
@@ -73,6 +74,16 @@ export function Footer({ error, pending, saveLabel, onCancel }: { error: string 
 }
 
 /** Courses running on the date first, the others after. */
+/** Says why a course's delegate list is empty, with the way to fix it. */
+export function NoneEnrolled({ courseId, delegates }: { courseId: string; delegates: ChartData['delegates'] }) {
+  if (!courseId || delegates.length > 0) return null;
+  return (
+    <p className="text-sm text-warn">
+      No delegates are enrolled in this course. <Link href={`/courses/${courseId}`} className="text-accent hover:underline">Enrol them on the course page</Link>.
+    </p>
+  );
+}
+
 export function CourseOptions({ courses, date }: { courses: ChartData['courses']; date: string }) {
   const { running, others } = coursesForDate(courses, date);
   return (
@@ -297,7 +308,12 @@ export function PlaceForm({
       [key]: value,
       ...(key === 'productId' ? { lotId: '' } : {}),
       ...(key === 'placedOn' ? { lotId: keepIfUsable(data, cur.productId, cur.lotId, value) } : {}),
+      ...(key === 'courseId' ? {
+        placingDelegateId: keepIfEnrolled(data.enrollments, value, cur.placingDelegateId),
+        assistingDelegateId: keepIfEnrolled(data.enrollments, value, cur.assistingDelegateId),
+      } : {}),
     }));
+  const enrolled = delegatesForCourse(data.delegates, data.enrollments, v.courseId);
   const { error, pending, submit } = useSubmit(placeImplant, () => { onPlaced?.(); onDone(); });
   return (
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, slotId: slot?.id ?? '', ...v }); }}>
@@ -339,17 +355,18 @@ export function PlaceForm({
         ]}
       >
         <Field label="Placed by (delegate)" required>
-          <select className="input" aria-required="true" value={v.placingDelegateId} onChange={(e) => set('placingDelegateId')(e.target.value)}>
-            <option value="">Choose the delegate…</option>
-            {data.delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+          <select className="input" aria-required="true" disabled={!v.courseId} value={v.placingDelegateId} onChange={(e) => set('placingDelegateId')(e.target.value)}>
+            <option value="">{v.courseId ? 'Choose the delegate…' : 'Choose the course first'}</option>
+            {enrolled.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
           </select>
         </Field>
         <Field label="Assisted by (optional)">
-          <select className="input" value={v.assistingDelegateId} onChange={(e) => set('assistingDelegateId')(e.target.value)}>
+          <select className="input" disabled={!v.courseId} value={v.assistingDelegateId} onChange={(e) => set('assistingDelegateId')(e.target.value)}>
             <option value="">Nobody</option>
-            {data.delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+            {enrolled.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
           </select>
         </Field>
+        <NoneEnrolled courseId={v.courseId} delegates={enrolled} />
         <Field label="Supervisor" required>
           <select className="input" aria-required="true" value={v.supervisorId} onChange={(e) => set('supervisorId')(e.target.value)}>
             <option value="">Choose the supervisor…</option>
@@ -368,7 +385,7 @@ export function PlaceForm({
 export function ComponentForm({ patientId, site, data, onDone }: { patientId: string; site: ImplantSite; data: ChartData; onDone: () => void }) {
   const [v, setV] = useState({
     componentType: 'healing_abutment' as ComponentType, productId: '', lotId: '', fittedOn: data.today,
-    byDelegateId: '', byOrganizerId: data.me, notes: '',
+    byDelegateId: '', byOrganizerId: data.me, courseId: site.course_id ?? '', notes: '',
   });
   const set = (key: keyof typeof v) => (value: string) =>
     setV((cur) => ({
@@ -377,7 +394,9 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
       ...(key === 'componentType' ? { productId: '', lotId: '' } : {}),
       ...(key === 'productId' ? { lotId: '' } : {}),
       ...(key === 'fittedOn' ? { lotId: keepIfUsable(data, cur.productId, cur.lotId, value) } : {}),
+      ...(key === 'courseId' ? { byDelegateId: keepIfEnrolled(data.enrollments, value, cur.byDelegateId) } : {}),
     }));
+  const enrolled = delegatesForCourse(data.delegates, data.enrollments, v.courseId);
   const products = data.componentProducts.filter((p) => acceptsProduct(v.componentType, p.type));
   const { error, pending, submit } = useSubmit(fitComponent, onDone);
   return (
@@ -398,12 +417,19 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
       <Field label="Fitted on">
         <input className="input" type="date" min={site.placed_on ?? undefined} max={data.today} value={v.fittedOn} onChange={(e) => set('fittedOn')(e.target.value)} />
       </Field>
+      <Field label="Course">
+        <select className="input" value={v.courseId} onChange={(e) => set('courseId')(e.target.value)}>
+          <option value="">—</option>
+          <CourseOptions courses={data.courses} date={v.fittedOn} />
+        </select>
+      </Field>
       <Field label="Fitted by (delegate)">
         <select className="input" value={v.byDelegateId} onChange={(e) => set('byDelegateId')(e.target.value)}>
           <option value="">—</option>
-          {data.delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+          {enrolled.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
         </select>
       </Field>
+      <NoneEnrolled courseId={v.courseId} delegates={enrolled} />
       <Field label="Fitted by (organizer)">
         <select className="input" value={v.byOrganizerId} onChange={(e) => set('byOrganizerId')(e.target.value)}>
           <option value="">—</option>

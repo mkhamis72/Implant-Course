@@ -107,6 +107,7 @@ export const componentSchema = z
     lotId: optionalId,
     byDelegateId: optionalId,
     byOrganizerId: optionalId,
+    courseId: optionalId,
     notes: text(1000),
   })
   .refine((c) => c.productId === null || c.lotId !== null, { message: 'Choose the stock batch used.' })

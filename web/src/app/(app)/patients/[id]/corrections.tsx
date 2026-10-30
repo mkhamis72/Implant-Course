@@ -2,10 +2,11 @@
 
 import { useState, useTransition } from 'react';
 import { acceptsProduct, currentComponent } from '@/lib/inventory/components';
+import { delegatesForCourse, keepIfEnrolled, withRecordedDelegate } from '@/lib/inventory/enrolled';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, type ChartData, type ImplantSite, type LotOnHand } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
-import { CourseOptions } from './implant-forms';
+import { CourseOptions, NoneEnrolled } from './implant-forms';
 import { visitResult } from '@/lib/visits/visits';
 import { correctBatch, correctPlacement, voidComponent, voidFollowup } from './implant-actions';
 
@@ -56,10 +57,19 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
     notes: site.notes ?? '',
   });
   const set = (key: keyof typeof v) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setV((cur) => ({ ...cur, [key]: e.target.value }));
-  const delegates = withRecorded(
-    withRecorded(data.delegates, site.placing_delegate_id, site.placing?.full_name),
-    site.assisting_delegate_id,
+    setV((cur) => ({
+      ...cur,
+      [key]: e.target.value,
+      ...(key === 'courseId' ? {
+        placingDelegateId: keepIfEnrolled(data.enrollments, e.target.value, cur.placingDelegateId),
+        assistingDelegateId: keepIfEnrolled(data.enrollments, e.target.value, cur.assistingDelegateId),
+      } : {}),
+    }));
+  const enrolled = delegatesForCourse(data.delegates, data.enrollments, v.courseId);
+  const delegates = withRecordedDelegate(
+    withRecordedDelegate(enrolled, data.delegates, v.placingDelegateId, site.placing?.full_name),
+    data.delegates,
+    v.assistingDelegateId,
     site.assisting?.full_name,
   );
   const supervisors = withRecorded(data.supervisors, site.supervisor_id, site.supervisor?.full_name);
@@ -100,6 +110,7 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
           </select>
         </label>
       </div>
+      <NoneEnrolled courseId={v.courseId} delegates={delegates} />
       <label className="block">
         <span className="label">Notes</span>
         <input className="input" value={v.notes} onChange={set('notes')} />

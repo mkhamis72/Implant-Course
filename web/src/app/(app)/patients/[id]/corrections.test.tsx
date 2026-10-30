@@ -16,7 +16,7 @@ const site = {
 } as unknown as ImplantSite;
 const data = {
   lots: [], implants: [], componentProducts: [],
-  delegates: [{ id: 'd1', label: 'Dr Right' }],
+  delegates: [{ id: 'd1', label: 'Dr Right' }], enrollments: [{ course_id: 'c1', delegate_id: 'd1' }, { course_id: 'c2', delegate_id: 'd1' }],
   supervisors: [{ id: 'sup1', label: 'Prof A' }, { id: 'sup2', label: 'Prof B' }],
   courses: [
     { id: 'c1', name: 'May course', start_date: '2026-05-01', end_date: '2026-05-05' },
@@ -52,6 +52,22 @@ describe('<Corrections> placement details', () => {
   });
 
   // The chart doesn't load enrollments (Patients viewers can't read them), so the report's date-plus-enrollment
+  it('lists the course delegates, keeps a recorded active one marked as not enrolled, and clears them on a course change', () => {
+    const twoDelegates = {
+      ...data,
+      delegates: [{ id: 'd1', label: 'Dr Right' }, { id: 'd2', label: 'Dr Visitor' }],
+      enrollments: [{ course_id: 'c2', delegate_id: 'd1' }],
+    } as unknown as ChartData;
+    render(<Corrections patientId="pt" site={{ ...site, placing_delegate_id: 'd2' } as ImplantSite} data={twoDelegates} />);
+    const box = screen.getByRole('group', { name: 'Placement details' });
+    const placing = within(box).getByRole('combobox', { name: 'Placed by' });
+    expect(placing).toHaveValue('d2');
+    expect(within(placing).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose the delegate…', 'Dr Visitor (not enrolled)']);
+    fireEvent.change(within(box).getByRole('combobox', { name: 'Course' }), { target: { value: 'c2' } });
+    expect(placing).toHaveValue('');
+    expect(within(placing).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose the delegate…', 'Dr Right']);
+  });
+
   // fallback can't be computed here: a placement with no course asks for one.
   it('leaves the course empty on a placement recorded without one', () => {
     render(<Corrections patientId="pt" site={{ ...site, course_id: null } as ImplantSite} data={data} />);

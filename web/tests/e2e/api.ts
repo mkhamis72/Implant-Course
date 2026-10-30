@@ -107,6 +107,13 @@ export async function placeImplant(
   },
 ) {
   const course = a.p_course ?? (await seedRunningCourse(api, `E2E Placement course ${Date.now()}${Math.floor(Math.random() * 1000)}`));
+  // A placement needs its delegates enrolled in the course (0081).
+  for (const delegate of [a.p_placing_delegate, a.p_assisting_delegate]) {
+    if (delegate) {
+      const { error } = await api.from('enrollments').upsert({ course_id: course, delegate_id: delegate }, { onConflict: 'course_id,delegate_id', ignoreDuplicates: true });
+      if (error) throw error;
+    }
+  }
   return api.rpc('place_implant_v3', {
     p_assisting_delegate: null, p_graft: '', p_notes: '', p_slot: null, p_technique: null, ...a, p_course: course,
   });

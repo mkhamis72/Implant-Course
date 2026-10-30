@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import type { ChartData, ImplantSite, Option } from '@/lib/inventory/types';
+import { delegatesForCourse, keepIfEnrolled, withRecordedDelegate } from '@/lib/inventory/enrolled';
 import { latestDate, todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
 import {
@@ -9,7 +10,7 @@ import {
   RESTORATION_TYPES, RESTORATION_TYPE_LABELS, RETENTIONS, RETENTION_LABELS, STAGE_LABELS,
   coursesForDate, describeTeeth, isCurrent, jawOf, loadingOf, type CourseOption, type Restoration, type RestorationProblem,
 } from '@/lib/restorations/restorations';
-import { Field, Footer, useSubmit } from './implant-forms';
+import { Field, Footer, NoneEnrolled, useSubmit } from './implant-forms';
 import {
   addRestoration, recordRestorationProblem, updateRestoration, updateRestorationProblem, voidRestoration, voidRestorationProblem,
 } from './restoration-actions';
@@ -221,7 +222,8 @@ function withRecorded(options: Option[], id: string, name: string | null | undef
 function DetailsFields({ v, set, data, fittedOn, recorded }: {
   v: Details; set: (key: keyof Details) => (value: string) => void; data: ChartData; fittedOn: string; recorded?: Restoration;
 }) {
-  const delegates = withRecorded(data.delegates, v.delegateId, recorded?.delegate?.full_name);
+  const enrolled = delegatesForCourse(data.delegates, data.enrollments, v.courseId);
+  const delegates = withRecordedDelegate(enrolled, data.delegates, v.delegateId, recorded?.delegate?.full_name);
   const supervisors = withRecorded(data.supervisors, v.supervisorId, recorded?.supervisor?.full_name);
   const known: CourseOption[] = v.courseId && !data.courses.some((c) => c.id === v.courseId)
     ? [...data.courses, { id: v.courseId, name: recorded?.course?.name ?? 'Unknown course', start_date: '', end_date: '' }]
@@ -242,20 +244,11 @@ function DetailsFields({ v, set, data, fittedOn, recorded }: {
             {MATERIALS.map((x) => <option key={x} value={x}>{MATERIAL_LABELS[x]}</option>)}
           </select>
         </Field>
-        <Field label="Delegate">
-          <select className="input" value={v.delegateId} onChange={(e) => set('delegateId')(e.target.value)}>
-            <option value="">—</option>
-            {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-          </select>
-        </Field>
-        <Field label="Supervisor">
-          <select className="input" value={v.supervisorId} onChange={(e) => set('supervisorId')(e.target.value)}>
-            <option value="">—</option>
-            {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-        </Field>
         <Field label="Course">
-          <select className="input" value={v.courseId} onChange={(e) => set('courseId')(e.target.value)}>
+          <select className="input" value={v.courseId} onChange={(e) => {
+            set('courseId')(e.target.value);
+            set('delegateId')(keepIfEnrolled(data.enrollments, e.target.value, v.delegateId));
+          }}>
             <option value="">—</option>
             {running.length > 0 && (
               <optgroup label={`Running on ${formatDate(fittedOn)}`}>
@@ -269,7 +262,20 @@ function DetailsFields({ v, set, data, fittedOn, recorded }: {
             )}
           </select>
         </Field>
+        <Field label="Delegate">
+          <select className="input" value={v.delegateId} onChange={(e) => set('delegateId')(e.target.value)}>
+            <option value="">—</option>
+            {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Supervisor">
+          <select className="input" value={v.supervisorId} onChange={(e) => set('supervisorId')(e.target.value)}>
+            <option value="">—</option>
+            {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </Field>
       </div>
+      <NoneEnrolled courseId={v.courseId} delegates={delegates} />
       <Field label="Notes">
         <input className="input" value={v.notes} maxLength={1000} onChange={(e) => set('notes')(e.target.value)} />
       </Field>
