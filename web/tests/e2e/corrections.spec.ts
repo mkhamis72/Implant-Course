@@ -92,9 +92,9 @@ test('corrects the batch of a component (I7)', async ({ page }) => {
   const haRightNo = `E2E-HAR${Date.now()}`;
   const haRight = await receiveStock(s.api, haProduct, 1, haRightNo, null);
   const me = (await s.api.auth.getUser()).data.user!.id;
-  const { error } = await s.api.rpc('fit_component', {
+  const { error } = await s.api.rpc('fit_component_v2', {
     p_site: s.siteId, p_type: 'healing_abutment', p_fitted_on: new Date().toISOString().slice(0, 10),
-    p_product: haProduct, p_lot: haWrong, p_by_organizer: me,
+    p_product: haProduct, p_lot: haWrong, p_by_delegate: null, p_by_organizer: me, p_notes: '', p_course: null,
   });
   expect(error).toBeNull();
   await page.goto(`/patients/${s.patientId}?tooth=36`);

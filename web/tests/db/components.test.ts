@@ -17,8 +17,8 @@ async function placed(c: Client) {
 
 async function fit(c: Client, site: string, type: string, product: string | null, lot: string | null, by: string) {
   const { rows } = await c.query(
-    `select public.fit_component(p_site => $1, p_type => $2, p_fitted_on => current_date,
-       p_product => $3, p_lot => $4, p_by_delegate => $5) as id`,
+    `select public.fit_component_v2(p_site => $1, p_type => $2, p_fitted_on => current_date,
+       p_product => $3, p_lot => $4, p_by_delegate => $5, p_by_organizer => null, p_notes => '', p_course => null) as id`,
     [site, type, product, lot, by],
   );
   return rows[0].id as string;
@@ -69,7 +69,7 @@ describe('components', () => {
       await refused(c, () => fit(c, s.site, 'ti_base', tb, null, s.delegate), /Choose the stock batch used/);
       await refused(
         c,
-        () => c.query("select public.fit_component(p_site => $1, p_type => 'cover_screw', p_fitted_on => current_date)", [s.site]),
+        () => c.query("select public.fit_component_v2(p_site => $1, p_type => 'cover_screw', p_fitted_on => current_date, p_product => null, p_lot => null, p_by_delegate => null, p_by_organizer => null, p_notes => '', p_course => null)", [s.site]),
         /Choose who fitted the component/,
       );
     });

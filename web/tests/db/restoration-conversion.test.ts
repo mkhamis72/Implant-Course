@@ -22,8 +22,8 @@ async function setup(c: Client) {
 
 async function fit(c: Client, site: string, type: string, daysBack: number, by: string) {
   const { rows } = await c.query(
-    `select public.fit_component(p_site => $1, p_type => $2::public.component_type,
-       p_fitted_on => public.cairo_today() - $3::int, p_by_delegate => $4) as id`,
+    `select public.fit_component_v2(p_site => $1, p_type => $2::public.component_type,
+       p_fitted_on => public.cairo_today() - $3::int, p_by_delegate => $4, p_product => null, p_lot => null, p_by_organizer => null, p_notes => '', p_course => null) as id`,
     [site, type, daysBack, by],
   );
   return rows[0].id as string;

@@ -22,8 +22,8 @@ async function setup(c: Client) {
     const product = type === 'final_restoration' ? null : await makeProduct(c, type);
     const fitLot = product ? await receive(c, product, 1, `${type}-lot`) : null;
     await c.query(
-      `select public.fit_component(p_site => $1, p_type => $2, p_fitted_on => current_date,
-         p_product => $3, p_lot => $4, p_by_delegate => $5)`,
+      `select public.fit_component_v2(p_site => $1, p_type => $2, p_fitted_on => current_date,
+         p_product => $3, p_lot => $4, p_by_delegate => $5, p_by_organizer => null, p_notes => '', p_course => null)`,
       [site, type, product, fitLot, delegate],
     );
   };
