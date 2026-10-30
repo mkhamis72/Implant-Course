@@ -146,6 +146,11 @@ describe('correcting the placement details', () => {
       const helper = await makeDelegate(c, 'Zz Helper');
       await asPostgres(c);
       const sup = (await c.query("insert into public.supervisors (full_name) values ('Zz Prof') returning id")).rows[0].id;
+      await c.query(
+        `insert into public.enrollments (course_id, delegate_id)
+         select course_id, d from public.implant_sites, unnest($2::uuid[]) d where id = $1`,
+        [s.site, [right, helper]],
+      );
       await actAs(c, users.organizer);
       const before = await onHand(c, s.wrongLot);
       await correct(c, s.site, {

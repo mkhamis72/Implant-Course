@@ -18,6 +18,7 @@ async function setup(c: Client) {
   const lot = await receive(c, product, 5, 'PC-1', '2031-01-01');
   const delegate = await makeDelegate(c, 'Zz Placement Course Delegate');
   const course = await makeCourse(c, '2026-03-01', '2026-03-05');
+  await enroll(c, course, delegate);
   return { patient, product, lot, delegate, course };
 }
 
@@ -74,6 +75,7 @@ describe('placement records its course', () => {
       const s = await setup(c);
       const site = await placeV3(c, s, { tooth: 36, course: s.course });
       const other = await makeCourse(c, '2026-04-01', '2026-04-05');
+      await enroll(c, other, s.delegate);
       const correct = (course: string | null) =>
         c.query(
           `select public.correct_placement_v2(p_site => $1, p_placed_on => '2026-03-02'::date, p_placing_delegate => $2,
