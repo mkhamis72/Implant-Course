@@ -65,6 +65,15 @@ export async function place(
       ? (await asOwner(c, () => c.query('select s.course_id from public.surgery_slots w join public.sessions s on s.id = w.session_id where w.id = $1', [a.slot]))).rows[0]?.course_id
       : null)
     ?? (await asOwner(c, () => makeCourse(c)));
+  // A placement needs its delegates enrolled in the course (0081).
+  for (const delegate of [a.delegate, a.assistant]) {
+    if (delegate) {
+      await asOwner(c, () => c.query(
+        'insert into public.enrollments (course_id, delegate_id) values ($1, $2) on conflict (course_id, delegate_id) do nothing',
+        [course, delegate],
+      ));
+    }
+  }
   const { rows } = await c.query(
     `select public.place_implant_v3(
        p_patient => $1, p_tooth => $2::smallint, p_product => $3, p_lot => $4,

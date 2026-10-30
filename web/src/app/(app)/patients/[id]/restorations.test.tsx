@@ -27,7 +27,8 @@ const final: Restoration = { ...temp, id: 'r2', stage: 'final', material: 'zirco
 const data = (restorations: Restoration[], editable = true) =>
   ({
     statuses: {}, sites: [s36, s34, s16], visits: [], implants: [], componentProducts: [], lots: [], organizers: [],
-    delegates: [{ id: 'd1', label: 'Dr Delegate' }], supervisors: [{ id: 'v1', label: 'Dr Supervisor' }],
+    delegates: [{ id: 'd1', label: 'Dr Delegate' }, { id: 'd2', label: 'Dr Second' }], supervisors: [{ id: 'v1', label: 'Dr Supervisor' }],
+    enrollments: [{ course_id: 'c1', delegate_id: 'd1' }],
     courses: [{ id: 'c1', name: 'Autumn course', start_date: '2026-10-01', end_date: '2026-10-30' }],
     restorations, today: '2026-10-21', me: 'u1', editable, canReceive: false,
   }) as unknown as ChartData;
@@ -110,6 +111,26 @@ describe('<Restorations>', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add restoration' }));
     expect(screen.getByText('Replaces the final on 36')).toBeInTheDocument();
     expect(screen.getByLabelText(/Why was the final remade/)).toBeInTheDocument();
+  });
+
+  it('lists all delegates with no course, then only the enrolled ones, clearing anyone else', () => {
+    render(<Restorations site={s36} patientId="pt" data={data([final])} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit details' }));
+    const delegate = screen.getByRole('combobox', { name: 'Delegate' });
+    const names = () => within(delegate).getAllByRole('option').map((o) => o.textContent);
+    expect(names()).toEqual(['—', 'Dr Delegate', 'Dr Second']);
+    fireEvent.change(delegate, { target: { value: 'd2' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Course' }), { target: { value: 'c1' } });
+    expect(delegate).toHaveValue('');
+    expect(names()).toEqual(['—', 'Dr Delegate']);
+  });
+
+  it('keeps a recorded delegate outside the course, marked as not enrolled', () => {
+    render(<Restorations site={s36} patientId="pt" data={data([{ ...final, course_id: 'c1', delegate_id: 'd2' }])} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit details' }));
+    const delegate = screen.getByRole('combobox', { name: 'Delegate' });
+    expect(delegate).toHaveValue('d2');
+    expect(within(delegate).getByRole('option', { name: 'Dr Second (not enrolled)' })).toBeInTheDocument();
   });
 
   it('edits the details of the newest with the version it opened with, and undoes it with a reason', async () => {

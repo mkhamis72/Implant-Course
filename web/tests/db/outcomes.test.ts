@@ -314,6 +314,8 @@ describe('implant_outcomes', () => {
       const byDates = await s.placeAt(26, courseB);
       await asPostgres(c);
       await c.query('update public.implant_sites set course_id = null where id = $1', [byDates]);
+      // Placing in B needs enrollment (0081); the date match below is for a delegate who isn't enrolled there.
+      await c.query('delete from public.enrollments where course_id = $1 and delegate_id = $2', [courseB, s.delegate]);
       await actAs(c, users.organizer);
       expect(await outcome(c, inA, courseA)).toMatchObject({ course_id: courseA, placed_on: s.placedOn });
       expect(await outcome(c, inB, courseA)).toBeUndefined();

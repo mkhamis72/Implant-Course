@@ -10,7 +10,7 @@ import { ComponentForm, PlaceForm } from './implant-forms';
 const implant = { id: 'p1', type: 'implant', brand: 'Brand', system: 'S', platform: null, diameter_mm: 4, length_mm: 10, description: '' };
 const lot = { stock_lot_id: 'l1', product_id: 'p1', lot_no: 'OLD', expiry: '2030-06-09', received_on: '2030-01-01', qty_received: 1, on_hand: 1 };
 const data = {
-  today: '2030-06-10', me: 'u1', editable: true, canReceive: true, implants: [implant], lots: [lot], delegates: [], organizers: [], supervisors: [], componentProducts: [],
+  today: '2030-06-10', me: 'u1', editable: true, canReceive: true, implants: [implant], lots: [lot], delegates: [], enrollments: [], organizers: [], supervisors: [], componentProducts: [],
   courses: [
     { id: 'c1', name: 'June course', start_date: '2030-06-08', end_date: '2030-06-12' },
     { id: 'c2', name: 'Earlier course', start_date: '2030-01-01', end_date: '2030-01-05' },
@@ -127,6 +127,68 @@ describe('<PlaceForm> graft', () => {
   });
 });
 
+const enrolledData = {
+  ...data,
+  delegates: [{ id: 'd1', label: 'Dr June' }, { id: 'd2', label: 'Dr Earlier' }], organizers: [{ id: 'u1', label: 'Org' }],
+  enrollments: [{ course_id: 'c1', delegate_id: 'd1' }, { course_id: 'c2', delegate_id: 'd2' }],
+} as unknown as ChartData;
+const optionsOf = (name: RegExp) => within(screen.getByRole('combobox', { name })).getAllByRole('option').map((o) => o.textContent);
+
+describe('<PlaceForm> enrolled delegates', () => {
+  it('waits for a course, then lists only those enrolled in it for both roles', () => {
+    render(<PlaceForm patientId="pt" tooth={36} data={enrolledData} onDone={() => {}} plannedProductId="p1" />);
+    expect(screen.getByRole('combobox', { name: /Placed by/ })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: /Assisted by/ })).toBeDisabled();
+    fireEvent.change(screen.getByRole('combobox', { name: /Course/ }), { target: { value: 'c1' } });
+    expect(screen.getByRole('combobox', { name: /Placed by/ })).toBeEnabled();
+    expect(optionsOf(/Placed by/)).toEqual(['Choose the delegate…', 'Dr June']);
+    expect(optionsOf(/Assisted by/)).toEqual(['Nobody', 'Dr June']);
+  });
+
+  it('clears a delegate who is not enrolled in the newly chosen course', () => {
+    render(<PlaceForm patientId="pt" tooth={36} data={enrolledData} onDone={() => {}} plannedProductId="p1" />);
+    fireEvent.change(screen.getByRole('combobox', { name: /Course/ }), { target: { value: 'c1' } });
+    fireEvent.change(screen.getByRole('combobox', { name: /Placed by/ }), { target: { value: 'd1' } });
+    fireEvent.change(screen.getByRole('combobox', { name: /Course/ }), { target: { value: 'c2' } });
+    expect(screen.getByRole('combobox', { name: /Placed by/ })).toHaveValue('');
+  });
+
+  it('says so when a course has nobody enrolled, with a link to it', () => {
+    render(<PlaceForm patientId="pt" tooth={36} data={{ ...enrolledData, enrollments: [] }} onDone={() => {}} plannedProductId="p1" />);
+    fireEvent.change(screen.getByRole('combobox', { name: /Course/ }), { target: { value: 'c1' } });
+    expect(screen.getByText(/No delegates are enrolled in this course/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Enrol them/ })).toHaveAttribute('href', '/courses/c1');
+  });
+});
+
+describe('<ComponentForm> course', () => {
+  const site = { id: 's1', tooth: 36, state: 'placed', course_id: 'c1', components: [] } as unknown as Parameters<typeof ComponentForm>[0]['site'];
+
+  it('defaults to the implant course and lists its delegates', () => {
+    render(<ComponentForm patientId="pt" site={site} data={enrolledData} onDone={() => {}} />);
+    expect(screen.getByRole('combobox', { name: /^Course/ })).toHaveValue('c1');
+    expect(optionsOf(/Fitted by \(delegate\)/)).toEqual(['—', 'Dr June']);
+  });
+
+  it('follows a later course, clears the delegate, and sends the course', async () => {
+    const { fitComponent } = await import('./implant-actions');
+    vi.mocked(fitComponent).mockResolvedValue({});
+    render(<ComponentForm patientId="pt" site={site} data={enrolledData} onDone={() => {}} />);
+    fireEvent.change(screen.getByRole('combobox', { name: /Fitted by \(delegate\)/ }), { target: { value: 'd1' } });
+    fireEvent.change(screen.getByRole('combobox', { name: /^Course/ }), { target: { value: 'c2' } });
+    expect(screen.getByRole('combobox', { name: /Fitted by \(delegate\)/ })).toHaveValue('');
+    expect(optionsOf(/Fitted by \(delegate\)/)).toEqual(['—', 'Dr Earlier']);
+    fireEvent.click(screen.getByRole('button', { name: 'Save component' }));
+    await vi.waitFor(() => expect(vi.mocked(fitComponent)).toHaveBeenCalledWith(expect.objectContaining({ courseId: 'c2' })));
+  });
+
+  it('lists every active delegate with no course', () => {
+    render(<ComponentForm patientId="pt" site={{ ...site, course_id: null }} data={enrolledData} onDone={() => {}} />);
+    expect(screen.getByRole('combobox', { name: /^Course/ })).toHaveValue('');
+    expect(optionsOf(/Fitted by \(delegate\)/)).toEqual(['—', 'Dr June', 'Dr Earlier']);
+  });
+});
+
 describe('<ComponentForm>', () => {
   it('no longer offers a final restoration (restorations are recorded on the Restoration tab)', () => {
     const site = { id: 's1', tooth: 36, state: 'placed', components: [] } as unknown as Parameters<typeof ComponentForm>[0]['site'];
@@ -141,6 +203,7 @@ describe('<PlaceForm> course', () => {
   const full = {
     ...data,
     delegates: [{ id: 'd1', label: 'Dr Right' }], supervisors: [{ id: 'sup1', label: 'Prof A' }],
+    enrollments: [{ course_id: 'c1', delegate_id: 'd1' }, { course_id: 'c2', delegate_id: 'd1' }],
   } as unknown as ChartData;
   const fill = () => {
     fireEvent.change(screen.getByRole('combobox', { name: /Placed by/ }), { target: { value: 'd1' } });

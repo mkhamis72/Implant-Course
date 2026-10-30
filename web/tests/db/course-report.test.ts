@@ -90,6 +90,8 @@ describe('course_report', () => {
       // Older placements have no course: they are matched by date and enrollment.
       await c.query('reset role');
       await c.query('update public.implant_sites set course_id = null where patient_id = $1', [p]);
+      // Placing needs enrollment (0081); the record being tested is older than that rule.
+      await c.query('delete from public.enrollments where course_id = $1 and delegate_id = $2', [past, outsider]);
       await actAs(c, users.organizer);
       const { rows } = await c.query('select tooth, session_id from public.course_report($1) order by tooth', [past]);
       expect(rows).toEqual([{ tooth: 36, session_id: null }]);

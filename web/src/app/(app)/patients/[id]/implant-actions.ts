@@ -95,7 +95,7 @@ export async function fitComponent(input: Record<string, unknown>): Promise<Resu
   const parsed = componentSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const c = parsed.data;
-  return run(c.patientId, 'fit_component', {
+  return run(c.patientId, 'fit_component_v2', {
     p_site: c.siteId,
     p_type: c.componentType,
     p_fitted_on: c.fittedOn,
@@ -104,6 +104,7 @@ export async function fitComponent(input: Record<string, unknown>): Promise<Resu
     p_by_delegate: c.byDelegateId,
     p_by_organizer: c.byOrganizerId,
     p_notes: c.notes,
+    p_course: c.courseId,
   });
 }
 

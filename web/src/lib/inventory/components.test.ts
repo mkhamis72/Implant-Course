@@ -3,7 +3,7 @@ import { acceptsProduct, activeSite, badgesFor, currentComponent, lastFollowup }
 import type { ImplantSite, SiteComponent } from './types';
 
 const comp = (type: SiteComponent['component_type'], removed_on: string | null): SiteComponent => ({
-  id: type, component_type: type, fitted_on: '2026-01-01', removed_on, notes: '', product: null, lot: null,
+  id: type, component_type: type, fitted_on: '2026-01-01', removed_on, notes: '', product: null, lot: null, course_id: null,
   fitted_by_delegate: null, fitted_by_organizer: null, voided_at: null, voided_reason: '', stock_lot_id: null,
 });
 

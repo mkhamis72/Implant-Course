@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
-import { apiAs, receiveStock, seedDelegate, seedImplantStock, seedRunningCourse, placeImplant } from './api';
+import { apiAs, enroll, receiveStock, seedDelegate, seedImplantStock, seedRunningCourse, placeImplant } from './api';
 
 async function placedImplant(page: Page) {
   const api = await apiAs(TEST_USERS.organizer.email);
@@ -48,13 +48,14 @@ test('corrects the placement date and delegate; History names the change', async
   const rightName = uniqueName('Dr Right');
   const right = await seedDelegate(s.api, rightName);
   const courseId = await seedRunningCourse(s.api, uniqueName('Course'));
+  await enroll(s.api, courseId, right);
   await page.goto(`/patients/${s.patientId}?tooth=36`);
   await panel(page).getByRole('tab', { name: 'Corrections' }).click();
   const details = page.getByRole('group', { name: 'Placement details' });
   await details.getByLabel('Placement date').fill('2026-01-15');
-  await details.getByRole('combobox', { name: 'Placed by' }).selectOption(right);
   // Implants placed before courses were recorded have none; the correction asks for one.
   await details.getByRole('combobox', { name: 'Course' }).selectOption(courseId);
+  await details.getByRole('combobox', { name: 'Placed by' }).selectOption(right);
   await details.getByRole('button', { name: 'Save details' }).click();
   await expect(panel(page).getByRole('status')).toHaveText('Correction saved.');
   await expect(panel(page).getByTestId('site-details')).toContainText(rightName);

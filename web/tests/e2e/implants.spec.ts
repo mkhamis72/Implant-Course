@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
-import { apiAs, receiveStock, seedDelegate, seedImplantStock, seedProduct, seedRunningCourse } from './api';
+import { apiAs, enroll, receiveStock, seedDelegate, seedImplantStock, seedProduct, seedRunningCourse } from './api';
 
 async function setup(page: Page) {
   const api = await apiAs(TEST_USERS.organizer.email);
@@ -11,8 +11,9 @@ async function setup(page: Page) {
   const stock = await seedImplantStock(api, { brand, qty: 3, lot: lotNo, expiry: '2031-12-31' });
   await receiveStock(api, stock.productId, 1, `${lotNo}-OLD`, '2020-01-01');
   const delegate = uniqueName('Dr Placer');
-  await seedDelegate(api, delegate);
+  const delegateId = await seedDelegate(api, delegate);
   const courseId = await seedRunningCourse(api, uniqueName('Course'));
+  await enroll(api, courseId, delegateId);
   await login(page, TEST_USERS.organizer.email);
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Implant patient') });
   return { api, brand, lotNo, delegate, courseId, patientId, ...stock };
@@ -38,9 +39,9 @@ test('places an implant from the chart and deducts stock', async ({ page }) => {
   const batch = page.getByRole('radiogroup', { name: 'Stock batch' });
   await expect(batch.getByRole('radio')).toHaveCount(1);
   await batch.getByRole('radio', { name: `Lot ${s.lotNo} · exp 2031-12-31 · 3 left` }).check();
+  await page.getByRole('combobox', { name: 'Course' }).selectOption(s.courseId);
   await page.getByLabel('Placed by (delegate)').selectOption({ label: s.delegate });
   await page.getByRole('combobox', { name: 'Technique' }).selectOption({ label: 'Free hand' });
-  await page.getByRole('combobox', { name: 'Course' }).selectOption(s.courseId);
   await page.getByRole('button', { name: 'Save placement' }).click();
 
   await expect(page.getByRole('button', { name: 'Tooth 36, Implant placed' })).toBeVisible();
@@ -65,6 +66,20 @@ test('places an implant from the chart and deducts stock', async ({ page }) => {
   await page.goto(`/inventory/lots/${s.lotId}`);
   await expect(page.getByTestId('on-hand')).toHaveText('2');
   await expect(page.getByTestId('usage-row')).toContainText(s.delegate);
+});
+
+test('offers only the delegates enrolled in the chosen course', async ({ page }) => {
+  const s = await setup(page);
+  const outsider = uniqueName('Dr Outsider');
+  await seedDelegate(s.api, outsider);
+  await page.reload();
+  await page.getByRole('button', { name: 'Tooth 36, Present' }).click();
+  await panel(page).getByRole('button', { name: 'Place implant' }).click();
+  const placing = page.getByLabel('Placed by (delegate)');
+  await expect(placing).toBeDisabled();
+  await page.getByRole('combobox', { name: 'Course' }).selectOption(s.courseId);
+  await expect(placing.locator('option', { hasText: s.delegate })).toHaveCount(1);
+  await expect(placing.locator('option', { hasText: outsider })).toHaveCount(0);
 });
 
 test('plans an implant and cancels the plan', async ({ page }) => {
@@ -96,6 +111,7 @@ test('receives a missing size inside the placement form without losing what was 
   await page.reload(); // the chart was loaded before this product existed
   await page.getByRole('button', { name: 'Tooth 37, Present' }).click();
   await panel(page).getByRole('button', { name: 'Place implant' }).click();
+  await page.getByRole('combobox', { name: 'Course' }).selectOption(s.courseId);
   await page.getByLabel('Placed by (delegate)').selectOption({ label: s.delegate });
   await page.getByRole('combobox', { name: 'Technique' }).selectOption({ label: 'Free hand' });
   await page.getByLabel('Notes (optional)').fill('Typed before receiving');
@@ -118,7 +134,6 @@ test('receives a missing size inside the placement form without losing what was 
   await expect(page.getByLabel('Notes (optional)')).toHaveValue('Typed before receiving');
   await expect(page.getByLabel('Placed by (delegate)')).toHaveValue(/.+/);
 
-  await page.getByRole('combobox', { name: 'Course' }).selectOption(s.courseId);
   await page.getByRole('button', { name: 'Save placement' }).click();
   await expect(page.getByRole('button', { name: 'Tooth 37, Implant placed' })).toBeVisible();
   await expect(panel(page).getByTestId('site-details')).toContainText(`Lot ${lotNo}`);
@@ -138,9 +153,9 @@ async function placeOn(page: Page, s: Awaited<ReturnType<typeof setup>>, tooth: 
   await panel(page).getByRole('button', { name: 'Place implant' }).click();
   await chooseImplant(page, s.brand, 'Ø4.0 × 10 mm');
   await page.getByRole('radiogroup', { name: 'Stock batch' }).getByRole('radio').first().check();
+  await page.getByRole('combobox', { name: 'Course' }).selectOption(s.courseId);
   await page.getByLabel('Placed by (delegate)').selectOption({ label: s.delegate });
   await page.getByRole('combobox', { name: 'Technique' }).selectOption({ label: 'Free hand' });
-  await page.getByRole('combobox', { name: 'Course' }).selectOption(s.courseId);
   await page.getByRole('button', { name: 'Save placement' }).click();
   await expect(page.getByRole('button', { name: `Tooth ${tooth}, Implant placed` })).toBeVisible();
 }

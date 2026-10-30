@@ -137,6 +137,7 @@ export function ImplantFacts({ site, patientId, data }: { site: ImplantSite; pat
             {site.components.map((c) => (
               <li key={c.id} className={c.voided_at ? 'text-muted line-through' : ''}>
                 {COMPONENT_LABELS[c.component_type]} — {formatDate(c.fitted_on)}
+                {c.course_id && ` — ${data.courses.find((x) => x.id === c.course_id)?.name ?? 'Unknown course'}`}
                 {c.voided_at ? ` — undone: ${c.voided_reason}` : c.removed_on ? ` (until ${formatDate(c.removed_on)})` : ' (current)'}
               </li>
             ))}

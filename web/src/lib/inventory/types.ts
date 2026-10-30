@@ -5,6 +5,7 @@ import type { FailureReason, FailureType } from '@/lib/implants/failure';
 import type { Attendance, VisitFindings, VisitRow } from '@/lib/visits/visits';
 import type { CourseOption, Restoration } from '@/lib/restorations/restorations';
 import type { Radiograph } from '@/lib/radiographs/radiographs';
+import type { Enrollment } from './enrolled';
 
 export const PRODUCT_TYPES = [
   'implant', 'cover_screw', 'healing_abutment', 'graft', 'membrane', 'ti_base', 'multi_unit',
@@ -95,6 +96,8 @@ export type SiteComponent = {
   lot: { lot_no: string | null } | null;
   fitted_by_delegate: Person;
   fitted_by_organizer: Organizer;
+  /** Empty on older records. */
+  course_id: string | null;
   voided_at: string | null;
   voided_reason: string;
 };
@@ -162,6 +165,7 @@ export type ChartData = {
   componentProducts: Product[];
   lots: LotOnHand[];
   delegates: Option[];
+  enrollments: Enrollment[];
   organizers: Option[];
   supervisors: Option[];
   /** The patient's restorations (voided ones left out), each with its implants and live problems. */

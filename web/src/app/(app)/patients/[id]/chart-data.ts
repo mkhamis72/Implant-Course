@@ -7,6 +7,7 @@ import { productLabel } from '@/lib/inventory/labels';
 import type { ChartData, ImplantSite, LotOnHand, Product } from '@/lib/inventory/types';
 import type { ToothState } from '@/lib/patients/types';
 import type { VisitRow } from '@/lib/visits/visits';
+import type { Enrollment } from '@/lib/inventory/enrolled';
 import type { Radiograph } from '@/lib/radiographs/radiographs';
 import type { CourseOption, Restoration, RestorationProblem } from '@/lib/restorations/restorations';
 
@@ -19,7 +20,7 @@ export const SITE_SELECT = `
   assisting:delegates!implant_sites_assisting_delegate_id_fkey(full_name),
   supervisor:supervisors!implant_sites_supervisor_ref_fkey(full_name),
   components:site_components(
-    id, component_type, fitted_on, removed_on, notes, voided_at, voided_reason, stock_lot_id,
+    id, component_type, fitted_on, removed_on, notes, voided_at, voided_reason, stock_lot_id, course_id,
     product:products(*), lot:stock_lots(lot_no),
     fitted_by_delegate:delegates(full_name),
     fitted_by_organizer:profiles!site_components_fitted_by_organizer_id_fkey(full_name, email)
@@ -78,7 +79,7 @@ function toRestoration({ sites, problems, ...r }: RestorationRow): Restoration {
 export async function loadChartData(patientId: string): Promise<ChartData> {
   const supabase = await createClient();
   const me = await getCurrentProfile();
-  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs] = await Promise.all([
+  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments] = await Promise.all([
     supabase.from('tooth_status').select('tooth, status').eq('patient_id', patientId),
     supabase.from('implant_sites').select(SITE_SELECT).eq('patient_id', patientId).order('created_at'),
     supabase.from('products').select('*').eq('active', true),
@@ -91,8 +92,9 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     // Course choices for the pickers: course_options() needs View on Patients, like this page.
     supabase.rpc('course_options'),
     supabase.rpc('radiographs_for', { p_patient: patientId }),
+    supabase.from('enrollments').select('course_id, delegate_id'),
   ]);
-  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs]) {
+  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments]) {
     if (r.error) throw new Error('Could not load the chart');
   }
   const statusMap: Partial<Record<number, ToothState>> = {};
@@ -107,6 +109,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     componentProducts: all.filter((p) => p.type !== 'implant').sort(byLabel),
     lots: (lots.data ?? []) as LotOnHand[],
     delegates: (delegates.data ?? []).map((d) => ({ id: d.id as string, label: d.full_name as string })),
+    enrollments: (enrollments.data ?? []) as Enrollment[],
     organizers: (organizers.data ?? []).map((o) => ({ id: o.user_id as string, label: (o.full_name || o.email) as string })),
     supervisors: (supervisors.data ?? []).map((s) => ({ id: s.id as string, label: s.full_name as string })),
     restorations: ((restorations.data ?? []) as unknown as RestorationRow[]).map(toRestoration),
