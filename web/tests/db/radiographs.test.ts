@@ -109,7 +109,7 @@ describe('save_radiograph', () => {
       await refused(c, () => save(c, { patient: s.patient, teeth: [] }), /tooth/i);
       await refused(c, () => save(c, { patient: s.patient, teeth: [19] }), /tooth/i);
       await refused(c, () => save(c, { patient: s.patient, teeth: [36, 36] }), /tooth/i);
-      await refused(c, () => save(c, { patient: s.patient, teeth: [36], type: 'panoramic' }), /type/i);
+      await refused(c, () => save(c, { patient: s.patient, teeth: [36], type: 'mri' }), /type/i);
       await refused(c, () => save(c, { patient: s.patient, teeth: [36], purpose: 'whim' }), /purpose/i);
       await refused(c, () => save(c, { patient: s.patient, teeth: [36], notes: 'x'.repeat(1001) }), /1000/);
     });
@@ -359,13 +359,6 @@ describe('save_radiograph panoramic (0080)', () => {
         levels: [{ site, mesial_mm: 1, distal_mm: null }] });
       const [row] = await list(c, s.patient);
       expect(row).toMatchObject({ id, type: 'panoramic', teeth });
-    });
-  });
-
-  it('still refuses an unknown type', async () => {
-    await withTx(async (c) => {
-      const s = await setup(c);
-      await refused(c, () => save(c, { patient: s.patient, type: 'mri', teeth: [16] }), /Choose the X-ray type/);
     });
   });
 });
