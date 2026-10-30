@@ -16,7 +16,8 @@ test('Courses compares two ticked courses and opens them in Explore', async ({ p
   const nameA = uniqueName('Course A');
   const nameB = uniqueName('Course B');
   const courseA = await seedCourse(api, { name: nameA, start: today(), end: today() });
-  const courseB = await seedCourse(api, { name: nameB, start: today(), end: today() });
+  // Started earlier, so it lists after A (courses are newest first).
+  const courseB = await seedCourse(api, { name: nameB, start: new Date(Date.now() - 86_400_000).toISOString().slice(0, 10), end: today() });
 
   await login(page, TEST_USERS.organizer.email);
   const patientA = await createPatientViaUi(page, { full_name: uniqueName('Courses patient') });
@@ -55,7 +56,8 @@ test('Courses compares two ticked courses and opens them in Explore', async ({ p
 
     // On a phone the comparison stacks; the page itself never scrolls sideways.
     await admin.setViewportSize({ width: 360, height: 740 });
-    await expect(row('Implants').getByRole('cell').first()).toBeVisible();
+    // Stacked cells lose their table role, so this finds the cell by its data-label.
+    await expect(admin.locator('td[data-label="Measure"]', { hasText: 'Implants' }).first()).toBeVisible();
     expect(await admin.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await admin.setViewportSize({ width: 1280, height: 720 });
 
