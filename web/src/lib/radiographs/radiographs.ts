@@ -1,9 +1,32 @@
 import { z } from 'zod';
 import { isRealDate, todayIso } from '@/lib/dates';
+import { ARCH_ORDER } from '@/lib/restorations/restorations';
 
-export const RADIOGRAPH_TYPES = ['periapical', 'cbct'] as const;
+export const RADIOGRAPH_TYPES = ['periapical', 'panoramic', 'cbct'] as const;
 export type RadiographType = (typeof RADIOGRAPH_TYPES)[number];
-export const RADIOGRAPH_TYPE_LABELS: Record<RadiographType, string> = { periapical: 'Periapical', cbct: 'CBCT' };
+export const RADIOGRAPH_TYPE_LABELS: Record<RadiographType, string> = { periapical: 'Periapical', panoramic: 'Panorama', cbct: 'CBCT' };
+
+/** How much of the mouth an X-ray shows. Not stored: it is worked out from the X-ray's teeth. */
+export const XRAY_COVERAGES = ['teeth', 'upper', 'lower', 'full'] as const;
+export type XrayCoverage = (typeof XRAY_COVERAGES)[number];
+export const XRAY_COVERAGE_LABELS: Record<XrayCoverage, string> = {
+  teeth: 'Specific teeth', upper: 'Upper arch', lower: 'Lower arch', full: 'Full mouth',
+};
+
+export function teethForCoverage(coverage: Exclude<XrayCoverage, 'teeth'>): number[] {
+  const teeth = coverage === 'full' ? [...ARCH_ORDER.upper, ...ARCH_ORDER.lower] : ARCH_ORDER[coverage];
+  return [...teeth].sort((a, b) => a - b);
+}
+
+export function coverageOf(teeth: number[]): XrayCoverage {
+  const key = [...teeth].sort((a, b) => a - b).join();
+  return (['upper', 'lower', 'full'] as const).find((c) => teethForCoverage(c).join() === key) ?? 'teeth';
+}
+
+export function coverageLabel(teeth: number[]): string {
+  const coverage = coverageOf(teeth);
+  return coverage === 'teeth' ? `Teeth ${teeth.join(', ')}` : XRAY_COVERAGE_LABELS[coverage];
+}
 
 export const RADIOGRAPH_PURPOSES = ['planning', 'baseline', 'loading', 'follow_up', 'other'] as const;
 export type RadiographPurpose = (typeof RADIOGRAPH_PURPOSES)[number];

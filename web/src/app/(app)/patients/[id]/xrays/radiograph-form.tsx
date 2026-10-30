@@ -5,7 +5,8 @@ import { earliestDate, todayIso } from '@/lib/dates';
 import { ARCH_ORDER } from '@/lib/restorations/restorations';
 import {
   MEASURABLE_STATES, RADIOGRAPH_PURPOSES, RADIOGRAPH_PURPOSE_LABELS, RADIOGRAPH_TYPES, RADIOGRAPH_TYPE_LABELS,
-  BONE_LEVEL_MAX, BONE_LEVEL_MIN, type Radiograph,
+  BONE_LEVEL_MAX, BONE_LEVEL_MIN, XRAY_COVERAGES, XRAY_COVERAGE_LABELS, coverageOf, teethForCoverage,
+  type Radiograph, type XrayCoverage,
 } from '@/lib/radiographs/radiographs';
 import { Field, Footer, useSubmit } from '../implant-forms';
 import { saveRadiograph } from './actions';
@@ -24,6 +25,7 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
     link: radiograph?.link ?? '', notes: radiograph?.notes ?? '',
   });
   const [teeth, setTeeth] = useState<number[]>(radiograph?.teeth ?? prefillTeeth ?? []);
+  const [coverage, setCoverage] = useState<XrayCoverage>(() => coverageOf(teeth));
   // Only a planning X-ray may come before the implants on its teeth were placed (0075).
   const firstPlaced = v.purpose && v.purpose !== 'planning' ? earliestDate(sites.filter((s) => teeth.includes(s.tooth) && (v.purpose === 'other' || (MEASURABLE_STATES as readonly string[]).includes(s.state))).map((s) => s.placed_on)) : undefined;
   const [levels, setLevels] = useState<Record<string, string>>(() => {
@@ -47,6 +49,12 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
 
   function toggle(tooth: number) {
     setTeeth((cur) => (cur.includes(tooth) ? cur.filter((t) => t !== tooth) : [...cur, tooth]));
+  }
+
+  // Specific teeth keeps what is chosen, so a whole arch can be narrowed down tooth by tooth.
+  function chooseCoverage(next: XrayCoverage) {
+    setCoverage(next);
+    if (next !== 'teeth') setTeeth(teethForCoverage(next));
   }
 
   return (
@@ -74,7 +82,10 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
           <input className="input" type="date" aria-required="true" min={firstPlaced} max={todayIso()} value={v.takenOn} onChange={(e) => setV({ ...v, takenOn: e.target.value })} />
         </Field>
         <Field label="Type" required>
-          <select className="input" aria-required="true" value={v.type} onChange={(e) => setV({ ...v, type: e.target.value as typeof v.type })}>
+          <select className="input" aria-required="true" value={v.type} onChange={(e) => {
+            setV({ ...v, type: e.target.value as typeof v.type });
+            if (e.target.value === 'panoramic') chooseCoverage('full');
+          }}>
             <option value="">Choose…</option>
             {RADIOGRAPH_TYPES.map((t) => <option key={t} value={t}>{RADIOGRAPH_TYPE_LABELS[t]}</option>)}
           </select>
@@ -89,7 +100,15 @@ export function RadiographForm({ patientId, sites, radiograph, prefillTeeth, onD
 
       <fieldset className="space-y-2">
         <legend className="label">Teeth shown <span aria-hidden="true" className="text-bad">*</span></legend>
-        {(['upper', 'lower'] as const).map((jaw) => (
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {XRAY_COVERAGES.map((c) => (
+            <label key={c} className="flex items-center gap-1 text-sm">
+              <input type="radio" name="coverage" checked={coverage === c} onChange={() => chooseCoverage(c)} />
+              {XRAY_COVERAGE_LABELS[c]}
+            </label>
+          ))}
+        </div>
+        {coverage === 'teeth' && (['upper', 'lower'] as const).map((jaw) => (
           <div key={jaw} className="flex flex-wrap gap-1">
             {ARCH_ORDER[jaw].map((t) => (
               <label key={t} className="flex items-center gap-1 rounded border border-line px-1.5 py-1 text-sm">
