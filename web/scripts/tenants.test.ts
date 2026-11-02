@@ -28,9 +28,17 @@ describe('parseRegisterArgs', () => {
 describe('checkTenant', () => {
   const t = { supabaseUrl: 'https://a.supabase.co', anonKey: 'anon', serviceRoleKey: 'svc' };
   it('ok when the anon key and service key both work', async () => {
-    const fetchImpl = vi.fn(async () => new Response('{}', { status: 200 }));
+    const fetchImpl = vi.fn(async () => new Response('{"disable_signup":true}', { status: 200 }));
     expect(await checkTenant(t, fetchImpl as unknown as typeof fetch)).toEqual([]);
     expect(fetchImpl).toHaveBeenCalledWith('https://a.supabase.co/auth/v1/settings', { headers: { apikey: 'anon' } });
+  });
+  it('fails while Auth sign-ups are open (a pending login would go to whoever signs up with its email)', async () => {
+    for (const body of ['{"disable_signup":false}', '{}']) {
+      const fetchImpl = vi.fn(async () => new Response(body, { status: 200 }));
+      expect(await checkTenant(t, fetchImpl as unknown as typeof fetch)).toEqual([
+        'Auth sign-ups are enabled on https://a.supabase.co: turn off "Allow new users to sign up" (Authentication -> Sign In / Providers)',
+      ]);
+    }
   });
   it('reports a wrong anon key', async () => {
     const fetchImpl = vi.fn(async () => new Response('', { status: 401 }));

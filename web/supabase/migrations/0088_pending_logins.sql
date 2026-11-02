@@ -3,6 +3,10 @@
 -- handle_new_user turns it into the membership. Without a pending row (the previous app version's
 -- logins) a new login still becomes an inactive academy member through the forward sync. delete_delegate
 -- now acts on the caller's company and keeps the profile of a login another company still has.
+--
+-- WARNING: a pending row grants its company and role to ANY auth.users insert with that email, so Auth
+-- sign-ups must stay disabled in every company project ("Allow new users to sign up" off). tenant:check
+-- and the console health check fail while they are on.
 set local lock_timeout = '5s';
 
 
