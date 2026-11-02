@@ -77,6 +77,36 @@ create trigger company_members_sync_profile after insert or update on public.com
   for each row when (new.company_id = 'a7c0de00-0000-4000-8000-000000000001')
   execute function app_private.sync_profile_from_member();
 
+-- 0085's sync_member_from_profile: a profiles UPDATE now changes only an existing academy row. Once
+-- delete_user has removed someone from academy while another membership remains, a later profile write
+-- (a name or email change, mfa_setup_done, the previous version's direct writes) must not make them an
+-- academy member again. Only a new profile (INSERT) creates the row. DELETE and the depth guard as 0085.
+create or replace function app_private.sync_member_from_profile() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if pg_trigger_depth() < 3 then
+    if tg_op = 'DELETE' then
+      delete from public.company_members
+      where company_id = 'a7c0de00-0000-4000-8000-000000000001' and user_id = old.user_id;
+    elsif tg_op = 'INSERT' then
+      insert into public.company_members as m (company_id, user_id, role, active, delegate_id, mfa_setup_required)
+      values ('a7c0de00-0000-4000-8000-000000000001', new.user_id, new.role, new.active, new.delegate_id, new.mfa_setup_required)
+      on conflict (company_id, user_id) do update
+        set role = excluded.role, active = excluded.active, delegate_id = excluded.delegate_id,
+            mfa_setup_required = excluded.mfa_setup_required
+        where (m.role, m.active, m.delegate_id, m.mfa_setup_required)
+          is distinct from (excluded.role, excluded.active, excluded.delegate_id, excluded.mfa_setup_required);
+    else
+      update public.company_members m
+      set role = new.role, active = new.active, delegate_id = new.delegate_id, mfa_setup_required = new.mfa_setup_required
+      where m.company_id = 'a7c0de00-0000-4000-8000-000000000001' and m.user_id = new.user_id
+        and (m.role, m.active, m.delegate_id, m.mfa_setup_required)
+          is distinct from (new.role, new.active, new.delegate_id, new.mfa_setup_required);
+    end if;
+  end if;
+  return null;
+end $$;
+
 -- set_member_role / set_member_active: admin-only, on the caller's company. The app offers admin and
 -- organizer; a delegate login's role follows its delegate link, so it is not changed here.
 create function public.set_member_role(p_user uuid, p_role public.user_role) returns void
