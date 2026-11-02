@@ -434,13 +434,15 @@ describe('users shared with another company', () => {
     ['resetPassword', (f) => resetPassword({}, f), { user_id: id }],
     ['changeEmail', (f) => changeEmail({}, f), { user_id: id, email: 'new@example.com' }],
     ['resetTwoFactor', (f) => resetTwoFactor({}, f), { user_id: id }],
+    ['editName', (f) => editName({}, f), { user_id: id, full_name: 'New Name' }],
+    ['resendInvite', (f) => resendInvite({}, f), { user_id: id }],
   ];
   it.each(cases)('%s refuses them before any Auth call', async (_name, run, fields) => {
     sharedWithAnotherCompany.mockResolvedValue(true);
     expect(await run(form(fields))).toEqual({ error: SHARED });
     expect(sharedWithAnotherCompany).toHaveBeenCalledWith(id);
     expect(createAdminClient).not.toHaveBeenCalled();
-    for (const fn of [setTemporaryPassword, changeAuthEmail, resetAuthFactors, hasVerifiedFactor, sendEmail, rpc]) {
+    for (const fn of [setTemporaryPassword, changeAuthEmail, resetAuthFactors, hasVerifiedFactor, inviteLink, sendEmail, rpc]) {
       expect(fn).not.toHaveBeenCalled();
     }
   });

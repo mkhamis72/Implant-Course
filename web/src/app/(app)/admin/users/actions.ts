@@ -232,6 +232,8 @@ export async function editName(_prev: ActionState, formData: FormData): Promise<
   const parsed = editNameSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   if (!(await memberOfMyCompany(parsed.data.user_id))) return { error: USER_NOT_FOUND };
+  // The name lives on the profile, which the other company shows too.
+  if (await sharedWithAnotherCompany(parsed.data.user_id)) return { error: SHARED_USER };
   const supabase = await createClient();
   const { error } = await supabase.rpc('admin_set_name', { p_user: parsed.data.user_id, p_name: parsed.data.full_name });
   if (error) return { error: userMessage(error)! };
@@ -247,6 +249,7 @@ export async function resendInvite(_prev: ActionState, formData: FormData): Prom
   if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
 
   if (!(await memberOfMyCompany(userId))) return { error: USER_NOT_FOUND };
+  if (await sharedWithAnotherCompany(userId)) return { error: SHARED_USER };
 
   const invite = await inviteLink(userId);
   if ('error' in invite) return invite;

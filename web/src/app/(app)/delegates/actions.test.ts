@@ -8,6 +8,8 @@ vi.mock('@/lib/tenant/current', () => ({ currentTenant: async () => ({ slug: 'ac
 vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: 'me' })), requirePermission: vi.fn() }));
 vi.mock('@/lib/admin/create-login', () => ({ createLogin }));
 vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser }));
+const { profileRemains } = vi.hoisted(() => ({ profileRemains: vi.fn() }));
+vi.mock('@/lib/admin/same-company', () => ({ profileRemains }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('next/navigation', () => ({ redirect }));
 vi.mock('@/lib/supabase/server', () => ({
@@ -40,6 +42,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   delegateRow.mockReturnValue({ data: { id: 'd1', full_name: 'Dr D', email: 'D@Example.com' } });
   loginRow.mockReturnValue({ data: null });
+  profileRemains.mockResolvedValue(false);
 });
 
 describe('createDelegateLogin', () => {
@@ -82,6 +85,22 @@ describe('deleteDelegate', () => {
     deleteAuthUser.mockResolvedValue(null);
     await deleteDelegate({}, del());
     expect(deleteAuthUser).toHaveBeenCalledWith('u1');
+  });
+  it('keeps the sign-in account of a login another company still has', async () => {
+    rpc.mockResolvedValue({ data: 'u1', error: null });
+    profileRemains.mockResolvedValue(true);
+    await deleteDelegate({}, del());
+    expect(profileRemains).toHaveBeenCalledWith('u1');
+    expect(deleteAuthUser).not.toHaveBeenCalled();
+    expect(redirect).toHaveBeenCalledWith('/delegates');
+  });
+  it('deletes no sign-in account when the profile could not be checked', async () => {
+    rpc.mockResolvedValue({ data: 'u1', error: null });
+    profileRemains.mockResolvedValue(null);
+    expect(await deleteDelegate({}, del())).toEqual({
+      error: "The delegate was removed, but it couldn't be checked whether their sign-in account can be deleted.",
+    });
+    expect(deleteAuthUser).not.toHaveBeenCalled();
   });
   it('shows the database’s refusal and keeps everything', async () => {
     rpc.mockResolvedValue({ data: null, error: { message: 'This delegate has implant records …', hint: 'user' } });

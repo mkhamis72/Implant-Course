@@ -273,6 +273,9 @@ describe('permissions: guard rails', () => {
         'bind_my_session', 'my_session_company', 'branding_for', 'branding_logo_for',
         // One database (0087, spec §4): admin-only membership writes for the caller's bound company.
         'set_member_role', 'set_member_active',
+        // One database (0088, spec §4): admin-only login creation for the caller's bound company (a pending
+        // row for a new account, a membership for an existing one).
+        'create_pending_login', 'add_existing_member',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
