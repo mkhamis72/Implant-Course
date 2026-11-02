@@ -41,26 +41,40 @@ What the check does, in this order (the order matters):
 
 ## Restore the whole academy project
 
+> **NOT proven on a hosted project.** The local fresh-stack flow in "Check a dump" is the only verified path. The commands below follow its order but have never been run against a hosted Supabase project (ownership limits, `--clean` on live data, TLS). Re-check the real academy dump with `restore-check` before anyone relies on this.
+
 Run only when the data is damaged and the owner decides to go back to the restore point. Data written after the dump is lost.
 
 1. Suspend the company in the console so nobody writes during the restore.
-2. Get the project's Session pooler URI (Supabase dashboard, Connect). Put it in `PGURL` and keep it out of the shell history; from a docker container use `-e PGURL`, never the URL on the command line.
-3. Restore, from the folder holding the dump:
+2. Get the project's Session pooler URI (Supabase dashboard, Connect). Put it in `PGURL` and keep it out of the shell history; from a docker container use `-e PGURL`, never the URL on the command line. On Windows Git Bash set `MSYS_NO_PATHCONV=1`. A hosted project needs TLS: add `-e PGSSLMODE=verify-full -e PGSSLROOTCERT=/ca.crt -v "<path to ca.crt>:/ca.crt:ro"` to every `docker run`.
+3. Auth first (the `public` tables have foreign keys to `auth.users`). Empty the project's auth tables except `auth.schema_migrations` (not truncatable, kept as is), then restore the data with `auth.users` and `auth.sessions` first, using a `-L` list. There is no `--disable-triggers`, because the role does not own the auth tables:
 
 ```bash
 docker run --rm -e PGURL -v "<backup dir>/academy:/in:ro" postgres:17 sh -c '
-  pg_restore --dbname="$PGURL" --clean --if-exists --no-owner --no-acl --schema=public --schema=app_private /in/full.dump &&
-  pg_restore --dbname="$PGURL" --data-only --no-owner --no-acl --schema=auth /in/full.dump'
+  { pg_restore -l /in/full.dump | grep " TABLE DATA auth users ";
+    pg_restore -l /in/full.dump | grep " TABLE DATA auth sessions ";
+    pg_restore -l /in/full.dump | grep -v -e " auth schema_migrations " -e " TABLE DATA auth users " -e " TABLE DATA auth sessions "; } > /tmp/list
+  pg_restore --dbname="$PGURL" --no-owner --no-acl --data-only --schema=auth -L /tmp/list /in/full.dump'
 ```
 
-   On Windows Git Bash set `MSYS_NO_PATHCONV=1` first. A hosted project needs TLS: add `-e PGSSLMODE=verify-full -e PGSSLROOTCERT=/ca.crt -v "<path to ca.crt>:/ca.crt:ro"`.
-4. The auth restore is data only, so empty the project's auth tables (the ones the role may truncate) before it, or it fails on duplicate keys. Load `auth.users` before `auth.sessions` (see "Check a dump", step 2). Restore auth before the app schemas when the app schemas have to be recreated, because of the foreign keys to `auth.users`.
+   The truncate itself is run with psql or any client as the project's `postgres` role: `truncate <every auth table except schema_migrations> cascade` (the list comes from `pg_class` in schema `auth`, as `restore-check.ts` does).
+4. Create the schema (a `--schema` filter does not carry it), then the app schemas:
+
+```bash
+docker run --rm -e PGURL postgres:17 psql "$PGURL" -c 'create schema if not exists app_private'
+docker run --rm -e PGURL -v "<backup dir>/academy:/in:ro" postgres:17 sh -c '
+  pg_restore --dbname="$PGURL" --clean --if-exists --no-owner --no-acl --schema=public --schema=app_private /in/full.dump'
+```
+
+   Steps 3 and 4 are in that order on purpose. Of these, only the order, the truncate, the `-L` list and `create schema` are proven (locally); `--clean --if-exists` is not.
 5. Check counts: take the counts of the restored project with the same query (`countsSql()` in `web/scripts/pre-one-db-backup-lib.ts`) and compare with `counts.json`. Only auth bookkeeping may differ (see Proof status).
 6. Lift the suspension in the console and sign in to confirm.
 
 ## Restore the control project
 
-The same as above, with `--schema=public --schema=control_private` instead of `--schema=public --schema=app_private`, using `<backup dir>/control/full.dump` and `control/counts.json`. The company registry and the Vault secrets live there: after restoring, run `npm run tenant:check -- academy` (`ENV_FILE=.env.prod`) to confirm the company still resolves. Vault secret values are not in `settings.md`; if Vault was lost, re-register the company with `npm run tenant:register`.
+> **NOT proven on a hosted project, and not proven at all for the control project.** The local check was run only on the app database. The creation of `control_private` and the restore order for the control dump are untested; the local fresh-stack flow in "Check a dump" is the only verified path. Test it on a dump of the control project in a local stack first.
+
+The same steps as above, in the same order (auth, then create the schema, then the app schemas), with `control_private` instead of `app_private` (`create schema if not exists control_private`, `--schema=public --schema=control_private`), using `<backup dir>/control/full.dump` and `control/counts.json`. The company registry and the Vault secrets live there: after restoring, run `npm run tenant:check -- academy` (`ENV_FILE=.env.prod`) to confirm the company still resolves. Vault secret values are not in `settings.md`; if Vault was lost, re-register the company with `npm run tenant:register`.
 
 ## Restore the code
 
