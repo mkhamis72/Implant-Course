@@ -5,6 +5,8 @@
 -- (unique (company_id, id) where the primary key is the single column id; unique (company_id) on the
 -- singletons settings, branding and branding_logos; none on tables with any other primary key).
 -- Re-runnable: every step skips what already exists.
+set local lock_timeout = '5s';
+
 do $$
 declare
   t regclass;

@@ -2,6 +2,8 @@
 -- yet. profiles stays the source the previous app version writes; a trigger mirrors role, active,
 -- delegate link and the 2FA setup flag into academy's company_members row (spec §4). The company-aware
 -- release turns this round; the cleanup release drops the profiles columns and this trigger.
+set local lock_timeout = '5s';
+
 
 -- company_members: one row per login per company. company_id has no default: every row names its
 -- company (0084's academy default is for the tables the previous app version writes without one).
