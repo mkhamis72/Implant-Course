@@ -42,8 +42,8 @@ describe('delegate logins', () => {
         await c.query('savepoint s');
         try {
           const r = await c.query(`select count(*)::int as n from public.${tablename}`);
-          // their own profile and membership (0085); settings holds only the idle timeout and expiry alert days
-          if (['profiles', 'company_members', 'settings'].includes(tablename)) expect({ tablename, n: r.rows[0].n }).toEqual({ tablename, n: 1 });
+          // their own profile, membership (0085) and bound company (0089); settings holds only the idle timeout and expiry alert days
+          if (['profiles', 'company_members', 'settings', 'companies'].includes(tablename)) expect({ tablename, n: r.rows[0].n }).toEqual({ tablename, n: 1 });
           else if (tablename !== 'user_permissions') expect({ tablename, n: r.rows[0].n }).toEqual({ tablename, n: 0 });
         } catch (e) {
           expect((e as Error).message).toMatch(/permission denied/);

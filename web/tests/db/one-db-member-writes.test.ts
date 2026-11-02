@@ -82,9 +82,9 @@ describe('set_member_role / set_member_active (0087)', () => {
       await refused(c, () => c.query(`select public.set_member_role($1, 'admin')`, [users.target]), /Only admins can do this\./);
       await refused(c, () => c.query('select public.set_member_active($1, false)', [users.target]), /Only admins can do this\./);
 
-      await actAs(c, users.admin); // no session binding
-      await refused(c, () => c.query(`select public.set_member_role($1, 'admin')`, [users.target]), /Sign in again/);
-      await refused(c, () => c.query('select public.set_member_active($1, false)', [users.target]), /Sign in again/);
+      await actAs(c, users.admin, { session_id: crypto.randomUUID() }); // no session binding: not an admin anywhere (0089)
+      await refused(c, () => c.query(`select public.set_member_role($1, 'admin')`, [users.target]), /Only admins can do this\.|Sign in again/);
+      await refused(c, () => c.query('select public.set_member_active($1, false)', [users.target]), /Only admins can do this\.|Sign in again/);
     });
   });
 
@@ -184,8 +184,9 @@ describe('cross-company: an academy admin who is only an organizer in B (0087)',
       await refused(c, () => c.query(`select public.set_member_role($1, 'admin')`, [users.viewer]), /Only admins can do this\./);
       await refused(c, () => c.query('select public.set_member_active($1, false)', [users.viewer]), /Only admins can do this\./);
       await refused(c, () => c.query('select public.delete_user($1)', [users.viewer]), /Only an admin can remove users\./);
-      await refused(c, () => c.query('select public.admin_end_sessions($1)', [users.viewer]), /Only an admin can do this\./);
-      await refused(c, () => c.query('select public.admin_require_mfa_setup($1)', [users.viewer]), /Only an admin can do this\./);
+      // No Delegates permission in B either (0089: permissions are per company), so require_perm refuses first.
+      await refused(c, () => c.query('select public.admin_end_sessions($1)', [users.viewer]), /Only an admin can do this\.|You don't have permission/);
+      await refused(c, () => c.query('select public.admin_require_mfa_setup($1)', [users.viewer]), /Only an admin can do this\.|You don't have permission/);
       expect((await member(c, b, users.viewer)).role).toBe('organizer');
     });
   });

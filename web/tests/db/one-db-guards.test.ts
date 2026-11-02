@@ -160,7 +160,7 @@ type GuardName = keyof typeof GUARDS;
 /** Guards a later plan-3 task enables: each task removes the names it makes pass. Plan 3 ends with none. */
 const PENDING = new Set<GuardName>([
   'rls-forced', 'company-policies', 'company-id-index', 'composite-fks', 'company-uniques',
-  'definer-owner', 'no-auth-outside-app', 'anon-exec', 'permissive-needs-guard', 'tenant-definer-policies',
+  'definer-owner', 'anon-exec', 'permissive-needs-guard', 'tenant-definer-policies',
 ]);
 
 describe('one database catalog guards', () => {
@@ -174,6 +174,6 @@ describe('one database catalog guards', () => {
   it('PENDING holds only guard names, and shrinks to empty as plan 3 enables them', () => {
     expect([...PENDING].filter((n) => !(n in GUARDS))).toEqual([]);
     // Lower this as each task enables its guards; plan 3 ends at 0.
-    expect(PENDING.size).toBe(10);
+    expect(PENDING.size).toBe(9);
   });
 });

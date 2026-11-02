@@ -97,7 +97,7 @@ describe('company_members (0085)', () => {
 
   it('shows a user their own row and an admin every row, and takes no writes', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.organizer);
+      await actAs(c, users.organizer, { session_id: crypto.randomUUID() }); // unbound: only the own-row policy applies
       const own = await c.query('select user_id from public.company_members');
       expect(own.rows).toEqual([{ user_id: users.organizer }]);
       await refused(c, () => c.query(
@@ -162,7 +162,7 @@ describe('session binding (0085)', () => {
       await actAs(c, users.organizer, { session_id: SESSION });
       await refused(c, () => c.query('select app.bind_session($1)', [other]), /You do not have access to this company\./);
 
-      await actAs(c, users.organizer);
+      await actAs(c, users.organizer, { session_id: undefined }); // a JWT without a session id
       await refused(c, () => c.query('select app.bind_session($1)', [ACADEMY_ID]), /No sign-in session\./);
 
       await asPostgres(c);
