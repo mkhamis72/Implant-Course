@@ -5,6 +5,7 @@ import { Client } from 'pg';
 import { migrate } from './migrate';
 import { pgConfig } from './db';
 import { registerTenant } from './tenants';
+import { ACADEMY_COMPANY_ID } from '../src/lib/tenant/types';
 import { envFileText } from './tenant-env';
 import { isLocalHost } from './test-guard';
 
@@ -39,10 +40,12 @@ async function main() {
     await registerTenant(control, {
       slug: 'dev', name: 'Dev Academy', hosts: ['localhost'], supabaseUrl: dev.NEXT_PUBLIC_SUPABASE_URL,
       anonKey: dev.NEXT_PUBLIC_SUPABASE_ANON_KEY, serviceRoleKey: dev.SUPABASE_SERVICE_ROLE_KEY, databaseUrl: dev.DATABASE_URL,
+      companyId: ACADEMY_COMPANY_ID,
     });
     await registerTenant(control, {
       slug: 'dev2', name: 'Dev Company Two', hosts: ['tenant2.localhost'], supabaseUrl: dev2.NEXT_PUBLIC_SUPABASE_URL,
       anonKey: dev2.NEXT_PUBLIC_SUPABASE_ANON_KEY, serviceRoleKey: dev2.SUPABASE_SERVICE_ROLE_KEY, databaseUrl: dev2.DATABASE_URL,
+      companyId: ACADEMY_COMPANY_ID,
     });
   } finally {
     await control.end();

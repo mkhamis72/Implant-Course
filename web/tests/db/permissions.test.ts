@@ -268,6 +268,14 @@ describe('permissions: guard rails', () => {
         'study_letter',
         // Admin user tools (0074): the user clears their own 2FA-setup flag; checks aal2 and a verified factor itself.
         'mfa_setup_done',
+        // One database (0086, spec §3): session binding for the signed-in user (0085's membership check),
+        // and the per-company branding readers for the signed-out login page.
+        'bind_my_session', 'my_session_company', 'branding_for', 'branding_logo_for',
+        // One database (0087, spec §4): admin-only membership writes for the caller's bound company.
+        'set_member_role', 'set_member_active',
+        // One database (0088, spec §4): admin-only login creation for the caller's bound company (a pending
+        // row for a new account and its removal when Auth fails, a membership for an existing one).
+        'create_pending_login', 'add_existing_member', 'cancel_pending_login',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { currentTenant } from '@/lib/tenant/current';
 import { requirePermission } from '@/lib/auth/session';
 import { canEdit, reportAccessNote } from '@/lib/auth/permissions';
 import { formatDate } from '@/lib/format';
@@ -43,9 +44,17 @@ export default async function DelegatePage({ params }: { params: Promise<{ id: s
   if (!data) notFound();
   const delegate = data as DelegateRow;
   const isAdmin = profile.role === 'admin';
-  const { data: login } = isAdmin
-    ? await supabase.from('profiles').select('user_id, email, active').eq('delegate_id', id).maybeSingle()
+  const { companyId } = await currentTenant();
+  const { data: member } = isAdmin
+    ? await supabase
+      .from('company_members')
+      .select('user_id, active, profile:profiles(email)')
+      .eq('company_id', companyId)
+      .eq('delegate_id', id)
+      .maybeSingle()
     : { data: null };
+  const loginRow = member as unknown as { user_id: string; active: boolean; profile: { email: string } | null } | null;
+  const login = loginRow && { user_id: loginRow.user_id, active: loginRow.active, email: loginRow.profile?.email ?? '' };
   const report = (reportData ?? []) as ReportRow[];
   const restorations = (restoData ?? []) as MyRestorationRow[];
 

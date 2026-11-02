@@ -1,6 +1,6 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs, actAsBound, asPostgres } from './helpers';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -40,11 +40,11 @@ describe('company_members (0085)', () => {
 
   it('follows an admin changing role and active on profiles', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query(`update public.profiles set role = 'admin' where user_id = $1`, [users.viewer]);
       expect(await member(c, users.viewer)).toEqual([
         { company_id: ACADEMY_ID, role: 'admin', active: true, delegate_id: null, mfa_setup_required: false }]);
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('update public.profiles set active = false where user_id = $1', [users.viewer]);
       expect((await member(c, users.viewer))[0].active).toBe(false);
     });
@@ -68,7 +68,7 @@ describe('company_members (0085)', () => {
         `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-members-new@example.com') returning id`)).rows[0].id;
       expect(await member(c, id)).toEqual([
         { company_id: ACADEMY_ID, role: 'organizer', active: false, delegate_id: null, mfa_setup_required: false }]);
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('select public.delete_user($1)', [id]);
       expect(await member(c, id)).toEqual([]);
       expect((await c.query('select count(*)::int as n from public.profiles where user_id = $1', [id])).rows[0].n).toBe(0);
@@ -103,7 +103,7 @@ describe('company_members (0085)', () => {
       await refused(c, () => c.query(
         `insert into public.company_members (company_id, user_id, role, active) values ($1, $2, 'admin', true)`,
         [ACADEMY_ID, users.organizer]), /permission denied/);
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       const all = await c.query('select count(*)::int as n from public.company_members');
       await asPostgres(c);
       const total = await c.query('select count(*)::int as n from public.company_members');
@@ -148,7 +148,7 @@ describe('session binding (0085)', () => {
     });
   });
 
-  it('refuses another company, a missing session and an inactive member', async () => {
+  it('refuses another company and a missing session; binds an inactive member (0086: access still needs active)', async () => {
     await withTx(async (c) => {
       await asPostgres(c);
       const other = (await c.query(`insert into public.companies (slug, name) values ('zz-other', 'Other') returning id`)).rows[0].id;
@@ -168,7 +168,8 @@ describe('session binding (0085)', () => {
       await asPostgres(c);
       await c.query('update public.profiles set active = false where user_id = $1', [users.viewer]);
       await actAs(c, users.viewer, { session_id: '0e5e5510-0000-4000-8000-000000000002' });
-      await refused(c, () => c.query('select app.bind_session($1)', [ACADEMY_ID]), /You do not have access to this company\./);
+      await c.query('select app.bind_session($1)', [ACADEMY_ID]);
+      expect((await c.query('select app.current_company_id() as id')).rows[0].id).toBe(ACADEMY_ID);
     });
   });
 

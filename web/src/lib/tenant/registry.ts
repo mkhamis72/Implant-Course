@@ -8,7 +8,7 @@ const usesControl = () => Boolean(process.env.CONTROL_SUPABASE_URL);
 /** Neither a control project nor TENANTS_FILE: today's single project. */
 export const isSingleTenant = () => !usesControl() && !process.env.TENANTS_FILE;
 
-const publicPart = (t: StaticTenant): Tenant => ({ slug: t.slug, hosts: t.hosts, supabaseUrl: t.supabaseUrl, anonKey: t.anonKey, status: t.status });
+const publicPart = (t: StaticTenant): Tenant => ({ slug: t.slug, hosts: t.hosts, supabaseUrl: t.supabaseUrl, anonKey: t.anonKey, status: t.status, companyId: t.companyId });
 
 async function all(): Promise<Tenant[]> {
   return usesControl() ? controlTenants() : staticTenants().map(publicPart);

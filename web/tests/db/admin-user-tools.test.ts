@@ -1,6 +1,6 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs, actAsBound, asPostgres } from './helpers';
 import { setPerms } from './fixtures';
 
 const users = inject('testUsers');
@@ -46,7 +46,7 @@ describe('admin user tools: guards', () => {
 
   it('change email and reset 2FA refuse your own account; your own name is allowed', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await refused(c, () => c.query('select public.admin_change_email($1, $2)', [users.admin, 'zz-me@example.com']), SELF);
       await refused(c, () => c.query('select public.admin_require_mfa_setup($1)', [users.admin]), SELF);
       const before = (await profile(c, users.admin)).full_name;
@@ -56,7 +56,7 @@ describe('admin user tools: guards', () => {
 
   it('the flag and the email cannot be written directly, even by an admin', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await refused(
         c,
         () => c.query('update public.profiles set mfa_setup_required = true where user_id = $1', [users.target]),
@@ -74,7 +74,7 @@ describe('admin user tools: guards', () => {
 describe('admin_change_email', () => {
   it('trims, lower-cases and updates the profile; refuses duplicates and bad addresses', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('select public.admin_change_email($1, $2)', [users.target, '  Zz-New.Target@Example.COM ']);
       expect((await profile(c, users.target)).email).toBe('zz-new.target@example.com');
       await refused(
@@ -99,7 +99,7 @@ describe('admin_change_email', () => {
       const other = (
         await c.query(`insert into public.delegates (full_name, email) values ('Zz Other Delegate', 'zz-other@example.com') returning id`)
       ).rows[0].id;
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('select public.admin_change_email($1, $2)', [users.delegate, 'Zz-Delegate-New@example.com']);
       await asPostgres(c);
       const emails = await c.query('select id, email from public.delegates where id = any($1)', [[linked, other]]);
@@ -107,7 +107,7 @@ describe('admin_change_email', () => {
       expect(byId[linked]).toBe('zz-delegate-new@example.com');
       expect(byId[other]).toBe('zz-other@example.com');
       // An unlinked organizer's change touches no delegate.
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('select public.admin_change_email($1, $2)', [users.target, 'zz-target-2@example.com']);
       await asPostgres(c);
       expect((await c.query('select email from public.delegates where id = $1', [other])).rows[0].email).toBe('zz-other@example.com');
@@ -118,7 +118,7 @@ describe('admin_change_email', () => {
 describe('admin_set_name', () => {
   it('trims and accepts 1–120 characters', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('select public.admin_set_name($1, $2)', [users.target, '  Zz Renamed  ']);
       expect((await profile(c, users.target)).full_name).toBe('Zz Renamed');
       await c.query('select public.admin_set_name($1, $2)', [users.target, 'a'.repeat(120)]);
@@ -131,7 +131,7 @@ describe('admin_set_name', () => {
 describe('2FA reset flag', () => {
   it('admin_require_mfa_setup sets the flag and records an mfa_reset event', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('select public.admin_require_mfa_setup($1)', [users.target]);
       expect((await profile(c, users.target)).mfa_setup_required).toBe(true);
       const ev = await c.query('select kind, actor_id from public.admin_events where user_id = $1', [users.target]);
@@ -141,7 +141,7 @@ describe('2FA reset flag', () => {
 
   it('mfa_setup_done needs aal2 and a verified factor, then clears the flag', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('select public.admin_require_mfa_setup($1)', [users.target]);
       await actAs(c, users.target, { aal: 'aal2' });
       await refused(c, () => c.query('select public.mfa_setup_done()'), /two-factor/);
@@ -167,7 +167,7 @@ describe('2FA reset flag', () => {
       await actAs(c, users.target, { aal: 'aal2' });
       expect(await seesPatient()).toBe(true);
 
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('select public.admin_require_mfa_setup($1)', [users.target]);
       await actAs(c, users.target, { aal: 'aal2' });
       expect(await seesPatient()).toBe(false);
@@ -186,7 +186,7 @@ describe('2FA reset flag', () => {
   it('mfa_setup_done refuses a factor that survived the reset and accepts one created after it', async () => {
     await withTx(async (c) => {
       await addVerifiedFactor(c, users.target, "now() - interval '1 day'");
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('select public.admin_require_mfa_setup($1)', [users.target]);
       await actAs(c, users.target, { aal: 'aal2' });
       await refused(c, () => c.query('select public.mfa_setup_done()'), /two-factor/);
@@ -202,14 +202,14 @@ describe('2FA reset flag', () => {
     await withTx(async (c) => {
       await asPostgres(c);
       await c.query('update public.profiles set mfa_setup_required = true where user_id = $1', [users.admin]);
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       expect((await c.query('select public.is_admin() as v')).rows[0].v).toBe(false);
     });
   });
 
   it('admin_record_event records the allowed kinds only', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('select public.admin_record_event($1, $2)', [users.target, 'invite_resent']);
       await c.query('select public.admin_record_event($1, $2)', [users.target, 'email_change_incomplete']);
       await refused(c, () => c.query('select public.admin_record_event($1, $2)', [users.target, 'other']), /Unknown event/);
@@ -220,7 +220,7 @@ describe('2FA reset flag', () => {
 
   it('admin_events is readable by admins only and not writable directly', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('select public.admin_record_event($1, $2)', [users.target, 'invite_resent']);
       expect((await c.query('select 1 from public.admin_events where user_id = $1', [users.target])).rows).toHaveLength(1);
       await refused(
@@ -235,17 +235,24 @@ describe('2FA reset flag', () => {
 });
 
 describe('admin_end_sessions', () => {
-  it("removes the user's auth sessions and nobody else's", async () => {
+  it("removes the user's academy-bound auth sessions and nobody else's", async () => {
     await withTx(async (c) => {
       await asPostgres(c);
-      await c.query('insert into auth.sessions (id, user_id, created_at, updated_at) values (gen_random_uuid(), $1, now(), now())', [users.target]);
-      await c.query('insert into auth.sessions (id, user_id, created_at, updated_at) values (gen_random_uuid(), $1, now(), now())', [users.viewer]);
-      await actAs(c, users.admin);
+      const session = async (u: string) => {
+        const id = (await c.query(
+          'insert into auth.sessions (id, user_id, created_at, updated_at) values (gen_random_uuid(), $1, now(), now()) returning id',
+          [u])).rows[0].id;
+        await c.query(`insert into app.session_companies (session_id, company_id, user_id)
+                       values ($1, 'a7c0de00-0000-4000-8000-000000000001', $2)`, [id, u]);
+        return id;
+      };
+      const mine = await session(users.target);
+      const theirs = await session(users.viewer);
+      await actAsBound(c, users.admin);
       await c.query('select public.admin_end_sessions($1)', [users.target]);
       await asPostgres(c);
-      const n = async (u: string) => (await c.query('select count(*)::int as n from auth.sessions where user_id = $1', [u])).rows[0].n;
-      expect(await n(users.target)).toBe(0);
-      expect(await n(users.viewer)).toBeGreaterThan(0);
+      const { rows } = await c.query('select id from auth.sessions where id = any($1)', [[mine, theirs]]);
+      expect(rows.map((r) => r.id)).toEqual([theirs]);
     });
   });
 });
@@ -278,14 +285,14 @@ describe('admin_user_history', () => {
         [users.target, users.admin],
       );
       // Newest: an email change and a 2FA reset made now.
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await c.query('select public.admin_change_email($1, $2)', [users.target, 'zz-history@example.com']);
       await asPostgres(c);
       await c.query(
         `insert into public.admin_events (user_id, kind, actor_id, at) values ($1, 'mfa_reset', $2, now() + interval '1 minute')`,
         [users.target, users.admin],
       );
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       const { rows } = await c.query('select at, actor_name, kind from public.admin_user_history($1)', [users.target]);
       expect(rows).toHaveLength(10);
       expect(rows.slice(0, 3).map((r) => r.kind)).toEqual(['mfa_reset', 'email_changed', 'invite_resent']);

@@ -5,7 +5,8 @@ import { adminClient } from '../../scripts/users';
 import { TEST_PASSWORD, TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 
-test('a signed-in user without a profile sees "Account deactivated", not a redirect loop', async ({ page }) => {
+// No profile means no company membership (the row cascades), and sign-in refuses a non-member.
+test('a user without a profile is refused at sign-in, not sent round a redirect loop', async ({ page }) => {
   const admin = adminClient();
   const email = `icm-noprofile-${Date.now()}@example.com`;
   const { data } = await admin.auth.admin.createUser({ email, password: TEST_PASSWORD, email_confirm: true });
@@ -13,8 +14,13 @@ test('a signed-in user without a profile sees "Account deactivated", not a redir
   await pg.connect();
   try {
     await pg.query('delete from public.profiles where user_id = $1', [data.user!.id]);
-    await login(page, email);
-    await expect(page.getByRole('heading', { name: 'Account deactivated' })).toBeVisible();
+    await page.goto('/login');
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password').fill(TEST_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText('You do not have access to this company.');
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/login$/);
   } finally {
     await pg.end();
     await admin.auth.admin.deleteUser(data.user!.id);

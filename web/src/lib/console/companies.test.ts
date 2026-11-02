@@ -24,13 +24,13 @@ function companyCounting(users: number, patients: number) {
 
 describe('companyHealth', () => {
   it('reports OK with counts', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('{"disable_signup":true}', { status: 200 }));
     const h = await companyHealth(controlWith(row), 'acme', { connect: companyCounting(4, 120), fetchImpl });
     expect(h).toEqual({ problems: [], users: 4, patients: 120 });
   });
 
   it('does not report a healthy row when a count query fails', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('{"disable_signup":true}', { status: 200 }));
     const broken = (() => ({
       from: () => ({ select: () => Object.assign(Promise.resolve({ count: null, error: { message: 'permission denied' } }), { eq: () => Promise.resolve({ count: null, error: { message: 'permission denied' } }), limit: () => Promise.resolve({ data: [], error: null }) }) }),
     })) as never;

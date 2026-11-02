@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { staticTenants, ANY_HOST } from './static';
+import { ACADEMY_COMPANY_ID } from './types';
 
 const single = { NEXT_PUBLIC_SUPABASE_URL: 'https://dev.supabase.co', NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_ROLE_KEY: 'svc' };
 const file = (tenants: unknown) => () => JSON.stringify(tenants);
@@ -10,8 +11,16 @@ const local = (slug: string, hosts: string[], status = 'active') => ({
 describe('staticTenants', () => {
   it('without TENANTS_FILE: one default tenant from today\'s env vars, on any host', () => {
     expect(staticTenants(single)).toEqual([
-      { slug: 'default', hosts: [ANY_HOST], supabaseUrl: 'https://dev.supabase.co', anonKey: 'anon', serviceRoleKey: 'svc', status: 'active' },
+      { slug: 'default', hosts: [ANY_HOST], supabaseUrl: 'https://dev.supabase.co', anonKey: 'anon', serviceRoleKey: 'svc', status: 'active', companyId: ACADEMY_COMPANY_ID },
     ]);
+  });
+
+  it('a TENANTS_FILE entry without companyId gets the academy id; an explicit one is kept', () => {
+    const env = { TENANTS_FILE: 'x.json', NODE_ENV: 'development' };
+    const other = '11111111-1111-4111-8111-111111111111';
+    const [a, b] = staticTenants(env, file([local('aa', ['a.local']), { ...local('bb', ['b.local']), companyId: other }]));
+    expect(a.companyId).toBe(ACADEMY_COMPANY_ID);
+    expect(b.companyId).toBe(other);
   });
 
   it('the default tenant works without a service key (only admin actions need it)', () => {

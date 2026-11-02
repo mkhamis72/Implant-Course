@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
+import { staffOptions } from '@/lib/admin/staff';
 import { canEdit } from '@/lib/auth/permissions';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { progressOf } from '@/lib/checklists/format';
@@ -46,7 +47,7 @@ export default async function ChecklistPage({ params }: { params: Promise<{ id: 
       .eq('id', id)
       .maybeSingle(),
     // Tasks go to staff: delegate logins are not assignable (0037).
-    supabase.from('profiles').select('user_id, full_name, email').eq('active', true).in('role', ['admin', 'organizer']).order('full_name'),
+    staffOptions(supabase),
   ]);
   if (!checklist) notFound();
   const c = checklist as unknown as {
@@ -56,7 +57,7 @@ export default async function ChecklistPage({ params }: { params: Promise<{ id: 
     items: ChecklistItem[];
   };
   const items = [...c.items].sort((a, b) => a.position - b.position);
-  const options = (organizers ?? []).map((o) => ({ id: o.user_id as string, label: (o.full_name || o.email) as string }));
+  const options = organizers ?? [];
 
   return (
     <div className="max-w-3xl space-y-4">

@@ -10,11 +10,13 @@ import {
 } from '@/lib/admin/schemas';
 import { createLogin } from '@/lib/admin/create-login';
 import { userMessage } from '@/lib/db-errors';
-import { updateProblem } from '@/lib/admin/results';
 import {
   changeAuthEmail, deleteAuthUser, hasVerifiedFactor, inviteLink, resetAuthFactors, setTemporaryPassword,
 } from '@/lib/admin/auth-accounts';
-import { memberOfMyCompany, USER_NOT_FOUND } from '@/lib/admin/same-company';
+import {
+  activeInAnotherCompany, memberOfMyCompany, profileRemains, SHARED_USER, sharedWithAnotherCompany, USER_NOT_FOUND,
+} from '@/lib/admin/same-company';
+import { currentTenant } from '@/lib/tenant/current';
 import { emailChangedNotice, inviteEmail } from '@/lib/admin/notices';
 import { sendEmail } from '@/lib/email/send';
 import { getBranding } from '@/lib/branding/get';
@@ -49,11 +51,10 @@ export async function setUserRole(_prev: ActionState, formData: FormData): Promi
   const parsed = setRoleSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: 'Invalid request.' };
   if (parsed.data.user_id === me.user_id) return { error: 'You cannot change your own role.' };
+  if (!(await memberOfMyCompany(parsed.data.user_id))) return { error: USER_NOT_FOUND };
   const supabase = await createClient();
-  const problem = updateProblem(
-    await supabase.from('profiles').update({ role: parsed.data.role }).eq('user_id', parsed.data.user_id).select('user_id'),
-  );
-  if (problem) return { error: problem };
+  const { error } = await supabase.rpc('set_member_role', { p_user: parsed.data.user_id, p_role: parsed.data.role });
+  if (error) return { error: userMessage(error)! };
   revalidatePath('/admin/users');
   return { ok: 'Role updated.' };
 }
@@ -67,12 +68,15 @@ export async function setUserActive(_prev: ActionState, formData: FormData): Pro
   if (!(await memberOfMyCompany(user_id))) return { error: USER_NOT_FOUND };
 
   const supabase = await createClient();
-  const problem = updateProblem(
-    await supabase.from('profiles').update({ active }).eq('user_id', user_id).select('user_id'),
-  );
-  if (problem) return { error: problem };
+  const { error } = await supabase.rpc('set_member_active', { p_user: user_id, p_active: active });
+  if (error) return { error: userMessage(error)! };
 
-  // Ban/unban in Auth so a deactivated user cannot sign in or refresh their session.
+  // Ban/unban in Auth so a deactivated user cannot sign in or refresh their session; not while another company
+  // still has them active (this company's inactive membership already keeps them out here).
+  if (!active && (await activeInAnotherCompany(user_id))) {
+    revalidatePath('/admin/users');
+    return { ok: 'User deactivated.' };
+  }
   let admin;
   try {
     admin = await createAdminClient();
@@ -97,8 +101,14 @@ export async function removeUser(_prev: FormState, formData: FormData): Promise<
   const supabase = await createClient();
   const { error } = await supabase.rpc('delete_user', { p_user: id.data });
   if (error) return { error: userMessage(error)! };
-  const authError = await deleteAuthUser(id.data);
   revalidatePath('/admin/users');
+  // delete_user keeps the profile of someone another company still has: their sign-in stays too.
+  const remains = await profileRemains(id.data);
+  if (remains === null) {
+    return { error: "The user was removed from this company, but it couldn't be checked whether their sign-in account can be deleted." };
+  }
+  if (remains) return { ok: 'User removed.' };
+  const authError = await deleteAuthUser(id.data);
   return authError ? { error: authError } : { ok: 'User removed.' };
 }
 
@@ -109,6 +119,7 @@ export async function resetPassword(_prev: ActionState, formData: FormData): Pro
   if (userId === me.user_id) return { error: 'Change your own password under Account security.' };
   if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
   if (!(await memberOfMyCompany(userId))) return { error: USER_NOT_FOUND };
+  if (await sharedWithAnotherCompany(userId)) return { error: SHARED_USER };
   const result = await setTemporaryPassword(userId);
   if ('error' in result) return result;
   return { ok: 'New one-time password set.', password: result.password };
@@ -141,6 +152,7 @@ export async function changeEmail(_prev: ActionState, formData: FormData): Promi
   if (isSelf(user_id, me.user_id)) return { error: SELF_MESSAGE };
 
   if (!(await memberOfMyCompany(user_id))) return { error: USER_NOT_FOUND };
+  if (await sharedWithAnotherCompany(user_id)) return { error: SHARED_USER };
 
   const changed = await changeAuthEmail(user_id, email);
   if ('error' in changed) return changed;
@@ -178,13 +190,20 @@ export async function resetTwoFactor(_prev: ActionState, formData: FormData): Pr
   if (isSelf(userId, me.user_id)) return { error: SELF_MESSAGE };
 
   if (!(await memberOfMyCompany(userId))) return { error: USER_NOT_FOUND };
+  if (await sharedWithAnotherCompany(userId)) return { error: SHARED_USER };
 
   // Not a way to require 2FA of someone who never set it up, except to retry a reset that half-failed.
   const factor = await hasVerifiedFactor(userId);
   if (factor === null) return { error: "Couldn't check this user's two-factor authentication. Try again." };
   const supabase = await createClient();
   if (!factor) {
-    const { data: target } = await supabase.from('profiles').select('mfa_setup_required').eq('user_id', userId).maybeSingle();
+    const { companyId } = await currentTenant();
+    const { data: target } = await supabase
+      .from('company_members')
+      .select('mfa_setup_required')
+      .eq('company_id', companyId)
+      .eq('user_id', userId)
+      .maybeSingle();
     if (!target?.mfa_setup_required) return { error: 'This user has no two-factor authentication to reset.' };
   }
   // The flag first: whatever fails after it, the user can't work without setting up 2FA again.
@@ -213,6 +232,8 @@ export async function editName(_prev: ActionState, formData: FormData): Promise<
   const parsed = editNameSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   if (!(await memberOfMyCompany(parsed.data.user_id))) return { error: USER_NOT_FOUND };
+  // The name lives on the profile, which the other company shows too.
+  if (await sharedWithAnotherCompany(parsed.data.user_id)) return { error: SHARED_USER };
   const supabase = await createClient();
   const { error } = await supabase.rpc('admin_set_name', { p_user: parsed.data.user_id, p_name: parsed.data.full_name });
   if (error) return { error: userMessage(error)! };
@@ -228,6 +249,7 @@ export async function resendInvite(_prev: ActionState, formData: FormData): Prom
   if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
 
   if (!(await memberOfMyCompany(userId))) return { error: USER_NOT_FOUND };
+  if (await sharedWithAnotherCompany(userId)) return { error: SHARED_USER };
 
   const invite = await inviteLink(userId);
   if ('error' in invite) return invite;

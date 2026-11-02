@@ -119,7 +119,7 @@ describe('inviteLink', () => {
       email: 'old@example.com',
       link: 'https://academy.example.com/auth/confirm?token_hash=h%20a%2Fsh&type=invite',
     });
-    expect(admin.generateLink).toHaveBeenCalledWith({ type: 'invite', email: 'old@example.com' });
+    expect(admin.generateLink).toHaveBeenCalledWith({ type: 'invite', email: 'old@example.com', options: { redirectTo: 'https://academy.example.com/auth/confirm' } });
   });
   it('refuses someone who has signed in', async () => {
     admin.getUserById.mockResolvedValue(user());

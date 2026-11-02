@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { Nav } from '@/components/nav';
 import { IdleTimer } from '@/components/idle-timer';
-import { getCurrentProfile, getSettings } from '@/lib/auth/session';
+import { getCurrentProfile, getSettings, signInPath } from '@/lib/auth/session';
 import { PilotBanner } from '@/components/pilot-banner';
 import { pilotMode } from '@/lib/flags';
 import { currentTenant } from '@/lib/tenant/current';
@@ -9,7 +9,7 @@ import { getBranding } from '@/lib/branding/get';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getCurrentProfile();
-  if (!profile) redirect('/login');
+  if (!profile) redirect(await signInPath());
   if (!profile.active) redirect('/deactivated');
   const settings = await getSettings();
   const tenant = await currentTenant();

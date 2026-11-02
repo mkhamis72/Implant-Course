@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { normaliseHost } from './host';
-import type { Tenant } from './types';
+import { ACADEMY_COMPANY_ID, type Tenant } from './types';
 
 export type StaticTenant = Tenant & { serviceRoleKey?: string };
 type Env = Record<string, string | undefined>;
@@ -16,6 +16,7 @@ const entry = z.object({
   anonKey: z.string().min(1),
   serviceRoleKey: z.string().min(1),
   status: z.enum(['active', 'suspended']).default('active'),
+  companyId: z.string().uuid().default(ACADEMY_COMPANY_ID),
 });
 
 function required(env: Env, name: string): string {
@@ -39,6 +40,7 @@ export function staticTenants(env: Env = process.env, read: (path: string) => st
       // Optional: only admin actions need it, and they fail with ADMIN_UNAVAILABLE.
       serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY || undefined,
       status: 'active',
+      companyId: ACADEMY_COMPANY_ID,
     }];
   }
   if (env.NODE_ENV === 'production') throw new Error('TENANTS_FILE is for local development only and is refused in production.');

@@ -9,6 +9,12 @@ export function emailChangedNotice(a: { company: string; newEmail: string }): No
   return { subject: 'Your sign-in email was changed', text, html: `<p>${escapeHtml(text)}</p>` };
 }
 
+/** Sent when an admin adds someone who already has an account to their company. No link, as above. */
+export function addedToCompanyNotice(a: { company: string }): NoticeEmail {
+  const text = `An administrator added you to ${a.company}. Sign in there with your existing email and password. If you didn't expect this, contact your course organizer.`;
+  return { subject: `You've been added to ${a.company}`, text, html: `<p>${escapeHtml(text)}</p>` };
+}
+
 /** A resent invitation, worded like the Supabase invite template (supabase/templates/invite.html). */
 export function inviteEmail(a: { company: string; link: string }): NoticeEmail {
   return {

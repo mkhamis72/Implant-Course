@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { currentTenant } from '@/lib/tenant/current';
 import { requireAdmin, type Profile } from '@/lib/auth/session';
 import { InviteForm } from './invite-form';
 import { UserRow, type Account } from './user-row';
@@ -7,16 +8,31 @@ import { toPermissions } from '@/lib/auth/permissions';
 import { hasVerifiedFactor, listSignIns } from '@/lib/admin/auth-accounts';
 import type { HistoryEntry } from '@/lib/admin/history';
 
+type MemberRow = Pick<Profile, 'user_id' | 'role' | 'active' | 'delegate_id' | 'mfa_setup_required'> & {
+  profile: { full_name: string; email: string } | null;
+};
+
 export default async function UsersPage() {
   const me = await requireAdmin();
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('user_id, full_name, email, role, active, delegate_id, mfa_setup_required, permissions:user_permissions(area, level)')
-    .order('full_name');
-  if (error) throw new Error('Could not load users');
-  const users = ((data ?? []) as unknown as (Omit<Profile, 'permissions'> & { permissions: { area: string; level: string }[] })[])
-    .map((u) => ({ ...u, permissions: toPermissions(u.permissions) }) as Profile);
+  const { companyId } = await currentTenant();
+  const [members, perms] = await Promise.all([
+    supabase
+      .from('company_members')
+      .select('user_id, role, active, delegate_id, mfa_setup_required, profile:profiles(full_name, email)')
+      .eq('company_id', companyId),
+    supabase.from('user_permissions').select('user_id, area, level').eq('company_id', companyId),
+  ]);
+  if (members.error || perms.error) throw new Error('Could not load users');
+  const permRows = (perms.data ?? []) as { user_id: string; area: string; level: string }[];
+  const users = ((members.data ?? []) as unknown as MemberRow[])
+    .map(({ profile, ...m }): Profile => ({
+      ...m,
+      full_name: profile?.full_name ?? '',
+      email: profile?.email ?? '',
+      permissions: toPermissions(permRows.filter((p) => p.user_id === m.user_id)),
+    }))
+    .sort((a, b) => a.full_name.localeCompare(b.full_name));
 
   // Auth answers for sign-in times and factors; a failure there shows "unknown" rather than breaking the page.
   const signIns = await listSignIns(users.map((u) => u.user_id)).catch((e: Error) => {

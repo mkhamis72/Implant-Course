@@ -3,9 +3,11 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { currentTenant } from '@/lib/tenant/current';
 import { requireAdmin, requirePermission } from '@/lib/auth/session';
 import { createLogin } from '@/lib/admin/create-login';
 import { deleteAuthUser } from '@/lib/admin/auth-accounts';
+import { profileRemains } from '@/lib/admin/same-company';
 import type { ActionState } from '@/lib/admin/schemas';
 import { delegateSchema } from '@/lib/inventory/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
@@ -43,7 +45,13 @@ export async function createDelegateLogin(_prev: ActionState, formData: FormData
   const { data: d } = await supabase.from('delegates').select('id, full_name, email').eq('id', id).maybeSingle();
   if (!d) return { error: 'Delegate not found.' };
   if (!d.email) return { error: 'Add the delegate’s email address first.' };
-  const { data: login } = await supabase.from('profiles').select('user_id').eq('delegate_id', id).maybeSingle();
+  const { companyId } = await currentTenant();
+  const { data: login } = await supabase
+    .from('company_members')
+    .select('user_id')
+    .eq('company_id', companyId)
+    .eq('delegate_id', id)
+    .maybeSingle();
   if (login) return { error: 'This delegate already has a login.' };
   const result = await createLogin({ email: String(d.email).trim().toLowerCase(), full_name: d.full_name, role: 'delegate', delegate_id: d.id });
   if ('error' in result) return result;
@@ -58,10 +66,16 @@ export async function deleteDelegate(_prev: FormState, formData: FormData): Prom
   const supabase = await createClient();
   const { data: login, error } = await supabase.rpc('delete_delegate', { p_delegate: id });
   if (error) return { error: userMessage(error)! };
-  // A delegate login goes with the delegate: its profile is gone, so delete the sign-in account too.
-  const authError = login ? await deleteAuthUser(login as string) : null;
   revalidatePath('/delegates');
   revalidatePath('/admin/users');
-  if (authError) return { error: authError };
+  if (login) {
+    // The login goes with the delegate unless another company keeps its profile: then the sign-in stays too.
+    const remains = await profileRemains(login as string);
+    if (remains === null) {
+      return { error: "The delegate was removed, but it couldn't be checked whether their sign-in account can be deleted." };
+    }
+    const authError = remains ? null : await deleteAuthUser(login as string);
+    if (authError) return { error: authError };
+  }
   redirect('/delegates');
 }

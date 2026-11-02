@@ -14,7 +14,7 @@ export async function requestReset(_prev: ForgotState, formData: FormData): Prom
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
   if (!EMAIL.test(email)) return { error: 'Enter your email address.', email };
   const supabase = await createClient();
-  // The email links to {{ .SiteURL }}/auth/confirm?type=recovery (the recovery template); redirectTo is kept for the default template.
+  // The recovery template links to {{ .RedirectTo }}?token_hash=…&type=recovery, so redirectTo decides which host the link opens on: keep it.
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${await requestOrigin()}/auth/confirm` });
   const reply = forgotReply(error);
   return reply === FORGOT_SENT ? { sent: reply } : { error: reply, email };
