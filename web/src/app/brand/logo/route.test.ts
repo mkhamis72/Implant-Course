@@ -2,16 +2,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const maybeSingle = vi.fn();
+const rpc = vi.fn();
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: async () => ({ rpc: () => ({ maybeSingle }) }),
+  createClient: async () => ({
+    rpc: (...args: unknown[]) => {
+      rpc(...args);
+      return { maybeSingle };
+    },
+  }),
 }));
+vi.mock('@/lib/tenant/current', () => ({ currentTenant: async () => ({ companyId: 'c1' }) }));
 
 import { GET } from './route';
 
 const req = (url: string) => new Request(url);
 
 describe('GET /brand/logo', () => {
-  beforeEach(() => maybeSingle.mockReset());
+  beforeEach(() => {
+    maybeSingle.mockReset();
+    rpc.mockReset();
+  });
+
+  it("reads the host's company logo through branding_logo_for", async () => {
+    maybeSingle.mockResolvedValue({ data: null, error: null });
+    await GET(req('http://localhost:3000/brand/logo?v=1'));
+    expect(rpc).toHaveBeenCalledWith('branding_logo_for', { p_company: 'c1' });
+  });
 
   it('serves the stored bytes with their type, cached long when versioned', async () => {
     maybeSingle.mockResolvedValue({ data: { bytes: '\\x89504e47', content_type: 'image/png' }, error: null });

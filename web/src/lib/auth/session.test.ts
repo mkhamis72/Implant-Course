@@ -34,6 +34,7 @@ vi.mock('@/lib/supabase/server', () => ({
           return chain;
         },
         maybeSingle: async () => result,
+        single: async () => ({ data: { expiry_alert_days: 30, session_timeout_minutes: 60 }, error: null }),
         then: (resolve: (v: typeof result) => unknown) => resolve(result),
       };
       return chain;
@@ -48,7 +49,7 @@ vi.mock('@/lib/supabase/server', () => ({
   },
 }));
 import {
-  checkPermission, getCurrentProfile, requireActiveUser, requireAdmin, requireDelegate, requirePermission, requireSignedIn,
+  checkPermission, getCurrentProfile, getSettings, requireActiveUser, requireAdmin, requireDelegate, requirePermission, requireSignedIn,
 } from './session';
 
 const profile = (over: Record<string, unknown> = {}) => ({
@@ -138,5 +139,13 @@ describe('without the flag', () => {
   it('lets an admin through', async () => {
     await expect(requireAdmin()).resolves.toMatchObject({ user_id: 'u1', mfa_setup_required: false });
     expect(await checkPermission('patients')).toBeNull();
+  });
+});
+
+describe('getSettings', () => {
+  it("reads the host's company row", async () => {
+    calls.eq.length = 0;
+    await expect(getSettings()).resolves.toEqual({ expiry_alert_days: 30, session_timeout_minutes: 60 });
+    expect(calls.eq).toContainEqual(['settings', 'company_id', A]);
   });
 });

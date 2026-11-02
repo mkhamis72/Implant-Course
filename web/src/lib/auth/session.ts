@@ -88,10 +88,12 @@ export async function requireAdmin(): Promise<Profile> {
 }
 
 export const getSettings = cache(async (): Promise<Settings> => {
+  const { companyId } = await currentTenant();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('settings')
     .select('expiry_alert_days, session_timeout_minutes')
+    .eq('company_id', companyId)
     .single();
   if (error || !data) throw new Error('Could not load settings');
   return data as Settings;
