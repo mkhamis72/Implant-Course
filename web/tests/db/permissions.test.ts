@@ -288,7 +288,10 @@ describe('permissions: guard rails', () => {
         // Admin user tools (0074): select for admins only, written only by the admin_* definer functions.
         'admin_events',
         // One database (0083): the company list, select of the bound company only, no API writes.
-        'companies']);
+        'companies',
+        // One database (0085, spec §4): memberships, select of the user's own row (admins all), no API
+        // writes; the company policies arrive with the company-aware release.
+        'company_members']);
       expect(rows.map((r) => r.relname).filter((n) => !shared.has(n)).sort()).toEqual([]);
     });
   });

@@ -8,6 +8,8 @@ import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeSes
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
 const SINGLETONS = ['public.settings', 'public.branding', 'public.branding_logos'];
+// Tables created after 0084 that set company_id explicitly: no academy default, keyed by their own primary key.
+const EXPLICIT_COMPANY = ['public.company_members'];
 const MIGRATION = join(process.cwd(), 'supabase', 'migrations', '0084_company_id.sql');
 
 type TableInfo = {
@@ -43,7 +45,7 @@ describe('company_id on every company table (0084)', () => {
       await asPostgres(c);
       const all = await tables(c);
       expect(all.length).toBeGreaterThan(40);
-      for (const t of all) {
+      for (const t of all.filter((x) => !EXPLICIT_COMPANY.includes(x.name))) {
         expect({ name: t.name, notnull: t.notnull, fk: t.fk_to_companies, index: t.leading_index })
           .toEqual({ name: t.name, notnull: true, fk: true, index: true });
         expect(t.default_expr, t.name).toContain(ACADEMY_ID);
