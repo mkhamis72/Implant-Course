@@ -8,6 +8,7 @@ import { emailEnabled } from '@/lib/flags';
 import { temporaryPassword } from './passwords';
 import type { Role } from '@/lib/auth/permissions';
 
+const EXISTS = 'A user with this email already exists.';
 export type LoginResult = { ok: string; password?: string } | { error: string };
 
 /**
@@ -19,7 +20,7 @@ export async function createLogin(a: { email: string; full_name: string; role: R
   const supabase = await createClient();
   // An invite to an existing, unconfirmed address returns that account instead of failing: never repurpose it.
   const { data: taken } = await supabase.from('profiles').select('user_id').eq('email', email).limit(1);
-  if (taken?.length) return { error: 'A user with this email already exists.' };
+  if (taken?.length) return { error: EXISTS };
 
   let admin;
   try {
@@ -27,16 +28,19 @@ export async function createLogin(a: { email: string; full_name: string; role: R
   } catch (error) {
     return { error: (error as Error).message };
   }
+  // Any company's profile with this address (the admin client sees all): Auth would hand back that account.
+  const { data: anywhere } = await admin.from('profiles').select('user_id').eq('email', email).limit(1);
+  if (anywhere?.length) return { error: EXISTS };
+
   const password = emailEnabled() ? undefined : temporaryPassword();
+  const startedAt = Date.now();
   const { data, error } = password
     ? await admin.auth.admin.createUser({ email, password, email_confirm: true })
     : await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${await requestOrigin()}/auth/confirm` });
   if (error || !data?.user) return { error: error ? mapAuthError(error) : 'Could not create the login.' };
 
-  // An invite to an address that already has a set-up account (another company's, once the database is shared)
-  // returns that account: never take it over. A new login only has the blank inactive row the signup trigger made.
-  const { data: existing } = await admin.from('profiles').select('active, full_name').eq('user_id', data.user.id).maybeSingle();
-  if (existing && (existing.active || existing.full_name !== '')) return { error: 'A user with this email already exists.' };
+  // Backstop: an account created before this call is an existing one (an invite returns it instead of failing).
+  if (data.user.created_at && Date.parse(data.user.created_at) < startedAt - 5000) return { error: EXISTS };
 
   // Through the admin's own session so RLS and the audit log record who did it.
   const problem = updateProblem(
