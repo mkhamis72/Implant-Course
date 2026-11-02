@@ -93,7 +93,7 @@ describe('listSignIns', () => {
       error: null,
     });
     admin.listUsers.mockResolvedValueOnce(page(1000, 0)).mockResolvedValueOnce(page(3, 1000));
-    const map = await listSignIns();
+    const map = await listSignIns(Array.from({ length: 1003 }, (_, i) => `u${i}`));
     expect(map.size).toBe(1003);
     expect(map.get('u0')).toBeNull();
     expect(map.get('u1002')).toBe('2026-10-01T08:00:00Z');
@@ -102,7 +102,12 @@ describe('listSignIns', () => {
   });
   it('throws on failure rather than show everyone as never signed in', async () => {
     admin.listUsers.mockResolvedValue({ data: { users: [] }, error: { message: 'down' } });
-    await expect(listSignIns()).rejects.toThrow();
+    await expect(listSignIns(['u1'])).rejects.toThrow();
+  });
+  it('returns only the ids asked for', async () => {
+    admin.listUsers.mockResolvedValue({ data: { users: [{ id: 'a', last_sign_in_at: null }, { id: 'b', last_sign_in_at: '2026-10-01T08:00:00Z' }] }, error: null });
+    const map = await listSignIns(['a']);
+    expect([...map.keys()]).toEqual(['a']);
   });
 });
 

@@ -19,7 +19,7 @@ export default async function UsersPage() {
     .map((u) => ({ ...u, permissions: toPermissions(u.permissions) }) as Profile);
 
   // Auth answers for sign-in times and factors; a failure there shows "unknown" rather than breaking the page.
-  const signIns = await listSignIns().catch((e: Error) => {
+  const signIns = await listSignIns(users.map((u) => u.user_id)).catch((e: Error) => {
     console.error(e.message);
     return null;
   });

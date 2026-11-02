@@ -14,6 +14,7 @@ import { updateProblem } from '@/lib/admin/results';
 import {
   changeAuthEmail, deleteAuthUser, hasVerifiedFactor, inviteLink, resetAuthFactors, setTemporaryPassword,
 } from '@/lib/admin/auth-accounts';
+import { memberOfMyCompany, USER_NOT_FOUND } from '@/lib/admin/same-company';
 import { emailChangedNotice, inviteEmail } from '@/lib/admin/notices';
 import { sendEmail } from '@/lib/email/send';
 import { getBranding } from '@/lib/branding/get';
@@ -105,6 +106,7 @@ export async function resetPassword(_prev: ActionState, formData: FormData): Pro
   const userId = String(formData.get('user_id') ?? '');
   if (userId === me.user_id) return { error: 'Change your own password under Account security.' };
   if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
+  if (!(await memberOfMyCompany(userId))) return { error: USER_NOT_FOUND };
   const result = await setTemporaryPassword(userId);
   if ('error' in result) return result;
   return { ok: 'New one-time password set.', password: result.password };
@@ -135,6 +137,8 @@ export async function changeEmail(_prev: ActionState, formData: FormData): Promi
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { user_id, email } = parsed.data;
   if (isSelf(user_id, me.user_id)) return { error: SELF_MESSAGE };
+
+  if (!(await memberOfMyCompany(user_id))) return { error: USER_NOT_FOUND };
 
   const changed = await changeAuthEmail(user_id, email);
   if ('error' in changed) return changed;
@@ -171,6 +175,8 @@ export async function resetTwoFactor(_prev: ActionState, formData: FormData): Pr
   if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
   if (isSelf(userId, me.user_id)) return { error: SELF_MESSAGE };
 
+  if (!(await memberOfMyCompany(userId))) return { error: USER_NOT_FOUND };
+
   // Not a way to require 2FA of someone who never set it up, except to retry a reset that half-failed.
   const factor = await hasVerifiedFactor(userId);
   if (factor === null) return { error: "Couldn't check this user's two-factor authentication. Try again." };
@@ -204,6 +210,7 @@ export async function editName(_prev: ActionState, formData: FormData): Promise<
   await requireAdmin();
   const parsed = editNameSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  if (!(await memberOfMyCompany(parsed.data.user_id))) return { error: USER_NOT_FOUND };
   const supabase = await createClient();
   const { error } = await supabase.rpc('admin_set_name', { p_user: parsed.data.user_id, p_name: parsed.data.full_name });
   if (error) return { error: userMessage(error)! };
@@ -217,6 +224,8 @@ export async function resendInvite(_prev: ActionState, formData: FormData): Prom
   if (!emailEnabled()) return { error: "Email is off, so invites can't be resent. Use Reset password instead." };
   const userId = String(formData.get('user_id') ?? '');
   if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
+
+  if (!(await memberOfMyCompany(userId))) return { error: USER_NOT_FOUND };
 
   const invite = await inviteLink(userId);
   if ('error' in invite) return invite;

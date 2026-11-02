@@ -6,7 +6,13 @@ const { auth, profileUpdate, existing } = vi.hoisted(() => ({
   existing: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn(async () => ({ auth: { admin: auth } })) }));
+const { adminProfile } = vi.hoisted(() => ({ adminProfile: vi.fn() }));
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: vi.fn(async () => ({
+    auth: { admin: auth },
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => adminProfile() }) }) }),
+  })),
+}));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     from: () => ({
@@ -22,6 +28,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   profileUpdate.mockReturnValue({ data: [{ user_id: 'u1' }], error: null });
   existing.mockReturnValue({ data: [], error: null });
+  // The signup trigger's blank, inactive row for a brand-new login.
+  adminProfile.mockReturnValue({ data: { active: false, full_name: '' }, error: null });
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -54,6 +62,16 @@ describe('createLogin', () => {
     expect(r).toEqual({ error: 'A user with this email already exists.' });
     expect(auth.inviteUserByEmail).not.toHaveBeenCalled();
     expect(auth.createUser).not.toHaveBeenCalled();
+  });
+
+  it('refuses an invite that returned an account already set up elsewhere, and leaves it alone', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    auth.inviteUserByEmail.mockResolvedValue({ data: { user: { id: 'other' } }, error: null });
+    adminProfile.mockReturnValue({ data: { active: true, full_name: 'Someone' }, error: null });
+    const r = await createLogin({ email: 'o@example.com', full_name: 'Org O', role: 'organizer' });
+    expect(r).toEqual({ error: 'A user with this email already exists.' });
+    expect(auth.deleteUser).not.toHaveBeenCalled();
+    expect(profileUpdate).not.toHaveBeenCalled();
   });
 
   it('removes the account again when the profile cannot be set', async () => {

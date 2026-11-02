@@ -33,6 +33,11 @@ export async function createLogin(a: { email: string; full_name: string; role: R
     : await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${await requestOrigin()}/auth/confirm` });
   if (error || !data?.user) return { error: error ? mapAuthError(error) : 'Could not create the login.' };
 
+  // An invite to an address that already has a set-up account (another company's, once the database is shared)
+  // returns that account: never take it over. A new login only has the blank inactive row the signup trigger made.
+  const { data: existing } = await admin.from('profiles').select('active, full_name').eq('user_id', data.user.id).maybeSingle();
+  if (existing && (existing.active || existing.full_name !== '')) return { error: 'A user with this email already exists.' };
+
   // Through the admin's own session so RLS and the audit log record who did it.
   const problem = updateProblem(
     await supabase
