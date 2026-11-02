@@ -6,7 +6,8 @@ import { temporaryPassword } from './passwords';
 
 /**
  * Deletes a sign-in account. Call only after delete_user / delete_delegate removed the profile: the database
- * decides whether removing is allowed. Returns an error message, or null.
+ * decides whether removing is allowed, and delete_user keeps the profile of someone another company still has
+ * (check with profileRemains). Returns an error message, or null.
  */
 export async function deleteAuthUser(userId: string): Promise<string | null> {
   const prefix = 'The user was removed from the app, but their sign-in account was not deleted: ';

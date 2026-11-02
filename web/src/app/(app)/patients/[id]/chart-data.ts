@@ -1,6 +1,7 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentProfile } from '@/lib/auth/session';
+import { staffOptions } from '@/lib/admin/staff';
 import { canEdit } from '@/lib/auth/permissions';
 import { todayIso } from '@/lib/dates';
 import { productLabel } from '@/lib/inventory/labels';
@@ -85,7 +86,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supabase.from('products').select('*').eq('active', true),
     supabase.from('stock_on_hand').select('*').gt('on_hand', 0),
     supabase.from('delegates').select('id, full_name').eq('active', true).order('full_name'),
-    supabase.from('profiles').select('user_id, full_name, email').eq('active', true).in('role', ['admin', 'organizer']).order('full_name'),
+    staffOptions(supabase),
     supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name'),
     supabase.rpc('implant_visits', { p_patient: patientId }),
     supabase.from('restorations').select(RESTORATION_SELECT).eq('patient_id', patientId).is('voided_at', null),
@@ -110,7 +111,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     lots: (lots.data ?? []) as LotOnHand[],
     delegates: (delegates.data ?? []).map((d) => ({ id: d.id as string, label: d.full_name as string })),
     enrollments: (enrollments.data ?? []) as Enrollment[],
-    organizers: (organizers.data ?? []).map((o) => ({ id: o.user_id as string, label: (o.full_name || o.email) as string })),
+    organizers: organizers.data ?? [],
     supervisors: (supervisors.data ?? []).map((s) => ({ id: s.id as string, label: s.full_name as string })),
     restorations: ((restorations.data ?? []) as unknown as RestorationRow[]).map(toRestoration),
     courses: (courses.data ?? []) as CourseOption[],

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
+import { staffOptions } from '@/lib/admin/staff';
 import { canEdit, canView } from '@/lib/auth/permissions';
 import { formatDate } from '@/lib/format';
 import { SESSION_TYPE_LABELS, type Course, type Session } from '@/lib/schedule/types';
@@ -26,7 +27,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
     supabase.from('sessions').select('*, checklists(id, items:checklist_items(done_at))').eq('course_id', id).order('date').order('start_time'),
     supabase.from('enrollments').select('id, delegate:delegates(id, full_name)').eq('course_id', id),
     supabase.from('delegates').select('id, full_name').eq('active', true).order('full_name'),
-    supabase.from('profiles').select('user_id, full_name, email').eq('active', true).in('role', ['admin', 'organizer']).order('full_name'),
+    staffOptions(supabase),
   ]);
   if (!course) notFound();
   const c = course as Course;
@@ -85,7 +86,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
           <SessionForm
             courseId={c.id}
             defaultDate={c.start_date}
-            organizers={(organizers ?? []).map((o) => ({ id: o.user_id as string, label: (o.full_name || o.email) as string }))}
+            organizers={organizers ?? []}
           />
         )}
       </section>

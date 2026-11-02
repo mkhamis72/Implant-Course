@@ -4,8 +4,15 @@ const { createLogin, rpc, deleteAuthUser, setTemporaryPassword, changeAuthEmail,
   createLogin: vi.fn(), rpc: vi.fn(), deleteAuthUser: vi.fn(), setTemporaryPassword: vi.fn(),
   changeAuthEmail: vi.fn(), resetAuthFactors: vi.fn(), inviteLink: vi.fn(), sendEmail: vi.fn(), hasVerifiedFactor: vi.fn(),
 }));
-const { memberOfMyCompany } = vi.hoisted(() => ({ memberOfMyCompany: vi.fn() }));
-vi.mock('@/lib/admin/same-company', () => ({ memberOfMyCompany, USER_NOT_FOUND: 'User not found.' }));
+const { memberOfMyCompany, sharedWithAnotherCompany, activeInAnotherCompany, profileRemains } = vi.hoisted(() => ({
+  memberOfMyCompany: vi.fn(), sharedWithAnotherCompany: vi.fn(), activeInAnotherCompany: vi.fn(), profileRemains: vi.fn(),
+}));
+const { SHARED } = vi.hoisted(() => ({ SHARED: 'This user also belongs to another company. Ask support to change their sign-in details.' }));
+vi.mock('@/lib/admin/same-company', () => ({
+  memberOfMyCompany, sharedWithAnotherCompany, activeInAnotherCompany, profileRemains,
+  USER_NOT_FOUND: 'User not found.', SHARED_USER: SHARED,
+}));
+vi.mock('@/lib/tenant/current', () => ({ currentTenant: vi.fn(async () => ({ slug: 'academy', companyId: 'a7c0de00-0000-4000-8000-000000000001' })) }));
 const { ME } = vi.hoisted(() => ({ ME: '9c1d6e2a-3b4f-4a5e-8d7c-1f2e3d4c5b6a' }));
 vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: ME })) }));
 vi.mock('@/lib/admin/create-login', () => ({ createLogin }));
@@ -14,16 +21,24 @@ vi.mock('@/lib/email/send', () => ({ sendEmail }));
 vi.mock('@/lib/branding/get', () => ({ getBranding: vi.fn(async () => ({ name: 'Academy' })) }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
 const { flagged } = vi.hoisted(() => ({ flagged: { value: false } }));
-const profilesQuery: { select: () => unknown; eq: () => unknown; maybeSingle: () => Promise<unknown> } = { select: () => profilesQuery, eq: () => profilesQuery, maybeSingle: async () => ({ data: { mfa_setup_required: flagged.value }, error: null }) };
-vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc, from: () => profilesQuery })) }));
+const { fromTable, eqs } = vi.hoisted(() => ({ fromTable: vi.fn(), eqs: vi.fn() }));
+const memberQuery: { select: () => unknown; eq: (c: string, v: unknown) => unknown; maybeSingle: () => Promise<unknown> } = {
+  select: () => memberQuery,
+  eq: (c, v) => (eqs(c, v), memberQuery),
+  maybeSingle: async () => ({ data: { mfa_setup_required: flagged.value }, error: null }),
+};
+vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc, from: (t: string) => (fromTable(t), memberQuery) })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-import { changeEmail, editName, inviteUser, removeUser, resendInvite, resetPassword, resetTwoFactor, savePermissions, setUserActive } from './actions';
+import { changeEmail, editName, inviteUser, removeUser, resendInvite, resetPassword, resetTwoFactor, savePermissions, setUserActive, setUserRole } from './actions';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 beforeEach(() => {
   vi.clearAllMocks();
   flagged.value = false;
   memberOfMyCompany.mockResolvedValue(true);
+  sharedWithAnotherCompany.mockResolvedValue(false);
+  activeInAnotherCompany.mockResolvedValue(false);
+  profileRemains.mockResolvedValue(false);
 });
 
 const form = (fields: Record<string, string>) => {
@@ -70,6 +85,22 @@ describe('removeUser', () => {
     expect(await removeUser({}, form({ id }))).toEqual({ ok: 'User removed.' });
     expect(rpc).toHaveBeenCalledWith('delete_user', { p_user: id });
     expect(deleteAuthUser).toHaveBeenCalledWith(id);
+  });
+  it('keeps the sign-in account while another company still has the profile', async () => {
+    rpc.mockResolvedValue({ error: null });
+    profileRemains.mockResolvedValue(true);
+    expect(await removeUser({}, form({ id }))).toEqual({ ok: 'User removed.' });
+    expect(rpc).toHaveBeenCalledWith('delete_user', { p_user: id });
+    expect(profileRemains).toHaveBeenCalledWith(id);
+    expect(deleteAuthUser).not.toHaveBeenCalled();
+  });
+  it('keeps the sign-in account, and says so, when it cannot tell whether the profile is gone', async () => {
+    rpc.mockResolvedValue({ error: null });
+    profileRemains.mockResolvedValue(null);
+    expect(await removeUser({}, form({ id }))).toEqual({
+      error: "The user was removed from this company, but it couldn't be checked whether their sign-in account can be deleted.",
+    });
+    expect(deleteAuthUser).not.toHaveBeenCalled();
   });
   it('keeps the account when the database refuses (e.g. the user has records)', async () => {
     rpc.mockResolvedValue({ error: { message: 'Dr X has records in the app … Deactivate them instead.', hint: 'user' } });
@@ -256,6 +287,8 @@ describe('resetTwoFactor', () => {
     });
     expect(resetAuthFactors).toHaveBeenCalledWith(id);
     expect(rpc.mock.calls.map((c) => c[0])).toEqual(['admin_require_mfa_setup', 'admin_end_sessions']);
+    expect(fromTable).toHaveBeenCalledWith('company_members');
+    expect(eqs.mock.calls).toEqual([['company_id', 'a7c0de00-0000-4000-8000-000000000001'], ['user_id', id]]);
   });
   it('says when sessions could not be ended', async () => {
     hasVerifiedFactor.mockResolvedValue(true);
@@ -322,6 +355,7 @@ describe('company check before any Auth change', () => {
     ['resendInvite', (f) => resendInvite({}, f), { user_id: id }],
     ['removeUser', (f) => removeUser({}, f), { id }],
     ['setUserActive', (f) => setUserActive({}, f), { user_id: id, active: 'false' }],
+    ['setUserRole', (f) => setUserRole({}, f), { user_id: id, role: 'admin' }],
   ];
   afterEach(() => vi.unstubAllEnvs());
   it.each(cases)('%s refuses a user outside the company, without touching Auth', async (_name, run, fields) => {
@@ -338,5 +372,76 @@ describe('company check before any Auth change', () => {
     setTemporaryPassword.mockResolvedValue({ password: 'Temp-Pass-123' });
     expect(await resetPassword({}, form({ user_id: id }))).toMatchObject({ ok: 'New one-time password set.' });
     expect(setTemporaryPassword).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('setUserRole', () => {
+  const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
+  it("changes the role of this company's member through set_member_role", async () => {
+    rpcAnswers({});
+    expect(await setUserRole({}, form({ user_id: id, role: 'admin' }))).toEqual({ ok: 'Role updated.' });
+    expect(memberOfMyCompany).toHaveBeenCalledWith(id);
+    expect(rpc).toHaveBeenCalledWith('set_member_role', { p_user: id, p_role: 'admin' });
+  });
+  it('refuses a user outside the company before changing anything', async () => {
+    memberOfMyCompany.mockResolvedValue(false);
+    expect(await setUserRole({}, form({ user_id: id, role: 'admin' }))).toEqual({ error: 'User not found.' });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it('shows the database’s refusal', async () => {
+    rpcAnswers({ set_member_role: { message: 'Choose admin or organizer for a staff login.', hint: 'user' } });
+    expect(await setUserRole({}, form({ user_id: id, role: 'organizer' }))).toEqual({ error: 'Choose admin or organizer for a staff login.' });
+  });
+});
+
+describe('setUserActive', () => {
+  const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
+  const updateUserById = vi.fn();
+  beforeEach(() => {
+    updateUserById.mockReset().mockResolvedValue({ error: null });
+    vi.mocked(createAdminClient).mockResolvedValue({ auth: { admin: { updateUserById } } } as never);
+  });
+  it('deactivates the membership through set_member_active, then bans the sign-in', async () => {
+    rpcAnswers({});
+    expect(await setUserActive({}, form({ user_id: id, active: 'false' }))).toEqual({ ok: 'User deactivated.' });
+    expect(rpc).toHaveBeenCalledWith('set_member_active', { p_user: id, p_active: false });
+    expect(activeInAnotherCompany).toHaveBeenCalledWith(id);
+    expect(updateUserById).toHaveBeenCalledWith(id, { ban_duration: '876000h' });
+  });
+  it('bans no sign-in while another company still has the user active', async () => {
+    rpcAnswers({});
+    activeInAnotherCompany.mockResolvedValue(true);
+    expect(await setUserActive({}, form({ user_id: id, active: 'false' }))).toEqual({ ok: 'User deactivated.' });
+    expect(rpc).toHaveBeenCalledWith('set_member_active', { p_user: id, p_active: false });
+    expect(updateUserById).not.toHaveBeenCalled();
+  });
+  it('reactivates and lifts the ban', async () => {
+    rpcAnswers({});
+    expect(await setUserActive({}, form({ user_id: id, active: 'true' }))).toEqual({ ok: 'User reactivated.' });
+    expect(rpc).toHaveBeenCalledWith('set_member_active', { p_user: id, p_active: true });
+    expect(updateUserById).toHaveBeenCalledWith(id, { ban_duration: 'none' });
+  });
+  it('touches no ban when the database refuses', async () => {
+    rpcAnswers({ set_member_active: { message: 'User not found.', hint: 'user' } });
+    expect(await setUserActive({}, form({ user_id: id, active: 'false' }))).toEqual({ error: 'User not found.' });
+    expect(updateUserById).not.toHaveBeenCalled();
+  });
+});
+
+describe('users shared with another company', () => {
+  const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
+  const cases: [string, (f: FormData) => Promise<unknown>, Record<string, string>][] = [
+    ['resetPassword', (f) => resetPassword({}, f), { user_id: id }],
+    ['changeEmail', (f) => changeEmail({}, f), { user_id: id, email: 'new@example.com' }],
+    ['resetTwoFactor', (f) => resetTwoFactor({}, f), { user_id: id }],
+  ];
+  it.each(cases)('%s refuses them before any Auth call', async (_name, run, fields) => {
+    sharedWithAnotherCompany.mockResolvedValue(true);
+    expect(await run(form(fields))).toEqual({ error: SHARED });
+    expect(sharedWithAnotherCompany).toHaveBeenCalledWith(id);
+    expect(createAdminClient).not.toHaveBeenCalled();
+    for (const fn of [setTemporaryPassword, changeAuthEmail, resetAuthFactors, hasVerifiedFactor, sendEmail, rpc]) {
+      expect(fn).not.toHaveBeenCalled();
+    }
   });
 });
