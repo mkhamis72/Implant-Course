@@ -9,6 +9,7 @@ import { listTenants, tenantSecrets } from '../../scripts/tenant-env';
 const CONTROL_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0001_control_registry.sql'), 'utf8');
 const CONSOLE_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0002_console.sql'), 'utf8');
 const LOG_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0003_console_log.sql'), 'utf8');
+const COMPANY_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0004_tenant_company.sql'), 'utf8');
 const users = inject('testUsers');
 
 /** The control schema applied inside the test's own (rolled-back) transaction on the dev database. */
@@ -51,6 +52,22 @@ describe('control registry', () => {
       await registerTenant(c, { ...academy, serviceRoleKey: 'rotated' });
       await c.query('set local role service_role');
       expect((await c.query(`select public.tenant_secret('zz-academy', 'service_role_key') as s`)).rows[0].s).toBe('rotated');
+    });
+  });
+
+  it('the academy row gets the academy company id; others stay null until set', async () => {
+    await withTx(async (c) => {
+      await c.query(CONTROL_SQL);
+      await c.query(CONSOLE_SQL);
+      await c.query(LOG_SQL);
+      await registerTenant(c, { ...academy, slug: 'academy', hosts: ['academy.zz.example.com'] });
+      await registerTenant(c, academy);
+      await c.query(COMPANY_SQL);
+      const rows = (await c.query(`select slug, company_id from public.tenants where slug in ('academy','zz-academy') order by slug`)).rows;
+      expect(rows).toEqual([
+        { slug: 'academy', company_id: 'a7c0de00-0000-4000-8000-000000000001' },
+        { slug: 'zz-academy', company_id: null },
+      ]);
     });
   });
 

@@ -9,7 +9,7 @@ export const CONTROL_TIMEOUT_MS = 3_000;
 const SECRET_MS = 5 * 60_000;
 const RETRY_MS = 15_000;
 
-type Row = { slug: string; hosts: string[]; supabase_url: string; anon_key: string; status: 'active' | 'suspended' };
+type Row = { slug: string; hosts: string[]; supabase_url: string; anon_key: string; status: 'active' | 'suspended'; company_id: string | null };
 
 let cache: { tenants: Tenant[]; fetchedAt: number } | null = null;
 const secrets = new Map<string, { value: string; fetchedAt: number }>();
@@ -36,10 +36,13 @@ function control(): SupabaseClient {
 }
 
 async function fetchTenants(): Promise<Tenant[]> {
-  const { data, error } = await control().from('tenants').select('slug, hosts, supabase_url, anon_key, status');
+  const { data, error } = await control().from('tenants').select('slug, hosts, supabase_url, anon_key, status, company_id');
   if (error || !data) throw new Error(error?.message ?? 'no data');
-  return (data as Row[]).map((r) => ({
-    slug: r.slug, hosts: r.hosts, supabaseUrl: r.supabase_url, anonKey: r.anon_key, status: r.status,
+  return (data as Row[]).map((r): Tenant => ({
+    slug: r.slug, hosts: r.hosts, supabaseUrl: r.supabase_url, anonKey: r.anon_key,
+    // A company without a company id is never routed: it is answered with 503.
+    status: r.company_id ? r.status : 'suspended',
+    companyId: r.company_id ?? '',
   }));
 }
 

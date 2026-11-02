@@ -6,10 +6,10 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({ from: () => ({ select }), rpc }),
 }));
 import { controlTenants, controlSecret, resetControlCache, FRESH_MS, STALE_MS } from './control';
-import { RegistryUnavailableError } from './types';
+import { ACADEMY_COMPANY_ID, RegistryUnavailableError } from './types';
 
-const row = { slug: 'academy', hosts: ['academy.example.com'], supabase_url: 'https://a.supabase.co', anon_key: 'anon', status: 'active' };
-const tenant = { slug: 'academy', hosts: ['academy.example.com'], supabaseUrl: 'https://a.supabase.co', anonKey: 'anon', status: 'active' };
+const row = { slug: 'academy', hosts: ['academy.example.com'], supabase_url: 'https://a.supabase.co', anon_key: 'anon', status: 'active', company_id: ACADEMY_COMPANY_ID };
+const tenant = { slug: 'academy', hosts: ['academy.example.com'], supabaseUrl: 'https://a.supabase.co', anonKey: 'anon', status: 'active', companyId: ACADEMY_COMPANY_ID };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -19,6 +19,12 @@ beforeEach(() => {
 });
 
 describe('controlTenants', () => {
+  it('a row without a company id is suspended, never routed', async () => {
+    select.mockResolvedValue({ data: [{ ...row, company_id: null }], error: null });
+    const [t] = await controlTenants(0);
+    expect(t.status).toBe('suspended');
+  });
+
   it('maps rows and serves them from cache while fresh', async () => {
     select.mockResolvedValue({ data: [row], error: null });
     expect(await controlTenants(0)).toEqual([tenant]);
