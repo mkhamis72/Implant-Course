@@ -16,7 +16,8 @@ const EXISTS = 'A user with this email already exists.';
 export type LoginResult = { ok: string; password?: string } | { error: string };
 
 /**
- * Someone with an account (another company's login) joins this company and keeps their password.
+ * Someone with an account (another company's login) joins this company and keeps their password (an Auth ban
+ * left from a deactivation elsewhere is lifted).
  * Otherwise a new account, which takes its company, role and name from the pending row:
  * email on: an invitation, whose link verifies the address and lets the user set a password;
  * email off (pilot without SMTP): a confirmed account with a one-time password for the admin to hand over.
@@ -36,8 +37,15 @@ export async function createLogin(a: { email: string; full_name: string; role: R
   // Through the admin's own session: the definers act on its bound company, and the audit log records who did it.
   const supabase = await createClient();
   if (anywhere?.length) {
-    const { error } = await supabase.rpc('add_existing_member', { p_email: email, p_role: a.role, p_delegate_id: a.delegate_id ?? null });
+    const { data: userId, error } = await supabase.rpc('add_existing_member', { p_email: email, p_role: a.role, p_delegate_id: a.delegate_id ?? null });
     if (error) return { error: userMessage(error) ?? 'Could not add this user.' };
+    // An account deactivated everywhere earlier is banned in Auth; active here now, it must be able to sign in.
+    try {
+      const { error: unbanError } = await admin.auth.admin.updateUserById(userId as string, { ban_duration: 'none' });
+      if (unbanError) console.warn(`The sign-in ban on ${email} could not be lifted: ${unbanError.message}`);
+    } catch (e) {
+      console.warn(`The sign-in ban on ${email} could not be lifted: ${(e as Error).message}`);
+    }
     const sent = await sendEmail({ to: email, ...addedToCompanyNotice({ company: (await getBranding()).name }) });
     if (sent === 'failed') console.warn(`The added-to-company notice to ${email} could not be sent.`);
     return { ok: `Added ${email} to this company. They sign in with their existing password.` };

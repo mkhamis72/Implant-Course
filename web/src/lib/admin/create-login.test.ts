@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
 const { auth, rpc, sendEmail, calls } = vi.hoisted(() => ({
-  auth: { createUser: vi.fn(), inviteUserByEmail: vi.fn(), deleteUser: vi.fn() },
+  auth: { createUser: vi.fn(), inviteUserByEmail: vi.fn(), deleteUser: vi.fn(), updateUserById: vi.fn() },
   rpc: vi.fn(),
   sendEmail: vi.fn(),
   calls: [] as string[],
@@ -29,6 +29,7 @@ beforeEach(() => {
   rpc.mockImplementation(async (name: string) => (calls.push(name), { data: null, error: null }));
   auth.inviteUserByEmail.mockImplementation(async () => (calls.push('invite'), fresh()));
   auth.createUser.mockImplementation(async () => (calls.push('createUser'), fresh()));
+  auth.updateUserById.mockResolvedValue({ data: {}, error: null });
   sendEmail.mockResolvedValue('sent');
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -125,6 +126,34 @@ describe('createLogin: an address that already has an account', () => {
     expect(r).toEqual({ ok: 'Added other@example.com to this company. They sign in with their existing password.' });
     expect(auth.inviteUserByEmail).not.toHaveBeenCalled();
     expect(auth.createUser).not.toHaveBeenCalled();
+  });
+
+  it('lifts an Auth ban left from a deactivation elsewhere, after adding the membership', async () => {
+    adminProfile.mockReturnValue({ data: [{ user_id: 'other' }], error: null });
+    rpc.mockImplementation(async (name: string) => (calls.push(name), { data: 'other', error: null }));
+    auth.updateUserById.mockImplementation(async () => (calls.push('unban'), { data: {}, error: null }));
+    expect(await createLogin({ email: 'other@example.com', full_name: 'O', role: 'organizer' })).toHaveProperty('ok');
+    expect(auth.updateUserById).toHaveBeenCalledWith('other', { ban_duration: 'none' });
+    expect(calls).toEqual(['add_existing_member', 'unban']);
+  });
+
+  it('a failed unban only warns', async () => {
+    adminProfile.mockReturnValue({ data: [{ user_id: 'other' }], error: null });
+    rpc.mockResolvedValue({ data: 'other', error: null });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    auth.updateUserById.mockResolvedValueOnce({ data: null, error: { message: 'down' } });
+    expect(await createLogin({ email: 'other@example.com', full_name: 'O', role: 'organizer' })).toHaveProperty('ok');
+    auth.updateUserById.mockRejectedValueOnce(new Error('fetch failed'));
+    expect(await createLogin({ email: 'other@example.com', full_name: 'O', role: 'organizer' })).toHaveProperty('ok');
+    expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
+  it('a refusal lifts no ban', async () => {
+    adminProfile.mockReturnValue({ data: [{ user_id: 'here' }], error: null });
+    rpc.mockResolvedValue({ data: null, error: { message: 'A user with this email already exists.', hint: 'user' } });
+    await createLogin({ email: 'here@example.com', full_name: 'H', role: 'organizer' });
+    expect(auth.updateUserById).not.toHaveBeenCalled();
   });
 
   it('a failed notice only warns', async () => {
