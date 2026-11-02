@@ -56,9 +56,14 @@ beforeEach(() => {
 
 describe('login', () => {
   it('a user who is not a member of this company is refused and signed out', async () => {
-    state.bindError = { message: 'You do not have access to this company.' };
+    state.bindError = { message: 'You do not have access to this company.', hint: 'user' };
     expect(await login({}, form())).toEqual({ error: 'You do not have access to this company.', email: 'u@example.com' });
     expect(signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+  it('a failed bind that is not a refusal shows the generic message, not the refusal', async () => {
+    state.bindError = { message: 'connection reset' };
+    expect(await login({}, form())).toEqual({ error: 'Something went wrong. Please try again.', email: 'u@example.com' });
+    expect(signOut).not.toHaveBeenCalled();
   });
   it("a delegate member goes to /my, reading the role from this company's member row", async () => {
     state.role = 'delegate';
@@ -71,7 +76,7 @@ describe('login', () => {
   });
   it('a 2FA user who is not a member is refused before the code page', async () => {
     state.factors = [{ status: 'verified' }];
-    state.bindError = { message: 'You do not have access to this company.' };
+    state.bindError = { message: 'You do not have access to this company.', hint: 'user' };
     expect(await login({}, form())).toMatchObject({ error: 'You do not have access to this company.' });
   });
 });

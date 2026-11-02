@@ -90,7 +90,7 @@ describe("the session's company", () => {
   });
   it('an unbound session that cannot be bound reads as signed out', async () => {
     session.bound = null;
-    session.bindError = { message: 'You do not have access to this company.' };
+    session.bindError = { message: 'You do not have access to this company.', hint: 'user' };
     expect(await getCurrentProfile()).toBeNull();
     await expect(requireSignedIn()).rejects.toThrow('REDIRECT /login?error=company');
   });

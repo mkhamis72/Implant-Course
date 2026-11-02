@@ -12,8 +12,9 @@ $$;
 alter function app.current_session_id() owner to postgres;
 revoke all on function app.current_session_id() from public, anon, authenticated;
 
--- bind_my_session: called by the server after sign-in. Binds the session (0085 rules and errors), then
--- forgets the caller's own bindings whose Auth session has ended. The session just bound is kept even
+-- bind_my_session: called by the server after sign-in. Binds the session (app.bind_session below: any
+-- membership row here binds, active or not; refusals are app_private.fail), then forgets the caller's own
+-- bindings whose Auth session has ended. The session just bound is kept even
 -- if auth.sessions has no row for it.
 create function public.bind_my_session(p_company uuid) returns void
 language plpgsql security definer set search_path = '' as $$

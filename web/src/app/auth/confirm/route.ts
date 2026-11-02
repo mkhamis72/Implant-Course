@@ -24,7 +24,15 @@ export async function GET(request: NextRequest) {
   }
   // The link's session belongs to this host's company, and only if the user is a member here.
   const { companyId } = await currentTenant();
-  if ((await bindSessionToCompany(supabase, companyId)) === 'refused') redirect('/auth/error?code=company');
+  let bound;
+  try {
+    bound = await bindSessionToCompany(supabase, companyId);
+  } catch (e) {
+    // An outage is not a refusal: the error page shows the generic message.
+    console.error('auth/confirm: could not bind the session', e);
+    redirect('/auth/error?code=unexpected');
+  }
+  if (bound === 'refused') redirect('/auth/error?code=company');
   // With 2FA, middleware sends a reset to /login/mfa first; this mark brings it back to the new password.
   if (type === 'recovery') (await cookies()).set(RESET_COOKIE, '1', resetCookieOptions);
   redirect(type === 'invite' || type === 'recovery' ? '/account/set-password' : '/');

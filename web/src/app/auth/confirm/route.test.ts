@@ -38,9 +38,15 @@ describe('GET /auth/confirm', () => {
     expect(rpc).toHaveBeenCalledWith('bind_my_session', { p_company: 'company-a' });
   });
   it("a link opened on a company the user doesn't belong to is refused and signed out", async () => {
-    rpc.mockResolvedValueOnce({ data: null, error: { message: 'You do not have access to this company.' } });
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'You do not have access to this company.', hint: 'user' } });
     await expect(get('token_hash=h&type=recovery')).rejects.toThrow('REDIRECT /auth/error?code=company');
     expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(set).not.toHaveBeenCalled();
+  });
+  it('a failed bind that is not a refusal opens the generic error page and keeps the session', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'connection reset' } });
+    await expect(get('token_hash=h&type=recovery')).rejects.toThrow('REDIRECT /auth/error?code=unexpected');
+    expect(auth.signOut).not.toHaveBeenCalled();
     expect(set).not.toHaveBeenCalled();
   });
 });
