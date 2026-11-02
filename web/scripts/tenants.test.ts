@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({ from: () => ({ select: () => ({ limit: async () => ({ error: null }) }) }) }),
 }));
-import { checkTenant, parseRegisterArgs } from './tenants';
+import { checkTenant, nullCompanyWarning, parseRegisterArgs } from './tenants';
 
 describe('parseRegisterArgs', () => {
   it('slug, name and one or more hosts', () => {
@@ -43,5 +43,17 @@ describe('checkTenant', () => {
   it('reports a wrong anon key', async () => {
     const fetchImpl = vi.fn(async () => new Response('', { status: 401 }));
     expect(await checkTenant(t, fetchImpl as unknown as typeof fetch)).toEqual(['Anon key rejected by https://a.supabase.co (401)']);
+  });
+});
+
+describe('nullCompanyWarning', () => {
+  it('warns when the registered tenant has no company id', () => {
+    expect(nullCompanyWarning('acme', null)).toBe(
+      'Warning: acme has no company id, so it answers 503 until one is set (run again with --company <uuid>).',
+    );
+  });
+  it('is quiet with a company id, or before control 0004 added the column', () => {
+    expect(nullCompanyWarning('acme', 'a7c0de00-0000-4000-8000-000000000001')).toBeNull();
+    expect(nullCompanyWarning('acme', undefined)).toBeNull();
   });
 });

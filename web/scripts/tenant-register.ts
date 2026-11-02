@@ -1,7 +1,7 @@
 import './load-env';
 import { Client } from 'pg';
 import { migrateTarget } from './migrate-target';
-import { checkTenant, parseRegisterArgs, registerTenant } from './tenants';
+import { checkTenant, nullCompanyWarning, parseRegisterArgs, registerTenant, tenantCompanyId } from './tenants';
 
 function need(name: string): string {
   const v = process.env[name];
@@ -35,6 +35,7 @@ async function main() {
     await c.end();
   }
   console.log(`Registered ${args.slug}: ${args.hosts.join(', ')}`);
+  if (warning) console.warn(warning);
 }
 
 main().catch((e) => {

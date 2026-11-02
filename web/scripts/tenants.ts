@@ -28,4 +28,19 @@ export async function registerTenant(c: Client, t: RegisterInput): Promise<void>
   if (t.companyId) await c.query('update public.tenants set company_id = $2 where slug = $1', [t.slug, t.companyId]);
 }
 
+/** The tenant's company id: null when none is set, undefined before control 0004 added the column. */
+export async function tenantCompanyId(c: Client, slug: string): Promise<string | null | undefined> {
+  const column = await c.query(
+    "select 1 from information_schema.columns where table_schema = 'public' and table_name = 'tenants' and column_name = 'company_id'",
+  );
+  if (!column.rowCount) return undefined;
+  const { rows } = await c.query<{ company_id: string | null }>('select company_id from public.tenants where slug = $1', [slug]);
+  return rows[0]?.company_id ?? null;
+}
+
+/** The app serves a tenant without a company as suspended. */
+export function nullCompanyWarning(slug: string, companyId: string | null | undefined): string | null {
+  return companyId === null ? `Warning: ${slug} has no company id, so it answers 503 until one is set (run again with --company <uuid>).` : null;
+}
+
 export { checkTenant } from '../src/lib/tenant/check';

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
-import { registerTenant } from '../../scripts/tenants';
+import { registerTenant, tenantCompanyId } from '../../scripts/tenants';
 import { listTenants, tenantSecrets } from '../../scripts/tenant-env';
 
 const CONTROL_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0001_control_registry.sql'), 'utf8');
@@ -68,6 +68,17 @@ describe('control registry', () => {
         { slug: 'academy', company_id: 'a7c0de00-0000-4000-8000-000000000001' },
         { slug: 'zz-academy', company_id: null },
       ]);
+    });
+  });
+
+  it("reads a tenant's company id; undefined before control 0004", async () => {
+    await withControl(async (c) => {
+      await registerTenant(c, academy);
+      expect(await tenantCompanyId(c, 'zz-academy')).toBeUndefined();
+      await c.query(COMPANY_SQL);
+      expect(await tenantCompanyId(c, 'zz-academy')).toBeNull();
+      await registerTenant(c, { ...academy, companyId: 'a7c0de00-0000-4000-8000-000000000001' });
+      expect(await tenantCompanyId(c, 'zz-academy')).toBe('a7c0de00-0000-4000-8000-000000000001');
     });
   });
 
