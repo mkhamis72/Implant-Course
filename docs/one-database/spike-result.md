@@ -28,9 +28,9 @@ Exit code 0.
 ### Findings
 
 - **`ALTER … OWNER TO tenant_definer` needs `CREATE` on schema `public` for the new owner.** Postgres requires this of any non-superuser, and the local stack's `postgres` is not a superuser. `grant anon to tenant_definer` doesn't supply it. With only `usage` (the brief's check 2), all 82 owner changes failed with `permission denied for schema public`. The script now grants `create on schema public` in check 2 and revokes it once the owners have changed. The definers still run afterwards (check 8 calls `spike_get` again), so the grant is needed only while owners change. The migration should do the same: grant, alter owners, revoke.
-- **Count:** 86 public definers, of which 82 moved and 4 are on the allowlist that exists in `public` (the other allowlist names are in `app_private` or aren't public definers). The "about 111" in the spec includes `app_private` definers, which check 8 leaves alone.
+- **Count:** 86 public definers, of which 82 moved and 4 are on the allowlist that exists in `public` (the other allowlist names are in `app_private` or aren't public definers). The spec's "about 111" presumably also counts `app_private` definers, which check 8 leaves alone.
 - `auth.uid()`, the postgres-owned `audit_row` trigger, and `app_private.require_active()` all work from a tenant_definer-owned function (the require_active check ran with an active staff user's claims and `aal2`).
-- Check 7 needs one active admin or organizer profile without `mfa_setup_required`. Prod has one.
+- Check 7 needs one active admin or organizer profile without `mfa_setup_required`; otherwise it fails with "no active staff profile to sign in as" (a setup gap, not a spike failure).
 
 ## Prod run: pending owner
 
