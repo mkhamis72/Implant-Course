@@ -10,7 +10,7 @@ import { countsSql, redact } from './pre-one-db-backup-lib';
 const IMAGE = 'postgres:17';
 
 /** Connection config from the full env, so DATABASE_CA_CERT is kept for any hosted host. */
-export const clientConfig = (env: NodeJS.ProcessEnv) => pgConfig(env);
+export const clientConfig = (env: Record<string, string | undefined>) => pgConfig(env);
 
 export type CountCheck = { table: string; expected: number; actual: number | null; ok: boolean };
 

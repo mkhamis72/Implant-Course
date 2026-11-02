@@ -4,7 +4,7 @@ import { pgConfig } from './db';
 import { applyTenantArg } from './tenant-env';
 
 /** The connection config for the target: a hosted host needs DATABASE_CA_CERT from the same env. */
-export const clientConfig = (env: NodeJS.ProcessEnv) => pgConfig(env);
+export const clientConfig = (env: Record<string, string | undefined>) => pgConfig(env);
 
 export type TableCount = { table: string; rows: number; nullCompany: number; otherCompany: number };
 export type Totals = { companies: number; members: number; profiles: number };
