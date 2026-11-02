@@ -13,6 +13,16 @@ describe('parseRegisterArgs', () => {
   it('needs at least one host', () => {
     expect(() => parseRegisterArgs(['academy', 'The Academy'])).toThrow(/Usage/);
   });
+  const id = 'a7c0de00-0000-4000-8000-000000000001';
+  it('--company with a valid uuid, before or after the positionals', () => {
+    const want = { slug: 'academy', name: 'The Academy', hosts: ['a.example.com'], companyId: id };
+    expect(parseRegisterArgs(['academy', 'The Academy', 'a.example.com', '--company', id])).toEqual(want);
+    expect(parseRegisterArgs(['--company', id, 'academy', 'The Academy', 'a.example.com'])).toEqual(want);
+  });
+  it('--company without a value or with a malformed id is refused', () => {
+    expect(() => parseRegisterArgs(['academy', 'The Academy', 'a.example.com', '--company'])).toThrow(/--company/);
+    expect(() => parseRegisterArgs(['academy', 'The Academy', 'a.example.com', '--company', 'nope'])).toThrow(/--company/);
+  });
 });
 
 describe('checkTenant', () => {
