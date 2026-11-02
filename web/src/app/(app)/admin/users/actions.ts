@@ -64,6 +64,7 @@ export async function setUserActive(_prev: ActionState, formData: FormData): Pro
   if (!parsed.success) return { error: 'Invalid request.' };
   const { user_id, active } = parsed.data;
   if (user_id === me.user_id) return { error: 'You cannot deactivate your own account.' };
+  if (!(await memberOfMyCompany(user_id))) return { error: USER_NOT_FOUND };
 
   const supabase = await createClient();
   const problem = updateProblem(
@@ -92,6 +93,7 @@ export async function removeUser(_prev: FormState, formData: FormData): Promise<
   await requireAdmin();
   const id = z.string().uuid().safeParse(formData.get('id'));
   if (!id.success) return { error: 'Invalid request.' };
+  if (!(await memberOfMyCompany(id.data))) return { error: USER_NOT_FOUND };
   const supabase = await createClient();
   const { error } = await supabase.rpc('delete_user', { p_user: id.data });
   if (error) return { error: userMessage(error)! };

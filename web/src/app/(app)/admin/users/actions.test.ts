@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const { createLogin, rpc, deleteAuthUser, setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink, sendEmail, hasVerifiedFactor } = vi.hoisted(() => ({
   createLogin: vi.fn(), rpc: vi.fn(), deleteAuthUser: vi.fn(), setTemporaryPassword: vi.fn(),
@@ -17,7 +17,8 @@ const { flagged } = vi.hoisted(() => ({ flagged: { value: false } }));
 const profilesQuery: { select: () => unknown; eq: () => unknown; maybeSingle: () => Promise<unknown> } = { select: () => profilesQuery, eq: () => profilesQuery, maybeSingle: async () => ({ data: { mfa_setup_required: flagged.value }, error: null }) };
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc, from: () => profilesQuery })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-import { changeEmail, editName, inviteUser, removeUser, resendInvite, resetPassword, resetTwoFactor, savePermissions } from './actions';
+import { changeEmail, editName, inviteUser, removeUser, resendInvite, resetPassword, resetTwoFactor, savePermissions, setUserActive } from './actions';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -319,16 +320,19 @@ describe('company check before any Auth change', () => {
     ['resetTwoFactor', (f) => resetTwoFactor({}, f), { user_id: id }],
     ['editName', (f) => editName({}, f), { user_id: id, full_name: 'New Name' }],
     ['resendInvite', (f) => resendInvite({}, f), { user_id: id }],
+    ['removeUser', (f) => removeUser({}, f), { id }],
+    ['setUserActive', (f) => setUserActive({}, f), { user_id: id, active: 'false' }],
   ];
+  afterEach(() => vi.unstubAllEnvs());
   it.each(cases)('%s refuses a user outside the company, without touching Auth', async (_name, run, fields) => {
     vi.stubEnv('EMAIL_ENABLED', 'true');
     memberOfMyCompany.mockResolvedValue(false);
     expect(await run(form(fields))).toEqual({ error: 'User not found.' });
     expect(memberOfMyCompany).toHaveBeenCalledWith(id);
-    for (const fn of [setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink, hasVerifiedFactor, sendEmail, rpc]) {
+    expect(createAdminClient).not.toHaveBeenCalled();
+    for (const fn of [deleteAuthUser, setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink, hasVerifiedFactor, sendEmail, rpc]) {
       expect(fn).not.toHaveBeenCalled();
     }
-    vi.unstubAllEnvs();
   });
   it('resetPassword goes ahead for a member', async () => {
     setTemporaryPassword.mockResolvedValue({ password: 'Temp-Pass-123' });

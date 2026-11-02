@@ -8,7 +8,8 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function memberOfMyCompany(userId: string): Promise<boolean> {
   const supabase = await createClient();
-  const { data } = await supabase.from('profiles').select('user_id').eq('user_id', userId).maybeSingle();
+  const { data, error } = await supabase.from('profiles').select('user_id').eq('user_id', userId).maybeSingle();
+  if (error) console.error('Company membership check failed:', error.message);
   return !!data;
 }
 

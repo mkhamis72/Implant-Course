@@ -8,6 +8,7 @@ import { emailEnabled } from '@/lib/flags';
 import { temporaryPassword } from './passwords';
 import type { Role } from '@/lib/auth/permissions';
 
+const CHECK_FAILED = 'Could not check this email. Try again.';
 const EXISTS = 'A user with this email already exists.';
 export type LoginResult = { ok: string; password?: string } | { error: string };
 
@@ -19,7 +20,8 @@ export async function createLogin(a: { email: string; full_name: string; role: R
   const email = a.email.trim().toLowerCase();
   const supabase = await createClient();
   // An invite to an existing, unconfirmed address returns that account instead of failing: never repurpose it.
-  const { data: taken } = await supabase.from('profiles').select('user_id').eq('email', email).limit(1);
+  const { data: taken, error: takenError } = await supabase.from('profiles').select('user_id').eq('email', email).limit(1);
+  if (takenError) return { error: CHECK_FAILED };
   if (taken?.length) return { error: EXISTS };
 
   let admin;
@@ -29,7 +31,8 @@ export async function createLogin(a: { email: string; full_name: string; role: R
     return { error: (error as Error).message };
   }
   // Any company's profile with this address (the admin client sees all): Auth would hand back that account.
-  const { data: anywhere } = await admin.from('profiles').select('user_id').eq('email', email).limit(1);
+  const { data: anywhere, error: anywhereError } = await admin.from('profiles').select('user_id').eq('email', email).limit(1);
+  if (anywhereError) return { error: CHECK_FAILED };
   if (anywhere?.length) return { error: EXISTS };
 
   const password = emailEnabled() ? undefined : temporaryPassword();

@@ -73,6 +73,20 @@ describe('createLogin', () => {
     expect(auth.createUser).not.toHaveBeenCalled();
   });
 
+  it('stops when the admin lookup errors, before any Auth call', async () => {
+    adminProfile.mockReturnValue({ data: null, error: { message: 'boom' } });
+    expect(await createLogin({ email: 'o@example.com', full_name: 'O', role: 'organizer' })).toEqual({ error: 'Could not check this email. Try again.' });
+    expect(auth.inviteUserByEmail).not.toHaveBeenCalled();
+    expect(auth.createUser).not.toHaveBeenCalled();
+  });
+
+  it('stops when the own-session lookup errors, before any Auth call', async () => {
+    existing.mockReturnValue({ data: null, error: { message: 'boom' } });
+    expect(await createLogin({ email: 'o@example.com', full_name: 'O', role: 'organizer' })).toEqual({ error: 'Could not check this email. Try again.' });
+    expect(auth.inviteUserByEmail).not.toHaveBeenCalled();
+    expect(auth.createUser).not.toHaveBeenCalled();
+  });
+
   it('refuses an invite that returned an older account, and leaves it alone', async () => {
     vi.stubEnv('EMAIL_ENABLED', 'true');
     auth.inviteUserByEmail.mockResolvedValue({ data: { user: { id: 'old', created_at: new Date(Date.now() - 3600_000).toISOString() } }, error: null });
