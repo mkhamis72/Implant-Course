@@ -2,6 +2,8 @@ import 'server-only';
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { currentTenant } from '@/lib/tenant/current';
+import { ensureSessionCompany } from './company-session';
 import {
   canEdit, canView, permissionMessage, toPermissions, type Area, type Level, type Permissions, type Role,
 } from './permissions';
@@ -23,26 +25,64 @@ export const MFA_SETUP_MESSAGE = 'Set up two-factor authentication first.';
 
 export type Settings = { expiry_alert_days: number; session_timeout_minutes: number };
 
-export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
+type Account = { profile: Profile | null; companyRefused: boolean };
+type MemberRow = Pick<Profile, 'role' | 'active' | 'delegate_id' | 'mfa_setup_required'> & {
+  profile: { full_name: string; email: string } | null;
+};
+
+/** The signed-in user as a member of this host's company. Ends the session when it doesn't belong here. */
+const loadAccount = cache(async (): Promise<Account> => {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('user_id, full_name, email, role, active, delegate_id, mfa_setup_required, permissions:user_permissions(area, level)')
-    .eq('user_id', user.id)
-    .maybeSingle();
+  if (!user) return { profile: null, companyRefused: false };
+  const { companyId } = await currentTenant();
+  if ((await ensureSessionCompany(supabase, companyId)) === 'refused') return { profile: null, companyRefused: true };
+  const [member, perms] = await Promise.all([
+    supabase
+      .from('company_members')
+      .select('role, active, delegate_id, mfa_setup_required, profile:profiles(full_name, email)')
+      .eq('company_id', companyId)
+      .eq('user_id', user.id)
+      .maybeSingle(),
+    supabase.from('user_permissions').select('area, level').eq('company_id', companyId).eq('user_id', user.id),
+  ]);
   // A failed lookup is an error page, not "signed out": redirecting to /login would loop.
-  if (error) throw new Error('Could not load your account');
-  // Signed in but no profile row: treat as deactivated (an admin has to set the account up).
-  if (!data) {
-    return { user_id: user.id, full_name: '', email: user.email ?? '', role: 'organizer', active: false, delegate_id: null, mfa_setup_required: false, permissions: {} };
+  if (member.error || perms.error) throw new Error('Could not load your account');
+  const row = member.data as MemberRow | null;
+  // Signed in but no member row: treat as deactivated (an admin has to set the account up).
+  if (!row) {
+    return {
+      profile: { user_id: user.id, full_name: '', email: user.email ?? '', role: 'organizer', active: false, delegate_id: null, mfa_setup_required: false, permissions: {} },
+      companyRefused: false,
+    };
   }
-  const row = data as Omit<Profile, 'permissions'> & { permissions: { area: string; level: string }[] | null };
-  return { ...row, permissions: toPermissions(row.permissions) };
+  // Deactivated in this company since signing in: the session ends on its next request.
+  if (!row.active) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return { profile: null, companyRefused: true };
+  }
+  const { profile, ...membership } = row;
+  return {
+    profile: {
+      user_id: user.id,
+      full_name: profile?.full_name ?? '',
+      email: profile?.email ?? user.email ?? '',
+      ...membership,
+      permissions: toPermissions(perms.data as { area: string; level: string }[] | null),
+    },
+    companyRefused: false,
+  };
 });
+
+/** Null means "not signed in here": no session, or one this company refused (then signed out). */
+export const getCurrentProfile = cache(async (): Promise<Profile | null> => (await loadAccount()).profile);
+
+/** Where a request without a profile signs in: with the reason when this company refused the session. */
+export async function signInPath(): Promise<string> {
+  return (await loadAccount()).companyRefused ? '/login?error=company' : '/login';
+}
 
 export async function requireAdmin(): Promise<Profile> {
   const profile = await getCurrentProfile();
@@ -67,7 +107,7 @@ export const getSettings = cache(async (): Promise<Settings> => {
  */
 export async function requireSignedIn(options: { allowMfaSetup?: boolean } = {}): Promise<Profile> {
   const profile = await getCurrentProfile();
-  if (!profile) redirect('/login');
+  if (!profile) redirect(await signInPath());
   if (!profile.active) redirect('/deactivated');
   if (profile.mfa_setup_required && !options.allowMfaSetup) redirect(MFA_SETUP_PATH);
   return profile;

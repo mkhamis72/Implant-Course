@@ -4,10 +4,11 @@ import { emailEnabled } from '@/lib/flags';
 import { getBranding } from '@/lib/branding/get';
 import { LoginForm } from './login-form';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
+import { COMPANY_REFUSED_MESSAGE } from '@/lib/auth/company-session';
 
 export default async function LoginPage({ searchParams }: { searchParams: PageSearchParams }) {
   const branding = await getBranding();
-  const reason = (await readParams(searchParams, 'reason')).reason || undefined;
+  const { reason, error } = await readParams(searchParams, 'reason', 'error');
   return (
     <main className="mx-auto mt-10 max-w-sm px-4 sm:mt-24">
       <div className="card space-y-6">
@@ -18,6 +19,7 @@ export default async function LoginPage({ searchParams }: { searchParams: PageSe
         {reason === 'idle' && (
           <p className="rounded bg-warn-soft p-3 text-sm text-warn">You were signed out after a period of inactivity.</p>
         )}
+        {error === 'company' && <p role="alert" className="rounded bg-bad-soft p-3 text-sm text-bad">{COMPANY_REFUSED_MESSAGE}</p>}
         <LoginForm />
         {emailEnabled() && (
           <Link href="/login/forgot" className="block text-center text-sm hover:underline">

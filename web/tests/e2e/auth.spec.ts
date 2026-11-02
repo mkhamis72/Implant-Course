@@ -32,11 +32,15 @@ test('unverified email cannot sign in', async ({ page }) => {
   await expect(page.getByRole('main').getByRole('alert')).toContainText('Please verify your email first');
 });
 
-test('inactive user lands on deactivated page', async ({ page }) => {
-  await login(page, TEST_USERS.inactive.email);
-  await expect(page.getByRole('heading', { name: 'Account deactivated' })).toBeVisible();
+// Signing in binds the session to the company, which needs an active membership: the session ends at once.
+test('an inactive user is refused at sign-in and stays signed out', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(TEST_USERS.inactive.email);
+  await page.getByLabel('Password').fill(TEST_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText('You do not have access to this company.');
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Account deactivated' })).toBeVisible();
+  await expect(page).toHaveURL(/\/login$/);
 });
 
 test('signed-in user visiting /login goes to dashboard', async ({ page }) => {
