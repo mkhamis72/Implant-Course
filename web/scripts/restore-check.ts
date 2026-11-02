@@ -9,6 +9,9 @@ import { countsSql, redact } from './pre-one-db-backup-lib';
 
 const IMAGE = 'postgres:17';
 
+/** Connection config from the full env, so DATABASE_CA_CERT is kept for any hosted host. */
+export const clientConfig = (env: Record<string, string | undefined>) => pgConfig(env);
+
 export type CountCheck = { table: string; expected: number; actual: number | null; ok: boolean };
 
 /** One line per expected table; a table missing from `actual` has `actual: null`. */
@@ -52,7 +55,7 @@ async function main() {
   // Auth first: the app tables' foreign keys to auth.users need its rows. The stack's own auth tables hold only
   // bootstrap rows; empty them, then load the dump's rows. auth.schema_migrations belongs to the auth service
   // (not truncatable here) and the stack already filled it, so its dump rows are skipped.
-  const c = new Client(pgConfig({ DATABASE_URL: url }));
+  const c = new Client(clientConfig(process.env));
   await c.connect();
   try {
     const { rows } = await c.query("select format('%I.%I', n.nspname, c.relname) as t from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'auth' and c.relkind = 'r' and c.relname <> 'schema_migrations'");
@@ -67,7 +70,7 @@ async function main() {
 
   // Then the un-migrated target gets schema and data of the app schemas. A --schema filter does not carry the
   // CREATE SCHEMA of app_private (public exists already), so create it first.
-  const s = new Client(pgConfig({ DATABASE_URL: url }));
+  const s = new Client(clientConfig(process.env));
   await s.connect();
   try {
     await s.query('create schema if not exists app_private');
@@ -77,7 +80,7 @@ async function main() {
   restore(['--no-owner', '--no-acl', '--schema=public', '--schema=app_private']);
 
   const expected = Object.fromEntries((JSON.parse(readFileSync(countsFile, 'utf8')) as { table: string; rows: number }[]).map((r) => [r.table, r.rows]));
-  const v = new Client(pgConfig({ DATABASE_URL: url }));
+  const v = new Client(clientConfig(process.env));
   await v.connect();
   let actual: Record<string, number>;
   try {

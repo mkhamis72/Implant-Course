@@ -43,9 +43,9 @@ Exit code 0.
 - **Plan 3 must give tenant_definer a permissive policy on every table its functions read or write.** That's the spec §5 policy `for all to tenant_definer using (true) with check (true)`, with the restrictive company policy doing the isolation. The guards need it on `profiles` and `user_permissions`; the business functions need it on every table they touch. Without it they deny everything.
 - Checks 7 and 10 need one active admin or organizer whose `mfa_setup_required` flag is off. Without one they fail with `no active staff user`, which is a setup gap and not a spike failure.
 
-## Prod run: pending owner
+## Prod run (2026-11-02)
 
-The owner runs the script against prod. It changes nothing: the transaction always rolls back.
+The owner runs the script against prod. It changes nothing: the transaction always rolls back. Check 10 takes ACCESS EXCLUSIVE locks on `profiles` and `user_permissions` until that rollback, so run it outside course hours and expect a few seconds of stalled pages.
 
 ```
 ! cd "/d/Claude/Claude Code/implant-course-one-db/web" && ENV_FILE=.env.prod npx tsx scripts/spike-tenant-definer.ts --tenant academy
@@ -53,8 +53,26 @@ The owner runs the script against prod. It changes nothing: the transaction alwa
 
 Then confirm, read-only, that the role is gone: `select rolname from pg_roles where rolname = 'tenant_definer'` (the script also prints `After rollback: tenant_definer is gone`).
 
-Output: _pending_.
+Before shipping release 2, also run the read-only `rolbypassrls` check in `release-2-checklist.md`.
+
+Output (2026-11-02, academy, `ENV_FILE=.env.prod … --tenant academy`):
+
+```
+Target project: aws-1-eu-central-1.pooler.supabase.com (academy kshsgwvwqvufqdxcyvat.supabase.co)
+PASS 1 role tenant_definer
+PASS 2 grants to tenant_definer
+PASS 3 table spike_rows with forced RLS and audit trigger
+PASS 4 definer spike_get sees only its company: B sees 0, A sees 1
+PASS 5 auth.uid() inside a tenant_definer function: returns the claims sub
+PASS 6 insert through tenant_definer, audit_row still writes: row inserted, 1 audit_log row
+PASS 7 app_private.require_active() from a tenant_definer function: ran as an active staff user
+PASS 8 every public and app_private definer (minus allowlist) owned by tenant_definer: public 82 moved, 4 stay; app_private 21 moved, 4 stay; CREATE on both schemas revoked afterwards, definers still run
+PASS 9 pg_roles: tenant_definer has rolbypassrls = false: rolbypassrls = false
+PASS 10 real guard chain (require_active, can) under tenant_definer: as an active organizer; require_active: no policy error "Not allowed", profiles policy ok; can('patients','view'): profiles policy only false, both true; needed the policy: profiles, user_permissions
+After rollback: tenant_definer is gone
+All checks passed
+```
 
 ## Decision
 
-**Provisional: definer approach** (all checks pass locally). This becomes final only if the prod run passes too. If any check fails on prod because hosted Supabase forbids it, the decision becomes **fallback: explicit company check in every definer**, and this section names the failing check. The likeliest failures are check 1 (`grant anon to tenant_definer`) and the owner changes in check 8.
+**Final: definer approach.** All 10 checks passed on the local stack and on prod (academy, 2026-11-02), and the role was gone after the rollback. Plan 3 uses `tenant_definer` ownership with the spec §5 allowlist; it must grant CREATE on `public` and `app_private` while changing owners and revoke it after, and give `tenant_definer` permissive policies on every table its functions read or write (check 10 needed `profiles` and `user_permissions`).

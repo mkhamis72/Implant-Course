@@ -16,7 +16,7 @@ Nothing here is run against production by a script. Every production step below 
 ## Proof status
 
 - Proven (2026-11-02) with a dump of the main local stack restored into a fresh second local stack (dev2) by `restore-check.ts`: `PASS 76/76`, including `auth.users`, `auth.identities`, `auth.mfa_factors` and the auth bookkeeping tables. No auth bookkeeping differences occurred in this run, but they are acceptable when a mismatch is limited to `auth.sessions`, `auth.refresh_tokens` and `auth.audit_log_entries` (they grow between the dump and the count). Any other mismatch is a failure.
-- **Pending:** the same proof with the real academy dump. The owner's production dump does not exist yet; re-run the check below on it when it does.
+- Proven (2026-11-02) with the real academy production dump (`pre-one-db/academy/full.dump`, 76 tables, 2198 rows) restored into a fresh dev2: `PASS 76/76`. The control dump (`pre-one-db/control/`) is taken but its restore is not proven.
 
 ## Check a dump (local only, any time)
 
