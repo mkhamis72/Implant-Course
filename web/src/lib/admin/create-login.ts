@@ -8,6 +8,8 @@ import { emailEnabled } from '@/lib/flags';
 import { temporaryPassword } from './passwords';
 import type { Role } from '@/lib/auth/permissions';
 
+const CHECK_FAILED = 'Could not check this email. Try again.';
+const EXISTS = 'A user with this email already exists.';
 export type LoginResult = { ok: string; password?: string } | { error: string };
 
 /**
@@ -18,8 +20,9 @@ export async function createLogin(a: { email: string; full_name: string; role: R
   const email = a.email.trim().toLowerCase();
   const supabase = await createClient();
   // An invite to an existing, unconfirmed address returns that account instead of failing: never repurpose it.
-  const { data: taken } = await supabase.from('profiles').select('user_id').eq('email', email).limit(1);
-  if (taken?.length) return { error: 'A user with this email already exists.' };
+  const { data: taken, error: takenError } = await supabase.from('profiles').select('user_id').eq('email', email).limit(1);
+  if (takenError) return { error: CHECK_FAILED };
+  if (taken?.length) return { error: EXISTS };
 
   let admin;
   try {
@@ -27,11 +30,20 @@ export async function createLogin(a: { email: string; full_name: string; role: R
   } catch (error) {
     return { error: (error as Error).message };
   }
+  // Any company's profile with this address (the admin client sees all): Auth would hand back that account.
+  const { data: anywhere, error: anywhereError } = await admin.from('profiles').select('user_id').eq('email', email).limit(1);
+  if (anywhereError) return { error: CHECK_FAILED };
+  if (anywhere?.length) return { error: EXISTS };
+
   const password = emailEnabled() ? undefined : temporaryPassword();
+  const startedAt = Date.now();
   const { data, error } = password
     ? await admin.auth.admin.createUser({ email, password, email_confirm: true })
     : await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${await requestOrigin()}/auth/confirm` });
   if (error || !data?.user) return { error: error ? mapAuthError(error) : 'Could not create the login.' };
+
+  // Backstop: an account created before this call is an existing one (an invite returns it instead of failing).
+  if (data.user.created_at && Date.parse(data.user.created_at) < startedAt - 5000) return { error: EXISTS };
 
   // Through the admin's own session so RLS and the audit log record who did it.
   const problem = updateProblem(

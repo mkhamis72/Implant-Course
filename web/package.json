@@ -18,6 +18,7 @@
     "db:dev2:stop": "supabase stop --workdir .dev2",
     "tenant:register": "tsx scripts/tenant-register.ts",
     "tenant:check": "tsx scripts/tenant-check.ts",
+    "backup:pre-one-db": "tsx scripts/pre-one-db-backup.ts",
     "tenants:export": "tsx scripts/tenants-export.ts",
     "test:db": "vitest run -c vitest.db.config.mts",
     "test:e2e": "playwright test",

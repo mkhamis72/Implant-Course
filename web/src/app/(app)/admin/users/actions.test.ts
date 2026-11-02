@@ -1,9 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const { createLogin, rpc, deleteAuthUser, setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink, sendEmail, hasVerifiedFactor } = vi.hoisted(() => ({
   createLogin: vi.fn(), rpc: vi.fn(), deleteAuthUser: vi.fn(), setTemporaryPassword: vi.fn(),
   changeAuthEmail: vi.fn(), resetAuthFactors: vi.fn(), inviteLink: vi.fn(), sendEmail: vi.fn(), hasVerifiedFactor: vi.fn(),
 }));
+const { memberOfMyCompany } = vi.hoisted(() => ({ memberOfMyCompany: vi.fn() }));
+vi.mock('@/lib/admin/same-company', () => ({ memberOfMyCompany, USER_NOT_FOUND: 'User not found.' }));
 const { ME } = vi.hoisted(() => ({ ME: '9c1d6e2a-3b4f-4a5e-8d7c-1f2e3d4c5b6a' }));
 vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: ME })) }));
 vi.mock('@/lib/admin/create-login', () => ({ createLogin }));
@@ -15,11 +17,13 @@ const { flagged } = vi.hoisted(() => ({ flagged: { value: false } }));
 const profilesQuery: { select: () => unknown; eq: () => unknown; maybeSingle: () => Promise<unknown> } = { select: () => profilesQuery, eq: () => profilesQuery, maybeSingle: async () => ({ data: { mfa_setup_required: flagged.value }, error: null }) };
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc, from: () => profilesQuery })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-import { changeEmail, editName, inviteUser, removeUser, resendInvite, resetPassword, resetTwoFactor, savePermissions } from './actions';
+import { changeEmail, editName, inviteUser, removeUser, resendInvite, resetPassword, resetTwoFactor, savePermissions, setUserActive } from './actions';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 beforeEach(() => {
   vi.clearAllMocks();
   flagged.value = false;
+  memberOfMyCompany.mockResolvedValue(true);
 });
 
 const form = (fields: Record<string, string>) => {
@@ -305,5 +309,34 @@ describe('resendInvite', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+describe('company check before any Auth change', () => {
+  const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
+  const cases: [string, (f: FormData) => Promise<unknown>, Record<string, string>][] = [
+    ['resetPassword', (f) => resetPassword({}, f), { user_id: id }],
+    ['changeEmail', (f) => changeEmail({}, f), { user_id: id, email: 'new@example.com' }],
+    ['resetTwoFactor', (f) => resetTwoFactor({}, f), { user_id: id }],
+    ['editName', (f) => editName({}, f), { user_id: id, full_name: 'New Name' }],
+    ['resendInvite', (f) => resendInvite({}, f), { user_id: id }],
+    ['removeUser', (f) => removeUser({}, f), { id }],
+    ['setUserActive', (f) => setUserActive({}, f), { user_id: id, active: 'false' }],
+  ];
+  afterEach(() => vi.unstubAllEnvs());
+  it.each(cases)('%s refuses a user outside the company, without touching Auth', async (_name, run, fields) => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    memberOfMyCompany.mockResolvedValue(false);
+    expect(await run(form(fields))).toEqual({ error: 'User not found.' });
+    expect(memberOfMyCompany).toHaveBeenCalledWith(id);
+    expect(createAdminClient).not.toHaveBeenCalled();
+    for (const fn of [deleteAuthUser, setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink, hasVerifiedFactor, sendEmail, rpc]) {
+      expect(fn).not.toHaveBeenCalled();
+    }
+  });
+  it('resetPassword goes ahead for a member', async () => {
+    setTemporaryPassword.mockResolvedValue({ password: 'Temp-Pass-123' });
+    expect(await resetPassword({}, form({ user_id: id }))).toMatchObject({ ok: 'New one-time password set.' });
+    expect(setTemporaryPassword).toHaveBeenCalledTimes(1);
   });
 });

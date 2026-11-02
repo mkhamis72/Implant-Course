@@ -94,14 +94,15 @@ export async function hasVerifiedFactor(userId: string): Promise<boolean | null>
 
 const USERS_PER_PAGE = 1000;
 
-/** Every login's last sign-in (null = never), by user id. Throws when Auth can't answer: "Never" would be wrong. */
-export async function listSignIns(): Promise<Map<string, string | null>> {
+/** The given members' last sign-in (null = never), by user id. Throws when Auth can't answer: "Never" would be wrong. */
+export async function listSignIns(userIds: string[]): Promise<Map<string, string | null>> {
+  const wanted = new Set(userIds);
   const auth = await adminAuth();
   const signIns = new Map<string, string | null>();
   for (let page = 1; ; page++) {
     const { data, error } = await auth.listUsers({ page, perPage: USERS_PER_PAGE });
     if (error) throw new Error(`Could not load sign-in times: ${error.message}`);
-    for (const user of data.users) signIns.set(user.id, user.last_sign_in_at ?? null);
+    for (const user of data.users) if (wanted.has(user.id)) signIns.set(user.id, user.last_sign_in_at ?? null);
     if (data.users.length < USERS_PER_PAGE) return signIns;
   }
 }
