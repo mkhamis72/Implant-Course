@@ -3,6 +3,9 @@ import { Client } from 'pg';
 import { pgConfig } from './db';
 import { applyTenantArg } from './tenant-env';
 
+/** The connection config for the target: a hosted host needs DATABASE_CA_CERT from the same env. */
+export const clientConfig = (env: NodeJS.ProcessEnv) => pgConfig(env);
+
 export type TableCount = { table: string; rows: number; nullCompany: number; otherCompany: number };
 export type Totals = { companies: number; members: number; profiles: number };
 
@@ -22,7 +25,7 @@ async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is not set');
   console.log(`Target project: ${new URL(url).hostname}`);
-  const c = new Client(pgConfig({ DATABASE_URL: url }));
+  const c = new Client(clientConfig(process.env));
   await c.connect();
   try {
     await c.query('begin read only');

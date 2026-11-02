@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateCheck, type TableCount } from './one-db-check';
+import { clientConfig, evaluateCheck, type TableCount } from './one-db-check';
 
 const ok: TableCount[] = [
   { table: 'public.patients', rows: 12, nullCompany: 0, otherCompany: 0 },
@@ -23,5 +23,17 @@ describe('evaluateCheck', () => {
     const r = evaluateCheck(ok, { companies: 1, members: 4, profiles: 5 });
     expect(r.ok).toBe(false);
     expect(r.problems).toEqual(['company_members has 4 rows but profiles has 5']);
+  });
+});
+
+describe('clientConfig', () => {
+  it('keeps the CA for a hosted host', async () => {
+    const { writeFileSync, mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const ca = join(mkdtempSync(join(tmpdir(), 'ca-')), 'ca.crt');
+    writeFileSync(ca, 'CERT');
+    const cfg = clientConfig({ DATABASE_URL: 'postgresql://u:p@db.example.com:5432/postgres', DATABASE_CA_CERT: ca });
+    expect(cfg.ssl).toEqual({ ca: 'CERT' });
   });
 });
