@@ -75,6 +75,25 @@ describe('bind_my_session / my_session_company (0086)', () => {
     });
   });
 
+  it('binds an inactive member, so the app can show "deactivated"', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      await c.query('update public.company_members set active = false where company_id = $1 and user_id = $2', [ACADEMY_ID, users.viewer]);
+      await actAs(c, users.viewer, { session_id: S1 });
+      await c.query('select public.bind_my_session($1)', [ACADEMY_ID]);
+      expect((await c.query('select public.my_session_company() as id')).rows[0].id).toBe(ACADEMY_ID);
+    });
+  });
+
+  it('refuses a user with no membership row', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      await c.query('delete from public.company_members where company_id = $1 and user_id = $2', [ACADEMY_ID, users.viewer]);
+      await actAs(c, users.viewer, { session_id: S1 });
+      await refused(c, () => c.query('select public.bind_my_session($1)', [ACADEMY_ID]), /You do not have access to this company\./);
+    });
+  });
+
   it('is closed to anon', async () => {
     await withTx(async (c) => {
       await actAs(c, null);

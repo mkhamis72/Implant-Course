@@ -69,6 +69,8 @@ test.describe('the session belongs to the company it signed in on', () => {
 
   test.afterAll(async () => {
     if (userId) await adminClient().auth.admin.deleteUser(userId);
+    // Company B exists only for this spec (DB tests expect academy to be the only company).
+    await withPg((pg) => pg.query('delete from public.companies where id = $1', [companyB]));
   });
 
   test("academy's cookies on company B's host are refused, and that session ends", async ({ page, context }) => {
@@ -96,9 +98,22 @@ test.describe('the session belongs to the company it signed in on', () => {
     expect(back.rows).toEqual([{ company_id: ACADEMY }]);
   });
 
-  test('a member deactivated in the company is signed out on the next request', async ({ page }) => {
+  test('a member deactivated in the company sees "Account deactivated" on the next request', async ({ page }) => {
     await signIn(page, email);
     await withPg((pg) => pg.query('update public.company_members set active = false where company_id = $1 and user_id = $2', [ACADEMY, userId]));
+    await page.reload();
+    await expect(page).toHaveURL(/\/deactivated$/);
+    await expect(page.getByRole('heading', { name: 'Account deactivated' })).toBeVisible();
+  });
+
+  test('a session that is unbound and no longer a member is signed out with the reason', async ({ page, context }) => {
+    await withPg((pg) => pg.query('update public.company_members set active = true where company_id = $1 and user_id = $2', [ACADEMY, userId]));
+    await signIn(page, email);
+    const session = await sessionId(context);
+    await withPg(async (pg) => {
+      await pg.query('delete from public.company_members where company_id = $1 and user_id = $2', [ACADEMY, userId]);
+      await pg.query('delete from app.session_companies where session_id = $1', [session]);
+    });
     await page.reload();
     await expect(page).toHaveURL(/\/login\?error=company$/);
     await expect(page.getByRole('alert').filter({ hasText: REFUSED })).toBeVisible();

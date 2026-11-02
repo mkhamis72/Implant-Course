@@ -93,11 +93,11 @@ describe("the session's company", () => {
     expect(await getCurrentProfile()).toBeNull();
     await expect(requireSignedIn()).rejects.toThrow('REDIRECT /login?error=company');
   });
-  it('a member deactivated in this company is signed out with the reason', async () => {
+  it('a member deactivated in this company stays signed in and is shown "deactivated"', async () => {
     row.current = profile({ active: false });
-    expect(await getCurrentProfile()).toBeNull();
-    expect(calls.signOut).toBeGreaterThan(0);
-    await expect(requireSignedIn()).rejects.toThrow('REDIRECT /login?error=company');
+    await expect(getCurrentProfile()).resolves.toMatchObject({ user_id: 'u1', active: false });
+    expect(calls.signOut).toBe(0);
+    await expect(requireSignedIn()).rejects.toThrow('REDIRECT /deactivated');
   });
   it('no member row keeps the "deactivated" fallback', async () => {
     row.current = null;
@@ -128,9 +128,9 @@ describe('while two-factor set-up is required', () => {
   it('the security page itself is still allowed', async () => {
     await expect(requireSignedIn({ allowMfaSetup: true })).resolves.toMatchObject({ user_id: 'u1', mfa_setup_required: true });
   });
-  it('a deactivated account is still signed out first', async () => {
+  it('a deactivated account still goes to /deactivated first', async () => {
     row.current = profile({ mfa_setup_required: true, active: false });
-    await expect(requireSignedIn()).rejects.toThrow('REDIRECT /login?error=company');
+    await expect(requireSignedIn()).rejects.toThrow('REDIRECT /deactivated');
   });
 });
 

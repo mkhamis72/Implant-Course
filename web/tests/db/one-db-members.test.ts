@@ -148,7 +148,7 @@ describe('session binding (0085)', () => {
     });
   });
 
-  it('refuses another company, a missing session and an inactive member', async () => {
+  it('refuses another company and a missing session; binds an inactive member (0086: access still needs active)', async () => {
     await withTx(async (c) => {
       await asPostgres(c);
       const other = (await c.query(`insert into public.companies (slug, name) values ('zz-other', 'Other') returning id`)).rows[0].id;
@@ -168,7 +168,8 @@ describe('session binding (0085)', () => {
       await asPostgres(c);
       await c.query('update public.profiles set active = false where user_id = $1', [users.viewer]);
       await actAs(c, users.viewer, { session_id: '0e5e5510-0000-4000-8000-000000000002' });
-      await refused(c, () => c.query('select app.bind_session($1)', [ACADEMY_ID]), /You do not have access to this company\./);
+      await c.query('select app.bind_session($1)', [ACADEMY_ID]);
+      expect((await c.query('select app.current_company_id() as id')).rows[0].id).toBe(ACADEMY_ID);
     });
   });
 

@@ -57,3 +57,32 @@ alter function public.branding_for(uuid) owner to postgres;
 alter function public.branding_logo_for(uuid) owner to postgres;
 revoke all on function public.branding_for(uuid), public.branding_logo_for(uuid) from public;
 grant execute on function public.branding_for(uuid), public.branding_logo_for(uuid) to anon, authenticated;
+
+-- bind_session: 0085's rules, but any membership row binds, active or not, so a member deactivated by an
+-- admin signs in and sees "Account deactivated" as before. Access still needs an active membership
+-- (is_active_user and the app's guards). A user with no membership row here is still refused.
+create or replace function app.bind_session(p_company uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_session uuid := app.current_session_id();
+  v_user uuid := app.current_user_id();
+  v_bound app.session_companies;
+begin
+  if v_session is null or v_user is null then
+    perform app_private.fail('No sign-in session.');
+  end if;
+  if not exists (select 1 from public.company_members m
+                 where m.company_id = p_company and m.user_id = v_user) then
+    perform app_private.fail('You do not have access to this company.');
+  end if;
+  insert into app.session_companies (session_id, company_id, user_id)
+  values (v_session, p_company, v_user)
+  on conflict (session_id) do nothing;
+  select * into v_bound from app.session_companies where session_id = v_session;
+  if v_bound.company_id <> p_company or v_bound.user_id <> v_user then
+    perform app_private.fail('You do not have access to this company.');
+  end if;
+end $$;
+alter function app.bind_session(uuid) owner to postgres;
+revoke all on function app.bind_session(uuid) from public, anon;
+grant execute on function app.bind_session(uuid) to authenticated;

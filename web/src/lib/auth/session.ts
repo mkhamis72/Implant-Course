@@ -58,11 +58,7 @@ const loadAccount = cache(async (): Promise<Account> => {
       companyRefused: false,
     };
   }
-  // Deactivated in this company since signing in: the session ends on its next request.
-  if (!row.active) {
-    await supabase.auth.signOut({ scope: 'local' });
-    return { profile: null, companyRefused: true };
-  }
+  // An inactive member keeps the session with active: false, so the guards show "Account deactivated".
   const { profile, ...membership } = row;
   return {
     profile: {
