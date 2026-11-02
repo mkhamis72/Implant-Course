@@ -4,8 +4,15 @@ Owner steps, in order. Production project `kshsgwvwqvufqdxcyvat`, company host `
 
 ## (a) Before shipping
 
+0. **Confirm academy's control slug.** Control migration 0004 gives the company id only to the tenant whose slug is `academy`; any other slug would be served as suspended (503). Read-only (`begin read only`, prints the target host, slugs and company ids, no secrets):
+
+   ```bash
+   cd web && ENV_FILE=.env.prod NODE_PATH=node_modules npx tsx scripts/control-tenants-check.ts
+   ```
+
+   It runs `select slug, company_id from public.tenants` (just `slug` while 0004 has not added the column) on the control project through `CONTROL_DATABASE_URL`. Expected: `Target project: <control host>`, a line `academy: ...`, then `PASS`. On `FAIL` (no `academy` tenant), stop and ask before shipping.
 1. Release 2 must be live and its checklist done (`release-2-checklist.md`).
-2. **Auth sign-ups must stay OFF** (Supabase -> Authentication -> Sign In / Providers -> "Allow new users to sign up" off). A pending login (0088) grants its role to any `auth.users` insert with that email, so open sign-ups would let a stranger claim it.
+2. **Auth sign-ups must stay OFF** (Supabase -> Authentication -> Sign In / Providers -> "Allow new users to sign up" off). A pending login (0088) grants its role to any `auth.users` insert with that email, so open sign-ups would let a stranger claim it. `ENV_FILE=.env.prod npm run tenant:check -- academy` fails while they are on.
 3. Ship: switch the repo public, `cd web && ./scripts/ship.sh ship`, then private again.
 4. After Release finishes (it migrates the control project, then every company, before deploying), check that academy's control row has its company. Read-only, in the control project's SQL editor:
 
