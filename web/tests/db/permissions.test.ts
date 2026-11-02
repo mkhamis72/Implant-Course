@@ -271,6 +271,8 @@ describe('permissions: guard rails', () => {
         // One database (0086, spec §3): session binding for the signed-in user (0085's membership check),
         // and the per-company branding readers for the signed-out login page.
         'bind_my_session', 'my_session_company', 'branding_for', 'branding_logo_for',
+        // One database (0087, spec §4): admin-only membership writes for the caller's bound company.
+        'set_member_role', 'set_member_active',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });

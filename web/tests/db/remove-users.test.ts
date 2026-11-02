@@ -1,6 +1,6 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs, actAsBound, asPostgres } from './helpers';
 import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, place, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
@@ -31,7 +31,7 @@ describe('delete_user', () => {
   it('an admin removes a user without records; their permissions go too', async () => {
     await withTx(async (c) => {
       const id = await newUser(c, 'zz-remove-clean@example.com');
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await deleteUser(c, id);
       await asPostgres(c);
       expect(await count(c, 'select count(*)::int as n from public.profiles where user_id = $1', [id])).toBe(0);
@@ -44,7 +44,7 @@ describe('delete_user', () => {
       const id = await newUser(c, 'zz-remove-guard@example.com');
       await actAs(c, users.organizer);
       await refused(c, () => deleteUser(c, id), /Only an admin can remove users/);
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await refused(c, () => deleteUser(c, users.admin), /can't remove your own/);
       await refused(c, () => deleteUser(c, '00000000-0000-0000-0000-000000000000'), /User not found/);
     });
@@ -58,7 +58,7 @@ describe('delete_user', () => {
       const product = await makeProduct(c);
       await actAs(c, id);
       await receive(c, product, 1, 'ZZREMOVE');
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       await refused(c, () => deleteUser(c, id), /has records .* Deactivate them instead/);
     });
   });
@@ -95,7 +95,7 @@ describe('delete_delegate', () => {
       await place(c, { patient: await makePatient(c, 'Zz Remove Patient'), tooth: 36, product, lot, delegate: placed, supervisor: users.organizer });
       await refused(c, () => deleteDelegate(c, placed), /implant records/);
 
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       const chair = await makeChair(c);
       await actAs(c, users.organizer);
       const booked = await makeDelegate(c, 'Zz Remove Booked');
@@ -121,7 +121,7 @@ describe('delete_delegate', () => {
       await c.query('set local session_replication_role = origin');
       await actAs(c, users.organizer);
       await refused(c, () => deleteDelegate(c, d), /Only an admin can remove a delegate who has a login/);
-      await actAs(c, users.admin);
+      await actAsBound(c, users.admin);
       expect(await deleteDelegate(c, d)).toBe(login);
       await asPostgres(c);
       expect(await count(c, 'select count(*)::int as n from public.profiles where user_id = $1', [login])).toBe(0);

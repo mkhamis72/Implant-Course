@@ -28,6 +28,15 @@ export async function actAs(c: Client, userId: string | null, extraClaims: Recor
   await c.query('set local role authenticated');
 }
 
+/** Impersonates the user with a new sign-in session bound to the company (academy by default), as the
+ *  company-aware app does after sign-in. Definers that act on the caller's company (0087) need it. */
+export async function actAsBound(
+  c: Client, userId: string, company = 'a7c0de00-0000-4000-8000-000000000001',
+): Promise<void> {
+  await actAs(c, userId, { session_id: crypto.randomUUID() });
+  await c.query('select public.bind_my_session($1)', [company]);
+}
+
 /** Back to the connection's own (postgres) role, bypassing RLS. */
 export async function asPostgres(c: Client): Promise<void> {
   await c.query('reset role');
