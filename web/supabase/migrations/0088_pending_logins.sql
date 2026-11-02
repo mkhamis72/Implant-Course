@@ -71,9 +71,18 @@ begin
   if v_user is null then
     perform app_private.fail('User not found.');
   end if;
-  insert into public.company_members (company_id, user_id, role, active, delegate_id)
-  values (v_company, v_user, p_role, true, p_delegate_id)
-  on conflict (company_id, user_id) do nothing;
+  if p_delegate_id is not null
+     and not exists (select 1 from public.delegates d where d.company_id = v_company and d.id = p_delegate_id) then
+    perform app_private.fail('Delegate not found.');
+  end if;
+  begin
+    insert into public.company_members (company_id, user_id, role, active, delegate_id)
+    values (v_company, v_user, p_role, true, p_delegate_id)
+    on conflict (company_id, user_id) do nothing;
+  exception when unique_violation then
+    -- (company_id, delegate_id): one login per delegate in a company.
+    perform app_private.fail('This delegate already has a login.');
+  end;
   if not found then
     perform app_private.fail('A user with this email already exists.');
   end if;

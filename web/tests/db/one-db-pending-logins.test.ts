@@ -164,6 +164,33 @@ describe('add_existing_member (0088)', () => {
     });
   });
 
+  it("refuses another company's delegate", async () => {
+    await withTx(async (c) => {
+      const b = await companyB(c);
+      await signUp(c, 'zz-pending-foreign@example.com');
+      const academyDelegate = (await c.query(
+        `insert into public.delegates (company_id, full_name) values ($1, 'Zz Pending Academy Delegate') returning id`, [ACADEMY_ID])).rows[0].id;
+      await actAsBound(c, users.admin, b);
+      await refused(c, () => c.query(`select public.add_existing_member('zz-pending-foreign@example.com', 'delegate', $1)`, [academyDelegate]),
+        /Delegate not found/);
+    });
+  });
+
+  it('refuses a delegate who already has a login here', async () => {
+    await withTx(async (c) => {
+      const b = await companyB(c);
+      const d = (await c.query(
+        `insert into public.delegates (company_id, full_name) values ($1, 'Zz Pending Taken') returning id`, [b])).rows[0].id;
+      const first = await signUp(c, 'zz-pending-taken1@example.com');
+      await signUp(c, 'zz-pending-taken2@example.com');
+      await c.query(`insert into public.company_members (company_id, user_id, role, active, delegate_id) values ($1, $2, 'delegate', true, $3)`,
+        [b, first, d]);
+      await actAsBound(c, users.admin, b);
+      await refused(c, () => c.query(`select public.add_existing_member('zz-pending-taken2@example.com', 'delegate', $1)`, [d]),
+        /This delegate already has a login\./);
+    });
+  });
+
   it('is admin-only and needs an existing profile', async () => {
     await withTx(async (c) => {
       await actAsBound(c, users.organizer);
