@@ -76,23 +76,37 @@ begin
   return v_user;
 end $$;
 
+-- cancel_pending_login: admin-only. createLogin removes its pending row again when the Auth call fails,
+-- so a later sign-up of that address doesn't join the company unasked.
+create function public.cancel_pending_login(p_email text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_company uuid := app_private.admin_company('Only admins can do this.', false);
+begin
+  delete from app_private.pending_logins
+  where company_id = v_company and email = lower(trim(coalesce(p_email, '')));
+end $$;
+
 alter function public.create_pending_login(text, text, public.user_role, uuid) owner to postgres;
 alter function public.add_existing_member(text, public.user_role, uuid) owner to postgres;
+alter function public.cancel_pending_login(text) owner to postgres;
 revoke all on function public.create_pending_login(text, text, public.user_role, uuid),
-  public.add_existing_member(text, public.user_role, uuid) from public, anon;
+  public.add_existing_member(text, public.user_role, uuid), public.cancel_pending_login(text) from public, anon;
 grant execute on function public.create_pending_login(text, text, public.user_role, uuid),
-  public.add_existing_member(text, public.user_role, uuid) to authenticated;
+  public.add_existing_member(text, public.user_role, uuid), public.cancel_pending_login(text) to authenticated;
 
 -- 0001's handle_new_user: the profile takes its name from a pending row. Each pending row becomes an
 -- active membership and is removed; the flag tells the forward sync not to add academy's row as well.
 -- A pending row whose delegate has gone since, or whose delegate already has a login, is dropped rather
--- than failing the sign-up. Without pending rows: as before (an inactive academy member, through the sync).
+-- than failing the sign-up. Rows older than 7 days are expired: deleted, never used. Without (fresh)
+-- pending rows: as before (an inactive academy member, through the sync).
 create or replace function app_private.handle_new_user() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare
   v_email text := lower(new.email);
   v_name text;
 begin
+  delete from app_private.pending_logins where email = v_email and created_at < now() - interval '7 days';
   select pl.full_name into v_name from app_private.pending_logins pl
   where pl.email = v_email order by pl.created_at desc limit 1;
   if not found then

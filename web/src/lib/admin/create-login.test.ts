@@ -70,6 +70,44 @@ describe('createLogin: a new address', () => {
     const r = await createLogin({ email: 'o@example.com', full_name: 'Org O', role: 'organizer' });
     expect(r).toEqual({ error: 'A user with this email already exists.' });
     expect(auth.deleteUser).not.toHaveBeenCalled();
+    expect(calls).toEqual(['create_pending_login', 'cancel_pending_login']);
+    expect(rpc).toHaveBeenCalledWith('cancel_pending_login', { p_email: 'o@example.com' });
+  });
+
+  it('removes the pending row again when Auth refuses', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    auth.inviteUserByEmail.mockResolvedValue({ data: { user: null }, error: { message: 'boom', status: 500 } });
+    const r = await createLogin({ email: 'o@example.com', full_name: 'Org O', role: 'organizer' });
+    expect(r).toHaveProperty('error');
+    expect(calls).toEqual(['create_pending_login', 'cancel_pending_login']);
+    expect(rpc).toHaveBeenCalledWith('cancel_pending_login', { p_email: 'o@example.com' });
+  });
+
+  it('removes the pending row again when the Auth call throws, and returns an error', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'false');
+    auth.createUser.mockRejectedValue(new Error('network down'));
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await createLogin({ email: 'o@example.com', full_name: 'Org O', role: 'organizer' })).toEqual({ error: 'Could not create the login.' });
+    expect(calls).toEqual(['create_pending_login', 'cancel_pending_login']);
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  it('a failed clean-up only warns', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    auth.inviteUserByEmail.mockResolvedValue({ data: { user: null }, error: { message: 'boom', status: 500 } });
+    rpc.mockImplementation(async (name: string) => (calls.push(name),
+      name === 'cancel_pending_login' ? { data: null, error: { message: 'down' } } : { data: null, error: null }));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await createLogin({ email: 'o@example.com', full_name: 'Org O', role: 'organizer' })).toHaveProperty('error');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('a fresh account leaves the pending row to handle_new_user', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    await createLogin({ email: 'o@example.com', full_name: 'Org O', role: 'organizer' });
+    expect(rpc).not.toHaveBeenCalledWith('cancel_pending_login', expect.anything());
   });
 });
 

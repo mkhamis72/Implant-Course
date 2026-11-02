@@ -49,15 +49,33 @@ export async function createLogin(a: { email: string; full_name: string; role: R
   });
   if (pendingError) return { error: userMessage(pendingError) ?? 'Could not create the login.' };
 
+  // Every failure from here removes the pending row again: a later sign-up of the address mustn't join unasked.
+  const cancel = async (result: { error: string }) => {
+    try {
+      const { error } = await supabase.rpc('cancel_pending_login', { p_email: email });
+      if (error) console.warn(`The pending login for ${email} could not be removed: ${error.message}`);
+    } catch (error) {
+      console.warn(`The pending login for ${email} could not be removed: ${(error as Error).message}`);
+    }
+    return result;
+  };
+
   const password = emailEnabled() ? undefined : temporaryPassword();
   const startedAt = Date.now();
-  const { data, error } = password
-    ? await admin.auth.admin.createUser({ email, password, email_confirm: true })
-    : await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${await requestOrigin()}/auth/confirm` });
-  if (error || !data?.user) return { error: error ? mapAuthError(error) : 'Could not create the login.' };
+  let created;
+  try {
+    created = password
+      ? await admin.auth.admin.createUser({ email, password, email_confirm: true })
+      : await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${await requestOrigin()}/auth/confirm` });
+  } catch (error) {
+    console.error('Creating the login failed:', (error as Error).message);
+    return cancel({ error: 'Could not create the login.' });
+  }
+  const { data, error } = created;
+  if (error || !data?.user) return cancel({ error: error ? mapAuthError(error) : 'Could not create the login.' });
 
   // Backstop: an account created before this call is an existing one (an invite returns it instead of failing).
-  if (data.user.created_at && Date.parse(data.user.created_at) < startedAt - 5000) return { error: EXISTS };
+  if (data.user.created_at && Date.parse(data.user.created_at) < startedAt - 5000) return cancel({ error: EXISTS });
 
   return password
     ? { ok: `Login created for ${email}.`, password }

@@ -85,6 +85,38 @@ describe('create_pending_login and handle_new_user (0088)', () => {
     });
   });
 
+  it('ignores and deletes a pending row older than 7 days', async () => {
+    await withTx(async (c) => {
+      const b = await companyB(c);
+      await actAsBound(c, users.admin, b);
+      await c.query(`select public.create_pending_login('zz-pending-old@example.com', 'Zz Old', 'organizer', null)`);
+      await asPostgres(c);
+      await c.query(`update app_private.pending_logins set created_at = now() - interval '8 days' where email = 'zz-pending-old@example.com'`);
+      const id = await signUp(c, 'zz-pending-old@example.com');
+      expect(await members(c, id)).toEqual([{ company_id: ACADEMY_ID, role: 'organizer', active: false, delegate_id: null }]);
+      expect((await profileOf(c, id)).full_name).toBe('');
+      expect(await pendingCount(c, 'zz-pending-old@example.com')).toBe(0);
+    });
+  });
+
+  it("cancel_pending_login removes only the caller's company row, admins only", async () => {
+    await withTx(async (c) => {
+      const b = await companyB(c);
+      await actAsBound(c, users.admin, b);
+      await c.query(`select public.create_pending_login('zz-pending-cancel@example.com', 'Zz B', 'organizer', null)`);
+      await actAsBound(c, users.admin);
+      await c.query(`select public.create_pending_login('zz-pending-cancel@example.com', 'Zz A', 'organizer', null)`);
+      await actAsBound(c, users.organizer);
+      await refused(c, () => c.query(`select public.cancel_pending_login('zz-pending-cancel@example.com')`), /Only admins can do this/);
+      await actAsBound(c, users.admin, b);
+      await c.query(`select public.cancel_pending_login(' Zz-Pending-Cancel@Example.com ')`);
+      await asPostgres(c);
+      expect((await c.query(
+        `select company_id from app_private.pending_logins where email = 'zz-pending-cancel@example.com'`)).rows)
+        .toEqual([{ company_id: ACADEMY_ID }]);
+    });
+  });
+
   it('without a pending row a new login is still an inactive academy member (previous app version)', async () => {
     await withTx(async (c) => {
       const id = await signUp(c, 'zz-pending-none@example.com');
