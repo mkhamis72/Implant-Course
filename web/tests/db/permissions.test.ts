@@ -286,7 +286,9 @@ describe('permissions: guard rails', () => {
         // Consent (0072): uploaded file bytes, closed to every role, reached only through definer readers.
         'stored_files',
         // Admin user tools (0074): select for admins only, written only by the admin_* definer functions.
-        'admin_events']);
+        'admin_events',
+        // One database (0083): the company list, select of the bound company only, no API writes.
+        'companies']);
       expect(rows.map((r) => r.relname).filter((n) => !shared.has(n)).sort()).toEqual([]);
     });
   });

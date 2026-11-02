@@ -157,7 +157,7 @@ You need:
    ```bash
    psql "<new session pooler URI>" --single-transaction -v ON_ERROR_STOP=1 \
      -c "SET session_replication_role = replica" \
-     -c "TRUNCATE public.settings, public.products, public.branding, public.consent_form_versions, public.audit_log CASCADE" \
+     -c "TRUNCATE public.settings, public.products, public.branding, public.consent_form_versions, public.companies, public.audit_log CASCADE" \
      -f data.sql
    ```
 
