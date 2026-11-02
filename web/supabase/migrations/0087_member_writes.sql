@@ -11,12 +11,17 @@ create policy company_members_staff_select on public.company_members for select 
 
 -- admin_company: the caller's bound company, for an active admin of it. is_admin() still reads profiles
 -- (academy) and checks aal2; the member row makes the admin check per company. An unbound session is
--- refused rather than acting on no company.
-create function app_private.admin_company(p_message text) returns uuid
+-- refused rather than acting on no company. p_academy_if_unbound is the release-3 fallback of the three
+-- redefined 0074/0037 functions below.
+create function app_private.admin_company(p_message text, p_academy_if_unbound boolean) returns uuid
 language plpgsql stable security definer set search_path = '' as $$
 declare
   v_company uuid := app.current_company_id();
 begin
+  if p_academy_if_unbound then
+    -- release-3 compatibility: an unbound session is academy's (the previous app version never binds); plan 3 removes this fallback
+    v_company := coalesce(v_company, 'a7c0de00-0000-4000-8000-000000000001'::uuid);
+  end if;
   if not public.is_admin() then
     perform app_private.fail(p_message);
   end if;
@@ -30,7 +35,7 @@ begin
   end if;
   return v_company;
 end $$;
-revoke all on function app_private.admin_company(text) from public, anon, authenticated;
+revoke all on function app_private.admin_company(text, boolean) from public, anon, authenticated;
 
 -- protect_last_member_admin: protect_last_admin (0001) per company, same message.
 create function app_private.protect_last_member_admin() returns trigger
@@ -77,7 +82,7 @@ create trigger company_members_sync_profile after insert or update on public.com
 create function public.set_member_role(p_user uuid, p_role public.user_role) returns void
 language plpgsql security definer set search_path = '' as $$
 declare
-  v_company uuid := app_private.admin_company('Only admins can do this.');
+  v_company uuid := app_private.admin_company('Only admins can do this.', false);
   v_old public.user_role;
 begin
   select m.role into v_old from public.company_members m
@@ -94,7 +99,7 @@ end $$;
 create function public.set_member_active(p_user uuid, p_active boolean) returns void
 language plpgsql security definer set search_path = '' as $$
 declare
-  v_company uuid := app_private.admin_company('Only admins can do this.');
+  v_company uuid := app_private.admin_company('Only admins can do this.', false);
 begin
   if p_active is null then
     perform app_private.fail('Invalid request.');
@@ -123,7 +128,8 @@ begin
   if p_user = app.current_user_id() then
     perform app_private.fail('You can''t do this to your own account here. Use Account → Security.');
   end if;
-  v_company := app_private.admin_company('Only an admin can do this.');
+  -- release-3 compatibility: an unbound session is academy's (the previous app version never binds); plan 3 removes this fallback
+  v_company := app_private.admin_company('Only an admin can do this.', true);
   update public.company_members set mfa_setup_required = true where company_id = v_company and user_id = p_user;
   if not found then
     perform app_private.fail('User not found.');
@@ -132,7 +138,8 @@ begin
   values (v_company, p_user, 'mfa_reset', app.current_user_id());
 end $$;
 
--- 0074's admin_end_sessions, limited to the sessions bound to the caller's company. Refresh tokens go
+-- 0074's admin_end_sessions, limited to the sessions bound to the caller's company (for academy, also
+-- the unbound sessions of the previous app version). Refresh tokens go
 -- with the sessions (on delete cascade); access tokens already issued last until they expire.
 create or replace function public.admin_end_sessions(p_user uuid) returns void
 language plpgsql security definer set search_path = '' as $$
@@ -143,11 +150,14 @@ begin
   if not public.is_admin() then
     perform app_private.fail('Only an admin can do this.');
   end if;
-  v_company := app_private.admin_company('Only an admin can do this.');
+  -- release-3 compatibility: an unbound session is academy's (the previous app version never binds); plan 3 removes this fallback
+  v_company := app_private.admin_company('Only an admin can do this.', true);
   delete from auth.sessions s
   where s.user_id = p_user
-    and s.id in (select sc.session_id from app.session_companies sc
-                 where sc.company_id = v_company and sc.user_id = p_user);
+    and (s.id in (select sc.session_id from app.session_companies sc
+                  where sc.company_id = v_company and sc.user_id = p_user)
+         or (v_company = 'a7c0de00-0000-4000-8000-000000000001'
+             and not exists (select 1 from app.session_companies sc where sc.session_id = s.id)));
 end $$;
 
 -- 0037's delete_user, per company: removes the caller's company membership and its permissions. The
@@ -168,7 +178,8 @@ begin
   if p_user = app.current_user_id() then
     perform app_private.fail('You can''t remove your own account.');
   end if;
-  v_company := app_private.admin_company('Only an admin can remove users.');
+  -- release-3 compatibility: an unbound session is academy's (the previous app version never binds); plan 3 removes this fallback
+  v_company := app_private.admin_company('Only an admin can remove users.', true);
   select m.role into v_role from public.company_members m
   where m.company_id = v_company and m.user_id = p_user for update;
   if not found then

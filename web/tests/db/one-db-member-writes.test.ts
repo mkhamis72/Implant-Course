@@ -83,6 +83,7 @@ describe('set_member_role / set_member_active (0087)', () => {
 
       await actAs(c, users.admin); // no session binding
       await refused(c, () => c.query(`select public.set_member_role($1, 'admin')`, [users.target]), /Sign in again/);
+      await refused(c, () => c.query('select public.set_member_active($1, false)', [users.target]), /Sign in again/);
     });
   });
 
@@ -130,6 +131,44 @@ describe('admin_require_mfa_setup / admin_end_sessions (0087)', () => {
       await asPostgres(c);
       const { rows } = await c.query('select id from auth.sessions where id = any($1)', [[S_VIEWER_A, S_VIEWER_B]]);
       expect(rows.map((r) => r.id)).toEqual([S_VIEWER_B]);
+    });
+  });
+});
+
+// Release-3 compatibility: the previous app version never binds, so an unbound session is academy's.
+describe('unbound academy admin: the previous app version (0087)', () => {
+  it('admin_require_mfa_setup works against academy', async () => {
+    await withTx(async (c) => {
+      await actAs(c, users.admin);
+      await c.query('select public.admin_require_mfa_setup($1)', [users.viewer]);
+      expect((await member(c, ACADEMY_ID, users.viewer)).mfa_setup_required).toBe(true);
+      expect((await profile(c, users.viewer)).mfa_setup_required).toBe(true);
+    });
+  });
+
+  it("admin_end_sessions ends the user's unbound and academy-bound sessions, not B's", async () => {
+    await withTx(async (c) => {
+      const b = await companyB(c);
+      for (const s of [S_VIEWER_A, S_VIEWER_B, S_OTHER]) {
+        await c.query('insert into auth.sessions (id, user_id, created_at, updated_at) values ($1, $2, now(), now())', [s, users.viewer]);
+      }
+      await c.query('insert into app.session_companies (session_id, company_id, user_id) values ($1, $2, $3), ($4, $5, $3)',
+        [S_VIEWER_A, ACADEMY_ID, users.viewer, S_VIEWER_B, b]); // S_OTHER stays unbound
+      await actAs(c, users.admin);
+      await c.query('select public.admin_end_sessions($1)', [users.viewer]);
+      await asPostgres(c);
+      const { rows } = await c.query('select id from auth.sessions where id = any($1)', [[S_VIEWER_A, S_VIEWER_B, S_OTHER]]);
+      expect(rows.map((r) => r.id)).toEqual([S_VIEWER_B]);
+    });
+  });
+
+  it('delete_user removes an academy user', async () => {
+    await withTx(async (c) => {
+      const id = await newUser(c, 'zz-member-writes-unbound@example.com');
+      await actAs(c, users.admin);
+      await c.query('select public.delete_user($1)', [id]);
+      await asPostgres(c);
+      expect((await c.query('select count(*)::int as n from public.profiles where user_id = $1', [id])).rows[0].n).toBe(0);
     });
   });
 });
