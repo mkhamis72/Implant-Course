@@ -45,13 +45,15 @@ Exit code 0.
 
 ## Prod run: pending owner
 
-The owner runs the script against prod. It changes nothing: the transaction always rolls back.
+The owner runs the script against prod. It changes nothing: the transaction always rolls back. Check 10 takes ACCESS EXCLUSIVE locks on `profiles` and `user_permissions` until that rollback, so run it outside course hours and expect a few seconds of stalled pages.
 
 ```
 ! cd "/d/Claude/Claude Code/implant-course-one-db/web" && ENV_FILE=.env.prod npx tsx scripts/spike-tenant-definer.ts --tenant academy
 ```
 
 Then confirm, read-only, that the role is gone: `select rolname from pg_roles where rolname = 'tenant_definer'` (the script also prints `After rollback: tenant_definer is gone`).
+
+Before shipping release 2, also run the read-only `rolbypassrls` check in `release-2-checklist.md`.
 
 Output: _pending_.
 
