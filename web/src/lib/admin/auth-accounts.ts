@@ -123,9 +123,9 @@ export async function inviteLink(userId: string): Promise<{ email: string; link:
     if (user.email_confirmed_at) {
       return { error: "This login's email is already confirmed, so there is no invite to resend. Use Reset password instead." };
     }
-    const { data: link, error } = await auth.generateLink({ type: 'invite', email: user.email! });
-    if (error || !link?.properties?.hashed_token) return { error: mapAuthError(error) };
     const origin = await requestOrigin();
+    const { data: link, error } = await auth.generateLink({ type: 'invite', email: user.email!, options: { redirectTo: `${origin}/auth/confirm` } });
+    if (error || !link?.properties?.hashed_token) return { error: mapAuthError(error) };
     return {
       email: user.email!,
       link: `${origin}/auth/confirm?token_hash=${encodeURIComponent(link.properties.hashed_token)}&type=invite`,
