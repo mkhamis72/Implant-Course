@@ -268,6 +268,9 @@ describe('permissions: guard rails', () => {
         'study_letter',
         // Admin user tools (0074): the user clears their own 2FA-setup flag; checks aal2 and a verified factor itself.
         'mfa_setup_done',
+        // One database (0086, spec §3): session binding for the signed-in user (0085's membership check),
+        // and the per-company branding readers for the signed-out login page.
+        'bind_my_session', 'my_session_company', 'branding_for', 'branding_logo_for',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
