@@ -287,7 +287,7 @@ describe('permissions: guard rails', () => {
         select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relkind = 'r'
           and not exists (select 1 from pg_policies pp where pp.schemaname = 'public' and pp.tablename = c.relname
-                          and pp.permissive = 'RESTRICTIVE')`);
+                          and pp.permissive = 'RESTRICTIVE' and pp.policyname like '%\\_area\\_%')`);
       const shared = new Set(['profiles', 'settings', 'user_permissions', 'chairs', 'supervisors', 'lecturers', 'stock_lots',
         // Branding (0040): closed tables (no grants), reached only through the definer functions.
         'branding', 'branding_logos',
@@ -295,6 +295,9 @@ describe('permissions: guard rails', () => {
         'stored_files',
         // Admin user tools (0074): select for admins only, written only by the admin_* definer functions.
         'admin_events',
+        // Research export log (0070): admin-only select (restrictive research_exports_admin_read), written
+        // only by the log_research_export definer.
+        'research_exports',
         // One database (0083): the company list, select of the bound company only, no API writes.
         'companies',
         // One database (0085, spec §4): memberships, select of the user's own row (admins all), no API
