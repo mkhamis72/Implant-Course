@@ -1,6 +1,6 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
-import { withTx, actAs, actAsBound, asPostgres } from './helpers';
+import { withTx, actAs, actAsBound, asPostgres, asCompany } from './helpers';
 import { makeDelegate, makePatient, makeProduct, pendingLogin, place, receive } from './fixtures';
 
 const users = inject('testUsers');
@@ -148,6 +148,7 @@ describe('check_assignee (0090)', () => {
       await c.query(`insert into public.company_members (company_id, user_id, role, active) values ($1, $2, 'organizer', true)`,
         [b, users.viewer]);
       await c.query('delete from public.company_members where company_id = $1 and user_id = $2', [ACADEMY_ID, users.viewer]);
+      await asCompany(c);
       const list = (await c.query(`insert into public.checklists (title) values ('Zz Company Fns') returning id`)).rows[0].id;
       await refused(c, () => c.query(
         `insert into public.checklist_items (checklist_id, position, text, assignee_id) values ($1, 1, 'Task', $2)`, [list, users.viewer]),

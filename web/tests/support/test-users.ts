@@ -2,6 +2,7 @@ import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
 import { adminClient, ensureUser, setPermissions, setProfile } from '../../scripts/users';
 import { assertSafeTestTarget } from '../../scripts/test-guard';
+import { ACADEMY_COMPANY_ID } from '../../src/lib/tenant/types';
 
 // No default: a password committed to the repo would be a known admin login. See assertSafeTestTarget.
 export const TEST_PASSWORD = process.env.TEST_USER_PASSWORD ?? '';
@@ -65,9 +66,9 @@ export async function ensureTestUsers(): Promise<TestUserIds> {
         await setProfile(pg, ids[key], profile);
         continue;
       }
-      const existing = await pg.query('select id from public.delegates where full_name = $1 order by created_at limit 1', [TEST_DELEGATE_NAME]);
+      const existing = await pg.query('select id from public.delegates where company_id = $1 and full_name = $2 order by created_at limit 1', [ACADEMY_COMPANY_ID, TEST_DELEGATE_NAME]);
       const delegateId = existing.rows[0]?.id
-        ?? (await pg.query('insert into public.delegates (full_name, email) values ($1, $2) returning id', [TEST_DELEGATE_NAME, TEST_USERS.delegate.email])).rows[0].id;
+        ?? (await pg.query('insert into public.delegates (company_id, full_name, email) values ($1, $2, $3) returning id', [ACADEMY_COMPANY_ID, TEST_DELEGATE_NAME, TEST_USERS.delegate.email])).rows[0].id;
       await pg.query('update public.delegates set active = true where id = $1', [delegateId]);
       await setProfile(pg, ids[key], { ...profile, delegate_id: delegateId });
     }
@@ -79,9 +80,9 @@ export async function ensureTestUsers(): Promise<TestUserIds> {
     for (const key of Object.keys(PROFILES) as TestUserKey[]) {
       if (PROFILES[key].role === 'delegate') continue;
       await pg.query(
-        `insert into public.supervisors (id, full_name, active) values ($1, $2, $3)
+        `insert into public.supervisors (company_id, id, full_name, active) values ($4, $1, $2, $3)
          on conflict (id) do update set full_name = excluded.full_name, active = excluded.active`,
-        [ids[key], PROFILES[key].full_name, PROFILES[key].active],
+        [ids[key], PROFILES[key].full_name, PROFILES[key].active, ACADEMY_COMPANY_ID],
       );
     }
   } finally {

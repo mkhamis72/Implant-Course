@@ -14,6 +14,8 @@ const OWN_SCHEMAS = ['public', 'app_private'];
 const ANON_EXEC_ALLOWLIST = new Set([
   'app.current_user_id', 'app.current_aal', 'app.current_company_id',
   'public.branding_for', 'public.branding_logo_for',
+  // The previous pre-login readers (academy only) until 0095 drops them.
+  'public.branding_public', 'public.branding_logo',
 ]);
 
 /** Unique indexes on company tables scoped by a parent row instead of company_id. Keys are the index's
@@ -55,7 +57,7 @@ const PERSON_LEVEL_POLICIES = new Set(['public.profiles.profiles_self']);
 
 const STAFF_GUARD = /\b(is_active_user|can|is_admin)\(/;
 const AUTH_CALL = /auth\.uid|auth\.jwt|request\.jwt/i;
-const COMPANY_CHECK = /company_id = \( SELECT app\.current_company_id\(\) AS current_company_id\)/;
+const COMPANY_CHECK = /\bcompany_id = \( SELECT app\.current_company_id\(\) AS current_company_id\)/;
 
 type Guard = (c: Client) => Promise<string[]>;
 
@@ -109,6 +111,10 @@ const GUARDS = {
     return offenders.sort();
   },
 
+  'company-tables-have-company-id': (c) => list(c, `
+    select t::text as name from app.company_tables() t
+    where not exists (select 1 from pg_attribute a where a.attrelid = t and a.attname = 'company_id' and not a.attisdropped)`),
+
   'company-id-index': (c) => list(c, `
     select a.attrelid::regclass::text as name from pg_attribute a
     join pg_class c on c.oid = a.attrelid join pg_namespace n on n.oid = c.relnamespace
@@ -152,9 +158,15 @@ const GUARDS = {
              coalesce(pg_get_expr(p.polqual, p.polrelid), '') || ' ' || coalesce(pg_get_expr(p.polwithcheck, p.polrelid), '') as body
       from pg_policy p join pg_class c on c.oid = p.polrelid join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = any($1)`, [OWN_SCHEMAS]);
+    const defaults = await c.query(`
+      select d.adrelid::regclass::text || '.' || a.attname as name, pg_get_expr(d.adbin, d.adrelid) as body
+      from pg_attrdef d join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
+      join pg_class c on c.oid = d.adrelid join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = any($1)`, [OWN_SCHEMAS]);
     return [
       ...fns.rows.filter((r) => AUTH_CALL.test(r.body)).map((r) => `function ${r.name}`),
       ...pols.rows.filter((r) => AUTH_CALL.test(r.body)).map((r) => `policy ${r.name}`),
+      ...defaults.rows.filter((r) => AUTH_CALL.test(r.body)).map((r) => `default ${r.name}`),
     ].sort();
   },
 
@@ -189,10 +201,7 @@ const GUARDS = {
 type GuardName = keyof typeof GUARDS;
 
 /** Guards a later plan-3 task enables: each task removes the names it makes pass. Plan 3 ends with none. */
-const PENDING = new Set<GuardName>([
-  'rls-forced', 'company-policies', 'company-id-index',
-  'definer-owner', 'anon-exec', 'permissive-needs-guard', 'tenant-definer-policies',
-]);
+const PENDING = new Set<GuardName>([]);
 
 describe('one database catalog guards', () => {
   for (const [name, guard] of Object.entries(GUARDS) as [GuardName, Guard][]) {
@@ -205,6 +214,11 @@ describe('one database catalog guards', () => {
   it('PENDING holds only guard names, and shrinks to empty as plan 3 enables them', () => {
     expect([...PENDING].filter((n) => !(n in GUARDS))).toEqual([]);
     // Lower this as each task enables its guards; plan 3 ends at 0.
-    expect(PENDING.size).toBe(7);
+    expect(PENDING.size).toBe(0);
+  });
+
+  it('app.company_tables() lists the company tables (a guard over an empty list proves nothing)', async () => {
+    const { rows } = await withTx((c) => c.query('select count(*)::int as n from app.company_tables()'));
+    expect(rows[0].n).toBeGreaterThanOrEqual(40);
   });
 });

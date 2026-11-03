@@ -45,7 +45,8 @@ test('implant teeth are locked in the panel', async ({ page }) => {
   const pg = new Client(pgConfig());
   await pg.connect();
   try {
-    await pg.query("insert into public.tooth_status (patient_id, tooth, status) values ($1, 46, 'implant_placed')", [id]);
+    // As postgres there is no session company (0092): the row takes its patient's.
+    await pg.query("insert into public.tooth_status (company_id, patient_id, tooth, status) select company_id, id, 46, 'implant_placed' from public.patients where id = $1", [id]);
   } finally {
     await pg.end();
   }

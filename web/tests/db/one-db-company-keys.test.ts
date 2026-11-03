@@ -1,6 +1,6 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
-import { withTx, actAs, actAsBound, asPostgres } from './helpers';
+import { withTx, actAs, actAsBound, asPostgres, asCompany } from './helpers';
 import { makeCourse, makeSession } from './fixtures';
 
 const users = inject('testUsers');
@@ -37,6 +37,7 @@ describe('company keys (0091)', () => {
       const b = await companyB(c);
       await dropGlobalUniques(c);
       for (const company of [ACADEMY_ID, b]) {
+        await asCompany(c, company); // create_medical_history writes as tenant_definer
         await c.query(`insert into public.patients (company_id, full_name, file_no) values ($1, 'Zz Keys Patient', 'ZZ-001')`, [company]);
         await c.query(`insert into public.chairs (company_id, name) values ($1, 'Zz Chair 1')`, [company]);
         await c.query(`insert into public.consent_form_versions (company_id, label, effective_on, text_en, text_ar)
@@ -95,6 +96,7 @@ describe('company keys (0091)', () => {
   it("refuses an academy slot on a B chair", async () => {
     await withTx(async (c) => {
       const b = await companyB(c);
+      await asCompany(c);
       const course = await makeCourse(c);
       const session = await makeSession(c, course);
       // As postgres there is no bound company to number the file from (0091), so it is typed.

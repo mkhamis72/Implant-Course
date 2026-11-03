@@ -63,18 +63,20 @@ describe('profiles & settings', () => {
       await actAs(c, users.organizer);
       const s = await c.query('update public.settings set expiry_alert_days = 10');
       expect(s.rowCount).toBe(0);
-      const p = await c.query("update public.profiles set full_name = 'Zz' where user_id = $1", [users.organizer]);
-      expect(p.rowCount).toBe(0);
+      await expect(c.query("update public.profiles set full_name = 'Zz' where user_id = $1", [users.organizer]))
+        .rejects.toThrow(/permission denied/);
     });
   });
 
-  it('admin can change settings and names', async () => {
+  it('admin can change settings; names only through admin_set_name (0092)', async () => {
     await withTx(async (c) => {
       await actAs(c, users.admin);
       const s = await c.query('update public.settings set expiry_alert_days = 90');
       expect(s.rowCount).toBe(1);
-      const p = await c.query("update public.profiles set full_name = full_name where user_id = $1", [users.organizer]);
-      expect(p.rowCount).toBe(1);
+      await c.query('savepoint s');
+      await expect(c.query("update public.profiles set full_name = full_name where user_id = $1", [users.organizer]))
+        .rejects.toThrow(/permission denied/);
+      await c.query('rollback to savepoint s');
     });
   });
 

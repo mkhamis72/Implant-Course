@@ -48,6 +48,22 @@ export async function actAsBound(
   await c.query('select public.bind_my_session($1)', [company]);
 }
 
+/** Stays postgres (bypassing RLS) but with a fixture session bound to the company, so column defaults
+ *  resolve: company_id (0092: the session's company, null without one) and created_by. The session's user
+ *  is userId, else one of the company's members. For fixtures that write as postgres. */
+export async function asCompany(c: Client, companyId = ACADEMY_ID, userId?: string): Promise<void> {
+  await c.query('reset role');
+  const user = userId ?? (await c.query(
+    'select user_id from public.company_members where company_id = $1 order by created_at limit 1', [companyId],
+  )).rows[0]?.user_id;
+  if (!user) throw new Error(`asCompany: company ${companyId} has no member to act as`);
+  const session = crypto.randomUUID();
+  await c.query('insert into app.session_companies (session_id, company_id, user_id) values ($1, $2, $3)',
+    [session, companyId, user]);
+  await c.query(`select set_config('request.jwt.claims', $1, true)`,
+    [JSON.stringify({ sub: user, role: 'authenticated', session_id: session })]);
+}
+
 /** Back to the connection's own (postgres) role, bypassing RLS. */
 export async function asPostgres(c: Client): Promise<void> {
   await c.query('reset role');

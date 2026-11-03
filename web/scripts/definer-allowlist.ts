@@ -18,5 +18,8 @@ export const DEFINER_ALLOWLIST: ReadonlySet<string> = new Set([
   // Pre-login branding readers: the login page renders before there is a session.
   'public.branding_for',
   'public.branding_logo_for',
+  // The previous pre-login readers (academy only, anon-callable) until 0095 drops them.
+  'public.branding_public',
+  'public.branding_logo',
   // The console / service-role functions that later plan-3 tasks add join this list there.
 ]);

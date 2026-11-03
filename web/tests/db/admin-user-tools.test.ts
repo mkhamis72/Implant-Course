@@ -1,6 +1,6 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs, actAsBound, asPostgres } from './helpers';
+import { withTx, actAs, actAsBound, asPostgres, asCompany } from './helpers';
 import { setPerms } from './fixtures';
 
 const users = inject('testUsers');
@@ -97,7 +97,7 @@ describe('admin_change_email', () => {
 
   it('updates the linked delegate email and leaves other delegates alone', async () => {
     await withTx(async (c) => {
-      await asPostgres(c);
+      await asCompany(c);
       const linked = (await c.query('select delegate_id from public.company_members where user_id = $1', [users.delegate])).rows[0].delegate_id;
       const other = (
         await c.query(`insert into public.delegates (full_name, email) values ('Zz Other Delegate', 'zz-other@example.com') returning id`)
@@ -160,7 +160,7 @@ describe('2FA reset flag', () => {
 
   it('RLS refuses a flagged user (even at aal2 with a factor) but keeps their own profile and settings readable', async () => {
     await withTx(async (c) => {
-      await asPostgres(c);
+      await asCompany(c);
       await setPerms(c, users.target, { patients: 'view' });
       const patient = (await c.query(`insert into public.patients (full_name, file_no) values ('Zz Flag Patient', 'ZZF' || substr(md5(random()::text), 1, 8)) returning id`)).rows[0].id;
       await addVerifiedFactor(c, users.target, "now() - interval '1 day'");
@@ -265,7 +265,7 @@ describe('admin_end_sessions', () => {
 describe('admin_user_history', () => {
   it('merges audited email/name changes and admin events, newest first, at most 10', async () => {
     await withTx(async (c) => {
-      await asPostgres(c);
+      await asCompany(c);
       const adminName = (await profile(c, users.admin)).full_name;
       // Older history: 12 audited name changes and an admin event, dated in the past.
       for (let i = 0; i < 12; i++) {

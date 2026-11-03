@@ -1,6 +1,6 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs, actAsBound, asPostgres } from './helpers';
+import { withTx, actAs, actAsBound, asPostgres, asCompany } from './helpers';
 import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, pendingLogin, place, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
@@ -130,7 +130,7 @@ describe('delete_delegate', () => {
 describe('checklist assignees', () => {
   it('are organizers or admins, never delegate logins', async () => {
     await withTx(async (c) => {
-      await asPostgres(c);
+      await asCompany(c);
       const list = (await c.query(`insert into public.checklists (title) values ('Zz Assignee list') returning id`)).rows[0].id;
       const assign = (user: string, position: number) =>
         c.query(`insert into public.checklist_items (checklist_id, position, text, assignee_id) values ($1, $2, 'Task', $3)`, [list, position, user]);

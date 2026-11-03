@@ -65,9 +65,11 @@ describe('company_members (0085)', () => {
 
   it('shows a user their own row and an admin every row, and takes no writes', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.organizer, { session_id: crypto.randomUUID() }); // unbound: only the own-row policy applies
-      const own = await c.query('select user_id from public.company_members');
-      expect(own.rows).toEqual([{ user_id: users.organizer }]);
+      await actAs(c, users.organizer, { session_id: crypto.randomUUID() }); // unbound: no company, no rows (0092)
+      expect((await c.query('select user_id from public.company_members')).rows).toEqual([]);
+      await actAs(c, users.organizer); // bound to academy: the own row
+      expect((await c.query('select user_id, company_id from public.company_members where user_id = $1', [users.organizer])).rows)
+        .toEqual([{ user_id: users.organizer, company_id: ACADEMY_ID }]);
       await refused(c, () => c.query(
         `insert into public.company_members (company_id, user_id, role, active) values ($1, $2, 'admin', true)`,
         [ACADEMY_ID, users.organizer]), /permission denied/);

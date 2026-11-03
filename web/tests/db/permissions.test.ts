@@ -1,6 +1,6 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs, asPostgres, asCompany } from './helpers';
 import { makeCourse, makeProduct, pendingLogin, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
@@ -106,7 +106,7 @@ describe('permissions: helpers and defaults', () => {
 
   it('a delegate profile is not an active (staff) user', async () => {
     await withTx(async (c) => {
-      await asPostgres(c);
+      await asCompany(c);
       const d = (await c.query(`insert into public.delegates (full_name) values ('Zz Perm Delegate') returning id`)).rows[0].id;
       await c.query(`update public.company_members set role = 'delegate', delegate_id = $2, active = true where company_id = 'a7c0de00-0000-4000-8000-000000000001' and user_id = $1`, [users.target, d]);
       await actAs(c, users.target);

@@ -40,7 +40,7 @@ async function tables(c: Client): Promise<TableInfo[]> {
 }
 
 describe('company_id on every company table (0084)', () => {
-  it('adds a not-null company_id defaulting to academy, with an FK to companies and an index', async () => {
+  it('adds a not-null company_id defaulting to the session company (0092), with an FK to companies and an index', async () => {
     await withTx(async (c) => {
       await asPostgres(c);
       const all = await tables(c);
@@ -48,7 +48,7 @@ describe('company_id on every company table (0084)', () => {
       for (const t of all.filter((x) => !EXPLICIT_COMPANY.includes(x.name))) {
         expect({ name: t.name, notnull: t.notnull, fk: t.fk_to_companies, index: t.leading_index })
           .toEqual({ name: t.name, notnull: true, fk: true, index: true });
-        expect(t.default_expr, t.name).toContain(ACADEMY_ID);
+        expect(t.default_expr, t.name).toBe('app.current_company_id()');
       }
     });
   });
