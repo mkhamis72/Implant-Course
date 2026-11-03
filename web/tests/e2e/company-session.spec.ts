@@ -2,7 +2,7 @@ import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { readFileSync, existsSync } from 'node:fs';
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
-import { adminClient, setProfile } from '../../scripts/users';
+import { adminClient, pendingLoginFor, setProfile } from '../../scripts/users';
 import { TEST_PASSWORD, TEST_USERS } from '../support/test-users';
 
 // Runs only with a registry of two companies on the same local stack (a.localhost = academy, b.localhost = company B):
@@ -52,6 +52,7 @@ test.describe('the session belongs to the company it signed in on', () => {
   const email = `icm-company-session-${Date.now()}@example.com`;
 
   test.beforeAll(async () => {
+    await pendingLoginFor(email);
     const { data, error } = await adminClient().auth.admin.createUser({ email, password: TEST_PASSWORD, email_confirm: true });
     if (error) throw error;
     userId = data.user!.id;
@@ -62,7 +63,6 @@ test.describe('the session belongs to the company it signed in on', () => {
         `delete from public.company_members where company_id = $1 and user_id = (select id from auth.users where email = $2)`,
         [companyB, TEST_USERS.organizer.email],
       );
-      // Mirrored into academy's member row (0085).
       await setProfile(pg, userId, { full_name: 'E2E Company Session', role: 'organizer', active: true });
     });
   });

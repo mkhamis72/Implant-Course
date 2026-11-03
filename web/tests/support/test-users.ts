@@ -41,21 +41,24 @@ export async function ensureTestUsers(): Promise<TestUserIds> {
   assertSafeTestTarget();
   const admin = adminClient();
   const ids = {} as TestUserIds;
-  for (const key of Object.keys(TEST_USERS) as TestUserKey[]) {
-    ids[key] = await ensureUser(admin, {
-      email: TEST_USERS[key].email,
-      password: TEST_PASSWORD,
-      emailConfirm: key !== 'unverified',
-    });
-  }
-  const { data: factors, error } = await admin.auth.admin.mfa.listFactors({ userId: ids.mfa });
-  if (error) throw error;
-  for (const factor of factors.factors) {
-    await admin.auth.admin.mfa.deleteFactor({ id: factor.id, userId: ids.mfa });
-  }
   const pg = new Client(pgConfig());
   await pg.connect();
   try {
+    // A new account needs a pending login (0090); before migration 0088 there is no such table.
+    const pendingTable = (await pg.query("select to_regclass('app_private.pending_logins') as t")).rows[0].t;
+    for (const key of Object.keys(TEST_USERS) as TestUserKey[]) {
+      ids[key] = await ensureUser(admin, {
+        email: TEST_USERS[key].email,
+        password: TEST_PASSWORD,
+        emailConfirm: key !== 'unverified',
+        pending: pendingTable ? { pg } : undefined,
+      });
+    }
+    const { data: factors, error } = await admin.auth.admin.mfa.listFactors({ userId: ids.mfa });
+    if (error) throw error;
+    for (const factor of factors.factors) {
+      await admin.auth.admin.mfa.deleteFactor({ id: factor.id, userId: ids.mfa });
+    }
     // Profiles table exists only after migration 0001; skip silently before that.
     const { rows } = await pg.query("select to_regclass('public.profiles') as t");
     if (rows[0].t) {

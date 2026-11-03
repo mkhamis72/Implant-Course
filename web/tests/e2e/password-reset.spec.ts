@@ -3,7 +3,7 @@ import { Client } from 'pg';
 import { createClient } from '@supabase/supabase-js';
 import { authenticator } from 'otplib';
 import { pgConfig } from '../../scripts/db';
-import { adminClient, setProfile } from '../../scripts/users';
+import { adminClient, pendingLoginFor, setProfile } from '../../scripts/users';
 import { login, expectDashboard } from './helpers';
 
 const SENT = "If an account exists for that address, we've emailed a link to set a new password. It works for 24 hours.";
@@ -13,6 +13,7 @@ async function withUser(prefix: string, fn: (u: { id: string; email: string; pas
   const admin = adminClient();
   const email = `icm-${prefix}-${Date.now()}@example.com`;
   const password = 'Old-password-123';
+  await pendingLoginFor(email);
   const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
   expect(error).toBeNull();
   const id = data.user!.id;

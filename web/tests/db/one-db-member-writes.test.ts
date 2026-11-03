@@ -1,7 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, asPostgres } from './helpers';
-import { setPerms } from './fixtures';
+import { pendingLogin, setPerms } from './fixtures';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -10,6 +10,7 @@ const S_VIEWER_A = '0e5e5530-0000-4000-8000-000000000002';
 const S_VIEWER_B = '0e5e5530-0000-4000-8000-000000000003';
 const S_OTHER = '0e5e5530-0000-4000-8000-000000000004';
 const LAST_ADMIN = /Cannot remove the last active admin/;
+const NO_DELEGATES_EDIT = /You don't have permission to edit Delegates\./;
 
 async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp) {
   await c.query('savepoint s');
@@ -39,34 +40,25 @@ async function member(c: Client, company: string, user: string) {
     [company, user])).rows[0];
 }
 
-async function profile(c: Client, user: string) {
-  await asPostgres(c);
-  return (await c.query('select role, active, mfa_setup_required from public.profiles where user_id = $1', [user])).rows[0];
-}
-
-/** A fresh active organizer login (academy, through the auth trigger and the forward sync). */
+/** A fresh active organizer login of academy (from a pending login, 0088). */
 async function newUser(c: Client, email: string): Promise<string> {
-  await asPostgres(c);
-  const id = (await c.query('insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id', [email])).rows[0].id;
-  await c.query(`update public.profiles set full_name = 'Zz Member Writes', active = true where user_id = $1`, [id]);
-  return id;
+  await pendingLogin(c, email, { fullName: 'Zz Member Writes' });
+  return (await c.query('insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id', [email])).rows[0].id;
 }
 
 describe('set_member_role / set_member_active (0087)', () => {
-  it("changes only the caller's company row, and mirrors academy's to profiles", async () => {
+  it("changes only the caller's company row", async () => {
     await withTx(async (c) => {
       const b = await companyB(c);
       await bound(c, users.admin, S_ADMIN);
       await c.query(`select public.set_member_role($1, 'admin')`, [users.viewer]);
       expect((await member(c, ACADEMY_ID, users.viewer)).role).toBe('admin');
       expect((await member(c, b, users.viewer)).role).toBe('organizer');
-      expect((await profile(c, users.viewer)).role).toBe('admin');
 
       await bound(c, users.admin, S_ADMIN);
       await c.query('select public.set_member_active($1, false)', [users.viewer]);
       expect((await member(c, ACADEMY_ID, users.viewer)).active).toBe(false);
       expect((await member(c, b, users.viewer)).active).toBe(true);
-      expect((await profile(c, users.viewer)).active).toBe(false);
     });
   });
 
@@ -83,8 +75,8 @@ describe('set_member_role / set_member_active (0087)', () => {
       await refused(c, () => c.query('select public.set_member_active($1, false)', [users.target]), /Only admins can do this\./);
 
       await actAs(c, users.admin, { session_id: crypto.randomUUID() }); // no session binding: not an admin anywhere (0089)
-      await refused(c, () => c.query(`select public.set_member_role($1, 'admin')`, [users.target]), /Only admins can do this\.|Sign in again/);
-      await refused(c, () => c.query('select public.set_member_active($1, false)', [users.target]), /Only admins can do this\.|Sign in again/);
+      await refused(c, () => c.query(`select public.set_member_role($1, 'admin')`, [users.target]), /Only admins can do this\./);
+      await refused(c, () => c.query('select public.set_member_active($1, false)', [users.target]), /Only admins can do this\./);
     });
   });
 
@@ -105,14 +97,13 @@ describe('set_member_role / set_member_active (0087)', () => {
 });
 
 describe('admin_require_mfa_setup / admin_end_sessions (0087)', () => {
-  it("sets the 2FA flag on the caller's company only, mirrored to profiles", async () => {
+  it("sets the 2FA flag on the caller's company only", async () => {
     await withTx(async (c) => {
       const b = await companyB(c);
       await bound(c, users.admin, S_ADMIN);
       await c.query('select public.admin_require_mfa_setup($1)', [users.viewer]);
       expect((await member(c, ACADEMY_ID, users.viewer)).mfa_setup_required).toBe(true);
       expect((await member(c, b, users.viewer)).mfa_setup_required).toBe(false);
-      expect((await profile(c, users.viewer)).mfa_setup_required).toBe(true);
       const { rows } = await c.query(
         `select company_id from public.admin_events where user_id = $1 and kind = 'mfa_reset'`, [users.viewer]);
       expect(rows).toEqual([{ company_id: ACADEMY_ID }]);
@@ -136,40 +127,26 @@ describe('admin_require_mfa_setup / admin_end_sessions (0087)', () => {
   });
 });
 
-// Release-3 compatibility: the previous app version never binds, so an unbound session is academy's.
-describe('unbound academy admin: the previous app version (0087)', () => {
-  it('admin_require_mfa_setup works against academy', async () => {
+describe('unbound admin: no company, no admin access (0090)', () => {
+  it('is refused by the member writes', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.admin);
-      await c.query('select public.admin_require_mfa_setup($1)', [users.viewer]);
-      expect((await member(c, ACADEMY_ID, users.viewer)).mfa_setup_required).toBe(true);
-      expect((await profile(c, users.viewer)).mfa_setup_required).toBe(true);
-    });
-  });
-
-  it("admin_end_sessions ends the user's unbound and academy-bound sessions, not B's", async () => {
-    await withTx(async (c) => {
-      const b = await companyB(c);
-      for (const s of [S_VIEWER_A, S_VIEWER_B, S_OTHER]) {
+      for (const s of [S_VIEWER_A, S_OTHER]) {
         await c.query('insert into auth.sessions (id, user_id, created_at, updated_at) values ($1, $2, now(), now())', [s, users.viewer]);
       }
-      await c.query('insert into app.session_companies (session_id, company_id, user_id) values ($1, $2, $3), ($4, $5, $3)',
-        [S_VIEWER_A, ACADEMY_ID, users.viewer, S_VIEWER_B, b]); // S_OTHER stays unbound
-      await actAs(c, users.admin);
+      await c.query('insert into app.session_companies (session_id, company_id, user_id) values ($1, $2, $3)',
+        [S_VIEWER_A, ACADEMY_ID, users.viewer]); // S_OTHER stays unbound
+      await actAs(c, users.admin, { session_id: crypto.randomUUID() });
+      await refused(c, () => c.query('select public.admin_require_mfa_setup($1)', [users.viewer]), /Not allowed/);
+      await refused(c, () => c.query('select public.admin_end_sessions($1)', [users.viewer]), /Not allowed/);
+      await refused(c, () => c.query('select public.delete_user($1)', [users.viewer]), /Not allowed/);
+      expect((await member(c, ACADEMY_ID, users.viewer)).mfa_setup_required).toBe(false);
+
+      // Bound to academy, admin_end_sessions leaves the user's unbound session alone.
+      await bound(c, users.admin, S_ADMIN);
       await c.query('select public.admin_end_sessions($1)', [users.viewer]);
       await asPostgres(c);
-      const { rows } = await c.query('select id from auth.sessions where id = any($1)', [[S_VIEWER_A, S_VIEWER_B, S_OTHER]]);
-      expect(rows.map((r) => r.id)).toEqual([S_VIEWER_B]);
-    });
-  });
-
-  it('delete_user removes an academy user', async () => {
-    await withTx(async (c) => {
-      const id = await newUser(c, 'zz-member-writes-unbound@example.com');
-      await actAs(c, users.admin);
-      await c.query('select public.delete_user($1)', [id]);
-      await asPostgres(c);
-      expect((await c.query('select count(*)::int as n from public.profiles where user_id = $1', [id])).rows[0].n).toBe(0);
+      const { rows } = await c.query('select id from auth.sessions where id = any($1)', [[S_VIEWER_A, S_OTHER]]);
+      expect(rows.map((r) => r.id)).toEqual([S_OTHER]);
     });
   });
 });
@@ -185,8 +162,8 @@ describe('cross-company: an academy admin who is only an organizer in B (0087)',
       await refused(c, () => c.query('select public.set_member_active($1, false)', [users.viewer]), /Only admins can do this\./);
       await refused(c, () => c.query('select public.delete_user($1)', [users.viewer]), /Only an admin can remove users\./);
       // No Delegates permission in B either (0089: permissions are per company), so require_perm refuses first.
-      await refused(c, () => c.query('select public.admin_end_sessions($1)', [users.viewer]), /Only an admin can do this\.|You don't have permission/);
-      await refused(c, () => c.query('select public.admin_require_mfa_setup($1)', [users.viewer]), /Only an admin can do this\.|You don't have permission/);
+      await refused(c, () => c.query('select public.admin_end_sessions($1)', [users.viewer]), NO_DELEGATES_EDIT);
+      await refused(c, () => c.query('select public.admin_require_mfa_setup($1)', [users.viewer]), NO_DELEGATES_EDIT);
       expect((await member(c, b, users.viewer)).role).toBe('organizer');
     });
   });
@@ -204,16 +181,10 @@ describe('delete_user (0087)', () => {
       await c.query('select public.delete_user($1)', [id]);
       expect(await member(c, ACADEMY_ID, id)).toBeUndefined();
       expect((await member(c, b, id)).active).toBe(true);
-      expect((await profile(c, id)).active).toBe(false);
+      expect((await c.query('select count(*)::int as n from public.profiles where user_id = $1', [id])).rows[0].n).toBe(1);
       const perms = (await c.query('select company_id, area from public.user_permissions where user_id = $1', [id])).rows;
       expect(perms).toEqual([{ company_id: b, area: 'patients' }]);
 
-      // Later profile writes (a name change, a direct write) must not make them an academy member again.
-      await bound(c, users.admin, S_ADMIN);
-      await c.query(`select public.admin_set_name($1, 'Zz Member Writes Renamed')`, [id]);
-      expect(await member(c, ACADEMY_ID, id)).toBeUndefined();
-      await c.query('update public.profiles set mfa_setup_required = true where user_id = $1', [id]);
-      expect(await member(c, ACADEMY_ID, id)).toBeUndefined();
     });
   });
 
@@ -237,29 +208,7 @@ describe('delete_user (0087)', () => {
   });
 });
 
-describe('profiles <-> academy membership mirror (0085 + 0087)', () => {
-  it('a direct profiles update still reaches the member row, and back, once each way', async () => {
-    await withTx(async (c) => {
-      const audits = async () => (await c.query(
-        `select table_name, count(*)::int as n from public.audit_log
-         where row_id = $1 and table_name in ('profiles', 'company_members') and at = now()
-         group by table_name order by table_name`, [users.viewer])).rows;
-      await asPostgres(c);
-      const before = await audits();
-      expect(before).toEqual([]);
-
-      await actAs(c, users.admin); // the previous app version's direct write
-      await c.query(`update public.profiles set role = 'admin' where user_id = $1`, [users.viewer]);
-      expect((await member(c, ACADEMY_ID, users.viewer)).role).toBe('admin');
-      expect(await audits()).toEqual([{ table_name: 'company_members', n: 1 }, { table_name: 'profiles', n: 1 }]);
-
-      await bound(c, users.admin, S_ADMIN); // the company-aware app's write
-      await c.query(`select public.set_member_role($1, 'organizer')`, [users.viewer]);
-      expect((await profile(c, users.viewer)).role).toBe('organizer');
-      expect(await audits()).toEqual([{ table_name: 'company_members', n: 2 }, { table_name: 'profiles', n: 2 }]);
-    });
-  });
-
+describe('company_members_staff_select (0087)', () => {
   it('staff read the members of their own company', async () => {
     await withTx(async (c) => {
       const b = await companyB(c);

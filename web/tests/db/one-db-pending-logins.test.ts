@@ -1,7 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, actAsBound, asPostgres } from './helpers';
-import { makeDelegate } from './fixtures';
+import { makeDelegate, pendingLogin } from './fixtures';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -41,7 +41,7 @@ const pendingCount = async (c: Client, email: string) => {
 
 const profileOf = async (c: Client, user: string) => {
   await asPostgres(c);
-  return (await c.query('select full_name, role, active, delegate_id from public.profiles where user_id = $1', [user])).rows[0];
+  return (await c.query('select full_name from public.profiles where user_id = $1', [user])).rows[0];
 };
 
 const deleteDelegate = async (c: Client, delegate: string) =>
@@ -60,7 +60,7 @@ describe('create_pending_login and handle_new_user (0088)', () => {
     });
   });
 
-  it("an academy delegate login: the role and delegate reach the member row and the profile mirror", async () => {
+  it("an academy delegate login: the role and delegate reach the member row", async () => {
     await withTx(async (c) => {
       await actAs(c, users.organizer);
       const d = await makeDelegate(c, 'Zz Pending Delegate');
@@ -68,7 +68,7 @@ describe('create_pending_login and handle_new_user (0088)', () => {
       await c.query(`select public.create_pending_login('zz-pending-d@example.com', 'Zz Pending D', 'delegate', $1)`, [d]);
       const id = await signUp(c, 'Zz-Pending-D@example.com');
       expect(await members(c, id)).toEqual([{ company_id: ACADEMY_ID, role: 'delegate', active: true, delegate_id: d }]);
-      expect(await profileOf(c, id)).toEqual({ full_name: 'Zz Pending D', role: 'delegate', active: true, delegate_id: d });
+      expect(await profileOf(c, id)).toEqual({ full_name: 'Zz Pending D' });
       expect(await pendingCount(c, 'zz-pending-d@example.com')).toBe(0);
     });
   });
@@ -85,17 +85,14 @@ describe('create_pending_login and handle_new_user (0088)', () => {
     });
   });
 
-  it('ignores and deletes a pending row older than 7 days', async () => {
+  it('ignores a pending row older than 7 days: the sign-up is refused', async () => {
     await withTx(async (c) => {
       const b = await companyB(c);
       await actAsBound(c, users.admin, b);
       await c.query(`select public.create_pending_login('zz-pending-old@example.com', 'Zz Old', 'organizer', null)`);
       await asPostgres(c);
       await c.query(`update app_private.pending_logins set created_at = now() - interval '8 days' where email = 'zz-pending-old@example.com'`);
-      const id = await signUp(c, 'zz-pending-old@example.com');
-      expect(await members(c, id)).toEqual([{ company_id: ACADEMY_ID, role: 'organizer', active: false, delegate_id: null }]);
-      expect((await profileOf(c, id)).full_name).toBe('');
-      expect(await pendingCount(c, 'zz-pending-old@example.com')).toBe(0);
+      await refused(c, () => signUp(c, 'zz-pending-old@example.com'), /No pending login for this address./);
     });
   });
 
@@ -114,13 +111,6 @@ describe('create_pending_login and handle_new_user (0088)', () => {
       expect((await c.query(
         `select company_id from app_private.pending_logins where email = 'zz-pending-cancel@example.com'`)).rows)
         .toEqual([{ company_id: ACADEMY_ID }]);
-    });
-  });
-
-  it('without a pending row a new login is still an inactive academy member (previous app version)', async () => {
-    await withTx(async (c) => {
-      const id = await signUp(c, 'zz-pending-none@example.com');
-      expect(await members(c, id)).toEqual([{ company_id: ACADEMY_ID, role: 'organizer', active: false, delegate_id: null }]);
     });
   });
 
@@ -150,6 +140,7 @@ describe('add_existing_member (0088)', () => {
   it("adds an academy user to company B, once", async () => {
     await withTx(async (c) => {
       const b = await companyB(c);
+      await pendingLogin(c, 'zz-pending-existing@example.com');
       const id = await signUp(c, 'zz-pending-existing@example.com');
       await actAsBound(c, users.admin, b);
       const added = (await c.query(
@@ -157,7 +148,7 @@ describe('add_existing_member (0088)', () => {
       expect(added).toBe(id);
       expect(await members(c, id)).toEqual(expect.arrayContaining([
         { company_id: b, role: 'organizer', active: true, delegate_id: null },
-        { company_id: ACADEMY_ID, role: 'organizer', active: false, delegate_id: null },
+        { company_id: ACADEMY_ID, role: 'organizer', active: true, delegate_id: null },
       ]));
       await actAsBound(c, users.admin, b);
       await refused(c, () => c.query(`select public.add_existing_member('zz-pending-existing@example.com', 'organizer', null)`), EXISTS);
@@ -167,6 +158,7 @@ describe('add_existing_member (0088)', () => {
   it("refuses another company's delegate", async () => {
     await withTx(async (c) => {
       const b = await companyB(c);
+      await pendingLogin(c, 'zz-pending-foreign@example.com');
       await signUp(c, 'zz-pending-foreign@example.com');
       const academyDelegate = (await c.query(
         `insert into public.delegates (company_id, full_name) values ($1, 'Zz Pending Academy Delegate') returning id`, [ACADEMY_ID])).rows[0].id;
@@ -181,7 +173,9 @@ describe('add_existing_member (0088)', () => {
       const b = await companyB(c);
       const d = (await c.query(
         `insert into public.delegates (company_id, full_name) values ($1, 'Zz Pending Taken') returning id`, [b])).rows[0].id;
+      await pendingLogin(c, 'zz-pending-taken1@example.com');
       const first = await signUp(c, 'zz-pending-taken1@example.com');
+      await pendingLogin(c, 'zz-pending-taken2@example.com');
       await signUp(c, 'zz-pending-taken2@example.com');
       await c.query(`insert into public.company_members (company_id, user_id, role, active, delegate_id) values ($1, $2, 'delegate', true, $3)`,
         [b, first, d]);
@@ -217,7 +211,7 @@ describe('delete_delegate with shared logins (0088)', () => {
       await actAsBound(c, users.admin);
       expect(await deleteDelegate(c, d)).toBe(login);
       expect(await members(c, login)).toEqual([{ company_id: b, role: 'organizer', active: true, delegate_id: null }]);
-      expect(await profileOf(c, login)).toMatchObject({ active: false, delegate_id: null });
+      expect(await profileOf(c, login)).toEqual({ full_name: 'Zz Shared' });
       expect((await c.query('select count(*)::int as n from public.delegates where id = $1', [d])).rows[0].n).toBe(0);
     });
   });
@@ -227,8 +221,8 @@ describe('delete_delegate with shared logins (0088)', () => {
       const b = await companyB(c);
       const d = (await c.query(
         `insert into public.delegates (company_id, full_name) values ($1, 'Zz Pending B Delegate') returning id`, [b])).rows[0].id;
+      await pendingLogin(c, 'zz-pending-bdel@example.com');
       const login = await signUp(c, 'zz-pending-bdel@example.com');
-      await c.query(`update public.profiles set active = true where user_id = $1`, [login]);
       await c.query(`insert into public.company_members (company_id, user_id, role, active, delegate_id) values ($1, $2, 'delegate', true, $3)`,
         [b, login, d]);
       await actAsBound(c, users.admin, b);

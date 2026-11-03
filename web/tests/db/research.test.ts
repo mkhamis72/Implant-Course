@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
-import { enroll, makeCourse, makeDelegate, makePatient, place, receive, setPerms } from './fixtures';
+import { enroll, makeCourse, makeDelegate, makePatient, pendingLogin, place, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
 const ALL_EDIT = { patients: 'edit', schedule: 'edit', courses: 'edit', checklists: 'edit', inventory: 'edit', delegates: 'edit' } as const;
@@ -72,6 +72,7 @@ const ids = (rows: { site_id: string }[]) => rows.map((r) => r.site_id);
 describe('research permission', () => {
   it('a new organizer has no Research row; Research is None, View or Edit (0073)', async () => {
     await withTx(async (c) => {
+      await pendingLogin(c, 'zz-research-new@example.com');
       const { rows } = await c.query(
         `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-research-new@example.com') returning id`,
       );

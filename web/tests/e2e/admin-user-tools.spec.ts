@@ -2,7 +2,7 @@ import { test, expect, type Browser, type Page } from '@playwright/test';
 import { Client } from 'pg';
 import { authenticator } from 'otplib';
 import { pgConfig } from '../../scripts/db';
-import { adminClient, setProfile } from '../../scripts/users';
+import { adminClient, pendingLoginFor, setProfile } from '../../scripts/users';
 import { TEST_USERS } from '../support/test-users';
 import { login, expectDashboard } from './helpers';
 
@@ -11,6 +11,7 @@ async function withUser(prefix: string, fn: (u: { id: string; email: string; pas
   const admin = adminClient();
   const email = `icm-${prefix}-${Date.now()}@example.com`;
   const password = 'Tools-password-123';
+  await pendingLoginFor(email);
   const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
   expect(error).toBeNull();
   const id = data.user!.id;

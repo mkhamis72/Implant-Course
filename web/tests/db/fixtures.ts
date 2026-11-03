@@ -177,3 +177,18 @@ export async function legacyFailure(c: Client, site: string, date: string, user:
   await c.query(`select app_private.set_tooth($1, $2::smallint, 'failed')`, [rows[0].patient_id, rows[0].tooth]);
   await actAs(c, user);
 }
+
+/** A pending login for the email (as postgres), so an auth.users insert creates its membership (0088):
+ *  without one, handle_new_user refuses the sign-up (0090). Academy and an active organizer by default. */
+export async function pendingLogin(
+  c: Client,
+  email: string,
+  opts: { company?: string; role?: 'admin' | 'organizer' | 'delegate'; fullName?: string; delegateId?: string | null } = {},
+): Promise<void> {
+  await asPostgres(c);
+  await c.query(
+    `insert into app_private.pending_logins (company_id, email, full_name, role, delegate_id, created_by)
+     values ($1, lower($2), $3, $4, $5, '00000000-0000-0000-0000-000000000000')`,
+    [opts.company ?? 'a7c0de00-0000-4000-8000-000000000001', email, opts.fullName ?? '', opts.role ?? 'organizer', opts.delegateId ?? null],
+  );
+}

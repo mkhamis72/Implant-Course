@@ -23,11 +23,11 @@ describe('RLS requires aal2 once a user has 2FA', () => {
     });
   });
 
-  it('a 2FA admin with an aal1 token cannot change roles', async () => {
+  it('a 2FA admin with an aal1 token cannot change names', async () => {
     await withTx(async (c) => {
       await addVerifiedFactor(c, users.admin);
       await actAs(c, users.admin, { aal: 'aal1' });
-      const r = await c.query("update public.profiles set role = 'admin' where user_id = $1", [users.target]);
+      const r = await c.query("update public.profiles set full_name = full_name where user_id = $1", [users.target]);
       expect(r.rowCount).toBe(0);
     });
   });

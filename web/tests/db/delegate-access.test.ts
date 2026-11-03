@@ -11,7 +11,7 @@ const users = inject('testUsers');
 async function asDelegate(c: Client): Promise<string> {
   await asPostgres(c);
   const me = await makeDelegate(c, 'Zz Me Delegate');
-  await c.query(`update public.profiles set role = 'delegate', delegate_id = $2, active = true where user_id = $1`, [users.target, me]);
+  await c.query(`update public.company_members set role = 'delegate', delegate_id = $2, active = true where company_id = 'a7c0de00-0000-4000-8000-000000000001' and user_id = $1`, [users.target, me]);
   return me;
 }
 
@@ -97,7 +97,7 @@ describe('delegate logins', () => {
       expect(r.rows).toEqual([{ patient_name: 'Zz Mine Patient', tooth: 46, role: 'placing' }]);
 
       await asPostgres(c);
-      await c.query('update public.profiles set active = false where user_id = $1', [users.target]);
+      await c.query('update public.company_members set active = false where user_id = $1', [users.target]);
       await actAs(c, users.target);
       await c.query('savepoint s');
       await expect(c.query(`select * from public.my_schedule('2030-03-01', '2030-03-05')`)).rejects.toThrow(/delegate logins/);

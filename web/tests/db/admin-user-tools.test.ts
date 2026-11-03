@@ -14,7 +14,10 @@ async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp | 
 }
 
 const profile = async (c: Client, id: string) =>
-  (await c.query('select email, full_name, mfa_setup_required from public.profiles where user_id = $1', [id])).rows[0];
+  (await c.query(
+    `select p.email, p.full_name, m.mfa_setup_required from public.profiles p
+     left join public.company_members m on m.user_id = p.user_id and m.company_id = 'a7c0de00-0000-4000-8000-000000000001'
+     where p.user_id = $1`, [id])).rows[0];
 
 /** createdAt is SQL: clock_timestamp() (default) is later than anything recorded earlier in the transaction (now()). */
 async function addVerifiedFactor(c: Client, userId: string, createdAt = 'clock_timestamp()') {
@@ -59,7 +62,7 @@ describe('admin user tools: guards', () => {
       await actAsBound(c, users.admin);
       await refused(
         c,
-        () => c.query('update public.profiles set mfa_setup_required = true where user_id = $1', [users.target]),
+        () => c.query('update public.company_members set mfa_setup_required = true where user_id = $1', [users.target]),
         /permission denied/,
       );
       await refused(
@@ -95,7 +98,7 @@ describe('admin_change_email', () => {
   it('updates the linked delegate email and leaves other delegates alone', async () => {
     await withTx(async (c) => {
       await asPostgres(c);
-      const linked = (await c.query('select delegate_id from public.profiles where user_id = $1', [users.delegate])).rows[0].delegate_id;
+      const linked = (await c.query('select delegate_id from public.company_members where user_id = $1', [users.delegate])).rows[0].delegate_id;
       const other = (
         await c.query(`insert into public.delegates (full_name, email) values ('Zz Other Delegate', 'zz-other@example.com') returning id`)
       ).rows[0].id;
@@ -172,8 +175,10 @@ describe('2FA reset flag', () => {
       await actAs(c, users.target, { aal: 'aal2' });
       expect(await seesPatient()).toBe(false);
       expect((await c.query('select public.is_active_user() as v')).rows[0].v).toBe(false);
-      const own = await c.query('select mfa_setup_required from public.profiles where user_id = $1', [users.target]);
-      expect(own.rows).toEqual([{ mfa_setup_required: true }]);
+      const own = await c.query('select user_id from public.profiles where user_id = $1', [users.target]);
+      expect(own.rows).toEqual([{ user_id: users.target }]);
+      const flag = await c.query('select mfa_setup_required from public.company_members where user_id = $1', [users.target]);
+      expect(flag.rows).toEqual([{ mfa_setup_required: true }]);
       expect((await c.query('select 1 from public.settings')).rows).toHaveLength(1);
 
       await addVerifiedFactor(c, users.target); // a new authenticator, after the reset
@@ -201,7 +206,7 @@ describe('2FA reset flag', () => {
   it('a flagged admin loses admin access until the flag is cleared', async () => {
     await withTx(async (c) => {
       await asPostgres(c);
-      await c.query('update public.profiles set mfa_setup_required = true where user_id = $1', [users.admin]);
+      await c.query('update public.company_members set mfa_setup_required = true where user_id = $1', [users.admin]);
       await actAsBound(c, users.admin);
       expect((await c.query('select public.is_admin() as v')).rows[0].v).toBe(false);
     });

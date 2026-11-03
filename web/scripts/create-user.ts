@@ -15,10 +15,10 @@ async function main() {
   }
   console.log(`Target project: ${label ?? targetLabel(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
   const password = temporaryPassword();
-  const userId = await ensureUser(adminClient(), { email: args.email, password });
   const pg = new Client(pgConfig());
   await pg.connect();
   try {
+    const userId = await ensureUser(adminClient(), { email: args.email, password, pending: { pg } });
     await setProfile(pg, userId, { full_name: args.fullName, role: args.role, active: true, delegate_id: args.delegateId ?? null });
   } finally {
     await pg.end();
