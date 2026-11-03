@@ -1,6 +1,6 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs } from './helpers';
 
 const users = inject('testUsers');
 
@@ -73,17 +73,15 @@ describe('I1: users cannot rewrite who/where columns', () => {
 });
 
 describe('I2: file numbers', () => {
-  it('automatic numbers skip numbers already typed by hand', async () => {
+  it('automatic numbers continue after the highest number, typed ones included (0091)', async () => {
     await withTx(async (c) => {
-      await asPostgres(c);
-      const { rows } = await c.query('select last_value, is_called from public.patients_file_no_seq');
-      const next = Number(rows[0].last_value) + (rows[0].is_called ? 1 : 0);
       await actAs(c, users.organizer);
+      const next = Number((await c.query('select public.next_file_no() as n')).rows[0].n.slice(1));
       for (const n of [next, next + 1, next + 2]) {
-        await c.query("insert into public.patients (full_name, file_no) values ('Typed', $1)", [`P${String(n).padStart(5, '0')}`]);
+        await c.query("insert into public.patients (full_name, file_no) values ('Typed', $1)", [`p${String(n).padStart(5, '0')}`]);
       }
       const { rows: auto } = await c.query("insert into public.patients (full_name) values ('Auto') returning file_no");
-      expect(auto[0].file_no).toMatch(/^P\d{5,}$/);
+      expect(auto[0].file_no).toBe(`P${String(next + 3).padStart(5, '0')}`);
     });
   });
 

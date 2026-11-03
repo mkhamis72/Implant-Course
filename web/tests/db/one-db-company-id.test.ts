@@ -58,9 +58,11 @@ describe('company_id on every company table (0084)', () => {
       await asPostgres(c);
       const all = await tables(c);
       for (const t of all) {
-        const expected = SINGLETONS.includes(t.name) ? ['company_id']
-          : t.pk.length === 1 && t.pk[0] === 'id' ? ['company_id', 'id'] : null;
+        // 0091 made company_id the singletons' primary key, replacing their unique (company_id).
+        const singleton = SINGLETONS.includes(t.name);
+        const expected = !singleton && t.pk.length === 1 && t.pk[0] === 'id' ? ['company_id', 'id'] : null;
         expect({ name: t.name, key: t.key_cols }).toEqual({ name: t.name, key: expected });
+        if (singleton) expect({ name: t.name, pk: t.pk }).toEqual({ name: t.name, pk: ['company_id'] });
       }
       const composite = all.filter((t) => t.key_cols === null).map((t) => t.name);
       expect(composite).toEqual(expect.arrayContaining(['app_private.research_codes', 'public.medical_history', 'public.user_permissions']));

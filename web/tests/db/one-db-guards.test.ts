@@ -16,8 +16,39 @@ const ANON_EXEC_ALLOWLIST = new Set([
   'public.branding_for', 'public.branding_logo_for',
 ]);
 
-/** Unique indexes on company tables scoped by a parent row instead of company_id (index name: reason). */
-const PARENT_SCOPED_UNIQUES = new Set<string>([]);
+/** Unique indexes on company tables scoped by a parent row instead of company_id. Keys are the index's
+ *  regclass text: bare in public, schema-qualified elsewhere. The parent belongs to one company, and the
+ *  composite foreign keys (0091) keep the child in that company. */
+const PARENT_SCOPED_UNIQUES = new Set<string>([
+  'app_private.research_codes_pkey', // (entity, entity_id): entity_id is one company's row
+  'checklist_items_position', // within one checklist
+  'enrollments_course_id_delegate_id_key', // within one course
+  'implant_followups_one_visit', // within one implant
+  'implant_sites_one_active', // within one patient
+  'implant_surgery_pkey', // one row per implant
+  'medical_history_pkey', // one row per patient
+  'patient_consents_file_id_key', // one consent per stored file
+  'radiograph_bone_levels_pkey', // within one radiograph
+  'restoration_sites_pkey', // within one restoration
+  'site_components_one_current', // within one implant
+  'slot_delegates_slot_id_delegate_id_key', // within one booking
+  'slot_planned_implants_slot_id_tooth_key', // within one booking
+  'studies_letter_file_id_key', // one study per stored file
+  'study_courses_pkey', // within one study
+  'template_items_template_id_position_key', // within one template
+  'tooth_status_patient_id_tooth_key', // within one patient
+]);
+
+/** Unique indexes on company tables meant to hold across companies (same key format). */
+const GLOBAL_UNIQUES = new Set<string>([
+  'app_private.research_codes_code_key', // random study codes: a code never repeats in any company's export
+]);
+
+/** Global uniques that 0091 replaced with per-company ones; 0095 (release 5) drops them, then this set goes. */
+const REPLACED_GLOBAL_UNIQUES = new Set<string>([
+  'chairs_name_key', 'checklist_templates_one_default', 'consent_form_versions_label_key',
+  'patients_file_no_key', 'patients_file_no_upper_key',
+]);
 
 /** Permissive policies that may skip the staff guard: the caller's own profile row (spec §4). */
 const PERSON_LEVEL_POLICIES = new Set(['public.profiles.profiles_self']);
@@ -101,7 +132,7 @@ const GUARDS = {
         -- A primary key on a single generated id is unique on its own.
         and not (i.indisprimary and i.indnkeyatts = 1 and exists (
           select 1 from pg_attribute ia where ia.attrelid = i.indrelid and ia.attnum = i.indkey[0] and ia.attname = 'id'))`);
-    return names.filter((n) => !PARENT_SCOPED_UNIQUES.has(n));
+    return names.filter((n) => !PARENT_SCOPED_UNIQUES.has(n) && !GLOBAL_UNIQUES.has(n) && !REPLACED_GLOBAL_UNIQUES.has(n));
   },
 
   'definer-owner': async (c) => {
@@ -159,7 +190,7 @@ type GuardName = keyof typeof GUARDS;
 
 /** Guards a later plan-3 task enables: each task removes the names it makes pass. Plan 3 ends with none. */
 const PENDING = new Set<GuardName>([
-  'rls-forced', 'company-policies', 'company-id-index', 'composite-fks', 'company-uniques',
+  'rls-forced', 'company-policies', 'company-id-index',
   'definer-owner', 'anon-exec', 'permissive-needs-guard', 'tenant-definer-policies',
 ]);
 
@@ -174,6 +205,6 @@ describe('one database catalog guards', () => {
   it('PENDING holds only guard names, and shrinks to empty as plan 3 enables them', () => {
     expect([...PENDING].filter((n) => !(n in GUARDS))).toEqual([]);
     // Lower this as each task enables its guards; plan 3 ends at 0.
-    expect(PENDING.size).toBe(9);
+    expect(PENDING.size).toBe(7);
   });
 });
