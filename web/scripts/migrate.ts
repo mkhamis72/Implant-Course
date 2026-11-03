@@ -8,6 +8,7 @@ import { DEFINER_ALLOWLIST } from './definer-allowlist';
 /**
  * Security-definer functions in public and app_private that are neither owned by tenant_definer nor on
  * DEFINER_ALLOWLIST (one database, spec §5): a definer owned by postgres bypasses the company policies.
+ * Also lists the role itself when it is SUPERUSER or BYPASSRLS, which would bypass them everywhere.
  * Empty when the role doesn't exist (a database before 0092, or the control project).
  */
 export async function definerOwnerOffenders(client: Client): Promise<string[]> {
@@ -19,7 +20,13 @@ export async function definerOwnerOffenders(client: Client): Promise<string[]> {
       and pg_get_userbyid(p.proowner) <> 'tenant_definer'
       and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
     order by 1`);
-  return rows.filter((r) => !DEFINER_ALLOWLIST.has(r.name)).map((r) => `${r.name} (${r.owner})`);
+  const role = await client.query<{ name: string }>(`
+    select 'role tenant_definer (' || case when rolsuper then 'SUPERUSER' else 'BYPASSRLS' end || ')' as name
+    from pg_roles where rolname = 'tenant_definer' and (rolsuper or rolbypassrls)`);
+  return [
+    ...role.rows.map((r) => r.name),
+    ...rows.filter((r) => !DEFINER_ALLOWLIST.has(r.name)).map((r) => `${r.name} (${r.owner})`),
+  ];
 }
 
 export async function migrate(
@@ -50,7 +57,7 @@ export async function migrate(
         // Inside the migration's transaction, so a definer that skips tenant_definer never commits.
         const offenders = await definerOwnerOffenders(client);
         if (offenders.length) {
-          throw new Error(`definers must be owned by tenant_definer (or be on DEFINER_ALLOWLIST): ${offenders.join(', ')}`);
+          throw new Error(`tenant_definer must own every definer outside DEFINER_ALLOWLIST and must not bypass RLS: ${offenders.join(', ')}`);
         }
         await client.query('insert into app_private.schema_migrations (name) values ($1)', [file]);
         await client.query('commit');

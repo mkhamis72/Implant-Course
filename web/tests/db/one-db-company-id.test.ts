@@ -9,8 +9,14 @@ const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
 const SINGLETONS = ['public.settings', 'public.branding', 'public.branding_logos'];
 // Tables created after 0084 that set company_id explicitly: no academy default, keyed by their own primary key.
-const EXPLICIT_COMPANY = ['public.company_members'];
+const EXPLICIT_COMPANY = ['public.company_members', 'app_private.pending_logins', 'app_private.file_no_counters'];
 const MIGRATION = join(process.cwd(), 'supabase', 'migrations', '0084_company_id.sql');
+/** 0083's app.company_tables(), which 0084 ran with: 0092 lists only tables that already have company_id. */
+function companyTables0083(): string {
+  const sql = readFileSync(join(process.cwd(), 'supabase', 'migrations', '0083_companies.sql'), 'utf8');
+  const start = sql.indexOf('create function app.company_tables()');
+  return sql.slice(start, sql.indexOf('$;', start) + 3).replace('create function', 'create or replace function');
+}
 
 type TableInfo = {
   name: string; relname: string; pk: string[]; notnull: boolean; default_expr: string | null;
@@ -108,6 +114,7 @@ describe('company_id on every company table (0084)', () => {
       const before = (await c.query(
         'select (select count(*) from public.stock_movements)::int as moves, (select count(*) from public.audit_log)::int as audits, (select max(id) from public.audit_log)::text as last_audit',
       )).rows[0];
+      await c.query(companyTables0083());
       await c.query(readFileSync(MIGRATION, 'utf8'));
       const after = (await c.query(
         'select (select count(*) from public.stock_movements)::int as moves, (select count(*) from public.audit_log)::int as audits, (select max(id) from public.audit_log)::text as last_audit',

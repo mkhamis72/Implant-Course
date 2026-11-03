@@ -115,6 +115,12 @@ const GUARDS = {
     select t::text as name from app.company_tables() t
     where not exists (select 1 from pg_attribute a where a.attrelid = t and a.attname = 'company_id' and not a.attisdropped)`),
 
+  // The reverse: a table holding company_id that app.company_tables() misses would get no company policies.
+  'company-id-tables-listed': (c) => list(c, `
+    select t.name from (${OWN_TABLES}) t
+    where exists (select 1 from pg_attribute a where a.attrelid = t.oid and a.attname = 'company_id' and not a.attisdropped)
+      and t.oid not in (select app.company_tables())`, [OWN_SCHEMAS]),
+
   'company-id-index': (c) => list(c, `
     select a.attrelid::regclass::text as name from pg_attribute a
     join pg_class c on c.oid = a.attrelid join pg_namespace n on n.oid = c.relnamespace
@@ -190,9 +196,11 @@ const GUARDS = {
       .map((r) => r.name as string).sort();
   },
 
+  // Every table but the migration ledger, which only postgres (BYPASSRLS) touches: tenant_definer has no
+  // grant and no policy there (0092), so a definer can't rewrite which migrations count as applied.
   'tenant-definer-policies': (c) => list(c, `
     select t.name from (${OWN_TABLES}) t
-    where not exists (
+    where t.name <> 'app_private.schema_migrations' and not exists (
       select 1 from pg_policy p join pg_roles r on r.oid = any(p.polroles)
       where p.polrelid = t.oid and p.polpermissive and p.polcmd = '*' and r.rolname = 'tenant_definer')`,
   [OWN_SCHEMAS]),
@@ -215,6 +223,13 @@ describe('one database catalog guards', () => {
     expect([...PENDING].filter((n) => !(n in GUARDS))).toEqual([]);
     // Lower this as each task enables its guards; plan 3 ends at 0.
     expect(PENDING.size).toBe(0);
+  });
+
+  it('tenant_definer has no access to the migration ledger', async () => {
+    const { rows } = await withTx((c) => c.query(`
+      select has_table_privilege('tenant_definer', 'app_private.schema_migrations', 'select, insert, update, delete') as any_priv,
+             (select count(*)::int from pg_policy where polrelid = 'app_private.schema_migrations'::regclass) as policies`));
+    expect(rows[0]).toEqual({ any_priv: false, policies: 0 });
   });
 
   it('app.company_tables() lists the company tables (a guard over an empty list proves nothing)', async () => {

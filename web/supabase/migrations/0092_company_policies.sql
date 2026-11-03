@@ -21,12 +21,19 @@ begin
   if not exists (select 1 from pg_catalog.pg_roles where rolname = 'tenant_definer') then
     create role tenant_definer nologin nobypassrls;
   end if;
+  -- An existing role must not bypass RLS: the company policies would then not apply inside the definers.
+  if exists (select 1 from pg_catalog.pg_roles where rolname = 'tenant_definer' and (rolbypassrls or rolsuper)) then
+    raise exception 'role tenant_definer must be NOSUPERUSER NOBYPASSRLS';
+  end if;
 end $$;
 -- postgres isn't a superuser on Supabase: ALTER ... OWNER TO needs it to be a member of the new owner.
 grant tenant_definer to postgres;
 grant anon to tenant_definer;
 grant usage on schema public, app_private, app to tenant_definer;
 grant select, insert, update, delete on all tables in schema public, app_private to tenant_definer;
+-- The migration ledger is postgres's alone: no grants and no tenant_definer policy (forced RLS with no
+-- policy; postgres bypasses RLS).
+revoke all on app_private.schema_migrations from tenant_definer;
 grant usage, select on all sequences in schema public, app_private to tenant_definer;
 -- public too: definers call security-invoker readers (implant_stage, delegate_report, …) that grant
 -- execute to authenticated only.
@@ -295,6 +302,21 @@ begin
 end $$;
 
 
+-- ── Company tables ──────────────────────────────────────────────────────────────────────────────────
+-- 0083's company_tables: every table in public and app_private with a company_id column, so the
+-- app_private ones (research_codes, pending_logins, file_no_counters) get the company policies too. Same
+-- signature, so the grants stay. The company list, profiles and the migration ledger have no company_id.
+create or replace function app.company_tables() returns setof regclass
+language sql stable set search_path = '' as $$
+  select c.oid::regclass from pg_catalog.pg_class c
+  join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+  where n.nspname in ('public', 'app_private') and c.relkind = 'r'
+    and c.relname not in ('companies', 'profiles', 'schema_migrations')
+    and exists (select 1 from pg_catalog.pg_attribute a
+                where a.attrelid = c.oid and a.attname = 'company_id' and not a.attisdropped)
+$$;
+
+
 -- ── Column defaults ─────────────────────────────────────────────────────────────────────────────────
 -- created_by and the like: auth.uid() becomes app.current_user_id() (no auth.* outside schema app).
 do $$
@@ -326,8 +348,8 @@ end $$;
 
 
 -- ── RLS and policies ────────────────────────────────────────────────────────────────────────────────
--- Forced RLS and a tenant_definer policy on every table in public and app_private (schema_migrations
--- included: only postgres, which bypasses RLS, touches it).
+-- Forced RLS on every table in public and app_private, and a tenant_definer policy on each but the
+-- migration ledger (only postgres, which bypasses RLS, touches it).
 do $$
 declare
   r record;
@@ -342,8 +364,10 @@ begin
     end if;
     execute format('alter table %s enable row level security', r.tbl);
     execute format('alter table %s force row level security', r.tbl);
-    execute format('create policy %I on %s for all to tenant_definer using (true) with check (true)',
-                   r.relname || '_tenant_definer', r.tbl);
+    if r.tbl <> 'app_private.schema_migrations'::regclass then
+      execute format('create policy %I on %s for all to tenant_definer using (true) with check (true)',
+                     r.relname || '_tenant_definer', r.tbl);
+    end if;
   end loop;
 end $$;
 
