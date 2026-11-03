@@ -34,6 +34,20 @@ begin
   end if;
 end $$;
 
+-- console_cancel_pending_login: removes the pending row console_add_first_admin wrote when the console's
+-- Auth call then fails, so a later account for that address doesn't become the company's admin unasked.
+-- Service role only and postgres-owned, as above.
+create function public.console_cancel_pending_login(p_company uuid, p_email text) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  delete from app_private.pending_logins
+  where company_id = p_company and email = lower(trim(coalesce(p_email, '')));
+end $$;
+
 alter function public.console_add_first_admin(uuid, text, text) owner to postgres;
-revoke all on function public.console_add_first_admin(uuid, text, text) from public, anon, authenticated;
-grant execute on function public.console_add_first_admin(uuid, text, text) to service_role;
+alter function public.console_cancel_pending_login(uuid, text) owner to postgres;
+-- 0092's default privileges give tenant_definer execute on every new postgres-owned function: take it back.
+revoke all on function public.console_add_first_admin(uuid, text, text),
+  public.console_cancel_pending_login(uuid, text) from public, anon, authenticated, tenant_definer;
+grant execute on function public.console_add_first_admin(uuid, text, text),
+  public.console_cancel_pending_login(uuid, text) to service_role;

@@ -112,14 +112,17 @@ export async function firstAdmin(_prev: FirstAdminState, formData: FormData): Pr
     // The login exists now: a failed log entry must not hide the password. Never log the password.
     const { error: logError } = await control.rpc('console_log', {
       p_slug: parsed.data.slug,
-      p_action: r.created ? 'first_admin_created' : 'admin_password_reset',
+      // console_log (control 0003) knows two actions: an added shared account is a created admin there.
+      p_action: r.outcome === 'reset' ? 'admin_password_reset' : 'first_admin_created',
       p_detail: parsed.data.email,
       p_actor: admin.email,
     });
-    const ok = r.created ? 'Admin login created.' : 'Password reset for the existing login.';
+    const ok = r.outcome === 'created' ? 'Admin login created.'
+      : r.outcome === 'reset' ? 'Password reset for the existing login.'
+      : `Added ${parsed.data.email} as admin. They sign in with their existing password.`;
     return {
       ok: logError ? `${ok} The change could not be recorded in the history.` : ok,
-      password: r.password,
+      password: r.outcome === 'added' ? undefined : r.password,
       email: parsed.data.email,
     };
   } catch (e) {

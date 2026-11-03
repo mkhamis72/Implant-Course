@@ -8,7 +8,7 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 vi.mock('@/lib/console/session', () => ({ requireConsoleAdmin: vi.fn(async () => ({ userId: 'u1', email: 'owner@example.com' })) }));
-vi.mock('@/lib/console/first-admin', () => ({ createFirstAdmin: vi.fn(async () => ({ password: 'Temp-Pass-123', created: true })) }));
+vi.mock('@/lib/console/first-admin', () => ({ createFirstAdmin: vi.fn(async () => ({ outcome: 'created', password: 'Temp-Pass-123' })) }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn(() => ({})) }));
 vi.mock('@/lib/tenant/check', () => ({ checkTenant: vi.fn() }));
 
@@ -172,5 +172,14 @@ describe('firstAdmin', () => {
     const r = await firstAdmin({}, form(admin));
     expect(r.password).toBe('Temp-Pass-123');
     expect(r.ok).toContain('could not be recorded in the history');
+  });
+
+  it('shows no password for an account another company uses', async () => {
+    existing = linked;
+    withKey();
+    vi.mocked(createFirstAdmin).mockResolvedValueOnce({ outcome: 'added' });
+    const r = await firstAdmin({}, form(admin));
+    expect(r.ok).toBe('Added a@b.com as admin. They sign in with their existing password.');
+    expect(r.password).toBeUndefined();
   });
 });

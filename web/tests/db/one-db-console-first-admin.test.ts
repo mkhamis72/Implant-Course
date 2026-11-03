@@ -84,10 +84,33 @@ describe('console_add_first_admin (0093)', () => {
       await actAs(c, users.admin);
       await refused(c, () => c.query('select public.console_add_first_admin($1, $2, $3)', [b, 'zz-owner@example.com', 'Zz']),
         /permission denied/);
+      await refused(c, () => c.query('select public.console_cancel_pending_login($1, $2)', [b, 'zz-owner@example.com']),
+        /permission denied/);
       await asPostgres(c);
-      const owner = (await c.query(`select pg_get_userbyid(proowner) as owner from pg_proc
-        where oid = 'public.console_add_first_admin(uuid, text, text)'::regprocedure`)).rows[0].owner;
-      expect(owner).toBe('postgres');
+      for (const fn of ['public.console_add_first_admin(uuid, text, text)', 'public.console_cancel_pending_login(uuid, text)']) {
+        const { rows: [r] } = await c.query(`select pg_get_userbyid(proowner) as owner,
+            has_function_privilege('anon', oid, 'execute') as anon,
+            has_function_privilege('authenticated', oid, 'execute') as authenticated,
+            has_function_privilege('tenant_definer', oid, 'execute') as tenant_definer,
+            has_function_privilege('service_role', oid, 'execute') as service_role
+          from pg_proc where oid = $1::regprocedure`, [fn]);
+        expect(r, fn).toEqual({ owner: 'postgres', anon: false, authenticated: false, tenant_definer: false, service_role: true });
+      }
+    });
+  });
+});
+
+describe('console_cancel_pending_login (0093)', () => {
+  it("removes only that company's pending row for the address", async () => {
+    await withTx(async (c) => {
+      const b = await companyB(c);
+      await addFirstAdmin(c, b, 'zz-owner@example.com');
+      await addFirstAdmin(c, ACADEMY_ID, 'zz-owner@example.com');
+      await c.query('set local role service_role');
+      await c.query('select public.console_cancel_pending_login($1, $2)', [b, ' ZZ-Owner@Example.com ']);
+      await asPostgres(c);
+      const left = (await c.query('select company_id from app_private.pending_logins where email = $1', ['zz-owner@example.com'])).rows;
+      expect(left).toEqual([{ company_id: ACADEMY_ID }]);
     });
   });
 });

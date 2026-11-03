@@ -23,5 +23,7 @@ export const DEFINER_ALLOWLIST: ReadonlySet<string> = new Set([
   'public.branding_logo',
   // Console, service role only (0093): writes a named company's first admin without a bound session.
   'public.console_add_first_admin',
+  // Console, service role only (0093): removes that pending row again when the Auth call fails.
+  'public.console_cancel_pending_login',
   // The console / service-role functions that later plan-3 tasks add join this list there.
 ]);
