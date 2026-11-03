@@ -28,18 +28,6 @@ const NOT_EDIT = new Set([
 ]);
 const FILE_READERS = new Set(['consent_file', 'study_letter']);
 
-/** Gaps the sweep finds on HEAD, pinned so the suite stays green and fails once one is fixed (then remove it).
- *  - research_codes is keyed by (entity, entity_id) across companies: B passing A's course to
- *    assign_research_codes (or any A id to research_code) stores B's code for A's row, and A then never gets a
- *    code for it (research_code returns null to A). No read of A's data, but B can break A's exports.
- *  - create_pending_login doesn't check that p_delegate_id is a delegate of the caller's company
- *    (add_existing_member does): B's pending login names A's delegate. handle_new_user drops such a row at
- *    sign-up, and company_members' composite key refuses it, so no access follows. */
-const KNOWN_CROSS_REFERENCES: string[] = [
-  "assign_research_codes: B rows name A's (app_private.research_codes)",
-  "create_pending_login: B rows name A's (app_private.pending_logins, audit_log)",
-];
-
 /** Tables with a person-level read policy: the caller's own rows in the bound company. */
 const OWN_ROWS = new Set(['company_members', 'user_permissions']);
 
@@ -467,7 +455,7 @@ describe('tenant isolation: nothing of company A is reachable from company B', (
         if (named.length) problems.push(`${fn.name}: B rows name A's (${named.join(', ')})`);
         await c.query('rollback to savepoint fn');
       }
-      expect(problems).toEqual(KNOWN_CROSS_REFERENCES);
+      expect(problems).toEqual([]);
       expect(ran).toBeGreaterThan(0);
       expect(await checksum(c, tables, a)).toEqual(before);
     });

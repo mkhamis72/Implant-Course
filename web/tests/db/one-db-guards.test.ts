@@ -22,7 +22,6 @@ const ANON_EXEC_ALLOWLIST = new Set([
  *  regclass text: bare in public, schema-qualified elsewhere. The parent belongs to one company, and the
  *  composite foreign keys (0091) keep the child in that company. */
 const PARENT_SCOPED_UNIQUES = new Set<string>([
-  'app_private.research_codes_pkey', // (entity, entity_id): entity_id is one company's row
   'checklist_items_position', // within one checklist
   'enrollments_course_id_delegate_id_key', // within one course
   'implant_followups_one_visit', // within one implant
