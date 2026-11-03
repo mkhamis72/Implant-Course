@@ -25,5 +25,7 @@ export const DEFINER_ALLOWLIST: ReadonlySet<string> = new Set([
   'public.console_add_first_admin',
   // Console, service role only (0093): removes that pending row again when the Auth call fails.
   'public.console_cancel_pending_login',
+  // Console and tenant:register --provision, service role only (0095): a new company and its starting data.
+  'public.provision_company',
   // The console / service-role functions that later plan-3 tasks add join this list there.
 ]);

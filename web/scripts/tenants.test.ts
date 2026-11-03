@@ -23,6 +23,14 @@ describe('parseRegisterArgs', () => {
     expect(() => parseRegisterArgs(['academy', 'The Academy', 'a.example.com', '--company'])).toThrow(/--company/);
     expect(() => parseRegisterArgs(['academy', 'The Academy', 'a.example.com', '--company', 'nope'])).toThrow(/--company/);
   });
+  it('--provision creates the company first, anywhere in the arguments', () => {
+    const want = { slug: 'acme', name: 'Acme', hosts: ['acme.example.com'], provision: true };
+    expect(parseRegisterArgs(['acme', 'Acme', 'acme.example.com', '--provision'])).toEqual(want);
+    expect(parseRegisterArgs(['--provision', 'acme', 'Acme', 'acme.example.com'])).toEqual(want);
+  });
+  it('--provision and --company together are refused', () => {
+    expect(() => parseRegisterArgs(['acme', 'Acme', 'acme.example.com', '--provision', '--company', id])).toThrow(/either --provision or --company/);
+  });
 });
 
 describe('checkTenant', () => {

@@ -204,11 +204,12 @@ const GUARDS = {
       where p.polrelid = t.oid and p.polpermissive and p.polcmd = '*' and r.rolname = 'tenant_definer')`,
   [OWN_SCHEMAS]),
 
-  // The console's functions (0093) take a company as an argument: only the service role may call them.
+  // The console's functions (0093) and provision_company (0095) act on a named company without a session:
+  // only the service role may call them.
   // tenant_definer gets execute on new functions by default (0092), so each must revoke it.
   'service-role-only': (c) => list(c, `
     select p.oid::regprocedure::text as name from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname like 'console\\_%'
+    where n.nspname = 'public' and (p.proname like 'console\\_%' or p.proname = 'provision_company')
       and (not has_function_privilege('service_role', p.oid, 'execute')
            or has_function_privilege('anon', p.oid, 'execute')
            or has_function_privilege('authenticated', p.oid, 'execute')

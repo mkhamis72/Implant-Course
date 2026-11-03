@@ -279,6 +279,8 @@ describe('permissions: guard rails', () => {
         'create_pending_login', 'add_existing_member', 'cancel_pending_login',
         // One database (0093): the console's first admin for a company and its cancel; service role only, no company session.
         'console_add_first_admin', 'console_cancel_pending_login',
+        // One database (0095): a new company and its starting data; service role only, no company session.
+        'provision_company',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });

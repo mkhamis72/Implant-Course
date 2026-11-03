@@ -9,7 +9,8 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@/lib/console/session', () => ({ requireConsoleAdmin: vi.fn(async () => ({ userId: 'u1', email: 'owner@example.com' })) }));
 vi.mock('@/lib/console/first-admin', () => ({ createFirstAdmin: vi.fn(async () => ({ outcome: 'created', password: 'Temp-Pass-123' })) }));
-vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn(() => ({})) }));
+const dbRpc = vi.fn();
+vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn(() => ({ rpc: dbRpc })) }));
 vi.mock('@/lib/tenant/check', () => ({ checkTenant: vi.fn() }));
 
 const rpc = vi.fn();
@@ -21,12 +22,14 @@ vi.mock('@/lib/console/supabase', () => ({
   }),
 }));
 
+import { createClient } from '@supabase/supabase-js';
 import { checkTenant } from '@/lib/tenant/check';
 import { createFirstAdmin } from '@/lib/console/first-admin';
 import { firstAdmin, registerCompany, replaceCompanyKeys, setCompanyStatus } from './actions';
 
 const check = vi.mocked(checkTenant);
 const KEY = 'k'.repeat(30);
+const NEW_COMPANY = 'c0000000-0000-4000-8000-0000000000aa';
 const row = { slug: 'acme', name: 'Acme', hosts: ['acme.example.com'], status: 'active', supabase_url: 'https://abcdefgh.supabase.co', anon_key: 'a' };
 
 function form(data: Record<string, string>) {
@@ -49,11 +52,12 @@ beforeEach(() => {
   existing = null;
   check.mockResolvedValue([]);
   rpc.mockResolvedValue({ data: null, error: null });
+  dbRpc.mockResolvedValue({ data: NEW_COMPANY, error: null });
 });
 
 describe('registerCompany', () => {
   it('refuses an existing slug before checking or saving anything', async () => {
-    existing = row;
+    existing = { ...row, company_id: NEW_COMPANY };
     const r = await registerCompany({}, form(registerData));
     expect(r.error).toBe('A company with this slug already exists — open it to replace its keys.');
     noSecrets(r.values);
@@ -84,9 +88,33 @@ describe('registerCompany', () => {
     expect(r.values?.name).toBe('Acme');
   });
 
-  it('saves with the actor and redirects to the company', async () => {
+  it('saves with the actor, creates the company in the database, stores its id and redirects to the company', async () => {
     await expect(registerCompany({}, form(registerData))).rejects.toThrow('REDIRECT:/console/companies/acme');
     expect(rpc).toHaveBeenCalledWith('console_register_tenant', expect.objectContaining({ p_slug: 'acme', p_actor: 'owner@example.com' }));
+    expect(vi.mocked(createClient)).toHaveBeenCalledWith(registerData.supabaseUrl, registerData.serviceRoleKey, expect.anything());
+    expect(dbRpc).toHaveBeenCalledWith('provision_company', { p_slug: 'acme', p_name: 'Acme' });
+    expect(rpc).toHaveBeenLastCalledWith('console_set_company', { p_slug: 'acme', p_company_id: NEW_COMPANY, p_actor: 'owner@example.com' });
+  });
+
+  it('finishes a registration whose company was never created (a registry row without a company id)', async () => {
+    existing = { ...row, company_id: null };
+    await expect(registerCompany({}, form(registerData))).rejects.toThrow('REDIRECT:/console/companies/acme');
+    expect(rpc).toHaveBeenLastCalledWith('console_set_company', expect.objectContaining({ p_company_id: NEW_COMPANY }));
+  });
+
+  it('says so when the company cannot be created, and stores no id', async () => {
+    dbRpc.mockResolvedValue({ data: null, error: { message: 'A company with this slug already exists.' } });
+    const r = await registerCompany({}, form(registerData));
+    expect(r.error).toBe('Registered, but the company could not be created in the database: A company with this slug already exists.');
+    noSecrets(r.values);
+    expect(rpc).not.toHaveBeenCalledWith('console_set_company', expect.anything());
+  });
+
+  it('names the created company when its id cannot be stored', async () => {
+    rpc.mockImplementation(async (fn: string) => (fn === 'console_set_company' ? { data: null, error: { message: 'boom' } } : { data: null, error: null }));
+    const r = await registerCompany({}, form(registerData));
+    expect(r.error).toBe(`Company ${NEW_COMPANY} was created in the database, but its id could not be saved in the registry: boom`);
+    noSecrets(r.values);
   });
 });
 

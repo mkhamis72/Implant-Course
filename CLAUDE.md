@@ -26,7 +26,7 @@ npm run console:admin -- you@example.com   # console admin in the control projec
 npm run console:local   # dev2 stack as control project + .env.console for console E2E (then: set -a; source .env.console; set +a; npx playwright test console --project=chromium, nothing on :3000)
 npm run create-user -- you@example.com "Name" [--role admin | --role delegate --delegate <id>]   # temporary password; ENV_FILE=.env.prod targets prod
 npm run db:migrate -- --tenant academy      # one company from the control project (ENV_FILE=.env.prod); --all-tenants = every company, stops at the first failure
-npm run tenant:register -- <slug> "<Name>" <hosts…>   # (re)point a company in the control registry at the project in ENV_FILE; replaces its Vault secrets
+npm run tenant:register -- <slug> "<Name>" <hosts…> [--provision | --company <id>]   # (re)point a company in the control registry at the project in ENV_FILE; replaces its Vault secrets; --provision first creates the company in the shared database (provision_company, 0095)
 npm run tenant:check -- <slug>              # health of one registered company (ENV_FILE=.env.prod)
 npm run build                               # next build — Release runs it after tsc, lint and unit tests
 npm run tenants:export -- --dir <dir>       # backup workflow: one env file per company (masked under GitHub Actions)

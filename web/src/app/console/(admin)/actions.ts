@@ -37,7 +37,8 @@ export async function registerCompany(_prev: FormState, formData: FormData): Pro
   if (!parsed.success) return failedWithoutSecrets(parsed.error.issues[0].message, formData);
   const c = parsed.data;
   const control = createConsoleServiceClient();
-  if (await getCompany(control, c.slug)) {
+  // A registry row without a company id is a registration whose company was never created: adding it again finishes it.
+  if ((await getCompany(control, c.slug))?.company_id) {
     return failedWithoutSecrets('A company with this slug already exists — open it to replace its keys.', formData);
   }
   const problem = await checkProblem({ supabaseUrl: c.supabaseUrl, anonKey: c.anonKey, serviceRoleKey: c.serviceRoleKey });
@@ -47,6 +48,16 @@ export async function registerCompany(_prev: FormState, formData: FormData): Pro
     p_service_role_key: c.serviceRoleKey, p_database_url: c.databaseUrl, p_actor: admin.email,
   });
   if (error) return failedWithoutSecrets(error.message, formData);
+  // The company itself, with its starting data, in the shared database (0095), then its id on the registry row.
+  const db = createClient(c.supabaseUrl, c.serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: companyId, error: provisionError } = await db.rpc('provision_company', { p_slug: c.slug, p_name: c.name });
+  if (provisionError || !companyId) {
+    return failedWithoutSecrets(`Registered, but the company could not be created in the database: ${provisionError?.message ?? 'no id returned'}`, formData);
+  }
+  const { error: saveError } = await control.rpc('console_set_company', { p_slug: c.slug, p_company_id: companyId, p_actor: admin.email });
+  if (saveError) {
+    return failedWithoutSecrets(`Company ${companyId} was created in the database, but its id could not be saved in the registry: ${saveError.message}`, formData);
+  }
   revalidatePath('/console');
   redirect(`/console/companies/${c.slug}`);
 }

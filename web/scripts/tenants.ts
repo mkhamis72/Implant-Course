@@ -6,18 +6,28 @@ export type RegisterInput = {
   companyId?: string;
 };
 
-export function parseRegisterArgs(argv: string[]): { slug: string; name: string; hosts: string[]; companyId?: string } {
+export function parseRegisterArgs(argv: string[]): { slug: string; name: string; hosts: string[]; companyId?: string; provision?: true } {
   const rest = [...argv];
   let companyId: string | undefined;
+  const provisionAt = rest.indexOf('--provision');
+  if (provisionAt >= 0) rest.splice(provisionAt, 1);
   const at = rest.indexOf('--company');
   if (at >= 0) {
     companyId = rest[at + 1];
     if (!companyId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(companyId)) throw new Error('--company needs a company id (uuid)');
     rest.splice(at, 2);
   }
+  if (provisionAt >= 0 && companyId) throw new Error('Give either --provision or --company, not both');
   const [slug, name, ...hosts] = rest;
-  if (!slug || !name || hosts.length === 0) throw new Error('Usage: npm run tenant:register -- <slug> "<name>" <host> [more hosts] [--company <uuid>]');
-  return { slug, name, hosts, companyId };
+  if (!slug || !name || hosts.length === 0) throw new Error('Usage: npm run tenant:register -- <slug> "<name>" <host> [more hosts] [--provision | --company <uuid>]');
+  return { slug, name, hosts, companyId, ...(provisionAt >= 0 && { provision: true as const }) };
+}
+
+/** Creates the company and its starting data in the shared database (0095; run with a postgres connection
+ *  to the company's project) and returns its id. */
+export async function provisionCompany(c: Client, slug: string, name: string): Promise<string> {
+  const { rows } = await c.query<{ id: string }>('select public.provision_company($1, $2) as id', [slug, name]);
+  return rows[0].id;
 }
 
 /** Adds or updates a company in the control project (run with a postgres connection to it). */

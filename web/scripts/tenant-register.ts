@@ -1,7 +1,8 @@
 import './load-env';
 import { Client } from 'pg';
+import { pgConfig } from './db';
 import { migrateTarget } from './migrate-target';
-import { checkTenant, nullCompanyWarning, parseRegisterArgs, registerTenant, tenantCompanyId } from './tenants';
+import { checkTenant, nullCompanyWarning, parseRegisterArgs, provisionCompany, registerTenant, tenantCompanyId } from './tenants';
 
 function need(name: string): string {
   const v = process.env[name];
@@ -10,7 +11,7 @@ function need(name: string): string {
 }
 
 async function main() {
-  const args = parseRegisterArgs(process.argv.slice(2));
+  const { provision, ...args } = parseRegisterArgs(process.argv.slice(2));
   const company = {
     ...args,
     supabaseUrl: need('NEXT_PUBLIC_SUPABASE_URL'),
@@ -27,6 +28,17 @@ async function main() {
   let warning: string | null = null;
   try {
     await c.query('begin');
+    if (provision) {
+      // The company and its starting data in the shared database (0095) first: its id goes on the registry row.
+      const db = new Client(pgConfig());
+      await db.connect();
+      try {
+        company.companyId = await provisionCompany(db, args.slug, args.name);
+      } finally {
+        await db.end();
+      }
+      console.log(`Created company ${args.slug} in the database: ${company.companyId}`);
+    }
     await registerTenant(c, company);
     warning = nullCompanyWarning(args.slug, await tenantCompanyId(c, args.slug));
     await c.query('commit');
