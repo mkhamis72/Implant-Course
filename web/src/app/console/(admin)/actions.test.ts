@@ -22,6 +22,7 @@ vi.mock('@/lib/console/supabase', () => ({
 }));
 
 import { checkTenant } from '@/lib/tenant/check';
+import { createFirstAdmin } from '@/lib/console/first-admin';
 import { firstAdmin, registerCompany, replaceCompanyKeys, setCompanyStatus } from './actions';
 
 const check = vi.mocked(checkTenant);
@@ -137,13 +138,14 @@ describe('firstAdmin', () => {
   });
 
   const admin = { slug: 'acme', email: 'a@b.com', fullName: 'Ann Admin' };
+  const linked = { ...row, company_id: 'c0000000-0000-4000-8000-00000000000c' };
   const withKey = (logError: { message: string } | null = null) =>
     rpc.mockImplementation(async (name: string) =>
       name === 'tenant_secret' ? { data: 'svc-key', error: null } : { data: null, error: name === 'console_log' ? logError : null },
     );
 
   it('records who created the login and for whom, never the password', async () => {
-    existing = row;
+    existing = linked;
     withKey();
     const r = await firstAdmin({}, form(admin));
     expect(r.password).toBe('Temp-Pass-123');
@@ -151,10 +153,21 @@ describe('firstAdmin', () => {
     const call = rpc.mock.calls.find(([name]) => name === 'console_log')!;
     expect(call[1]).toEqual({ p_slug: 'acme', p_action: 'first_admin_created', p_detail: 'a@b.com', p_actor: 'owner@example.com' });
     expect(JSON.stringify(call)).not.toContain('Temp-Pass-123');
+    expect(vi.mocked(createFirstAdmin)).toHaveBeenCalledWith(expect.anything(), { companyId: linked.company_id, email: 'a@b.com', fullName: 'Ann Admin' });
+  });
+
+  it('refuses a company not yet linked to the database', async () => {
+    existing = row;
+    withKey();
+    vi.mocked(createFirstAdmin).mockClear();
+    const r = await firstAdmin({}, form(admin));
+    expect(r.error).toBe('acme has no company in the database yet');
+    expect(r.password).toBeUndefined();
+    expect(vi.mocked(createFirstAdmin)).not.toHaveBeenCalled();
   });
 
   it('still shows the password, with a warning, when the history entry fails', async () => {
-    existing = row;
+    existing = linked;
     withKey({ message: 'boom' });
     const r = await firstAdmin({}, form(admin));
     expect(r.password).toBe('Temp-Pass-123');

@@ -104,9 +104,11 @@ export async function firstAdmin(_prev: FirstAdminState, formData: FormData): Pr
   const company = await getCompany(control, parsed.data.slug);
   const key = company && (await serviceKeyOf(control, parsed.data.slug));
   if (!company || !key) return failed(`Unknown company ${parsed.data.slug}`, formData);
+  if (!company.company_id) return failed(`${parsed.data.slug} has no company in the database yet`, formData);
+  const companyId = company.company_id;
   try {
     const db = createClient(company.supabase_url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-    const r = await createFirstAdmin(db, { email: parsed.data.email, fullName: parsed.data.fullName });
+    const r = await createFirstAdmin(db, { companyId, email: parsed.data.email, fullName: parsed.data.fullName });
     // The login exists now: a failed log entry must not hide the password. Never log the password.
     const { error: logError } = await control.rpc('console_log', {
       p_slug: parsed.data.slug,

@@ -2,10 +2,10 @@ import 'server-only';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { checkTenant } from '@/lib/tenant/check';
 
-export type CompanyRow = { slug: string; name: string; hosts: string[]; status: 'active' | 'suspended'; supabase_url: string; anon_key: string };
+export type CompanyRow = { slug: string; name: string; hosts: string[]; status: 'active' | 'suspended'; supabase_url: string; anon_key: string; company_id: string | null };
 export type CompanyHealth = { problems: string[]; users: number | null; patients: number | null };
 
-const COLUMNS = 'slug, name, hosts, status, supabase_url, anon_key';
+const COLUMNS = 'slug, name, hosts, status, supabase_url, anon_key, company_id';
 
 export async function listCompanies(control: SupabaseClient): Promise<CompanyRow[]> {
   const { data, error } = await control.from('tenants').select(COLUMNS).order('slug');
@@ -38,7 +38,8 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 const connectDefault = (url: string, key: string) => createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 
-/** Is the company's project answering with its keys, and how many active logins / patients (counts only). */
+/** Is the company's project answering with its keys, and how many active logins / patients of this company
+ *  (counts only; the service role sees every company, so both counts filter by its id). */
 export async function companyHealth(
   control: SupabaseClient,
   slug: string,
@@ -48,14 +49,16 @@ export async function companyHealth(
   if (!company) return { problems: [`Unknown company ${slug}`], users: null, patients: null };
   const serviceRoleKey = await serviceKeyOf(control, slug);
   if (!serviceRoleKey) return { problems: ['No service key in Vault'], users: null, patients: null };
+  const companyId = company.company_id;
+  if (!companyId) return { problems: ['No company in the database yet'], users: null, patients: null };
   try {
     return await withTimeout((async () => {
       const problems = await checkTenant({ supabaseUrl: company.supabase_url, anonKey: company.anon_key, serviceRoleKey }, opts.fetchImpl, opts.connect);
       if (problems.length) return { problems, users: null, patients: null };
       const db = (opts.connect ?? connectDefault)(company.supabase_url, serviceRoleKey);
       const [users, patients] = await Promise.all([
-        db.from('profiles').select('user_id', { count: 'exact', head: true }).eq('active', true),
-        db.from('patients').select('id', { count: 'exact', head: true }),
+        db.from('company_members').select('user_id', { count: 'exact', head: true }).eq('company_id', companyId).eq('active', true),
+        db.from('patients').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
       ]);
       const failure = users.error ?? patients.error;
       if (failure) return { problems: [`Couldn't count users or patients: ${failure.message}`], users: null, patients: null };

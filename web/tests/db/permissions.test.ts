@@ -277,6 +277,8 @@ describe('permissions: guard rails', () => {
         // One database (0088, spec §4): admin-only login creation for the caller's bound company (a pending
         // row for a new account and its removal when Auth fails, a membership for an existing one).
         'create_pending_login', 'add_existing_member', 'cancel_pending_login',
+        // One database (0093): the console's first admin for a company; service role only, no company session.
+        'console_add_first_admin',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });

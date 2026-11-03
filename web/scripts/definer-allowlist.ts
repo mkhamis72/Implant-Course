@@ -21,5 +21,7 @@ export const DEFINER_ALLOWLIST: ReadonlySet<string> = new Set([
   // The previous pre-login readers (academy only, anon-callable) until 0095 drops them.
   'public.branding_public',
   'public.branding_logo',
+  // Console, service role only (0093): writes a named company's first admin without a bound session.
+  'public.console_add_first_admin',
   // The console / service-role functions that later plan-3 tasks add join this list there.
 ]);

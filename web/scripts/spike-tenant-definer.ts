@@ -1,3 +1,6 @@
+// HISTORICAL. This spike ran before 0092 (plan 3) created the tenant_definer role; it creates that role
+// itself, so it can no longer run against a migrated database. Its result is recorded in
+// docs/one-database/spike-result.md. Running the script only prints this note; main() is kept for reference.
 // Spike: can definers enforce company isolation through RLS by being owned by a NOBYPASSRLS role?
 // Everything runs in one transaction that is always rolled back: nothing changes permanently.
 //   ENV_FILE=.env.local npx tsx scripts/spike-tenant-definer.ts [--tenant <slug>]
@@ -259,7 +262,7 @@ const checks: Check[] = [
   },
 ];
 
-async function main() {
+export async function main() {
   const env = process.env;
   const tenant = await applyTenantArg(process.argv.slice(2), env);
   const config = pgConfig(env);
@@ -298,7 +301,4 @@ async function main() {
   if (failures) process.exit(1);
 }
 
-main().catch((e) => {
-  console.error((e as Error).message);
-  process.exit(1);
-});
+console.log('Historical: this spike no longer runs (0092 created tenant_definer). Its result: docs/one-database/spike-result.md');

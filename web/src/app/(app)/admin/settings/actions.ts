@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdmin } from '@/lib/auth/session';
+import { currentTenant } from '@/lib/tenant/current';
 import { settingsSchema, type ActionState } from '@/lib/admin/schemas';
 import { updateProblem } from '@/lib/admin/results';
 import { failed, type FormState } from '@/lib/patients/form-state';
@@ -15,7 +16,9 @@ export async function updateSettings(_prev: ActionState, formData: FormData): Pr
   const parsed = settingsSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const supabase = await createClient();
-  const problem = updateProblem(await supabase.from('settings').update(parsed.data).eq('id', true).select('id'));
+  // The bound company's row (RLS limits it too); the boolean id goes in release 5.
+  const { companyId } = await currentTenant();
+  const problem = updateProblem(await supabase.from('settings').update(parsed.data).eq('company_id', companyId).select('company_id'));
   if (problem) return { error: problem };
   revalidatePath('/', 'layout');
   return { ok: 'Settings saved.' };
