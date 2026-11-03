@@ -45,12 +45,6 @@ const GLOBAL_UNIQUES = new Set<string>([
   'app_private.research_codes_code_key', // random study codes: a code never repeats in any company's export
 ]);
 
-/** Global uniques that 0091 replaced with per-company ones; 0095 (release 5) drops them, then this set goes. */
-const REPLACED_GLOBAL_UNIQUES = new Set<string>([
-  'chairs_name_key', 'checklist_templates_one_default', 'consent_form_versions_label_key',
-  'patients_file_no_key', 'patients_file_no_upper_key',
-]);
-
 /** Permissive policies that may skip the staff guard: the caller's own profile row (spec §4). */
 const PERSON_LEVEL_POLICIES = new Set(['public.profiles.profiles_self']);
 
@@ -143,7 +137,7 @@ const GUARDS = {
         -- A primary key on a single generated id is unique on its own.
         and not (i.indisprimary and i.indnkeyatts = 1 and exists (
           select 1 from pg_attribute ia where ia.attrelid = i.indrelid and ia.attnum = i.indkey[0] and ia.attname = 'id'))`);
-    return names.filter((n) => !PARENT_SCOPED_UNIQUES.has(n) && !GLOBAL_UNIQUES.has(n) && !REPLACED_GLOBAL_UNIQUES.has(n));
+    return names.filter((n) => !PARENT_SCOPED_UNIQUES.has(n) && !GLOBAL_UNIQUES.has(n));
   },
 
   'definer-owner': async (c) => {

@@ -87,7 +87,7 @@ async function seedCompany(c: Client, key: 'A' | 'B'): Promise<Company> {
   const delegateUser = await newUser(c, id, `zz-iso-${tag}-delegate@example.com`, 'delegate', r.delegates);
   await pendingLogin(c, `zz-iso-${tag}-pending@example.com`, { company: id });
   await asCompany(c, id, admin);
-  // An explicit file number: the global unique on file_no stays until release 5 (0095), and both companies' counters start at 1.
+  // An explicit file number, unique to this run.
   r.patients = await one(c, `insert into public.patients (full_name, file_no) values ($1, $2) returning id`,
     [`${marker} Patient`, `ZZI${Math.random().toString(36).slice(2, 10)}`]);
   r.courses = await makeCourse(c);

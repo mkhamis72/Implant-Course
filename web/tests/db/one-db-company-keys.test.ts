@@ -22,20 +22,10 @@ async function companyB(c: Client): Promise<string> {
   return b;
 }
 
-/** Release 5 (0095) drops the global uniques that 0091 replaces; until then a test drops them in its transaction. */
-async function dropGlobalUniques(c: Client): Promise<void> {
-  await c.query('alter table public.patients drop constraint patients_file_no_key');
-  await c.query('drop index public.patients_file_no_upper_key');
-  await c.query('alter table public.chairs drop constraint chairs_name_key');
-  await c.query('alter table public.consent_form_versions drop constraint consent_form_versions_label_key');
-  await c.query('drop index public.checklist_templates_one_default');
-}
-
 describe('company keys (0091)', () => {
   it('lets two companies reuse a file number, chair name, form label and default template, but not one company', async () => {
     await withTx(async (c) => {
       const b = await companyB(c);
-      await dropGlobalUniques(c);
       for (const company of [ACADEMY_ID, b]) {
         await asCompany(c, company); // create_medical_history writes as tenant_definer
         await c.query(`insert into public.patients (company_id, full_name, file_no) values ($1, 'Zz Keys Patient', 'ZZ-001')`, [company]);

@@ -1,5 +1,15 @@
 set local lock_timeout = '5s';
 
+-- The global uniques that 0091 replaced with per-company ones (patients_company_file_no_key,
+-- chairs_company_name_key, consent_form_versions_company_label_key, checklist_templates_company_one_default):
+-- a second company reuses file numbers, chair names, consent labels and a default template. Release 4
+-- runs with the previous app suspended, and dropping a unique never breaks it.
+alter table public.patients drop constraint patients_file_no_key;
+drop index public.patients_file_no_upper_key;
+alter table public.chairs drop constraint chairs_name_key;
+alter table public.consent_form_versions drop constraint consent_form_versions_label_key;
+drop index public.checklist_templates_one_default;
+
 -- provision_company: a new company in the shared database with what its signed-in pages need from the
 -- start: settings (every page reads them), branding with its name, a file-number counter, academy's
 -- active catalogue and academy's consent form versions (new ids, unsigned). Returns the company id, which
@@ -7,8 +17,6 @@ set local lock_timeout = '5s';
 -- Service role only and owned by postgres (scripts/definer-allowlist.ts), like 0093's console functions:
 -- it writes a named company's rows with no bound session, so every insert names company_id (the column
 -- defaults resolve to null without one). The audit trigger on these tables is postgres-owned too.
--- Until 0096 drops 0091's replaced global unique on consent_form_versions.label, copying academy's
--- versions fails on the label: provision companies after release 5.
 create function public.provision_company(p_slug text, p_name text) returns uuid
 language plpgsql security definer set search_path = '' as $$
 declare

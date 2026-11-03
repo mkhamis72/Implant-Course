@@ -80,10 +80,6 @@ describe('company policies (0092)', () => {
   it('keeps two companies\' default templates and consent labels apart (save_template, attach_default, save_consent_version, current_consent_version)', async () => {
     await withTx(async (c) => {
       const b = await companyB(c);
-      // Release 5 (0095) drops the global uniques that 0091 replaced; until then the test drops them here.
-      await c.query('drop index public.checklist_templates_one_default');
-      await c.query('alter table public.consent_form_versions drop constraint consent_form_versions_label_key');
-
       await actAsBound(c, users.admin);
       const academyDefault = (await c.query(`select public.save_template(null, 'Zz Academy default', 'surgery', true, array['A item']) as id`)).rows[0].id;
       await c.query(`select public.save_consent_version(null, 'Zz v1', public.cairo_today(), 'Academy text', 'نص')`);

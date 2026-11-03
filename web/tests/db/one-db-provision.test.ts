@@ -9,9 +9,6 @@ const users = inject('testUsers');
 /** The console's call: the service role, no signed-in user and no bound session. */
 async function provision(c: Client, slug: string, name: string): Promise<string> {
   await asPostgres(c);
-  // Until 0096 (release 5) drops the global consent label unique that 0091 replaced with a per-company one,
-  // academy's version labels can't be copied into a second company.
-  await c.query('alter table public.consent_form_versions drop constraint if exists consent_form_versions_label_key');
   await c.query('set local role service_role');
   const { rows } = await c.query('select public.provision_company($1, $2) as id', [slug, name]);
   await asPostgres(c);
@@ -77,7 +74,6 @@ describe('provision_company (0095)', () => {
 
   it("tenant:register --provision's helper creates it over the owner's connection", async () => {
     await withTx(async (c) => {
-      await c.query('alter table public.consent_form_versions drop constraint if exists consent_form_versions_label_key');
       const id = await provisionCompany(c, 'canary', 'Canary');
       expect((await c.query(`select id from public.companies where slug = 'canary'`)).rows).toEqual([{ id }]);
     });
