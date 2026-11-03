@@ -28,6 +28,15 @@ const NOT_EDIT = new Set([
 ]);
 const FILE_READERS = new Set(['consent_file', 'study_letter']);
 
+/** Functions the sweep can't run with guessed arguments (an error other than a business or permission
+ *  refusal), with the reason. Pinned: the sweep fails if one of them starts to run or refuse normally. */
+const UNRUNNABLE: Record<string, string> = {};
+/** Sweep calls that must run to completion or raise a business ('user') error. */
+const MIN_REACHED = 100;
+/** The guards' refusals: require_perm, require_active ('Not allowed', 42501), the admin checks and an
+ *  unbound session. */
+const GUARD_REFUSAL = /^(You don't have permission to |Not allowed$|Only admins can do this\.$|Only an admin can |This session is not linked to a company)/;
+
 /** Tables with a person-level read policy: the caller's own rows in the bound company. */
 const OWN_ROWS = new Set(['company_members', 'user_permissions']);
 
@@ -164,9 +173,10 @@ async function checksum(c: Client, tables: { name: string; pk: string[] }[], a: 
       from ${t.name} x where x.company_id = $1`;
   });
   parts.push(`select 'profiles', count(*) || ':' || md5(coalesce(string_agg(x::text, '|' order by x.user_id), '')) from public.profiles x where x.user_id = any($2)`);
-  parts.push(`select 'auth.users', count(*) || ':' || md5(coalesce(string_agg(concat_ws(',', x.id, x.email, x.encrypted_password, x.banned_until, x.email_change, x.raw_app_meta_data), '|' order by x.id), ''))
-    from auth.users x where x.id = any($2)`);
-  parts.push(`select 'auth.sessions', count(*) || ':' || md5(coalesce(string_agg(x.id::text, '|' order by x.id), '')) from auth.sessions x where x.user_id = any($2)`);
+  parts.push(`select 'auth.users', count(*) || ':' || md5(coalesce(string_agg(x::text, '|' order by x.id), '')) from auth.users x where x.id = any($2)`);
+  parts.push(`select 'auth.sessions', count(*) || ':' || md5(coalesce(string_agg(x::text, '|' order by x.id), '')) from auth.sessions x where x.user_id = any($2)`);
+  parts.push(`select 'app.session_companies', count(*) || ':' || md5(coalesce(string_agg(x::text, '|' order by x.session_id), ''))
+    from app.session_companies x where x.user_id = any($2)`);
   const { rows } = await c.query(parts.join('\nunion all\n'), [a.id, users]);
   return Object.fromEntries(rows.map((r) => [r.t, r.h]));
 }
@@ -207,14 +217,17 @@ async function bRoles(c: Client, b: Company): Promise<Role[]> {
   ];
 }
 
-/** Runs the statement in a savepoint: its row count, or null when it raised. Raises nothing. */
-async function attempt(c: Client, sql: string, params: unknown[] = []): Promise<{ rows: unknown[]; count: number } | { error: string }> {
+type Attempt = { rows: unknown[]; count: number } | { error: string; code?: string; hint?: string };
+
+/** Runs the statement in a savepoint: its rows and row count, or the error it raised. Raises nothing. */
+async function attempt(c: Client, sql: string, params: unknown[] = []): Promise<Attempt> {
   await c.query('savepoint probe');
   try {
     const res = await c.query(sql, params);
     return { rows: res.rows, count: res.rowCount ?? 0 };
   } catch (e) {
-    return { error: (e as Error).message };
+    const err = e as Error & { code?: string; hint?: string };
+    return { error: err.message, code: err.code, hint: err.hint };
   } finally {
     await c.query('rollback to savepoint probe');
   }
@@ -230,10 +243,23 @@ async function columnsWith(c: Client, oid: number, privilege: 'INSERT' | 'UPDATE
 
 const ISOLATION_ERROR = /permission denied|row-level security|violates row-level/;
 
+/** How a call ended: ran to completion; refused by a business rule (app_private.fail, hint 'user');
+ *  refused for lack of privilege (SQLSTATE 42501, which RLS violations carry too); or any other error,
+ *  meaning the call never reached its rules (bad arguments, a missing function, a broken constraint). */
+type Outcome = 'ran' | 'business' | 'permission' | 'other';
+function outcome(res: Attempt): Outcome {
+  if (!('error' in res)) return 'ran';
+  if (res.hint === 'user') return 'business';
+  if (res.code === '42501' || ISOLATION_ERROR.test(res.error)) return 'permission';
+  return 'other';
+}
+const describeError = (res: Attempt) => ('error' in res ? `${res.code ?? '?'} ${res.error}` : 'ran');
+
 /** As the role: select, update, delete and insert on A's rows of every company table and of stock_on_hand.
  *  Returns what got through. */
 async function probeTables(
-  c: Client, role: Role, tables: { name: string; oid: number }[], a: Company, aRows: Record<string, Record<string, unknown>>,
+  c: Client, role: Role, tables: { name: string; oid: number }[], a: Company, b: Company,
+  aRows: Record<string, Record<string, unknown>>,
 ): Promise<string[]> {
   const leaks: string[] = [];
   await role.act(c);
@@ -256,6 +282,11 @@ async function probeTables(
       select ${cols.map((n) => `r.${n}`).join(', ')} from jsonb_populate_record(null::${t.name}, $1) r`, [row]);
     if (!('error' in ins)) leaks.push(`${role.label}: insert ${t.name}`);
     else if (!ISOLATION_ERROR.test(ins.error)) leaks.push(`${role.label}: insert ${t.name} refused for another reason: ${ins.error}`);
+
+    // B's own rows moved into A.
+    const move = await attempt(c, `update ${t.name} set company_id = $1 where company_id = $2`, [a.id, b.id]);
+    if (!('error' in move) && move.count !== 0) leaks.push(`${role.label}: moved ${t.name} rows into A (${move.count})`);
+    else if (outcome(move) === 'other') leaks.push(`${role.label}: move ${t.name} refused for another reason: ${describeError(move)}`);
   }
   const lot = a.rows.stock_lots;
   const sel = await attempt(c, 'select count(*)::int as n from public.stock_on_hand where stock_lot_id = $1', [lot]);
@@ -346,7 +377,9 @@ function argsFor(fn: Fn, co: Company, today: string, updatedAt: Record<string, D
         if (name === 'p_placing' || name === 'p_delegates') return [co.rows.delegates];
         if (name === 'p_courses') return [co.rows.courses];
         if (name === 'p_sites') return [co.rows.implant_sites];
-        return [];
+        // Assisting delegates must differ from the placing ones.
+        if (name === 'p_assisting') return [];
+        return [crypto.randomUUID()];
       case 'text':
         if (TYPE_ARG[name]?.[fn.name]) return TYPE_ARG[name][fn.name];
         return name in TEXT_ARG ? TEXT_ARG[name] : 'Zz probe';
@@ -416,7 +449,7 @@ describe('tenant isolation: nothing of company A is reachable from company B', (
         aRows[t.name] = (await c.query(`select to_jsonb(x) as r from ${t.name} x where company_id = $1 limit 1`, [a.id])).rows[0]?.r ?? { company_id: a.id };
       }
       const leaks: string[] = [];
-      for (const role of await bRoles(c, b)) leaks.push(...await probeTables(c, role, tables, a, aRows));
+      for (const role of await bRoles(c, b)) leaks.push(...await probeTables(c, role, tables, a, b, aRows));
       expect(leaks).toEqual([]);
 
       // B's admin does see B's own rows: the probes above were not refused for some unrelated reason.
@@ -429,26 +462,45 @@ describe('tenant isolation: nothing of company A is reachable from company B', (
   it("every public function with a uuid argument, called by B's admin with A's ids, raises or changes nothing of A's, returns none of A's data and leaves no B row naming A's", { timeout: TIMEOUT }, async () => {
     await withTx(async (c) => {
       const { a, b, tables, today } = await world(c);
-      const fns = await publicFunctions(c, `'uuid'::regtype = any(p.proargtypes::oid[]::regtype[])`);
+      const fns = await publicFunctions(c,
+        `('uuid'::regtype = any(p.proargtypes::oid[]::regtype[]) or 'uuid[]'::regtype = any(p.proargtypes::oid[]::regtype[]))`);
       expect(fns.length).toBeGreaterThan(90);
       const stamps = await updatedAts(c, a);
       const aIds = await companyIds(c, tables, a);
       const before = await checksum(c, tables, a);
       expect(await naming(c, tables, b, aIds)).toEqual([]);
       const problems: string[] = [];
-      let ran = 0;
+      const counts = { ran: 0, business: 0, permission: 0, unrunnable: 0 };
       for (const fn of fns) {
         await c.query('savepoint fn');
         await actAsBound(c, b.admin, b.id);
-        let rows: unknown[];
+        const args = argsFor(fn, a, today, stamps);
+        let res: Attempt;
         try {
-          rows = (await c.query(callSql(fn), argsFor(fn, a, today, stamps))).rows;
-        } catch {
+          const r = await c.query(callSql(fn), args);
+          res = { rows: r.rows, count: r.rowCount ?? 0 };
+        } catch (e) {
+          const err = e as Error & { code?: string; hint?: string };
+          res = { error: err.message, code: err.code, hint: err.hint };
+        }
+        const how = outcome(res);
+        if (fn.name in UNRUNNABLE) {
+          if (how === 'other') counts.unrunnable++;
+          else problems.push(`${fn.name}: listed in UNRUNNABLE but ${how === 'ran' ? 'ran' : describeError(res)}`);
+        } else if (how === 'other') {
+          problems.push(`${fn.name}: ${describeError(res)}`);
+        } else {
+          counts[how]++;
+        }
+        if ('error' in res) {
           await c.query('rollback to savepoint fn');
           continue;
         }
-        ran++;
-        if (!PRE_LOGIN_READERS.has(fn.name) && JSON.stringify(rows).includes(a.marker)) problems.push(`${fn.name}: returned A's data`);
+        const json = JSON.stringify(res.rows);
+        const passed = new Set(args.flat().filter((v): v is string => typeof v === 'string'));
+        const leaked = aIds.filter((id) => !passed.has(id) && json.includes(id));
+        if (!PRE_LOGIN_READERS.has(fn.name) && json.includes(a.marker)) problems.push(`${fn.name}: returned A's data`);
+        if (leaked.length) problems.push(`${fn.name}: returned A's ids (${leaked.length})`);
         const diff = changed(before, await checksum(c, tables, a));
         if (diff.length) problems.push(`${fn.name}: changed A's ${diff.join(', ')}`);
         const named = await naming(c, tables, b, aIds);
@@ -456,7 +508,8 @@ describe('tenant isolation: nothing of company A is reachable from company B', (
         await c.query('rollback to savepoint fn');
       }
       expect(problems).toEqual([]);
-      expect(ran).toBeGreaterThan(0);
+      // Most calls reach their rules: they run, or a business rule refuses them (counts in task-7-report.md).
+      expect(counts.ran + counts.business, JSON.stringify(counts)).toBeGreaterThanOrEqual(MIN_REACHED);
       expect(await checksum(c, tables, a)).toEqual(before);
     });
   });
@@ -483,20 +536,32 @@ describe('tenant isolation: nothing of company A is reachable from company B', (
       const fns = (await publicFunctions(c, 'p.prosecdef')).filter((f) => !NOT_EDIT.has(f.name));
       expect(fns.length).toBeGreaterThan(70);
       const stamps = await updatedAts(c, b);
-      const ran: string[] = [];
+      const notRefused: string[] = [];
+      let reached = 0;
       for (const fn of fns) {
+        const args = argsFor(fn, b, today, stamps);
         await c.query('savepoint fn');
         try {
+          // The inactive member: refused by the guard itself.
           await actAsBound(c, user, b.id);
-          const res = await attempt(c, callSql(fn), argsFor(fn, b, today, stamps));
-          const nothing = 'error' in res
-            || (FILE_READERS.has(fn.name) && res.rows.every((r) => Object.values(r as object).every((v) => v === null)));
-          if (!nothing) ran.push(fn.name);
+          const res = await attempt(c, callSql(fn), args);
+          const how = outcome(res);
+          const guarded = how === 'permission' || (how === 'business' && 'error' in res && GUARD_REFUSAL.test(res.error));
+          const emptyRead = FILE_READERS.has(fn.name) && 'rows' in res
+            && res.rows.every((r) => Object.values(r as object).every((v) => v === null));
+          if (!guarded && !emptyRead) notRefused.push(`${fn.name}: ${describeError(res)}`);
+          // Control: B's active admin with the same arguments gets past the guard.
+          await actAsBound(c, b.admin, b.id);
+          const control = await attempt(c, callSql(fn), args);
+          const past = outcome(control) === 'ran'
+            || (outcome(control) === 'business' && 'error' in control && !GUARD_REFUSAL.test(control.error));
+          if (past) reached++;
         } finally {
           await c.query('rollback to savepoint fn');
         }
       }
-      expect(ran).toEqual([]);
+      expect(notRefused).toEqual([]);
+      expect(reached / fns.length, `${reached} of ${fns.length} reached past the guard as B's admin`).toBeGreaterThanOrEqual(0.7);
     });
   });
 
