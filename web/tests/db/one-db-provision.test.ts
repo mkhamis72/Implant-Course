@@ -62,9 +62,19 @@ describe('provision_company (0095)', () => {
     });
   });
 
-  it('refuses a slug that is already taken, and a blank name', async () => {
+  it('again for a company nobody belongs to yet returns the same company (a retried registration)', async () => {
     await withTx(async (c) => {
-      await provision(c, 'canary', 'Canary');
+      const id = await provision(c, 'canary', 'Canary');
+      expect(await provision(c, 'canary', 'Canary')).toBe(id);
+      expect(await count(c, 'public.companies where slug = $1', ['canary'])).toBe(1);
+      expect(await count(c, 'public.settings where company_id = $1', [id])).toBe(1);
+    });
+  });
+
+  it('refuses a slug whose company has members, and a blank name', async () => {
+    await withTx(async (c) => {
+      const id = await provision(c, 'canary', 'Canary');
+      await c.query("insert into public.company_members (company_id, user_id, role, active) values ($1, $2, 'admin', true)", [id, users.organizer]);
       await refused(c, () => provision(c, 'canary', 'Canary Two'), /already exists/);
       await refused(c, () => provision(c, 'academy', 'Academy'), /already exists/);
       await refused(c, () => provision(c, 'zz-blank', '  '), /name/i);

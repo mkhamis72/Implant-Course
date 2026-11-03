@@ -13,7 +13,8 @@ drop index public.checklist_templates_one_default;
 -- provision_company: a new company in the shared database with what its signed-in pages need from the
 -- start: settings (every page reads them), branding with its name, a file-number counter, academy's
 -- active catalogue and academy's consent form versions (new ids, unsigned). Returns the company id, which
--- the console and tenant:register --provision save on the control project's tenants row.
+-- the console and tenant:register --provision save on the control project's tenants row (for a slug that
+-- exists already, the existing company's id while it has no members, so a lost save can be retried).
 -- Service role only and owned by postgres (scripts/definer-allowlist.ts), like 0093's console functions:
 -- it writes a named company's rows with no bound session, so every insert names company_id (the column
 -- defaults resolve to null without one). The audit trigger on these tables is postgres-owned too.
@@ -35,7 +36,13 @@ begin
   on conflict (slug) do nothing
   returning id into v_id;
   if v_id is null then
-    perform app_private.fail('A company with this slug already exists.');
+    -- A retried registration (the registry never saved the id): a company nobody belongs to yet is that
+    -- earlier call's, seeded in its transaction, so hand back its id. One with members is someone else's.
+    select c.id into v_id from public.companies c where c.slug = v_slug for update;
+    if exists (select 1 from public.company_members m where m.company_id = v_id) then
+      perform app_private.fail('A company with this slug already exists.');
+    end if;
+    return v_id;
   end if;
 
   insert into public.settings (company_id) values (v_id);

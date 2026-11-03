@@ -78,6 +78,7 @@ describe('control registry', () => {
       expect(await tenantCompanyId(c, 'zz-academy')).toBeUndefined();
       await c.query(COMPANY_SQL);
       expect(await tenantCompanyId(c, 'zz-academy')).toBeNull();
+      await c.query(PROVISION_SQL);
       await registerTenant(c, { ...academy, companyId: 'a7c0de00-0000-4000-8000-000000000001' });
       expect(await tenantCompanyId(c, 'zz-academy')).toBe('a7c0de00-0000-4000-8000-000000000001');
     });
@@ -305,6 +306,38 @@ describe('console_set_company (0005)', () => {
       await c.query('set local role service_role');
       await refused(c, () => setCompany(c, 'zz-academy', COMPANY), /already has a company/);
       await refused(c, () => setCompany(c, 'zz-nope', COMPANY), /Unknown company zz-nope/);
+    });
+  });
+
+  it('a company is served by one tenant per project: a second tenant for it is refused, by the function and the index', async () => {
+    await withControl(async (c) => {
+      await c.query(COMPANY_SQL);
+      await c.query(PROVISION_SQL);
+      await registerTenant(c, academy);
+      await registerTenant(c, { ...academy, slug: 'zz-other', hosts: ['other.example.com'] });
+      await c.query('set local role service_role');
+      await setCompany(c, 'zz-academy', COMPANY);
+      await refused(c, () => setCompany(c, 'zz-other', COMPANY), new RegExp(`Company ${COMPANY} is already registered as zz-academy`));
+      await asPostgres(c);
+      await refused(c, () => c.query('update public.tenants set company_id = $1 where slug = $2', [COMPANY, 'zz-other']),
+        /tenants_company_key/);
+      // Another project may hold the same id (local stacks: every database has academy's).
+      await c.query(`update public.tenants set supabase_url = 'https://otherproj.supabase.co' where slug = 'zz-other'`);
+      await c.query('set local role service_role');
+      await setCompany(c, 'zz-other', COMPANY);
+    });
+  });
+
+  it('tenant:register writes the company through console_set_company: it never repoints a tenant', async () => {
+    await withControl(async (c) => {
+      await c.query(COMPANY_SQL);
+      await c.query(PROVISION_SQL);
+      await registerTenant(c, { ...academy, companyId: COMPANY });
+      await registerTenant(c, { ...academy, companyId: COMPANY });
+      await refused(c, () => registerTenant(c, { ...academy, companyId: 'a7c0de00-0000-4000-8000-000000000001' }), /already has a company/);
+      expect(await tenantCompanyId(c, 'zz-academy')).toBe(COMPANY);
+      const audit = (await c.query(`select actor from public.tenant_audit where slug = 'zz-academy' order by id desc limit 1`)).rows[0];
+      expect(audit.actor).toBe('script');
     });
   });
 });

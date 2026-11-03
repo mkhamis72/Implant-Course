@@ -116,6 +116,17 @@ describe('registerCompany', () => {
     expect(r.error).toBe(`Company ${NEW_COMPANY} was created in the database, but its id could not be saved in the registry: boom`);
     noSecrets(r.values);
   });
+
+  it('a retry after the id could not be saved stores the same company (provision_company hands back the empty company)', async () => {
+    rpc.mockImplementation(async (fn: string) => (fn === 'console_set_company' ? { data: null, error: { message: 'boom' } } : { data: null, error: null }));
+    expect((await registerCompany({}, form(registerData))).error).toContain(NEW_COMPANY);
+    // The registry row now exists without a company id; the database's provision_company returns the same id again.
+    existing = { ...row, company_id: null };
+    rpc.mockResolvedValue({ data: null, error: null });
+    await expect(registerCompany({}, form(registerData))).rejects.toThrow('REDIRECT:/console/companies/acme');
+    expect(dbRpc).toHaveBeenCalledTimes(2);
+    expect(rpc).toHaveBeenLastCalledWith('console_set_company', { p_slug: 'acme', p_company_id: NEW_COMPANY, p_actor: 'owner@example.com' });
+  });
 });
 
 describe('replaceCompanyKeys', () => {

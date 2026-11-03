@@ -2,7 +2,8 @@ import type { Client } from 'pg';
 
 export type RegisterInput = {
   slug: string; name: string; hosts: string[]; supabaseUrl: string; anonKey: string; serviceRoleKey: string; databaseUrl: string;
-  /** Written when given; an existing company id is kept when omitted. */
+  /** Written when given, through console_set_company (control 0005), which never repoints a tenant; an
+   *  existing company id is kept when omitted. */
   companyId?: string;
 };
 
@@ -35,7 +36,7 @@ export async function registerTenant(c: Client, t: RegisterInput): Promise<void>
   await c.query('select public.console_register_tenant($1, $2, $3, $4, $5, $6, $7, $8)', [
     t.slug, t.name, t.hosts, t.supabaseUrl, t.anonKey, t.serviceRoleKey, t.databaseUrl, 'script',
   ]);
-  if (t.companyId) await c.query('update public.tenants set company_id = $2 where slug = $1', [t.slug, t.companyId]);
+  if (t.companyId) await c.query('select public.console_set_company($1, $2, $3)', [t.slug, t.companyId, 'script']);
 }
 
 /** The tenant's company id: null when none is set, undefined before control 0004 added the column. */
