@@ -176,7 +176,7 @@ describe('delete_user (0087)', () => {
       const b = (await c.query(`insert into public.companies (slug, name) values ('zz-member-writes', 'Zz B') returning id`)).rows[0].id;
       await c.query(`insert into public.company_members (company_id, user_id, role, active) values ($1, $2, 'organizer', true)`, [b, id]);
       await setPerms(c, id, { inventory: 'edit' }); // academy's
-      await c.query(`insert into public.user_permissions (company_id, user_id, area, level) values ($1, $2, 'patients', 'view')`, [b, id]);
+      await setPerms(c, id, { patients: 'view' }, b);
       await bound(c, users.admin, S_ADMIN);
       await c.query('select public.delete_user($1)', [id]);
       expect(await member(c, ACADEMY_ID, id)).toBeUndefined();
@@ -184,7 +184,6 @@ describe('delete_user (0087)', () => {
       expect((await c.query('select count(*)::int as n from public.profiles where user_id = $1', [id])).rows[0].n).toBe(1);
       const perms = (await c.query('select company_id, area from public.user_permissions where user_id = $1', [id])).rows;
       expect(perms).toEqual([{ company_id: b, area: 'patients' }]);
-
     });
   });
 

@@ -141,12 +141,18 @@ export async function book(
 
 export type Perms = Partial<Record<'patients' | 'schedule' | 'courses' | 'checklists' | 'inventory' | 'delegates' | 'research', 'view' | 'edit' | null>>;
 
-/** Sets a user's area permissions directly (bypasses RLS; call as postgres). Unlisted areas become None. */
-export async function setPerms(c: Client, user: string, perms: Perms): Promise<void> {
+/** Sets a user's area permissions in the company (academy by default) directly (bypasses RLS; call as
+ *  postgres). Unlisted areas become None there; other companies' rows stay. */
+export async function setPerms(
+  c: Client, user: string, perms: Perms, company = 'a7c0de00-0000-4000-8000-000000000001',
+): Promise<void> {
   await c.query('reset role');
-  await c.query('delete from public.user_permissions where user_id = $1', [user]);
+  await c.query('delete from public.user_permissions where company_id = $1 and user_id = $2', [company, user]);
   for (const [area, level] of Object.entries(perms)) {
-    if (level) await c.query('insert into public.user_permissions (user_id, area, level) values ($1, $2, $3)', [user, area, level]);
+    if (level) {
+      await c.query('insert into public.user_permissions (company_id, user_id, area, level) values ($1, $2, $3, $4)',
+        [company, user, area, level]);
+    }
   }
 }
 

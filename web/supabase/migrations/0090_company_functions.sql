@@ -268,8 +268,9 @@ begin
   where value #>> '{}' is not null;
 end $$;
 
--- 0089's admin_change_email: the target must be a member of the caller's company. The email is the
--- person's (profiles, unique across companies); the delegate whose address follows is this company's.
+-- 0089's admin_change_email: the target must be a member of the caller's company, and of no other (the
+-- sign-in email is the person's, shared by every company they belong to: support changes it). It stays
+-- unique across profiles; the delegate whose address follows is this company's.
 create or replace function public.admin_change_email(p_user uuid, p_email text) returns void
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -293,6 +294,9 @@ begin
   if not found then
     perform app_private.fail('User not found.');
   end if;
+  if exists (select 1 from public.company_members m where m.user_id = p_user and m.company_id <> v_company) then
+    perform app_private.fail('This user also belongs to another company. Ask support to change their sign-in details.');
+  end if;
   perform 1 from public.profiles where user_id = p_user for update;
   if exists (select 1 from public.profiles where lower(email) = v_email and user_id <> p_user) then
     perform app_private.fail('Another account already uses that email.');
@@ -303,7 +307,8 @@ begin
   end if;
 end $$;
 
--- 0074's admin_set_name: the target must be a member of the caller's company.
+-- 0074's admin_set_name: the target must be a member of the caller's company, and of no other (the name is
+-- the person's, as for admin_change_email).
 create or replace function public.admin_set_name(p_user uuid, p_name text) returns void
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -320,6 +325,9 @@ begin
   end if;
   if not exists (select 1 from public.company_members m where m.company_id = v_company and m.user_id = p_user) then
     perform app_private.fail('User not found.');
+  end if;
+  if exists (select 1 from public.company_members m where m.user_id = p_user and m.company_id <> v_company) then
+    perform app_private.fail('This user also belongs to another company. Ask support to change their sign-in details.');
   end if;
   update public.profiles set full_name = v_name where user_id = p_user;
 end $$;
@@ -394,7 +402,7 @@ begin
   return new;
 end $$;
 
--- 0081's fit_component_v2: "fitted by organizer" must be an active member of the implant's company
+-- 0081's fit_component_v2: "fitted by organizer" must be an active admin or organizer of the implant's company
 -- (profiles.active is no longer maintained), and the component row takes that company.
 create or replace function public.fit_component_v2(p_site uuid, p_type public.component_type, p_fitted_on date,
   p_product uuid, p_lot uuid, p_by_delegate uuid, p_by_organizer uuid, p_notes text, p_course uuid)
@@ -428,7 +436,8 @@ begin
   perform app_private.check_enrolled(p_course, p_by_delegate);
   if p_by_organizer is not null and not exists (
     select 1 from public.company_members m
-    where m.company_id = v_site.company_id and m.user_id = p_by_organizer and m.active
+    where m.company_id = v_site.company_id and m.user_id = p_by_organizer
+      and m.active and m.role in ('admin', 'organizer')
   ) then
     perform app_private.fail('Choose an active organizer.');
   end if;

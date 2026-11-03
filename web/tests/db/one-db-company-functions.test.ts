@@ -1,11 +1,13 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, actAsBound, asPostgres } from './helpers';
-import { pendingLogin } from './fixtures';
+import { makeDelegate, makePatient, makeProduct, pendingLogin, place, receive } from './fixtures';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
 const NOT_FOUND = /User not found\./;
+const SHARED = /This user also belongs to another company\. Ask support to change their sign-in details\./;
+const NOT_ORGANIZER = /Choose an active organizer\./;
 
 async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp) {
   await c.query('savepoint s');
@@ -55,6 +57,27 @@ describe('admin functions act on the caller\'s company (0090)', () => {
       expect((await c.query(
         `select company_id from public.admin_events where user_id = $1 and kind = 'invite_resent'`, [users.target])).rows)
         .toEqual([{ company_id: b }]);
+    });
+  });
+
+  it("refuses a B admin changing the name or email of a user shared with academy; a B-only user's are changed", async () => {
+    await withTx(async (c) => {
+      const b = await companyB(c);
+      await c.query(`insert into public.company_members (company_id, user_id, role, active) values ($1, $2, 'organizer', true)`,
+        [b, users.target]);
+      await actAsBound(c, users.admin, b);
+      await refused(c, () => c.query(`select public.admin_set_name($1, 'Zz Renamed')`, [users.target]), SHARED);
+      await refused(c, () => c.query(`select public.admin_change_email($1, 'zz-company-fns-shared@example.com')`, [users.target]), SHARED);
+
+      await pendingLogin(c, 'zz-company-fns-b@example.com', { company: b });
+      const only = (await c.query(
+        `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-company-fns-b@example.com') returning id`)).rows[0].id;
+      await actAsBound(c, users.admin, b);
+      await c.query(`select public.admin_set_name($1, 'Zz B Only')`, [only]);
+      await c.query(`select public.admin_change_email($1, 'zz-company-fns-b2@example.com')`, [only]);
+      await asPostgres(c);
+      expect((await c.query('select full_name, email from public.profiles where user_id = $1', [only])).rows)
+        .toEqual([{ full_name: 'Zz B Only', email: 'zz-company-fns-b2@example.com' }]);
     });
   });
 
@@ -131,6 +154,38 @@ describe('check_assignee (0090)', () => {
         /Choose an active organizer or admin to assign this to\./);
       await c.query(
         `insert into public.checklist_items (checklist_id, position, text, assignee_id) values ($1, 1, 'Task', $2)`, [list, users.organizer]);
+    });
+  });
+});
+
+describe('fit_component_v2: fitted by organizer (0090)', () => {
+  const fit = (c: Client, site: string, organizer: string) => c.query(
+    `select public.fit_component_v2(p_site => $1, p_type => 'cover_screw', p_fitted_on => current_date,
+       p_product => null, p_lot => null, p_by_delegate => null, p_by_organizer => $2, p_notes => '', p_course => null) as id`,
+    [site, organizer]);
+
+  it("accepts an active staff member of the implant's company only, and the row takes that company", async () => {
+    await withTx(async (c) => {
+      const b = await companyB(c);
+      await c.query(`insert into public.company_members (company_id, user_id, role, active) values ($1, $2, 'organizer', true)`,
+        [b, users.viewer]);
+      await c.query('delete from public.company_members where company_id = $1 and user_id = $2', [ACADEMY_ID, users.viewer]);
+      await actAs(c, users.organizer);
+      const implant = await makeProduct(c);
+      const lot = await receive(c, implant, 1, 'ZZ-FNS');
+      const site = await place(c, {
+        patient: await makePatient(c, 'Zz Company Fns Patient'), tooth: 36, product: implant, lot,
+        delegate: await makeDelegate(c, 'Zz Company Fns Delegate'), supervisor: users.organizer,
+      });
+      await actAs(c, users.organizer);
+      await refused(c, () => fit(c, site, users.viewer), NOT_ORGANIZER); // a member of B only
+      await refused(c, () => fit(c, site, users.delegate), NOT_ORGANIZER); // an active delegate login of academy
+      const id = (await fit(c, site, users.organizer)).rows[0].id;
+      await asPostgres(c);
+      const { rows } = await c.query(
+        `select sc.company_id, s.company_id as site_company from public.site_components sc
+         join public.implant_sites s on s.id = sc.site_id where sc.id = $1`, [id]);
+      expect(rows).toEqual([{ company_id: ACADEMY_ID, site_company: ACADEMY_ID }]);
     });
   });
 });
