@@ -162,7 +162,7 @@ describe('2FA reset flag', () => {
     await withTx(async (c) => {
       await asPostgres(c);
       await setPerms(c, users.target, { patients: 'view' });
-      const patient = (await c.query(`insert into public.patients (full_name) values ('Zz Flag Patient') returning id`)).rows[0].id;
+      const patient = (await c.query(`insert into public.patients (full_name, file_no) values ('Zz Flag Patient', 'ZZF' || substr(md5(random()::text), 1, 8)) returning id`)).rows[0].id;
       await addVerifiedFactor(c, users.target, "now() - interval '1 day'");
       const seesPatient = async () =>
         (await c.query('select 1 from public.patients where id = $1', [patient])).rows.length === 1;

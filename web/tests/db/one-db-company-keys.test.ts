@@ -1,7 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
-import { withTx, actAsBound, asPostgres } from './helpers';
-import { makeCourse, makePatient, makeSession } from './fixtures';
+import { withTx, actAs, actAsBound, asPostgres } from './helpers';
+import { makeCourse, makeSession } from './fixtures';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -56,21 +56,39 @@ describe('company keys (0091)', () => {
     });
   });
 
-  it('numbers patient files within the bound company', async () => {
+  it('counts file numbers per company', async () => {
     await withTx(async (c) => {
       const b = await companyB(c);
-      await dropGlobalUniques(c);
-      await actAsBound(c, users.admin, b);
-      expect((await c.query('select public.next_file_no() as n')).rows[0].n).toBe('P00001');
+      const next = async (company: string) => {
+        await actAsBound(c, users.admin, company);
+        return (await c.query('select public.next_file_no() as n')).rows[0].n as string;
+      };
+      const academyFirst = Number((await next(ACADEMY_ID)).slice(1));
+      expect(await next(b)).toBe('P00001');
+      expect(await next(b)).toBe('P00002');
+      expect(await next(ACADEMY_ID)).toBe(`P${String(academyFirst + 1).padStart(5, '0')}`);
+      expect(await next(b)).toBe('P00003');
+    });
+  });
+
+  it('never hands out a number again, even after its patient is deleted', async () => {
+    await withTx(async (c) => {
+      await actAsBound(c, users.organizer);
+      const { rows } = await c.query(`insert into public.patients (full_name) values ('Zz Keys Deleted') returning id, file_no`);
       await asPostgres(c);
-      await c.query(`insert into public.patients (company_id, full_name, file_no) values ($1, 'Zz Keys Patient', 'P00001')`, [b]);
-      await actAsBound(c, users.admin, b);
-      expect((await c.query('select public.next_file_no() as n')).rows[0].n).toBe('P00002');
-      await actAsBound(c, users.admin, ACADEMY_ID);
-      const academyNext = (await c.query('select public.next_file_no() as n')).rows[0].n as string;
+      await c.query('delete from public.patients where id = $1', [rows[0].id]);
+      await actAsBound(c, users.organizer);
+      const again = (await c.query(`insert into public.patients (full_name) values ('Zz Keys After') returning file_no`)).rows[0].file_no;
+      expect(Number(again.slice(1))).toBe(Number(rows[0].file_no.slice(1)) + 1);
+    });
+  });
+
+  it('refuses a file number without a bound company', async () => {
+    await withTx(async (c) => {
+      await actAs(c, users.organizer, { session_id: crypto.randomUUID() });
+      await refused(c, () => c.query('select public.next_file_no()'), /This session is not linked to a company\./);
       await asPostgres(c);
-      expect((await c.query(`select count(*)::int as n from public.patients where company_id = $1 and upper(file_no) = $2`,
-        [ACADEMY_ID, academyNext])).rows[0].n).toBe(0);
+      await refused(c, () => c.query('select public.next_file_no()'), /This session is not linked to a company\./);
     });
   });
 
@@ -79,7 +97,8 @@ describe('company keys (0091)', () => {
       const b = await companyB(c);
       const course = await makeCourse(c);
       const session = await makeSession(c, course);
-      const patient = await makePatient(c, 'Zz Keys Slot Patient');
+      // As postgres there is no bound company to number the file from (0091), so it is typed.
+      const patient = (await c.query(`insert into public.patients (full_name, file_no) values ('Zz Keys Slot Patient', 'ZZS' || substr(md5(random()::text), 1, 8)) returning id`)).rows[0].id;
       const supervisor = (await c.query("insert into public.supervisors (full_name) values ('Zz Keys Prof') returning id")).rows[0].id;
       const chair = (await c.query(`insert into public.chairs (company_id, name) values ($1, 'Zz B Chair') returning id`, [b])).rows[0].id;
       await refused(c, () => c.query(

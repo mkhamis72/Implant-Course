@@ -152,12 +152,12 @@ You need:
 3. Make an env file `.env.restore` with the new project's `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (session pooler) and `DATABASE_CA_CERT`, plus the `CONTROL_SUPABASE_URL` and `CONTROL_DATABASE_URL` lines copied from `.env.prod` (`tenant:register` reads the company from the first group and the control project from the second).
 4. Apply the schema to the new project directly: `ENV_FILE=.env.restore npm run db:migrate`. If the backup is older than the newest migrations, check out the commit the backup belongs to first: the newest migration it has is the newest migration file at that date. Then `git checkout master` again before the next steps.
 5. Turn the dump into SQL: `pg_restore --data-only --no-owner -f data.sql <slug>.dump`.
-6. **Fresh project only.** The TRUNCATE below (with `companies … CASCADE`) is for a brand-new project. After the one-database cut-over it would wipe every company; plan 3 rewrites this step. Load it in one transaction, with triggers off so nothing is created twice. This is Supabase's documented restore method. The migrations seeded `settings`, `branding`, the sample `products`, the consent form `consent_form_versions` (0072), the company list `companies` (0083) and the academy memberships `company_members` (0085), and auditing those seeds wrote `audit_log` rows, so empty those seven first. Without `audit_log`, the load stops with `duplicate key value violates unique constraint "audit_log_pkey"`:
+6. **Fresh project only.** The TRUNCATE below (with `companies … CASCADE`) is for a brand-new project. After the one-database cut-over it would wipe every company; plan 3 rewrites this step. Load it in one transaction, with triggers off so nothing is created twice. This is Supabase's documented restore method. The migrations seeded `settings`, `branding`, the sample `products`, the consent form `consent_form_versions` (0072), the company list `companies` (0083) and the academy memberships `company_members` (0085) and academy's file number counter `app_private.file_no_counters` (0091), and auditing those seeds wrote `audit_log` rows, so empty those eight first. Without `audit_log`, the load stops with `duplicate key value violates unique constraint "audit_log_pkey"`:
 
    ```bash
    psql "<new session pooler URI>" --single-transaction -v ON_ERROR_STOP=1 \
      -c "SET session_replication_role = replica" \
-     -c "TRUNCATE public.settings, public.products, public.branding, public.consent_form_versions, public.companies, public.company_members, public.audit_log CASCADE" \
+     -c "TRUNCATE public.settings, public.products, public.branding, public.consent_form_versions, public.companies, public.company_members, app_private.file_no_counters, public.audit_log CASCADE" \
      -f data.sql
    ```
 

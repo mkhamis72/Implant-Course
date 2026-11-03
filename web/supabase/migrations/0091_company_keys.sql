@@ -140,23 +140,48 @@ end $$;
 
 
 -- ── The file number counter, per company ────────────────────────────────────────────────────────────
--- next_file_no (0006) drew from one global sequence. It now continues the bound company's own numbers:
--- the highest P-number in that company (typed ones included, any case) plus one, so it never meets a
--- number already used there. One draw at a time per company: the lock is held until the insert commits.
--- Without a bound company (scripts, service role) it counts across every company, so the number is free
--- in any of them. patients_file_no_seq is no longer used.
+-- next_file_no (0006) drew from one global sequence. Each company now has its own counter, which only
+-- goes up: a number is never handed out twice, even after its patient is deleted (paper files must never
+-- share a number). Academy's counter continues from the sequence or the highest P-number, whichever is
+-- higher. patients_file_no_seq stays until release 5 (0095).
 
+create table app_private.file_no_counters (
+  company_id uuid primary key references public.companies (id),
+  last_no integer not null
+);
+alter table app_private.file_no_counters enable row level security;
+alter table app_private.file_no_counters force row level security;
+revoke all on app_private.file_no_counters from public, anon, authenticated;
+create trigger file_no_counters_audit after insert or update or delete on app_private.file_no_counters
+  for each row execute function app_private.audit_row('company_id');
+
+insert into app_private.file_no_counters (company_id, last_no)
+select 'a7c0de00-0000-4000-8000-000000000001', greatest(
+  (select case when s.is_called then s.last_value else s.last_value - 1 end from public.patients_file_no_seq s),
+  (select coalesce(max(substring(upper(p.file_no) from '^P([0-9]{1,9})$')::bigint), 0) from public.patients p
+   where p.company_id = 'a7c0de00-0000-4000-8000-000000000001' and upper(p.file_no) ~ '^P[0-9]{1,9}$'));
+
+-- The bound company's next number. The upsert locks the company's counter row until the insert commits,
+-- so two new patients never draw the same number; numbers already typed by hand are skipped.
 create or replace function public.next_file_no() returns text
 language plpgsql volatile security definer set search_path = '' as $$
 declare
   v_company uuid := app.current_company_id();
-  n bigint;
+  n integer;
+  candidate text;
 begin
-  perform pg_advisory_xact_lock(hashtext('file-no:' || coalesce(v_company::text, 'any')));
-  select coalesce(max(substring(upper(p.file_no) from '^P([0-9]{1,18})$')::bigint), 0) + 1 into n
-  from public.patients p
-  where (v_company is null or p.company_id = v_company) and upper(p.file_no) ~ '^P[0-9]{1,18}$';
-  return 'P' || lpad(n::text, greatest(5, length(n::text)), '0');
+  if v_company is null then
+    perform app_private.fail('This session is not linked to a company.');
+  end if;
+  loop
+    insert into app_private.file_no_counters as f (company_id, last_no) values (v_company, 1)
+    on conflict (company_id) do update set last_no = f.last_no + 1
+    returning f.last_no into n;
+    candidate := 'P' || lpad(n::text, greatest(5, length(n::text)), '0');
+    exit when not exists (
+      select 1 from public.patients p where p.company_id = v_company and upper(p.file_no) = candidate);
+  end loop;
+  return candidate;
 end $$;
 
 
