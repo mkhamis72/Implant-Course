@@ -90,8 +90,26 @@ describe('backup.yml', () => {
   });
   it('encrypts every dump on the way out (the plain dump never touches disk)', () => {
     expect(dump).toMatch(/encrypt\(\) \{ gpg [^}]*--symmetric --cipher-algo AES256/);
-    expect(dump.match(/\| encrypt /g)?.length).toBe(2);
+    expect(dump.match(/\| encrypt /g)?.length).toBe(3); // whole database, company export, control registry
     expect(dump).not.toMatch(/pg_dump[^\n]*> /);
+  });
+  it('dumps the whole database once per distinct database, then exports each company on its own', () => {
+    expect(dump).toContain('declare -A dumped=()');
+    expect(dump).toContain("printf '%s' \"$DB_KEY\"");
+    expect(dump).toContain('if [ -z "${dumped[$key]:-}" ]; then');
+    expect(dump).toContain('dumped[$key]="$slug"');
+    // the whole-database dump sits inside the "not yet dumped" branch; the company export is outside it
+    expect(dump.indexOf('if [ -z "${dumped[$key]:-}" ]; then')).toBeLessThan(dump.indexOf('pg_dump" --data-only'));
+    expect(dump.indexOf('pg_dump" --data-only')).toBeLessThan(dump.indexOf('dumped[$key]="$slug"'));
+    expect(dump.indexOf('dumped[$key]="$slug"')).toBeLessThan(dump.indexOf('company:export'));
+    expect(dump).toContain('npm run --silent company:export -- --tenant "$slug" --out -');
+    expect(dump).toContain('out/$slug-$day.company.dump.gpg');
+    expect(dump).toContain('failed+=("$slug (company export)")');
+  });
+  it('verify mode reads each company export too', () => {
+    const verify = runOf(jobs.verify, 'Decrypt');
+    expect(verify).toContain('*.company.dump.gpg');
+    expect(verify).toContain('"format":"company-export-v1"');
   });
   it('backs up every exported company, refusing an empty export', () => {
     expect(runOf(jobs.backup, 'Export')).toContain('npm run tenants:export -- --dir "$RUNNER_TEMP/tenants"');

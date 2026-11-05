@@ -30,6 +30,7 @@ npm run tenant:register -- <slug> "<Name>" <hosts…> [--provision | --company <
 npm run tenant:check -- <slug>              # health of one registered company (ENV_FILE=.env.prod)
 npm run build                               # next build — Release runs it after tsc, lint and unit tests
 npm run tenants:export -- --dir <dir>       # backup workflow: one env file per company (masked under GitHub Actions)
+npm run company:export -- --tenant <slug> --out <file|->   # one company's rows as JSON; company:restore -- --tenant <slug> --in <file> (or --delete) replaces/erases them (docs/operations.md §D)
 ./scripts/ship.sh verify [e2e specs…]   # on a feature branch, all committed: tsc, lint, unit, test:db (local), named E2E specs
 ./scripts/ship.sh ship                  # push → PR → merge → watch release.yml (migrates PROD, then deploys) — the owner runs this (auto mode blocks Claude): `! cd web && ./scripts/ship.sh ship`, after switching the repo public
 ```

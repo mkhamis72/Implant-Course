@@ -20,6 +20,8 @@
     "tenant:check": "tsx scripts/tenant-check.ts",
     "backup:pre-one-db": "tsx scripts/pre-one-db-backup.ts",
     "tenants:export": "tsx scripts/tenants-export.ts",
+    "company:export": "tsx scripts/company-export.ts",
+    "company:restore": "tsx scripts/company-restore.ts",
     "test:db": "vitest run -c vitest.db.config.mts",
     "test:e2e": "playwright test",
     "create-user": "tsx scripts/create-user.ts",

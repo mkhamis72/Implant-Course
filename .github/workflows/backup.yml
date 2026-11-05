@@ -78,17 +78,32 @@ jobs:
           mkdir -p out
           day=$(date -u +%F)
           failed=()
+          declare -A dumped=()
           for f in "${files[@]}"; do
             slug=$(basename "$f" .env)
-            # A failed company is recorded and the others are still backed up; the run fails at the end.
-            if ! ( set -euo pipefail; source "$f"
+            key=$(set -euo pipefail; source "$f"; printf '%s' "$DB_KEY")
+            # Companies in one database (same DB_KEY) share one whole-database dump, taken for the first of them;
+            # if it fails, the next company on that database retries it. A failed company is recorded and the
+            # others are still backed up; the run fails at the end.
+            if [ -z "${dumped[$key]:-}" ]; then
+              if ( set -euo pipefail; source "$f"
                    "$PG_BIN/pg_dump" --data-only --format=custom --no-owner \
                      --schema=public --schema=app_private --schema=auth \
                      --exclude-table=app_private.schema_migrations --exclude-table=auth.schema_migrations \
                      "$DATABASE_URL" \
                      | encrypt "out/$SLUG-$day.dump.gpg" ); then
-              rm -f "out/$slug-$day.dump.gpg"
-              failed+=("$slug")
+                dumped[$key]="$slug"
+              else
+                rm -f "out/$slug-$day.dump.gpg"
+                failed+=("$slug")
+              fi
+            fi
+            # Each company's own rows as JSON (company-export), restorable on its own (docs/operations.md section D).
+            if ! ( set -euo pipefail
+                   DATABASE_CA_CERT="$RUNNER_TEMP/ca.crt" npm run --silent company:export -- --tenant "$slug" --out - \
+                     | encrypt "out/$slug-$day.company.dump.gpg" ); then
+              rm -f "out/$slug-$day.company.dump.gpg"
+              failed+=("$slug (company export)")
             fi
           done
           if ! "$PG_BIN/pg_dump" --data-only --format=custom --no-owner --table=public.tenants --table=public.tenant_audit \
@@ -240,6 +255,15 @@ jobs:
             control_files=0; company_files=0
             for f in "$dir"/*.dump.gpg; do
               name="$dir/$(basename "$f" .dump.gpg)"
+              # A company's own JSON export (company-export): readable, and it holds the company's patients and accounts.
+              case "$(basename "$f")" in *.company.dump.gpg)
+                if ! gpg --batch --pinentry-mode loopback --decrypt --passphrase-fd 3 3<<<"$PASSPHRASE" "$f" > "$RUNNER_TEMP/check.dump" \
+                   || ! grep -q '"format":"company-export-v1"' "$RUNNER_TEMP/check.dump" \
+                   || ! grep -q '"public.patients"' "$RUNNER_TEMP/check.dump" || ! grep -q '"auth.users"' "$RUNNER_TEMP/check.dump"; then
+                  bad+=("$name: company export unreadable or incomplete")
+                fi
+                continue ;;
+              esac
               case "$(basename "$f")" in _control-*) control_files=$((control_files + 1)) ;; *) company_files=$((company_files + 1)) ;; esac
               if ! gpg --batch --pinentry-mode loopback --decrypt --passphrase-fd 3 3<<<"$PASSPHRASE" "$f" > "$RUNNER_TEMP/check.dump" \
                  || ! "$PG_BIN/pg_restore" --list "$RUNNER_TEMP/check.dump" > "$RUNNER_TEMP/list.txt"; then

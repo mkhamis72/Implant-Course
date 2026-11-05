@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { ClientConfig } from 'pg';
 import { pgConfig } from './db';
-import { companyLabel, tenantEnvFrom, type Company } from './tenant-env';
+import { companyLabel, distinctDatabases, tenantEnvFrom, type Company } from './tenant-env';
 
 /** Throws if `--all-tenants` appears with any other flag. */
 export function checkAllTenantsArgs(argv: string[]): void {
@@ -16,7 +16,7 @@ export function checkTargetArgs(argv: string[]): void {
   if (tenant && argv.includes('--control')) throw new Error('Use --tenant or --control, not both.');
 }
 
-/** Applies the app migrations to every company in turn; the first failure stops the run (nothing is deployed). */
+/** Applies the app migrations once to each distinct database (companies sharing one database are migrated once, through the first); the first failure stops the run (nothing is deployed). */
 export async function migrateAllTenants(
   companies: Company[],
   caPath: string | undefined,
@@ -25,7 +25,7 @@ export async function migrateAllTenants(
 ): Promise<void> {
   if (!companies.length) throw new Error('No companies in the control project.');
   const dir = path.join(process.cwd(), 'supabase', 'migrations');
-  for (const company of companies) {
+  for (const company of distinctDatabases(companies)) {
     log(`Target project: ${companyLabel(company.tenant)}`);
     let applied: string[];
     try {

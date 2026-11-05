@@ -1,17 +1,20 @@
 import './load-env';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { envFileText, loadCompanies, type Company } from './tenant-env';
+import { databaseKey, envFileText, loadCompanies, type Company } from './tenant-env';
 import { migrateTarget } from './migrate-target';
 
 /**
  * For the backup workflow: one bash-sourceable file per company in --dir (mode 600, runner temp only,
- * never uploaded). Holds only what a dump and the keep-awake ping need; no service keys.
+ * never uploaded). Holds only what a dump and the keep-awake ping need (DB_KEY: companies with the same key share a database, dumped once); no service keys.
  */
 export function exportFiles(companies: Company[]): { file: string; text: string }[] {
-  return companies.map(({ tenant, secrets }) => ({
-    file: `${tenant.slug}.env`,
-    text: envFileText({ SLUG: tenant.slug, DATABASE_URL: secrets.databaseUrl, SUPABASE_URL: tenant.supabase_url, ANON_KEY: tenant.anon_key }),
+  return companies.map((company) => ({
+    file: `${company.tenant.slug}.env`,
+    text: envFileText({
+      SLUG: company.tenant.slug, DATABASE_URL: company.secrets.databaseUrl, SUPABASE_URL: company.tenant.supabase_url,
+      ANON_KEY: company.tenant.anon_key, DB_KEY: databaseKey(company),
+    }),
   }));
 }
 

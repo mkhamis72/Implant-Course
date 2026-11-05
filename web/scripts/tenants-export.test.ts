@@ -12,10 +12,10 @@ const tricky: Company = {
 };
 
 describe('exportFiles', () => {
-  it('writes one file per company with exactly the four variables the backup needs', () => {
+  it('writes one file per company with exactly the variables the backup needs', () => {
     const [f] = exportFiles([tricky]);
     expect(f.file).toBe('academy.env');
-    expect(f.text.split('\n').filter(Boolean).map((l) => l.split('=')[0])).toEqual(['SLUG', 'DATABASE_URL', 'SUPABASE_URL', 'ANON_KEY']);
+    expect(f.text.split('\n').filter(Boolean).map((l) => l.split('=')[0])).toEqual(['SLUG', 'DATABASE_URL', 'SUPABASE_URL', 'ANON_KEY', 'DB_KEY']);
     expect(f.text).not.toContain('svc');
   });
 
