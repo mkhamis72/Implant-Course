@@ -85,7 +85,7 @@ export async function insertableColumns(c: Client, qualified: string): Promise<s
   return rows.map((r) => r.name);
 }
 
-/** Reads one company's data. Runs on the caller's connection and transaction (no session needed: it filters on company_id). */
+/** Reads one company's data. Callers must give it one consistent snapshot (begin isolation level repeatable read read only), or the ~50 reads see different moments. Runs on the caller's connection and transaction (no session needed: it filters on company_id). */
 export async function exportCompany(c: Client, companyId: string): Promise<CompanyExport> {
   const members = '(select user_id from public.company_members where company_id = $1)';
   const tables: Record<string, Row[]> = {};
@@ -108,9 +108,11 @@ export function takeFileArg(argv: string[], flag: string): { file: string; rest:
 }
 
 /** The company id the control registry holds for the slug. */
+export class NoCompanyIdError extends Error {}
+
 export async function companyIdOf(slug: string, env: NodeJS.ProcessEnv = process.env): Promise<string> {
   const id = await withControl(env, (c) => tenantCompanyId(c, slug));
-  if (!id) throw new Error(`Company ${slug} has no company id in the control project; register it with --company or --provision.`);
+  if (!id) throw new NoCompanyIdError(`Company ${slug} has no company id in the control project; register it with --company or --provision.`);
   return id;
 }
 
@@ -126,7 +128,7 @@ async function main() {
   const c = new Client(pgConfig());
   await c.connect();
   try {
-    await c.query('begin read only');
+    await c.query('begin isolation level repeatable read read only');
     const data = await exportCompany(c, companyId);
     await c.query('commit');
     const text = stringifyExport(data);
@@ -142,6 +144,6 @@ async function main() {
 if (process.argv[1]?.endsWith('company-export.ts')) {
   main().catch((e) => {
     console.error(e.message);
-    process.exit(1);
+    process.exit(e instanceof NoCompanyIdError ? 3 : 1);
   });
 }

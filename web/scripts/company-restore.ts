@@ -45,24 +45,18 @@ async function foreignKeyProblems(c: Client, companyId: string): Promise<string[
 
 /**
  * Switches off the triggers that would alter or refuse restored rows (audit, append-only ledger, column
- * defaults) for the rest of the transaction and returns the function that switches them back on.
- * session_replication_role = replica does it without locks (Ruling 23); a role that may not set it (the
- * local stack's postgres) disables the user triggers of the company tables instead, which locks them until
- * the transaction ends. Either way a rollback undoes it.
+ * defaults, account triggers) for the rest of the transaction with SET LOCAL session_replication_role = replica
+ * (Ruling 23; no locks) and returns the function that restores the previous setting. The plain statement is
+ * needed: set_config() is refused to postgres by Supabase. A refusal fails the restore.
  */
-async function triggersOff(c: Client, tables: string[]): Promise<() => Promise<void>> {
+async function triggersOff(c: Client): Promise<() => Promise<void>> {
   const previous = (await c.query<{ v: string }>(`select current_setting('session_replication_role') as v`)).rows[0].v;
-  await c.query('savepoint restore_triggers');
   try {
-    await c.query(`select set_config('session_replication_role', 'replica', true)`);
-    await c.query('release savepoint restore_triggers');
-    return async () => { await c.query(`select set_config('session_replication_role', $1, true)`, [previous]); };
+    await c.query('set local session_replication_role = replica');
   } catch (error) {
-    if ((error as { code?: string }).code !== '42501') throw error;
-    await c.query('rollback to savepoint restore_triggers');
+    throw new Error(`The database role may not set session_replication_role, which a restore needs: ${(error as Error).message}`);
   }
-  for (const t of tables) await c.query(`alter table ${quoteTable(t)} disable trigger user`);
-  return async () => { for (const t of tables) await c.query(`alter table ${quoteTable(t)} enable trigger user`); };
+  return async () => { await c.query(`set local session_replication_role = ${quoteIdent(previous)}`); };
 }
 
 /**
@@ -98,7 +92,7 @@ export async function restoreCompany(c: Client, companyId: string, data: unknown
   }
 
   const log: string[] = [];
-  const triggersBack = await triggersOff(c, order);
+  const triggersBack = await triggersOff(c);
   // No try/finally: after an error the transaction is dead and the caller's rollback undoes the switch.
   for (const t of [...order].reverse()) {
     const { rowCount } = await c.query(`delete from ${quoteTable(t)} where company_id = $1`, [companyId]);
@@ -135,6 +129,7 @@ export async function emptyExport(c: Client, companyId: string): Promise<Company
 async function main() {
   const usage = 'Usage: npm run company:restore -- --tenant <slug> (--in <file> | --delete)';
   const erase = process.argv.includes('--delete');
+  if (erase && process.argv.includes('--in')) throw new Error('Use --delete or --in, not both.');
   const { file, rest } = erase ? { file: `company-erase-${new Date().toISOString().slice(0, 10)}`, rest: process.argv.slice(2).filter((a) => a !== '--delete') } : takeFileArg(process.argv.slice(2), '--in');
   const { slug } = takeTenantArg(rest);
   if (!slug) throw new Error(usage);

@@ -35,6 +35,13 @@ async function fingerprint(c: Client, companyId: string): Promise<Record<string,
       `select count(*)::int as n, coalesce(md5(string_agg(r::text, '|' order by r::text)), '') as h from ${t} r where company_id = $1`, [companyId]);
     out[t] = `${rows[0].n}:${rows[0].h}`;
   }
+  // The members' accounts are never touched by a restore.
+  const members = '(select user_id from public.company_members where company_id = $1)';
+  for (const [t, key] of [['auth.users', 'id'], ['public.profiles', 'user_id']]) {
+    const { rows } = await c.query(
+      `select count(*)::int as n, coalesce(md5(string_agg(r::text, '|' order by r::text)), '') as h from ${t} r where r.${key} in ${members}`, [companyId]);
+    out[t] = `${rows[0].n}:${rows[0].h}`;
+  }
   return out;
 }
 

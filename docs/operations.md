@@ -140,6 +140,8 @@ One sender serves every company; the email names the company. Locally the emails
 6. GitHub → Environments → `production` → add the secrets `R2_ENDPOINT` (that endpoint), `R2_BUCKET` (`implant-course-backups`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`. Keep the Cloudflare login in your password manager: it is the way in if GitHub is lost.
 7. Run Backup by hand, then Backup with mode `verify`: both copies must pass. In the bucket, try to delete one file: R2 must refuse it.
 
+**Before this release every tenant must have its company id** in the control project (register with `--company <uuid>` or `--provision`). The nightly company export fails for one without, naming it ("no company id in the control project") and turning the run red.
+
 **Restore a whole database**, if a company's project (or the control project) is lost or damaged. For one company inside a healthy shared database use **Restore one company's data** below instead.
 
 You need:

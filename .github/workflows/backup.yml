@@ -81,7 +81,8 @@ jobs:
           declare -A dumped=()
           for f in "${files[@]}"; do
             slug=$(basename "$f" .env)
-            key=$(set -euo pipefail; source "$f"; printf '%s' "$DB_KEY")
+            key=$(set -euo pipefail; source "$f"; printf '%s' "$DB_KEY") || key=""
+            [ -n "$key" ] || { echo "No DB_KEY for $slug"; failed+=("$slug"); continue; }
             # Companies in one database (same DB_KEY) share one whole-database dump, taken for the first of them;
             # if it fails, the next company on that database retries it. A failed company is recorded and the
             # others are still backed up; the run fails at the end.
@@ -99,11 +100,14 @@ jobs:
               fi
             fi
             # Each company's own rows as JSON (company-export), restorable on its own (docs/operations.md section D).
-            if ! ( set -euo pipefail
+            # company:export exits 3 for a tenant without a company id (register it with --company or --provision).
+            rc=0
+            ( set -euo pipefail
                    DATABASE_CA_CERT="$RUNNER_TEMP/ca.crt" npm run --silent company:export -- --tenant "$slug" --out - \
-                     | encrypt "out/$slug-$day.company.dump.gpg" ); then
+                     | encrypt "out/$slug-$day.company.dump.gpg" ) || rc=$?
+            if [ "$rc" -ne 0 ]; then
               rm -f "out/$slug-$day.company.dump.gpg"
-              failed+=("$slug (company export)")
+              if [ "$rc" -eq 3 ]; then failed+=("$slug (no company id in the control project)"); else failed+=("$slug (company export)"); fi
             fi
           done
           if ! "$PG_BIN/pg_dump" --data-only --format=custom --no-owner --table=public.tenants --table=public.tenant_audit \
