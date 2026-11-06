@@ -16,8 +16,8 @@ describe('supervisors', () => {
   it('every staff test user has a supervisor with the same id (delegate logins never supervise)', async () => {
     await withTx(async (c) => {
       const { rows } = await c.query(
-        `select count(*)::int as n from public.profiles p
-         where p.user_id = any($1) and p.role <> 'delegate'
+        `select count(*)::int as n from public.profiles p join public.company_members m on m.user_id = p.user_id
+         where p.user_id = any($1) and m.role <> 'delegate'
            and not exists (select 1 from public.supervisors s where s.id = p.user_id)`,
         [Object.values(users)],
       );
