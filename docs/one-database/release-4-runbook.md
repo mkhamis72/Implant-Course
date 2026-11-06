@@ -19,11 +19,24 @@ Commands below that read prod use `ENV_FILE=.env.prod` and `--tenant academy` (r
 
    `db:migrate` takes the empty stack to 0095 (`Applied: 0001_foundation.sql, ..., 0095_provision_company.sql`). The test users need no step: the DB tests' global setup (`tests/db/global-setup.ts`, `tests/support/test-users.ts`) creates them on every run. Expected last line `Verified one-db-release-4.` (2026-11-06, after this rebuild: 36 s to rebuild the stack, 3 s to migrate, 2.5 minutes for verify: unit 222 files / 1518 tests, DB 77 files / 646 tests). To sign in to the dev server afterwards, `npm run create-user -- you@example.com "Your Name" --role admin`.
 
-   Back to release 5 afterwards: `! cd "/d/Claude/Claude Code/implant-course-one-db/web" && git checkout one-database && npm run test:db` (it applies 0096 to the stack first), then `npm run console:local` before the console E2E (it recreates `console-e2e`). Do the same rebuild-and-verify on `one-db-release-5` before release 5 (`release-5-canary.md`).
+   Back to release 5 afterwards: `! cd "/d/Claude/Claude Code/implant-course-one-db/web" && git checkout one-database && npm run test:db` (it applies 0096 to the stack first), then `npm run console:local` before the console E2E (it recreates `console-e2e`). Do the same rebuild-and-verify on `one-db-release-5` before release 5 (`release-5-canary.md` lives on the `one-database` / `one-db-release-5` branches, not on this one).
 3. Switch the repo public (Vercel Hobby deploy), as for every release; private again afterwards.
 4. Tell the academy users the window time. Suspended means they see "Service unavailable" (503).
 5. Docker Desktop must be running on the machine you use: the dump (step 2) and the rollback run `pg_dump`, `pg_restore` and `psql` in the `postgres:17` container. Have the dashboard open on the prod project: Authentication, Logs, Database advisors.
-6. Read the Rollback section below once before the window; it is one command plus two compares, rehearsed locally.
+6. **Compare prod's schema with a fresh local stack at 0088**, so a grant or default-privilege difference that exists only on hosted shows up now and not after a rollback (the rollback is proven against a fingerprint of prod itself, but the rehearsals ran on locally built stacks). Read-only on prod. Docker Desktop must be running and nothing may be using the dev2 stack you still need. Build dev2 as a fresh stack at exactly 0088 by holding back 0089 to 0095 for a moment, then put them back:
+
+   ```bash
+   ! cd "/d/Claude/Claude Code/implant-course-one-db/web" && git checkout one-db-release-4 && npx supabase stop --no-backup --workdir .dev2; npm run db:dev2:start && rm supabase/migrations/009[0-5]_*.sql supabase/migrations/0089_*.sql && ENV_FILE=.env.dev2 npm run db:migrate && git checkout -- supabase/migrations && git status --short
+   ```
+
+   Expected: `Applied: 0001_foundation.sql, ..., 0088_pending_logins.sql` (88 files, not 0089 onward) and an empty `git status`. Do not run this with uncommitted work in `supabase/migrations`. Then fingerprint both and compare:
+
+   ```bash
+   ! cd "/d/Claude/Claude Code/implant-course-one-db/web" && ENV_FILE=.env.dev2 npm run schema:fingerprint -- --out "D:/Backups/implant-course/pre-window/fingerprint-local-0088.json" && ENV_FILE=.env.prod npm run schema:fingerprint -- --tenant academy --out "D:/Backups/implant-course/pre-window/fingerprint-prod-check.json" && npm run schema:fingerprint -- --compare "D:/Backups/implant-course/pre-window/fingerprint-local-0088.json" "D:/Backups/implant-course/pre-window/fingerprint-prod-check.json"
+   ```
+
+   Expected: both `Target project:` lines (local host, then the prod host), then `PASS` (1753 entries each; the compare may list `REGROUPED` lines, which are fine). Any `DIFFERENT`, `ONLY BEFORE` or `ONLY AFTER` line means prod's grants, default privileges or roles are not what the migrations build: **stop and report before the window**, with the output; the rollback would restore prod's own state, but the local rehearsals no longer stand for it. Step 3's `fingerprint-before.json` is the one the rollback is checked against; this one is only the early warning. Afterwards `git checkout one-database` as in step 2 if you continue with release 5.
+7. Read the Rollback section below once before the window; it is one command plus two compares, rehearsed locally.
 
 ## The window
 
@@ -126,6 +139,8 @@ It puts academy's database back to the pre-window dump: the schemas `public`, `a
    ```
 
    (The entry count is the rehearsal's; prod's may differ by a few.) `--confirm` must be the project ref the script reads from the database URL, or it refuses. In that one transaction (`scripts/window-rollback.ts`): `drop owned by tenant_definer cascade` and `drop role tenant_definer`; `drop schema app cascade` and `drop schema app_private cascade`; every table, view, sequence, function and type of ours in `public` dropped (`public` itself stays, it carries Supabase's own default privileges); our default privileges in `public` revoked, so the restored objects start from the built-in ACLs and the dump's own `GRANT`, `REVOKE` and `ALTER DEFAULT PRIVILEGES` lines rebuild exactly the release 3 ones; then the dump's entries for the three schemas (schema, data, constraints, indexes, policies, triggers, ACLs) and the `auth.users` trigger, replayed by `psql --single-transaction -v ON_ERROR_STOP=1`; last, a check that the ledger ends at 0088 and the role is gone. The SQL with the data never leaves the container. It refuses a dump without ACLs (one taken before release 4 changed `backup:pre-one-db`), a dump without the ledger or the trigger, and any object outside the three schemas that depends on them and would be lost.
+
+   **If `window:rollback` fails on hosted:** its transaction rolled back, so the database is unchanged and consistent at 0095 (the ledger still lists 0089 to 0095), exactly the state release 4 left it in. Do not run it again blindly and do not touch the database by hand. Release 3 is redeployed but cannot run on 0095, so put release 4 back: in Vercel, Deployments, the release 4 deployment, **Promote to Production**. Confirm the site works (sign in once; `session-check` as in the window). Keep academy suspended until you have decided what to do next, and lift it only if the smoke test passes on release 4; then report the failure text. Re-run the rollback only after the cause is found (it is safe to re-run: the failed run changed nothing).
 4. **Prove it** (both must end `PASS`):
 
    ```bash
@@ -165,7 +180,7 @@ Built to look like prod at release 3, grants included: a wiped dev2 stack migrat
 | --- | --- | --- |
 | "marked as STABLE/IMMUTABLE, but expression is VOLATILE" at a `PERFORM` | 14: `finding_number`, `finding_choice`, `check_restoration_problem`, `check_technique`, `detail_date`, `complication_details`, `check_restoration_details`, `clean_items`, `admin_company`, `my_schedule`, `my_restorations`, `my_report`, `admin_user_history`, `analysis_codes` | The PERFORM is the permission/active-user guard (`require_perm`, `require_active`), which reads the session and may raise. Marking these VOLATILE would stop the planner caching them and is not needed. Pre-existing pattern of every reader; `admin_company` only gained a company lookup in 0090. |
 | "target type is different type than source type" (text to uuid / array / enum) | `provision_company` (0095), `void_followup`, `create_surgery_slot`, `save_radiograph` | String-literal initialisers and `case ... 'restored'` results that Postgres casts implicitly; the check does not model the literal cast. No runtime effect (the DB tests exercise all four). |
-| "unused parameter p_academy_if_unbound" | `app_private.admin_company` | Deliberate: kept so the release 3 callers still work. Not removed by release 5's 0096: removing it means redefining every caller, a separate follow-up (see `release-5-canary.md`, "Not done by 0096"). |
+| "unused parameter p_academy_if_unbound" | `app_private.admin_company` | Deliberate: kept so the release 3 callers still work. Not removed by release 5's 0096: removing it means redefining every caller, a separate follow-up (see `release-5-canary.md`, "Not done by 0096"; that file lives on the `one-database` / `one-db-release-5` branches, not on `one-db-release-4`). |
 
 ## Rehearsals (2026-11-06, local, `restore-check` of the 2026-11-02 academy dump)
 
