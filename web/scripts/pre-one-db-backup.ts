@@ -8,7 +8,7 @@ import { pgConfig } from './db';
 import { resolveEnvFile } from './env-file';
 import { isLocalHost } from './test-guard';
 import { applyTenantArg } from './tenant-env';
-import { countsSql, pgDumpArgs, redact, settingsMarkdown } from './pre-one-db-backup-lib';
+import { countsSql, pgDumpArgs, projectRef, redact, settingsMarkdown } from './pre-one-db-backup-lib';
 
 const IMAGE = 'postgres:17';
 
@@ -81,7 +81,7 @@ async function main() {
   writeFileSync(path.join(out, 'counts.json'), JSON.stringify(counts, null, 2));
 
   const envNames = Object.keys(parse(readFileSync(resolveEnvFile(env, existsSync))));
-  writeFileSync(path.join(out, 'settings.md'), settingsMarkdown({ label, host, serverVersion, envNames, vaultNames }));
+  writeFileSync(path.join(out, 'settings.md'), settingsMarkdown({ label, host, ref: projectRef(url), serverVersion, envNames, vaultNames }));
 
   for (const f of ['full.dump', 'schema.dump', 'counts.json', 'settings.md']) console.log(`${f}  ${statSync(path.join(out, f)).size} bytes`);
 }

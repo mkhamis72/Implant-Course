@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countsSql, pgDumpArgs, redact, settingsMarkdown } from './pre-one-db-backup-lib';
+import { countsSql, dumpMismatch, pgDumpArgs, redact, settingsMarkdown } from './pre-one-db-backup-lib';
 
 describe('pgDumpArgs', () => {
   it('dumps everything, auth and ACLs included (the release 4 rollback replays the grants)', () => {
@@ -14,6 +14,7 @@ describe('settingsMarkdown', () => {
   const md = settingsMarkdown({
     label: 'academy',
     host: 'db.example.supabase.co',
+    ref: 'example',
     serverVersion: 'PostgreSQL 17.0',
     envNames: ['DATABASE_URL', 'SMTP_PASS'],
     vaultNames: ['tenant/academy/service_role_key'],
@@ -24,6 +25,11 @@ describe('settingsMarkdown', () => {
   it('never shows a value after an env name', () => {
     expect(md).not.toMatch(/DATABASE_URL\s*=/);
     expect(md).not.toMatch(/SMTP_PASS\s*=/);
+  });
+  it('records the project ref, which dumpMismatch reads back', () => {
+    expect(md).toContain('- Project ref: example');
+    expect(dumpMismatch(md, 'example')).toBeNull();
+    expect(dumpMismatch(md, 'other')).toMatch(/taken from project example, the target is other/);
   });
   it('ends with an Owner fills in section', () => {
     expect(md).toContain('Owner fills in');
@@ -44,5 +50,16 @@ describe('countsSql', () => {
     const sql = countsSql();
     expect(sql).toMatch(/relkind in \('r','p'\)/);
     for (const s of ['public', 'app_private', 'auth']) expect(sql).toContain(`'${s}'`);
+  });
+});
+
+describe('dumpMismatch', () => {
+  it('refuses a dump without settings.md or without a recorded ref', () => {
+    expect(dumpMismatch(null, 'abc')).toMatch(/no settings\.md/);
+    expect(dumpMismatch('# Settings snapshot: academy\n\n- Host: db.abc.supabase.co\n', 'abc')).toMatch(/records no project ref/);
+  });
+  it('accepts only the same ref', () => {
+    expect(dumpMismatch('- Host: h\n- Project ref: abc\n- Server: x\n', 'abc')).toBeNull();
+    expect(dumpMismatch('- Project ref: abc\r\n', 'abd')).toMatch(/project abc, the target is abd/);
   });
 });
