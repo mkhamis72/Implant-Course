@@ -1,5 +1,5 @@
 import './load-env';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -7,7 +7,9 @@ import { Client } from 'pg';
 import { pgConfig } from './db';
 import { isLocalHost } from './test-guard';
 import { applyTenantArg } from './tenant-env';
-import { redact } from './pre-one-db-backup-lib';
+import { dumpMismatch, projectRef, redact } from './pre-one-db-backup-lib';
+
+export { projectRef };
 
 /**
  * Release 4 rollback: puts a company's database back to the pre-window dump (release 3: migrations through 0088).
@@ -143,12 +145,6 @@ select 'ledger: ' || count(*) || ' migrations, last ' || max(name) as rollback f
 `;
 }
 
-/** Project ref from a database URL: db.<ref>.supabase.co, or the pooler user postgres.<ref>; otherwise the host. */
-export function projectRef(databaseUrl: string): string {
-  const u = new URL(databaseUrl);
-  return u.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/)?.[1] ?? decodeURIComponent(u.username).split('.')[1] ?? u.hostname;
-}
-
 function takeArg(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(name);
   const v = argv[i + 1];
@@ -170,6 +166,11 @@ async function main() {
   console.log(`Target project: ${host} (ref ${ref})`);
   if (confirm !== ref) throw new Error(`Refusing: --confirm ${confirm} does not match the target's ref ${ref}`);
   const local = isLocalHost(host);
+
+  // The dump's own settings.md (written beside it by backup:pre-one-db) must name this project.
+  const settingsFile = path.join(path.dirname(dump), 'settings.md');
+  const mismatch = dumpMismatch(existsSync(settingsFile) ? readFileSync(settingsFile, 'utf8') : null, ref);
+  if (mismatch) throw new Error(mismatch);
 
   // Triggers outside our schemas that call our functions are dropped by the cascade; the dump must recreate each.
   const c = new Client(pgConfig(process.env));
