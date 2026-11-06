@@ -18,9 +18,6 @@ export const DEFINER_ALLOWLIST: ReadonlySet<string> = new Set([
   // Pre-login branding readers: the login page renders before there is a session.
   'public.branding_for',
   'public.branding_logo_for',
-  // The previous pre-login readers (academy only, anon-callable) until 0095 drops them.
-  'public.branding_public',
-  'public.branding_logo',
   // Console, service role only (0093): writes a named company's first admin without a bound session.
   'public.console_add_first_admin',
   // Console, service role only (0093): removes that pending row again when the Auth call fails.

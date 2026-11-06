@@ -15,7 +15,8 @@ describe('audit_log', () => {
       );
       expect(log.action).toBe('UPDATE');
       expect(log.user_id).toBe(users.admin);
-      expect(log.row_id).toBe('true');
+      // The singleton's key is its company (0096; it was the boolean id).
+      expect(log.row_id).toBe('a7c0de00-0000-4000-8000-000000000001');
       expect(log.before.expiry_alert_days).toBe(orig.expiry_alert_days);
       expect(log.after.expiry_alert_days).not.toBe(orig.expiry_alert_days);
     });

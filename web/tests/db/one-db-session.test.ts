@@ -110,9 +110,8 @@ describe('branding_for / branding_logo_for (0086)', () => {
       await c.query('select public.update_branding($1, $2, $3)', ['Zz Session Academy', '#7c2d12', null]);
       await c.query('select public.set_branding_logo($1, $2)', [PNG, 'image/png']);
       await actAs(c, null);
-      const pub = (await c.query('select * from public.branding_public()')).rows[0];
       const row = (await c.query('select * from public.branding_for($1)', [ACADEMY_ID])).rows;
-      expect(row).toEqual([pub]);
+      expect(row).toHaveLength(1);
       expect(row[0]).toMatchObject({ name: 'Zz Session Academy', brand_color: '#7c2d12', has_logo: true });
       const logo = (await c.query('select * from public.branding_logo_for($1)', [ACADEMY_ID])).rows;
       expect(logo).toHaveLength(1);

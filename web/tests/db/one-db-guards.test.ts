@@ -14,8 +14,6 @@ const OWN_SCHEMAS = ['public', 'app_private'];
 const ANON_EXEC_ALLOWLIST = new Set([
   'app.current_user_id', 'app.current_aal', 'app.current_company_id',
   'public.branding_for', 'public.branding_logo_for',
-  // The previous pre-login readers (academy only) until 0095 drops them.
-  'public.branding_public', 'public.branding_logo',
 ]);
 
 /** Unique indexes on company tables scoped by a parent row instead of company_id. Keys are the index's
@@ -214,6 +212,66 @@ type GuardName = keyof typeof GUARDS;
 
 /** Guards a later plan-3 task enables: each task removes the names it makes pass. Plan 3 ends with none. */
 const PENDING = new Set<GuardName>([]);
+
+/** What release 5's cleanup (0096) removes: each must be gone from the catalog. */
+const DROPPED = {
+  columns: [
+    'public.profiles.role', 'public.profiles.active', 'public.profiles.delegate_id', 'public.profiles.mfa_setup_required',
+    // The boolean singleton keys: the company is the key now.
+    'public.settings.id', 'public.branding.id', 'public.branding_logos.id',
+  ],
+  functions: ['public.branding_public', 'public.branding_logo'],
+  sequences: ['public.patients_file_no_seq'],
+  // Constraints (checked by name on their table) and the indexes of 0091's replaced global uniques (dropped by 0095).
+  constraints: ['public.profiles.profiles_delegate_id_key', 'public.profiles.profiles_delegate_link', 'public.patients.patients_file_no_key',
+    'public.chairs.chairs_name_key', 'public.consent_form_versions.consent_form_versions_label_key'],
+  indexes: ['public.patients_file_no_upper_key', 'public.checklist_templates_one_default'],
+};
+
+describe('release 5 cleanup (0096)', () => {
+  it('the dropped columns, functions, sequence, constraints and indexes are gone', async () => {
+    const left = await withTx(async (c) => {
+      const out: string[] = [];
+      for (const col of DROPPED.columns) {
+        const [schema, table, column] = col.split('.');
+        const { rowCount } = await c.query(
+          `select 1 from pg_attribute where attrelid = (quote_ident($1) || '.' || quote_ident($2))::regclass and attname = $3 and not attisdropped`, [schema, table, column]);
+        if (rowCount) out.push(col);
+      }
+      for (const fn of DROPPED.functions) {
+        const [schema, name] = fn.split('.');
+        const { rowCount } = await c.query('select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = $1 and p.proname = $2', [schema, name]);
+        if (rowCount) out.push(fn);
+      }
+      for (const seq of DROPPED.sequences) {
+        const [schema, name] = seq.split('.');
+        const { rowCount } = await c.query('select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = $1 and c.relname = $2', [schema, name]);
+        if (rowCount) out.push(seq);
+      }
+      for (const con of DROPPED.constraints) {
+        const [schema, table, name] = con.split('.');
+        const { rowCount } = await c.query(`select 1 from pg_constraint where conrelid = (quote_ident($1) || '.' || quote_ident($2))::regclass and conname = $3`, [schema, table, name]);
+        if (rowCount) out.push(con);
+      }
+      for (const idx of DROPPED.indexes) {
+        const [schema, name] = idx.split('.');
+        const { rowCount } = await c.query('select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = $1 and c.relname = $2', [schema, name]);
+        if (rowCount) out.push(idx);
+      }
+      return out;
+    });
+    expect(left).toEqual([]);
+  });
+
+  it('no _company_id_idx sits beside another index that leads with company_id', async () => {
+    const dup = await withTx((c) => list(c, `
+      select i.indexrelid::regclass::text as name from pg_index i join pg_class ic on ic.oid = i.indexrelid
+      where ic.relname like '%\\_company\\_id\\_idx' and i.indnkeyatts = 1
+        and exists (select 1 from pg_index j where j.indrelid = i.indrelid and j.indexrelid <> i.indexrelid
+                    and j.indkey[0] = i.indkey[0] and j.indpred is null and j.indexprs is null)`));
+    expect(dup).toEqual([]);
+  });
+});
 
 describe('one database catalog guards', () => {
   for (const [name, guard] of Object.entries(GUARDS) as [GuardName, Guard][]) {

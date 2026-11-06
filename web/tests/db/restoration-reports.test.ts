@@ -97,7 +97,7 @@ describe('restorations in course reports', () => {
     await withTx(async (c) => {
       const s = await setup(c);
       await asPostgres(c);
-      const me = (await c.query('select delegate_id from public.profiles where user_id = $1', [users.delegate])).rows[0]
+      const me = (await c.query('select delegate_id from public.company_members where user_id = $1', [users.delegate])).rows[0]
         .delegate_id as string;
       await actAs(c, users.organizer);
       const mine = await add(c, s.patient, [await s.placeAt(36)], { delegate: me });

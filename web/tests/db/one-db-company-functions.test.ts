@@ -131,9 +131,9 @@ describe('the profile mirrors are gone (0090)', () => {
   it('a member write leaves profiles alone, and a profile write leaves members alone', async () => {
     await withTx(async (c) => {
       await asPostgres(c);
-      const before = (await c.query('select role, active from public.profiles where user_id = $1', [users.viewer])).rows[0];
+      const before = (await c.query('select full_name, email from public.profiles where user_id = $1', [users.viewer])).rows[0];
       await c.query(`update public.company_members set active = false where company_id = $1 and user_id = $2`, [ACADEMY_ID, users.viewer]);
-      expect((await c.query('select role, active from public.profiles where user_id = $1', [users.viewer])).rows[0]).toEqual(before);
+      expect((await c.query('select full_name, email from public.profiles where user_id = $1', [users.viewer])).rows[0]).toEqual(before);
       await c.query(`update public.profiles set full_name = 'Zz Mirror' where user_id = $1`, [users.viewer]);
       expect((await c.query('select active from public.company_members where company_id = $1 and user_id = $2',
         [ACADEMY_ID, users.viewer])).rows[0].active).toBe(false);

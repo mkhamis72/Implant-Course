@@ -4,12 +4,19 @@ import { login } from './helpers';
 import { uniqueName } from './patients';
 import { apiAs, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate, seedLecturer, seedSession } from './api';
 
+// The test delegate login's link to its delegate record: the membership holds it (profiles has no delegate_id).
+async function delegateLink(admin: Awaited<ReturnType<typeof apiAs>>): Promise<{ delegate_id: string }> {
+  const { data: profile } = await admin.from('profiles').select('user_id').eq('email', TEST_USERS.delegate.email).single();
+  const { data: member } = await admin.from('company_members').select('delegate_id').eq('user_id', profile!.user_id).single();
+  return { delegate_id: member!.delegate_id as string };
+}
+
 test('a delegate sees only their own bookings and their courses’ talks, and their own report', async ({ page }) => {
   const admin = await apiAs(TEST_USERS.admin.email);
   const api = await apiAs(TEST_USERS.organizer.email);
   const supervisor = (await api.auth.getUser()).data.user!.id;
-  const { data: link } = await admin.from('profiles').select('delegate_id').eq('email', TEST_USERS.delegate.email).single();
-  const me = link!.delegate_id as string;
+  const link = await delegateLink(admin);
+  const me = link.delegate_id as string;
 
   const date = randomFutureDate();
   const chair = await seedChair(admin, uniqueName('Chair'));
@@ -69,9 +76,9 @@ test('an admin is told to add an email before creating a delegate login', async 
 
 test('the delegate page shows an existing login', async ({ page }) => {
   const admin = await apiAs(TEST_USERS.admin.email);
-  const { data: link } = await admin.from('profiles').select('delegate_id').eq('email', TEST_USERS.delegate.email).single();
+  const link = await delegateLink(admin);
   await login(page, TEST_USERS.admin.email);
-  await page.goto(`/delegates/${link!.delegate_id}`);
+  await page.goto(`/delegates/${link.delegate_id}`);
   await expect(page.getByText(`Login ${TEST_USERS.delegate.email}: active`)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create login' })).toHaveCount(0);
   // A lost one-time password can be replaced from here (not pressed: it would change the shared test login).

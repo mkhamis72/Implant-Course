@@ -80,13 +80,13 @@ describe('profiles & settings', () => {
     });
   });
 
-  it('nobody writes role, active or the delegate link on profiles (0090: they are the membership\'s)', async () => {
+  it('profiles has no role, active or delegate link any more (0096: they are the membership\'s)', async () => {
     await withTx(async (c) => {
       await actAs(c, users.admin);
       for (const set of ["role = 'admin'", 'active = true', 'delegate_id = null']) {
         await c.query('savepoint s');
         await expect(c.query(`update public.profiles set ${set} where user_id = $1`, [users.organizer]))
-          .rejects.toThrow(/permission denied/);
+          .rejects.toThrow(/does not exist/);
         await c.query('rollback to savepoint s');
       }
     });
