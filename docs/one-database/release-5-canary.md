@@ -59,6 +59,10 @@ A second company in the shared database whose only job is to prove that a signed
 
 Afterwards switch the repo private again.
 
+## Audit rows
+
+From 0096, `audit_log.row_id` for `settings` and `branding` changes is the company id; rows logged before keep `'true'`.
+
 ## Not done by 0096
 
 `app_private.admin_company(text, boolean)` still carries its unused `p_academy_if_unbound` parameter (release 4 runbook, Rollback notes): removing it means redefining every function that calls it with two arguments, which is a separate change.

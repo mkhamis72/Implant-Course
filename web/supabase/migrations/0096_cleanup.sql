@@ -26,7 +26,8 @@ drop function public.branding_public();
 drop function public.branding_logo();
 
 -- The singletons' boolean keys (their checks go with them). Their audit triggers named 'id' as the audited
--- row's key (row_id 'true'); the row is the company's now, so they log company_id.
+-- row's key (row_id 'true'); the row is the company's now, so they log company_id. From here
+-- audit_log.row_id for settings and branding is the company id; rows logged before keep 'true'.
 drop trigger settings_audit on public.settings;
 create trigger settings_audit after insert or update or delete on public.settings
   for each row execute function app_private.audit_row('company_id');

@@ -66,6 +66,21 @@ export function canaryInputs(env: Env): { url: string; anonKey: string; email: s
   };
 }
 
+/**
+ * Pure: the project the PostgREST session talks to (NEXT_PUBLIC_SUPABASE_URL) and the one the table list is read from
+ * (DATABASE_URL) must be the same. Supabase hosts are `db.<ref>.supabase.co` / `<ref>.supabase.co`, the session pooler's user
+ * is `postgres.<ref>`, a local stack is the same host on both. Returns an error text, or null when they match.
+ */
+export function projectMismatch(supabaseUrl: string, databaseUrl: string): string | null {
+  const api = new URL(supabaseUrl);
+  const db = new URL(databaseUrl);
+  const ref = (host: string) => host.match(/^(?:db.)?([a-z0-9]+).supabase.co$/)?.[1];
+  const apiRef = ref(api.hostname);
+  const dbRef = ref(db.hostname) ?? decodeURIComponent(db.username).split('.')[1];
+  const same = apiRef || dbRef ? apiRef === dbRef : api.hostname === db.hostname;
+  return same ? null : `NEXT_PUBLIC_SUPABASE_URL (${api.hostname}) and DATABASE_URL (${db.hostname}) are different projects`;
+}
+
 /** The tables the canary could read through PostgREST: company tables in public, from the catalog (read only). */
 async function companyTables(env: Env): Promise<string[]> {
   const c = new Client(pgConfig(env));
@@ -86,6 +101,11 @@ async function companyTables(env: Env): Promise<string[]> {
 async function main() {
   const input = canaryInputs(process.env);
   console.log(`Target project: ${new URL(input.url).hostname}`);
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error('DATABASE_URL is not set');
+  console.log(`Table list from: ${new URL(databaseUrl).hostname}`);
+  const mismatch = projectMismatch(input.url, databaseUrl);
+  if (mismatch) throw new Error(mismatch);
   if (input.companyId === ACADEMY_ID) throw new Error('CANARY_COMPANY_ID is the academy: the check needs the canary company');
   const tables = await companyTables(process.env);
 

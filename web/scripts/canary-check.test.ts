@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateCanary, canaryInputs } from './canary-check';
+import { evaluateCanary, canaryInputs, projectMismatch } from './canary-check';
 
 const zero = (table: string) => ({ table, academyRows: 0 });
 
@@ -54,5 +54,20 @@ describe('canaryInputs', () => {
 
   it('names the missing variable without echoing any value', () => {
     expect(() => canaryInputs({ ...env, CANARY_PASSWORD: undefined })).toThrow('CANARY_PASSWORD is not set');
+  });
+});
+
+describe('projectMismatch', () => {
+  it('accepts the same hosted project through the API url and the direct or pooler database url', () => {
+    expect(projectMismatch('https://abc123.supabase.co', 'postgresql://postgres:x@db.abc123.supabase.co:5432/postgres')).toBeNull();
+    expect(projectMismatch('https://abc123.supabase.co', 'postgresql://postgres.abc123:x@aws-0-eu-central-1.pooler.supabase.com:5432/postgres')).toBeNull();
+  });
+  it('refuses different projects', () => {
+    expect(projectMismatch('https://abc123.supabase.co', 'postgresql://postgres:x@db.zzz999.supabase.co:5432/postgres')).toContain('different projects');
+    expect(projectMismatch('https://abc123.supabase.co', 'postgresql://postgres.zzz999:x@aws-0-eu-central-1.pooler.supabase.com:5432/postgres')).toContain('different projects');
+  });
+  it('compares hosts on a local stack', () => {
+    expect(projectMismatch('http://127.0.0.1:54321', 'postgresql://postgres:postgres@127.0.0.1:54322/postgres')).toBeNull();
+    expect(projectMismatch('http://127.0.0.1:54321', 'postgresql://postgres:postgres@db.example.com:5432/postgres')).toContain('different projects');
   });
 });
