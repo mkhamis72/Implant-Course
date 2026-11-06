@@ -127,7 +127,7 @@ One sender serves every company; the email names the company. Locally the emails
   1. `npx supabase stop --workdir .dev2 --no-backup`, then `npm run db:dev2:start` and `ENV_FILE=.env.dev2 npm run db:migrate`.
   2. Download and decrypt the newest backup outside the repo (steps 1, 5 and 6 below). Run them with `docker exec supabase_db_implant-course-dev2 psql -U postgres -d postgres …` after `docker cp`-ing `data.sql` in. If your local `pg_restore` is older than the backup's, run it through `docker run --rm -v <dir>:/work postgres:18 pg_restore …`.
   3. Compare the row count of every `COPY` block in `data.sql` with `select count(*)` of that table in dev2.
-  4. `npx supabase stop --workdir .dev2 --no-backup`, delete the downloaded and decrypted files, then rebuild dev2 for the tests (`npm run db:dev2:start`, `ENV_FILE=.env.dev2 npm run db:migrate`, `npm run console:local`).
+  4. `npx supabase stop --workdir .dev2 --no-backup`, delete the downloaded and decrypted files, then rebuild dev2 for the console tests: `npm run db:dev2:start`, `npm run console:local` (control project only: do not `db:migrate` the rebuilt dev2; the company schema's sign-up trigger would refuse the console admins).
 
   Last rehearsal: 2026-10-08, backup run 37782802942. All 57 tables matched, all 5 accounts kept their passwords, and new writes continued the ID sequences.
 
@@ -170,13 +170,24 @@ You need:
 
 **Restore one company's data** (a mistake or damage in one company; the other companies in the database are untouched). Needs the company's own export `<slug>-<date>.company.dump.gpg` from the artifact or R2.
 1. Decrypt it outside the repo: `gpg --decrypt <slug>-<date>.company.dump.gpg > <slug>.json`. The file holds password hashes and patient data: treat it like a database dump and delete it afterwards.
-2. Take a fresh export of the company first, so the restore can itself be undone: `ENV_FILE=.env.prod npm run company:export -- --tenant <slug> --out before-<slug>.json`.
-3. `ENV_FILE=.env.prod npm run company:restore -- --tenant <slug> --in <slug>.json`. It refuses a file whose company id is not the company's, or with a row that carries another company's id, or a table list that differs from the database's. In one transaction it deletes that company's rows (company tables in reverse foreign-key order, including its `company_members`) and loads the file's rows back; `profiles` and `auth.users` are only inserted when missing and never deleted, because a person can belong to another company. Triggers are off during the load (`session_replication_role = replica`; where the role may not set it, the company tables' user triggers are disabled and locked until the transaction ends, so run it when the app is quiet), so audit rows and the stock ledger come back exactly as exported. The foreign keys of the restored rows are then checked and any failure rolls everything back. A log is written next to the file (`<file>.restore.log`).
-4. Check the company in the app (patients, stock on hand) and delete the downloaded and decrypted files.
+2. **Suspend the company** in the console (Companies, the company, Suspend; type the slug), wait up to 60 seconds for the host cache and confirm its site shows 503. The restore deletes the company's rows and loads the file's rows back: anything the company's users write meanwhile would be interleaved with that and lost. Other companies keep working.
+3. Take a fresh export of the company, so the restore can itself be undone: `ENV_FILE=.env.prod npm run company:export -- --tenant <slug> --out before-<slug>.json`.
+4. `ENV_FILE=.env.prod npm run company:restore -- --tenant <slug> --in <slug>.json`. It refuses a file whose company id is not the company's, or with a row that carries another company's id, or a table list that differs from the database's. In one transaction it deletes that company's rows (company tables in reverse foreign-key order, including its `company_members`) and loads the file's rows back; `profiles` and `auth.users` are only inserted when missing and never deleted, because a person can belong to another company. Triggers are off during the load (`session_replication_role = replica`; if the database role may not set it, the restore stops before changing anything), so audit rows and the stock ledger come back exactly as exported. The foreign keys of the restored rows are then checked and any failure rolls everything back. A log is written next to the file (`<file>.restore.log`).
+5. **Lift the suspension** in the console (Reactivate), wait up to 60 seconds, then check the company in the app (patients, stock on hand). If it is wrong, suspend again and restore `before-<slug>.json` the same way. Delete the downloaded and decrypted files.
 
 **Delete one company's data** (a data-protection request, or after a company leaves). Irreversible: export first and keep that file encrypted until the request is settled.
 1. `ENV_FILE=.env.prod npm run company:export -- --tenant <slug> --out erase-<slug>.json`; the list of people is in its `public.company_members` table.
-2. `ENV_FILE=.env.prod npm run company:restore -- --tenant <slug> --delete` removes every company-table row of the company (the same transaction, triggers and checks as a restore, with nothing reloaded). The company row itself, `companies`, stays; to remove it too, run `delete from public.companies where id = '<company id>'` as postgres afterwards.
+2. `ENV_FILE=.env.prod npm run company:restore -- --tenant <slug> --delete` removes every company-table row of the company (the same transaction, triggers and checks as a restore, with nothing reloaded). The company row itself, `companies`, stays. To remove it too, end the company's sign-in sessions first: their bindings in `app.session_companies` reference the company (`session_companies_company_id_fkey`), so a plain delete of the company fails while any exist; and the company's own audit trigger would log its deletion under the deleted company, which fails too (`audit_log_company_id_fkey`), so it is off for that one statement (foreign keys stay checked). As postgres, in one transaction (tried in a rolled-back transaction on the local stack, 2026-11-06):
+
+   ```sql
+   begin;
+   delete from auth.sessions where id in (select session_id from app.session_companies where company_id = '<company id>');
+   delete from app.session_companies where company_id = '<company id>';
+   alter table public.companies disable trigger companies_audit;
+   delete from public.companies where id = '<company id>';
+   alter table public.companies enable trigger companies_audit;
+   commit;
+   ```
 3. Remove the people only if they have no other membership (they may belong to another company): as postgres, `delete from auth.users u where u.id in (<user ids from step 1>) and not exists (select 1 from public.company_members m where m.user_id = u.id)`. Their `profiles` rows go with them. A user who is still a member somewhere stays.
 4. Deregister the company from the control project in the console (hosts and Vault secrets), and delete `erase-<slug>.json` once the request is closed. Nightly backups still hold the company's data until the 14-day artifacts expire and the year-long R2 copies are deleted by their lifecycle rule; say so in the reply to the data subject.
 

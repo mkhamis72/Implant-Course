@@ -8,6 +8,11 @@ import {
   type CompanyExport, type Row,
 } from './company-export';
 
+/*
+ * For one company in a healthy shared database only (see the limits in company-export.ts): former members'
+ * profiles are not in the file, identity sequences are not advanced, and files' bytes are held in memory as hex.
+ * Suspend the company first (docs/operations.md section D): writes during the delete-and-reload would be lost.
+ */
 const CHUNK = 2000;
 
 /** Throws unless `data` is a company export for exactly this company. */
