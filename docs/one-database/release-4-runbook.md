@@ -64,7 +64,7 @@ Commands below that read prod use `ENV_FILE=.env.prod` and `--tenant academy` (r
    ENV_FILE=.env.prod npm run schema:fingerprint -- --tenant academy --out "D:/Backups/implant-course/pre-window/fingerprint-before.json"
    ```
 
-   Expected: `Target project: <prod host>` then `N entries -> ...` (1753 on a release 3 stack).
+   Expected: `Target project: <prod host>` then `N entries -> ...` (1745 on a release 3 stack).
 
 4. **Ship release 4.** From the branch `one-db-release-4`:
 
