@@ -6,13 +6,14 @@ import { pgConfig } from './db';
 import { applyTenantArg } from './tenant-env';
 
 /**
- * Release 4 window checks. Per table in public / app_private / auth: the row count and, per column, the md5 of that
- * column's values ordered by primary key (company_id excluded everywhere). Per-column hashes name the column that differs; a column
+ * Release 4 window checks. Per table in public / app_private / app / auth: the row count and, per column, the md5 of that
+ * column's values ordered by primary key (company_id excluded everywhere). Append-only tables (APPEND_ONLY_TABLES) are
+ * hashed row by row instead: a row that existed before must be unchanged after, new rows are only reported. Per-column hashes name the column that differs; a column
  * present on one side only fails unless it is in EXPECTED_SCHEMA_CHANGES.
  *   window-checksums [--tenant academy] --out <file>
  *   window-checksums --compare <before> <after>
  */
-export type TableSum = { rows: number; columns: Record<string, string> };
+export type TableSum = { rows: number; columns: Record<string, string>; rowHashes?: Record<string, string> };
 export type Checksums = { target: string; tables: Record<string, TableSum> };
 
 export type SchemaChange = {
@@ -28,9 +29,14 @@ export const EXPECTED_SCHEMA_CHANGES: SchemaChange[] = [
   { table: 'app_private.schema_migrations', kind: 'data-changed', migration: 'runner: records 0089-0095' },
 ];
 
-/** Reported, never failed: they grow or change on their own (audit rows from the migrations, sign-ins, token refresh). */
+/**
+ * Append-only tables and their key: each row is hashed (md5 of the row as jsonb, company_id excluded). Rows present before
+ * must be present and unchanged after; rows only after (the migrations write audit rows) are reported, never failed.
+ */
+export const APPEND_ONLY_TABLES: Record<string, string> = { 'public.audit_log': 'id' };
+
+/** Reported, never failed: they grow or change on their own (sign-ins, token refresh). */
 export const REPORT_ONLY_TABLES = [
-  'public.audit_log',
   'auth.sessions',
   'auth.refresh_tokens',
   'auth.audit_log_entries',
@@ -66,6 +72,14 @@ export function compareChecksums(before: Checksums, after: Checksums, expectedLi
       else note(table, 'table-removed', `${table}: table only before`);
       continue;
     }
+    if (table in APPEND_ONLY_TABLES) {
+      compareRows(table, b, a, differences, reported);
+      for (const c of [...new Set([...Object.keys(b.columns), ...Object.keys(a.columns)])].sort()) {
+        if (!(c in b.columns)) note(table, 'column-added', `${table}: column ${c} only after`, c);
+        else if (!(c in a.columns)) note(table, 'column-removed', `${table}: column ${c} only before`, c);
+      }
+      continue;
+    }
     const lines: string[] = [];
     if (a.rows !== b.rows) lines.push(`${table}: rows ${b.rows} -> ${a.rows}`);
     const schemaLines: { kind: SchemaChange['kind']; text: string; column: string }[] = [];
@@ -82,6 +96,28 @@ export function compareChecksums(before: Checksums, after: Checksums, expectedLi
     for (const s of schemaLines) note(table, s.kind, s.text, s.column);
   }
   return { ok: differences.length === 0, differences, reported, expected };
+}
+
+/** Append-only table: every row before must be unchanged after; rows only after are counted and reported. */
+function compareRows(table: string, b: TableSum, a: TableSum, differences: string[], reported: string[]) {
+  if (!b.rowHashes || !a.rowHashes) {
+    differences.push(`${table}: no row hashes on ${b.rowHashes ? 'the after' : 'the before'} side (take both files with this version of the script)`);
+    return;
+  }
+  const after = a.rowHashes;
+  const bad: string[] = [];
+  for (const [id, h] of Object.entries(b.rowHashes)) {
+    if (!(id in after)) bad.push(`${id} missing after`);
+    else if (after[id] !== h) bad.push(`${id} differs`);
+  }
+  if (bad.length) differences.push(`${table}: ${bad.length} earlier row(s) changed: ${bad.slice(0, 20).join(', ')}${bad.length > 20 ? ', ...' : ''}`);
+  const added = Object.keys(after).filter((id) => !(id in b.rowHashes!)).length;
+  reported.push(`${table}: ${added} new row(s), ${Object.keys(b.rowHashes).length} earlier row(s) ${bad.length ? 'checked' : 'unchanged'}`);
+}
+
+/** SQL for an append-only table: one md5 per row (the row as jsonb without company_id), keyed by `key`. */
+export function rowHashSql(schema: string, table: string, key: string): string {
+  return `select ${q(key)}::text as id, md5((to_jsonb(t) - 'company_id')::text) as h from ${q(schema)}.${q(table)} t`;
 }
 
 const q = (id: string) => `"${id.replace(/"/g, '""')}"`;
@@ -105,7 +141,7 @@ async function collect(c: Client): Promise<Record<string, TableSum>> {
   const { rows: tables } = await c.query(
     `select n.nspname as schema, c.relname as name, c.oid::int as oid
        from pg_class c join pg_namespace n on n.oid = c.relnamespace
-      where c.relkind in ('r','p') and n.nspname in ('public','app_private','auth') order by 1, 2`,
+      where c.relkind in ('r','p') and n.nspname in ('public','app_private','app','auth') order by 1, 2`,
   );
   const out: Record<string, TableSum> = {};
   for (const t of tables) {
@@ -121,7 +157,12 @@ async function collect(c: Client): Promise<Record<string, TableSum>> {
     ).rows.map((r) => r.attname as string);
     const row = (await c.query(hashSql(t.schema, t.name, cols, pk))).rows[0];
     const hashed = cols.filter((x) => x !== 'company_id');
-    out[`${t.schema}.${t.name}`] = { rows: row.rows, columns: Object.fromEntries(hashed.map((name, i) => [name, row[`c${i}`] as string])) };
+    const name = `${t.schema}.${t.name}`;
+    out[name] = { rows: row.rows, columns: Object.fromEntries(hashed.map((col, i) => [col, row[`c${i}`] as string])) };
+    if (name in APPEND_ONLY_TABLES) {
+      const r = await c.query(rowHashSql(t.schema, t.name, APPEND_ONLY_TABLES[name]));
+      out[name].rowHashes = Object.fromEntries(r.rows.map((x) => [x.id as string, x.h as string]));
+    }
   }
   return out;
 }

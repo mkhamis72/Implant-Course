@@ -6,25 +6,36 @@ Release 4 applies migrations **0089 to 0095** (not 0089 to 0094): guards, compan
 
 Commands below that read prod use `ENV_FILE=.env.prod` and `--tenant academy` (read from the control project). Put no secret on a command line.
 
+**When:** keep the window away from the nightly backup at 00:00 UTC (02:00/03:00 Cairo, `backup.yml`): its `pg_dump` holds locks on every table while it runs, and each migration gives up after 5 seconds of waiting for a lock (`set local lock_timeout = '5s'`). Any other quiet hour works; start no later than 22:00 UTC, so an hour's window ends before the backup.
+
 ## Before the window (days before)
 
 1. Release 3 is live and its checklist (`release-3-checklist.md`) is done, including `session-check` PASS.
-2. `git log one-db-release-4` is the code to ship; its CI-equivalent checks have passed (`./scripts/ship.sh verify`).
+2. `git log one-db-release-4` is the code to ship. Verify it on a local main stack at **exactly 0095**: release 4's DB tests fail on a stack that already has release 5's 0096 (it drops columns and indexes they still check), and running the `one-database` branch's tests applies 0096. So rebuild the main stack first. This wipes the local stack's data (leftover E2E rows, the console E2E company `console-e2e`); Docker Desktop must be running:
+
+   ```bash
+   ! cd "/d/Claude/Claude Code/implant-course-one-db/web" && git checkout one-db-release-4 && npx supabase stop --no-backup && npm run db:start && npm run db:migrate && ./scripts/ship.sh verify
+   ```
+
+   `db:migrate` takes the empty stack to 0095 (`Applied: 0001_foundation.sql, ..., 0095_provision_company.sql`). The test users need no step: the DB tests' global setup (`tests/db/global-setup.ts`, `tests/support/test-users.ts`) creates them on every run. Expected last line `Verified one-db-release-4.` (2026-11-06: see the final fix report). To sign in to the dev server afterwards, `npm run create-user -- you@example.com "Your Name" --role admin`.
+
+   Back to release 5 afterwards: `! cd "/d/Claude/Claude Code/implant-course-one-db/web" && git checkout one-database && npm run test:db` (it applies 0096 to the stack first), then `npm run console:local` before the console E2E (it recreates `console-e2e`). Do the same rebuild-and-verify on `one-db-release-5` before release 5 (`release-5-canary.md`).
 3. Switch the repo public (Vercel Hobby deploy), as for every release; private again afterwards.
 4. Tell the academy users the window time. Suspended means they see "Service unavailable" (503).
-5. Docker is not needed for the window itself. Have the dashboard open on the prod project: Authentication, Logs, Database advisors.
+5. Docker Desktop must be running on the machine you use: the dump (step 2) and the rollback run `pg_dump`, `pg_restore` and `psql` in the `postgres:17` container. Have the dashboard open on the prod project: Authentication, Logs, Database advisors.
+6. Read the Rollback section below once before the window; it is one command plus two compares, rehearsed locally.
 
 ## The window
 
 1. **Suspend academy in the console.** Console host, Companies, academy, Suspend (reason "release 4 window", type the slug). Wait up to 60 seconds for the host cache, then open `https://kaleidoscope.imploid.net` and confirm it shows 503. Nobody writes from now on.
 
-2. **Pre-window dump** (the rollback point; a full `pg_dump` of every schema including `auth`):
+2. **Pre-window dump** (the rollback point; a full `pg_dump` of every schema including `auth`, with grants: the rollback replays them):
 
    ```bash
-   ENV_FILE=.env.prod npm run backup:pre-one-db -- --tenant academy --out "D:/Backups/implant-course/pre-window"
+   ENV_FILE=.env.prod npm run backup:pre-one-db -- --tenant academy --out "D:/Backups/implant-course/pre-window/academy"
    ```
 
-   Expected: files `full.dump`, `schema.dump`, `counts.json`, `settings.md` in `pre-window/academy`. Keep this directory; do not continue without it.
+   Expected: files `full.dump`, `schema.dump`, `counts.json`, `settings.md` in `pre-window/academy` (the script writes into `--out` itself). Keep this directory; do not continue without it.
 
 3. **Before checksums** (read-only; per table row count and per column md5, `company_id` excluded):
 
@@ -32,7 +43,15 @@ Commands below that read prod use `ENV_FILE=.env.prod` and `--tenant academy` (r
    ENV_FILE=.env.prod npm run window:checksums -- --tenant academy --out "D:/Backups/implant-course/pre-window/checksums-before.json"
    ```
 
-   Expected: `Target project: <prod host>` then `N tables, M rows -> ...`.
+   Expected: `Target project: <prod host>` then `N tables, M rows -> ...` (tables of `public`, `app_private`, `app` and `auth`; `public.audit_log` is hashed row by row).
+
+   Then the **before fingerprint** (read-only; the schema, grants, default privileges and roles of `public`, `app_private` and `app`, no data), which the rollback is checked against:
+
+   ```bash
+   ENV_FILE=.env.prod npm run schema:fingerprint -- --tenant academy --out "D:/Backups/implant-course/pre-window/fingerprint-before.json"
+   ```
+
+   Expected: `Target project: <prod host>` then `N entries -> ...` (1753 on a release 3 stack).
 
 4. **Ship release 4.** From the branch `one-db-release-4`:
 
@@ -40,7 +59,7 @@ Commands below that read prod use `ENV_FILE=.env.prod` and `--tenant academy` (r
    ./scripts/ship.sh ship
    ```
 
-   Release migrates the control project, then every company (0089 to 0095 for academy, suspended companies included), then triggers the Vercel deploy. Wait for the run to turn green, then 1 to 3 minutes more for the build to go live. If the run fails at the academy migration, nothing was deployed: read the error, do not edit an applied migration, and use the rollback below if unsure. Migrations begin with `set local lock_timeout = '5s'`, so a lock wait fails fast instead of hanging.
+   Release migrates the control project, then every company (0089 to 0095 for academy, suspended companies included), then triggers the Vercel deploy. Wait for the run to turn green, then 1 to 3 minutes more for the build to go live. If the run fails at the academy migration, nothing was deployed: read the error, do not edit an applied migration, and use the rollback below if unsure. Migrations begin with `set local lock_timeout = '5s'`, so a lock wait fails fast instead of hanging. **A lock-timeout failure** (`canceling statement due to lock timeout`) is not a reason to roll back: each migration file is its own transaction, so the files before it are applied and the failing one left nothing behind. Wait a minute and re-run the Release workflow (Actions, Release, Re-run all jobs): it applies the remaining files, then deploys. Then continue with step 5 as normal.
 
 5. **After checksums and compare:**
 
@@ -49,7 +68,7 @@ Commands below that read prod use `ENV_FILE=.env.prod` and `--tenant academy` (r
    npm run window:checksums -- --compare "D:/Backups/implant-course/pre-window/checksums-before.json" "D:/Backups/implant-course/pre-window/checksums-after.json"
    ```
 
-   Expected last line `PASS`, exit 0. Expected lines (rehearsal): `EXPECTED app_private.file_no_counters: table only after (0091)`, `EXPECTED app_private.schema_migrations` rows 88 to 95 and its two column hashes (the runner recording 0089 to 0095), and `REPORTED public.audit_log` (migrations write audit rows; auth session tables are reported the same way). Any `DIFFERENT` line is a failure: stop and roll back. Columns are compared one by one. A table or a column present on one side only fails unless it is in `EXPECTED_SCHEMA_CHANGES` in `scripts/window-checksums.ts`, with the migration that makes it. If the only differences are in `auth.users` sign-in or refresh timestamp columns (`last_sign_in_at`, `updated_at`; open tabs refreshing tokens during the window), check them by hand: that is not an automatic rollback. Any other `DIFFERENT` line is.
+   Expected last line `PASS`, exit 0. Expected lines (rehearsal): `EXPECTED app_private.file_no_counters: table only after (0091)`, `EXPECTED app_private.schema_migrations` rows 88 to 95 and its two column hashes (the runner recording 0089 to 0095), and `REPORTED public.audit_log: 1 new row(s), N earlier row(s) unchanged` (the migrations write audit rows; every row that existed before is compared one by one and must be unchanged; auth session tables are reported without failing). Any `DIFFERENT` line is a failure, `DIFFERENT public.audit_log: ... earlier row(s) changed` included: stop and roll back. Columns are compared one by one. A table or a column present on one side only fails unless it is in `EXPECTED_SCHEMA_CHANGES` in `scripts/window-checksums.ts`, with the migration that makes it. If the only differences are in `auth.users` sign-in or refresh timestamp columns (`last_sign_in_at`, `updated_at`; open tabs refreshing tokens during the window), check them by hand: that is not an automatic rollback. Any other `DIFFERENT` line is.
 
 6. **Session check before the lift.** Academy is still suspended and nobody has signed in on the new code, so this confirms that no existing session is bound to another company (run it as soon as the compare has passed):
 
@@ -82,15 +101,61 @@ Commands below that read prod use `ENV_FILE=.env.prod` and `--tenant academy` (r
 
 ## Rollback
 
-Use it when the compare fails, the Release stops after migrating academy, or the smoke test shows data from the wrong company.
+Use it when the compare fails, the Release stops after migrating academy for a reason other than a lock timeout (step 4), or the smoke test shows data from the wrong company.
 
-1. Keep academy suspended.
-2. **Redeploy the release 3 build in Vercel** (Deployments, the last production deployment before release 4, Redeploy). Do **not** revert on master and run Release for this: the restore below removes 0089 to 0095 from `app_private.schema_migrations`, so a Release would apply them again.
-3. Restore the pre-window dump into the academy project following `D:/Backups/implant-course/pre-one-db/RESTORE.md`, section "Restore the whole academy project", with the files in `D:/Backups/implant-course/pre-window/academy`. That procedure has been proven only on local stacks (see the warning in that file); allow extra time and read it before the window.
-4. Check: `ENV_FILE=.env.prod npm run window:checksums -- --tenant academy --out <file>` then `--compare` against `checksums-before.json` must PASS with no `EXPECTED` lines for 0091 or the migrations table.
-5. Control migration `0005_provision.sql` stays applied on the control project: it is additive and the release 3 app ignores it. Reactivate academy. Afterwards revert the release 4 merge on master (so the next Release does not migrate again) before any new release.
+It puts academy's database back to the pre-window dump: the schemas `public`, `app_private` and `app` with their data, grants and default privileges, the trigger on `auth.users` that calls them, and the release 3 roles (`tenant_definer`, added by 0092, is dropped, so a later retry of 0089 to 0095 starts clean). `auth` itself is not restored: the window does not change it, and sign-ins stay valid. Anything written after the dump (a smoke-test booking) is lost. It runs as **one transaction**: if any statement fails, the database stays exactly as it was (rehearsed: a failing run left the fingerprint identical), so it can be fixed and run again.
+
+`D:/Backups/implant-course/pre-one-db/RESTORE.md`, section "Restore the whole academy project", is superseded for release 4 by this section: its `pg_restore --clean --no-acl --schema=public --schema=app_private` restores no grants, leaves schema `app` at the release 4 versions and keeps `tenant_definer`, after which a retried release 4 fails at 0089.
+
+1. Keep academy suspended (if it was lifted: Suspend, wait up to 60 seconds, confirm 503).
+2. **Redeploy the release 3 build in Vercel** (Deployments, the last production deployment before release 4, Redeploy). Do **not** revert on master and run Release for this: the rollback removes 0089 to 0095 from `app_private.schema_migrations`, so a Release would apply them again.
+3. **Roll the database back** (Docker Desktop running):
+
+   ```bash
+   ENV_FILE=.env.prod npm run window:rollback -- --tenant academy --dump "D:/Backups/implant-course/pre-window/academy/full.dump" --confirm kshsgwvwqvufqdxcyvat
+   ```
+
+   Expected, in about 5 seconds plus the network (rehearsal 4.4 to 4.5 s, the transaction itself 3.0 s):
+
+   ```text
+   Target project: <prod host> (ref kshsgwvwqvufqdxcyvat)
+   Now at 0095_provision_company.sql; outside triggers to recreate: auth users on_auth_user_created
+   Replaying 1315 dump entries in one transaction ...
+   ledger: 88 migrations, last 0088_pending_logins.sql
+   Rolled back in 3.0 s. Now run window:checksums and schema:fingerprint and compare.
+   ```
+
+   (The entry count is the rehearsal's; prod's may differ by a few.) `--confirm` must be the project ref the script reads from the database URL, or it refuses. In that one transaction (`scripts/window-rollback.ts`): `drop owned by tenant_definer cascade` and `drop role tenant_definer`; `drop schema app cascade` and `drop schema app_private cascade`; every table, view, sequence, function and type of ours in `public` dropped (`public` itself stays, it carries Supabase's own default privileges); our default privileges in `public` revoked, so the restored objects start from the built-in ACLs and the dump's own `GRANT`, `REVOKE` and `ALTER DEFAULT PRIVILEGES` lines rebuild exactly the release 3 ones; then the dump's entries for the three schemas (schema, data, constraints, indexes, policies, triggers, ACLs) and the `auth.users` trigger, replayed by `psql --single-transaction -v ON_ERROR_STOP=1`; last, a check that the ledger ends at 0088 and the role is gone. The SQL with the data never leaves the container. It refuses a dump without ACLs (one taken before release 4 changed `backup:pre-one-db`), a dump without the ledger or the trigger, and any object outside the three schemas that depends on them and would be lost.
+4. **Prove it** (both must end `PASS`):
+
+   ```bash
+   ENV_FILE=.env.prod npm run window:checksums -- --tenant academy --out "D:/Backups/implant-course/pre-window/checksums-rollback.json"
+   npm run window:checksums -- --compare "D:/Backups/implant-course/pre-window/checksums-before.json" "D:/Backups/implant-course/pre-window/checksums-rollback.json"
+   ENV_FILE=.env.prod npm run schema:fingerprint -- --tenant academy --out "D:/Backups/implant-course/pre-window/fingerprint-rollback.json"
+   npm run schema:fingerprint -- --compare "D:/Backups/implant-course/pre-window/fingerprint-before.json" "D:/Backups/implant-course/pre-window/fingerprint-rollback.json"
+   ```
+
+   Checksums: no `EXPECTED` lines (no 0091 table, ledger back at 88 rows), `REPORTED public.audit_log: 0 new row(s), N earlier row(s) unchanged`; auth session tables may be `REPORTED`. Fingerprint: three `REGROUPED` lines are expected and fine (`consent_form_versions_label_check`, `saved_analyses_title_check`, `studies_title_check`: a CHECK written `a and b and c` in a migration is stored nested and comes back flat from a dump; same rule, other parentheses). Any `DIFFERENT`, `ONLY BEFORE` or `ONLY AFTER` line: keep academy suspended, keep every file, and report; the database is consistent (one transaction) but not equal to release 3.
+5. Control migration `0005_provision.sql` stays applied on the control project: it is additive and the release 3 app ignores it. Reactivate academy and sign in once. Afterwards revert the release 4 merge on master (so the next Release does not migrate again) before any new release.
+6. **Retrying release 4 later** needs nothing special: the rolled-back database takes 0089 to 0095 from Release like the first time (rehearsed: all seven applied in 0.4 s, and the compare against the original `checksums-before.json` passed with the usual `EXPECTED` lines). Take a new dump, checksums and fingerprint in that window.
 
 Migrations 0089 to 0095 are not backward compatible with the release 3 app (forced company policies, definers that need a bound session). Rolling back means going back to the dump, not just redeploying.
+
+### Rollback rehearsal (2026-11-06, local dev2)
+
+Built to look like prod at release 3, grants included: a wiped dev2 stack migrated 0001 to 0082 (so every grant comes from the migrations, as on prod; the earlier `restore-check` rehearsals restore without ACLs, so their grants are not prod's), the real 2026-11-02 academy dump's data loaded into it (`PASS 76/76` against its `counts.json`), then 0083 to 0088. Its fingerprint equals that of an empty stack migrated to 0088 (`PASS`, 1753 entries). Then the window as above, the rollback, the proofs and a retry:
+
+| Step | Time | Result |
+| --- | --- | --- |
+| Pre-window dump (`backup:pre-one-db`, with ACLs) | 4.4 s | 4 files |
+| Checksums before / fingerprint before | 1.0 s / 0.9 s | 80 tables, 2223 rows / 1753 entries |
+| 0089 to 0095 | 0.4 s | compare `PASS` (the usual `EXPECTED` lines, `public.audit_log: 1 new row(s), 736 earlier row(s) unchanged`) |
+| `window:rollback` | 4.5 s (transaction 3.0 s) | ledger 88, last 0088 |
+| Checksums after rollback vs before | 1.0 s | `PASS`, no `EXPECTED` lines; the two JSON files are byte-identical |
+| Fingerprint after rollback vs before, and vs an empty stack at 0088 | 0.9 s | `PASS` both (3 `REGROUPED`); every ACL (281 objects, 77 columns with column grants), default privilege and role equal, no `tenant_definer` |
+| Retry 0089 to 0095 | 0.4 s | compare vs the original before `PASS`, same `EXPECTED` lines |
+| Rollback again from the retried state, and once more from an already rolled-back one | 4.4 s / 2.7 s | `PASS` / ledger 88 |
+| A rollback that fails partway (a dump taken at 0095, whose grants name the role it has just dropped) | | `role "tenant_definer" does not exist`, exit 3; fingerprint before and after the attempt `PASS`: nothing changed |
 
 ## Lint (local, before the window)
 
