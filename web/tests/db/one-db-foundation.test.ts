@@ -5,9 +5,9 @@ const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
 
 describe('one database foundation (0083)', () => {
-  it('seeds academy as the only company', async () => {
+  it('seeds academy (other companies may exist on a stack that ran the console E2E)', async () => {
     await withTx(async (c) => {
-      const { rows } = await c.query('select id, slug, name from public.companies');
+      const { rows } = await c.query('select id, slug, name from public.companies where id = $1', [ACADEMY_ID]);
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({ id: ACADEMY_ID, slug: 'academy' });
       expect(rows[0].name.length).toBeGreaterThan(0);

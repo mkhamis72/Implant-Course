@@ -79,7 +79,12 @@ describe('company_id on every company table (0084)', () => {
     await withTx(async (c) => {
       await asPostgres(c);
       for (const t of await tables(c)) {
-        const { rows } = await c.query(`select count(*)::int as n from ${t.name} where company_id <> $1`, [ACADEMY_ID]);
+        // The backfill: nothing of the single-company data sits in another company. Companies provisioned later
+        // (the console E2E leaves some on the local stack) legitimately hold rows of their own.
+        const { rows } = await c.query(
+          `select count(*)::int as n from ${t.name} where company_id <> $1
+             and company_id in (select id from public.companies where created_at <= (select created_at from public.companies where id = $1))`,
+          [ACADEMY_ID]);
         expect({ name: t.name, n: rows[0].n }).toEqual({ name: t.name, n: 0 });
       }
     });
