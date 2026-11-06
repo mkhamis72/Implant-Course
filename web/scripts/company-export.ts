@@ -5,6 +5,15 @@ import { pgConfig } from './db';
 import { applyTenantArg, takeTenantArg, withControl } from './tenant-env';
 import { tenantCompanyId } from './tenants';
 
+/*
+ * Limits (company-export and company-restore): for one company in a healthy shared database, not a disaster
+ * restore. Only the current members' accounts and profiles are exported, so a former member (one now in another
+ * company, say), still named by this company's rows, is not in the file (the restore's foreign-key check then fails on
+ * an empty database). Identity sequences are not advanced by the restore (the live database's are already past
+ * the restored ids). Files' bytes (bytea) travel as hex inside the JSON and the whole file is held in memory.
+ * Whole-database disasters use the nightly pg_dump (docs/operations.md section D).
+ */
+
 export type Row = Record<string, unknown>;
 
 /** One company's data: its rows from every company table (parents before children), preceded by its
