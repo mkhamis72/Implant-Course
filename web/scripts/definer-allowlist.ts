@@ -18,7 +18,8 @@ export const DEFINER_ALLOWLIST: ReadonlySet<string> = new Set([
   // Pre-login branding readers: the login page renders before there is a session.
   'public.branding_for',
   'public.branding_logo_for',
-  // The previous pre-login readers (academy only, anon-callable) until 0095 drops them.
+  // The previous pre-login readers (academy only): dropped by 0096. Listed so migrate.ts's owner check passes on
+  // 0092 to 0095 when a database is built from scratch; once dropped they are in no catalog, so no guard sees them.
   'public.branding_public',
   'public.branding_logo',
   // Console, service role only (0093): writes a named company's first admin without a bound session.

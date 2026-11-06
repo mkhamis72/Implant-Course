@@ -125,8 +125,8 @@ describe('company keys (0091)', () => {
       expect((await c.query('select count(*)::int as n from public.branding_logos where company_id = $1', [b])).rows[0].n).toBe(1);
       expect((await c.query('select name, logo_version from public.branding where company_id = $1', [ACADEMY_ID])).rows[0])
         .toEqual(before);
-      // The previous version's reader keeps serving academy alone.
-      expect((await c.query('select name, logo_version from public.branding_public()')).rows).toEqual([before]);
+      // The public reader serves each company its own branding.
+      expect((await c.query('select name from public.branding_for($1)', [ACADEMY_ID])).rows).toEqual([{ name: before.name }]);
 
       const academyLogos = (await c.query('select count(*)::int as n from public.branding_logos where company_id = $1', [ACADEMY_ID])).rows[0].n;
       await actAsBound(c, users.admin, b);

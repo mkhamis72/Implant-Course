@@ -11,7 +11,7 @@ describe('privilege lockdown', () => {
         'delete from public.settings',
         'truncate public.settings',
         'delete from public.profiles where user_id = $1',
-        "insert into public.settings (id) values (false)",
+        "insert into public.settings (company_id) values (gen_random_uuid())",
       ]) {
         await c.query('savepoint s');
         await expect(c.query(sql, sql.includes('$1') ? [users.target] : [])).rejects.toThrow(/permission denied/);

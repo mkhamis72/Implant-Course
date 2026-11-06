@@ -34,7 +34,7 @@ async function tables(c: Client): Promise<TableInfo[]> {
       exists (select 1 from pg_constraint f where f.conrelid = t and f.contype = 'f'
               and f.confrelid = 'public.companies'::regclass and f.conkey = array[col.attnum]) as fk_to_companies,
       exists (select 1 from pg_index i where i.indrelid = t and i.indkey[0] = col.attnum
-              and i.indexrelid = to_regclass(quote_ident(n.nspname) || '.' || quote_ident(k.relname || '_company_id_idx'))) as leading_index,
+              and i.indpred is null and i.indexprs is null) as leading_index,
       (select array(select a.attname::text from unnest(u.conkey) with ordinality x(attnum, i)
                     join pg_attribute a on a.attrelid = t and a.attnum = x.attnum order by x.i)
        from pg_constraint u where u.conrelid = t and u.contype = 'u' and u.conname = k.relname || '_company_id_key') as key_cols

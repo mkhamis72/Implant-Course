@@ -23,6 +23,7 @@
     "window:checksums": "tsx scripts/window-checksums.ts",
     "window:rollback": "tsx scripts/window-rollback.ts",
     "schema:fingerprint": "tsx scripts/schema-fingerprint.ts",
+    "canary:check": "tsx scripts/canary-check.ts",
     "company:export": "tsx scripts/company-export.ts",
     "company:restore": "tsx scripts/company-restore.ts",
     "test:db": "vitest run -c vitest.db.config.mts",
