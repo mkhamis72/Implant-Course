@@ -17,7 +17,7 @@ Commands below that read prod use `ENV_FILE=.env.prod` and `--tenant academy` (r
    ! cd "/d/Claude/Claude Code/implant-course-one-db/web" && git checkout one-db-release-4 && npx supabase stop --no-backup && npm run db:start && npm run db:migrate && ./scripts/ship.sh verify
    ```
 
-   `db:migrate` takes the empty stack to 0095 (`Applied: 0001_foundation.sql, ..., 0095_provision_company.sql`). The test users need no step: the DB tests' global setup (`tests/db/global-setup.ts`, `tests/support/test-users.ts`) creates them on every run. Expected last line `Verified one-db-release-4.` (2026-11-06: see the final fix report). To sign in to the dev server afterwards, `npm run create-user -- you@example.com "Your Name" --role admin`.
+   `db:migrate` takes the empty stack to 0095 (`Applied: 0001_foundation.sql, ..., 0095_provision_company.sql`). The test users need no step: the DB tests' global setup (`tests/db/global-setup.ts`, `tests/support/test-users.ts`) creates them on every run. Expected last line `Verified one-db-release-4.` (2026-11-06, after this rebuild: 36 s to rebuild the stack, 3 s to migrate, 2.5 minutes for verify: unit 222 files / 1518 tests, DB 77 files / 646 tests). To sign in to the dev server afterwards, `npm run create-user -- you@example.com "Your Name" --role admin`.
 
    Back to release 5 afterwards: `! cd "/d/Claude/Claude Code/implant-course-one-db/web" && git checkout one-database && npm run test:db` (it applies 0096 to the stack first), then `npm run console:local` before the console E2E (it recreates `console-e2e`). Do the same rebuild-and-verify on `one-db-release-5` before release 5 (`release-5-canary.md`).
 3. Switch the repo public (Vercel Hobby deploy), as for every release; private again afterwards.
