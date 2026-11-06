@@ -42,7 +42,7 @@ describe('components', () => {
       const second = await fit(c, s.site, 'ti_base', tb, tbLot, s.delegate);
       expect(await onHand(c, haLot)).toBe(1);
       expect(await onHand(c, tbLot)).toBe(0);
-      const { rows } = await c.query('select id, removed_on is null as current from public.site_components where site_id = $1 order by created_at', [s.site]);
+      const { rows } = await c.query('select id, removed_on is null as current from public.site_components where site_id = $1 order by created_at, removed_on is null', [s.site]);
       expect(rows).toEqual([{ id: first, current: false }, { id: second, current: true }]);
       const m = await c.query('select site_component_id, patient_id from public.stock_movements where stock_lot_id = $1 and reason = $2', [tbLot, 'use']);
       expect(m.rows).toEqual([{ site_component_id: second, patient_id: s.patient }]);
