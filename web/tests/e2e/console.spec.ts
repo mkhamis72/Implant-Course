@@ -172,6 +172,26 @@ test('adding a company checks its keys first', async ({ page }) => {
     await c.query('delete from public.tenants where slug = $1', [slug]);
     await c.query("delete from vault.secrets where name like 'tenant/' || $1 || '/%'", [slug]);
     await c.end();
+    // The check also provisioned the company in the main stack (provision_company): remove it and its rows, so
+    // the DB tests that count rows per company don't see it. audit_log is append-only, so triggers are off.
+    const main = new pg.Client({ connectionString: company.DATABASE_URL });
+    await main.connect();
+    try {
+      await main.query('begin');
+      await main.query('set local session_replication_role = replica');
+      const id = (await main.query('select id from public.companies where slug = $1', [slug])).rows[0]?.id;
+      if (id) {
+        for (const t of ['public.products', 'public.consent_form_versions', 'public.settings', 'public.branding', 'public.branding_logos', 'app_private.file_no_counters', 'public.audit_log']) {
+          await main.query(`delete from ${t} where company_id = $1`, [id]);
+        }
+        await main.query('delete from public.companies where id = $1', [id]);
+      }
+      await main.query('commit');
+    } catch {
+      await main.query('rollback').catch(() => {});
+    } finally {
+      await main.end();
+    }
   }
 });
 

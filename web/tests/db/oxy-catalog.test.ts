@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { withTx } from './helpers';
 
+const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
+
 describe('Oxy catalogue (0026)', () => {
   it('loads the approved Oxy PSK-MDK and MD EXT products, active and verified', async () => {
     await withTx(async (c) => {
+      // Academy's catalogue: provisioned companies get their own copy (0095), so count one company.
       const { rows } = await c.query(
         `select type::text, count(*)::int as n from public.products
-         where brand = 'Oxy Implant' and active and not is_sample group by type order by type`,
+         where company_id = $1 and brand = 'Oxy Implant' and active and not is_sample group by type order by type`,
+        [ACADEMY_ID],
       );
       expect(rows).toEqual([
         { type: 'abutment_angled', n: 42 },
@@ -17,7 +21,8 @@ describe('Oxy catalogue (0026)', () => {
         { type: 'ti_base', n: 26 },
       ]);
       const refs = await c.query(
-        `select count(*)::int as n, count(distinct ref_code)::int as d from public.products where brand = 'Oxy Implant'`,
+        `select count(*)::int as n, count(distinct ref_code)::int as d from public.products where company_id = $1 and brand = 'Oxy Implant'`,
+        [ACADEMY_ID],
       );
       expect(refs.rows[0].n).toBe(refs.rows[0].d);
     });
@@ -27,8 +32,9 @@ describe('Oxy catalogue (0026)', () => {
     await withTx(async (c) => {
       const { rows } = await c.query(
         `select ref_code, system, platform, diameter_mm::float8 as d, length_mm::float8 as l from public.products
-         where brand = 'Oxy Implant' and ref_code in ('PSKR35070', 'PSK40200NT', 'OMKR42100', 'OMKN30150', 'OMEX33130')
+         where company_id = $1 and brand = 'Oxy Implant' and ref_code in ('PSKR35070', 'PSK40200NT', 'OMKR42100', 'OMKN30150', 'OMEX33130')
          order by ref_code`,
+        [ACADEMY_ID],
       );
       expect(rows).toEqual([
         { ref_code: 'OMEX33130', system: 'MD EXT · Mini', platform: 'External hex 3.3', d: 3.3, l: 13 },

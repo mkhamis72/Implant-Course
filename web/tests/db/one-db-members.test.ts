@@ -76,7 +76,7 @@ describe('company_members (0085)', () => {
       await actAsBound(c, users.admin);
       const all = await c.query('select count(*)::int as n from public.company_members');
       await asPostgres(c);
-      const total = await c.query('select count(*)::int as n from public.company_members');
+      const total = await c.query('select count(*)::int as n from public.company_members where company_id = $1', [ACADEMY_ID]);
       expect(all.rows[0].n).toBe(total.rows[0].n);
     });
   });
