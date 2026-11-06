@@ -41,6 +41,8 @@ What the check does, in this order (the order matters):
 
 ## Restore the whole academy project
 
+> **Release 4 window:** do not use this section to undo release 4. Use `release-4-runbook.md`, Rollback (`npm run window:rollback`, rehearsed with its proofs): this section restores no grants (`--no-acl`), leaves schema `app` at its release 4 version and keeps the role `tenant_definer`, after which a retried release 4 fails at 0089.
+
 > **NOT proven on a hosted project.** The local fresh-stack flow in "Check a dump" is the only verified path. The commands below follow its order but have never been run against a hosted Supabase project (ownership limits, `--clean` on live data, TLS). Re-check the real academy dump with `restore-check` before anyone relies on this.
 
 Run only when the data is damaged and the owner decides to go back to the restore point. Data written after the dump is lost.

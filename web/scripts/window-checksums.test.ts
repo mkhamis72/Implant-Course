@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareChecksums, EXPECTED_SCHEMA_CHANGES, hashSql, type Checksums } from './window-checksums';
+import { APPEND_ONLY_TABLES, compareChecksums, EXPECTED_SCHEMA_CHANGES, hashSql, rowHashSql, type Checksums } from './window-checksums';
 
 const sum = (rows: number, columns: Record<string, string>) => ({ rows, columns });
 const make = (tables: Checksums['tables']): Checksums => ({ target: 'x', tables });
@@ -7,7 +7,7 @@ const make = (tables: Checksums['tables']): Checksums => ({ target: 'x', tables 
 describe('compareChecksums', () => {
   const base = make({
     'public.patients': sum(2, { id: 'a', name: 'b' }),
-    'public.audit_log': sum(10, { id: 'c' }),
+    'public.audit_log': { ...sum(2, { id: 'c' }), rowHashes: { '1': 'h1', '2': 'h2' } },
     'auth.sessions': sum(1, { id: 'd' }),
   });
 
@@ -36,14 +36,29 @@ describe('compareChecksums', () => {
     expect(r.differences.join('\n')).toMatch(/public\.patients: column company_note only after/);
   });
 
-  it('reports audit_log and auth session tables without failing', () => {
+  it('reports new audit_log rows and auth session changes without failing', () => {
     const after = structuredClone(base);
-    after.tables['public.audit_log'] = sum(40, { id: 'zz' });
+    after.tables['public.audit_log'] = { ...sum(4, { id: 'zz' }), rowHashes: { '1': 'h1', '2': 'h2', '3': 'h3', '9': 'h9' } };
     after.tables['auth.sessions'] = sum(0, { id: 'e' });
     const r = compareChecksums(base, after);
     expect(r.ok).toBe(true);
-    expect(r.reported.join('\n')).toMatch(/public\.audit_log/);
+    expect(r.reported.join('\n')).toMatch(/public\.audit_log: 2 new row\(s\), 2 earlier row\(s\) unchanged/);
     expect(r.reported.join('\n')).toMatch(/auth\.sessions/);
+  });
+
+  it('fails when an audit_log row that existed before changes or disappears', () => {
+    const changed = structuredClone(base);
+    changed.tables['public.audit_log'].rowHashes = { '1': 'other', '3': 'h3' };
+    const r = compareChecksums(base, changed);
+    expect(r.ok).toBe(false);
+    expect(r.differences.join('\n')).toMatch(/public\.audit_log: 2 earlier row\(s\) changed: 1 differs, 2 missing after/);
+  });
+
+  it('fails an append-only table whose file has no row hashes', () => {
+    const old = structuredClone(base);
+    delete old.tables['public.audit_log'].rowHashes;
+    expect(compareChecksums(old, base).differences.join('\n')).toMatch(/public\.audit_log: no row hashes on the before side/);
+    expect(compareChecksums(base, old).ok).toBe(false);
   });
 
   it('fails on a table or column on one side only unless it is on the expected list, and prints the expected ones', () => {
@@ -70,6 +85,13 @@ describe('compareChecksums', () => {
 
   it('names a migration for every expected entry', () => {
     for (const e of EXPECTED_SCHEMA_CHANGES) expect(e.migration).toMatch(/^\d{4}_|runner/);
+  });
+});
+
+describe('rowHashSql', () => {
+  it('hashes each audit_log row without company_id, keyed by id', () => {
+    expect(APPEND_ONLY_TABLES).toEqual({ 'public.audit_log': 'id' });
+    expect(rowHashSql('public', 'audit_log', 'id')).toBe(`select "id"::text as id, md5((to_jsonb(t) - 'company_id')::text) as h from "public"."audit_log" t`);
   });
 });
 

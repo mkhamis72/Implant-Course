@@ -1,8 +1,9 @@
 /** Pure helpers for the restore-point backup (`npm run backup:pre-one-db`). */
 
 export function pgDumpArgs(kind: 'full' | 'schema', outFile: string): string[] {
-  // No --schema filter: the auth schema (users, identities) must be in the restore point.
-  const args = ['--format=custom', '--no-owner', '--no-acl'];
+  // No --schema filter: the auth schema (users, identities) must be in the restore point. ACLs are kept: the release 4
+  // rollback (window-rollback.ts) replays them; restores that don't want them pass --no-acl to pg_restore.
+  const args = ['--format=custom', '--no-owner'];
   if (kind === 'schema') args.push('--schema-only');
   args.push(`--file=${outFile}`);
   return args;

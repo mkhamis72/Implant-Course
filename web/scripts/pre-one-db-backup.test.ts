@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { countsSql, pgDumpArgs, redact, settingsMarkdown } from './pre-one-db-backup-lib';
 
 describe('pgDumpArgs', () => {
-  it('dumps everything, auth included', () => {
-    expect(pgDumpArgs('full', '/out/full.dump')).toEqual(['--format=custom', '--no-owner', '--no-acl', '--file=/out/full.dump']);
+  it('dumps everything, auth and ACLs included (the release 4 rollback replays the grants)', () => {
+    expect(pgDumpArgs('full', '/out/full.dump')).toEqual(['--format=custom', '--no-owner', '--file=/out/full.dump']);
   });
   it('adds --schema-only for the schema dump', () => {
     expect(pgDumpArgs('schema', '/out/schema.dump')).toContain('--schema-only');
