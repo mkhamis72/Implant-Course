@@ -120,8 +120,9 @@ test('a first admin created in the console can sign in on the company', async ({
   await page.getByLabel('Full name').fill('E2E First Admin');
   await page.getByRole('button', { name: 'Create admin login' }).click();
   const password = (await page.getByTestId('temporary-password').locator('code').textContent())!.trim();
-  const dev2 = parse(readFileSync('.env.dev2'));
-  const db = createClient(dev2.NEXT_PUBLIC_SUPABASE_URL, dev2.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  // Company two is in the main stack; dev2 is only the control project.
+  const company = parse(readFileSync('.env.local'));
+  const db = createClient(company.NEXT_PUBLIC_SUPABASE_URL, company.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   try {
     const ctx = await browser.newContext();
     const p2 = await ctx.newPage();
@@ -139,8 +140,9 @@ test('a first admin created in the console can sign in on the company', async ({
 
 test('adding a company checks its keys first', async ({ page }) => {
   test.setTimeout(120_000);
-  test.skip(!existsSync('.env.dev2'), 'needs the dev2 stack');
+  test.skip(!existsSync('.env.dev2') || !existsSync('.env.local'), 'needs the dev2 (control) and main stacks');
   const dev2 = parse(readFileSync('.env.dev2'));
+  const company = parse(readFileSync('.env.local'));
   const slug = `zz-e2e-${Date.now().toString(36)}`;
   try {
     await signInWith2fa(page);
@@ -150,15 +152,15 @@ test('adding a company checks its keys first', async ({ page }) => {
     await page.getByLabel('Addresses (one per line)').fill(`${slug}.localhost`);
     // The local gateway answers /auth/v1/settings without checking the anon key, so the bad key here is the service key.
     const keys = async (service: string) => {
-      await page.getByLabel('Supabase URL').fill(dev2.NEXT_PUBLIC_SUPABASE_URL);
-      await page.getByLabel('Anon key').fill(dev2.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+      await page.getByLabel('Supabase URL').fill(company.NEXT_PUBLIC_SUPABASE_URL);
+      await page.getByLabel('Anon key').fill(company.NEXT_PUBLIC_SUPABASE_ANON_KEY);
       await page.getByLabel('Service role key').fill(service);
-      await page.getByLabel('Database URL (session pooler)').fill(dev2.DATABASE_URL);
+      await page.getByLabel('Database URL (session pooler)').fill(company.DATABASE_URL);
     };
     await keys('not-a-real-key-not-a-real-key');
     await page.getByRole('button', { name: 'Check and add' }).click();
     await expect(page.getByRole('alert').filter({ hasText: "didn't pass the check" })).toBeVisible();
-    await keys(dev2.SUPABASE_SERVICE_ROLE_KEY);
+    await keys(company.SUPABASE_SERVICE_ROLE_KEY);
     await page.getByRole('button', { name: 'Check and add' }).click();
     await expect(page).toHaveURL(new RegExp(`/console/companies/${slug}$`));
     await page.goto(`${C}/console`);

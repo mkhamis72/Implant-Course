@@ -28,7 +28,7 @@ describe('compareChecksums', () => {
     expect(r.differences.join('\n')).toMatch(/public\.patients\.name: hash differs/);
   });
 
-  it('hashes only the columns present on both sides (a new column is not a difference)', () => {
+  it('fails on a column present on one side only', () => {
     const after = structuredClone(base);
     after.tables['public.patients'].columns.company_note = 'q';
     const r = compareChecksums(base, after);

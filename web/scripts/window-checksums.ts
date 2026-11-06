@@ -7,8 +7,8 @@ import { applyTenantArg } from './tenant-env';
 
 /**
  * Release 4 window checks. Per table in public / app_private / auth: the row count and, per column, the md5 of that
- * column's values ordered by primary key (company_id excluded everywhere). Per-column hashes let the compare use only the
- * columns present both before and after the window.
+ * column's values ordered by primary key (company_id excluded everywhere). Per-column hashes name the column that differs; a column
+ * present on one side only fails unless it is in EXPECTED_SCHEMA_CHANGES.
  *   window-checksums [--tenant academy] --out <file>
  *   window-checksums --compare <before> <after>
  */

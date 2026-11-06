@@ -2,7 +2,7 @@
 
 Owner steps, in order, from `web/` of the worktree (`cd "/d/Claude/Claude Code/implant-course-one-db/web"`) on the branch `one-db-release-4`. Production project `kshsgwvwqvufqdxcyvat`, company `academy` (id `a7c0de00-0000-4000-8000-000000000001`, host `kaleidoscope.imploid.net`). Expected length: one hour reserved, about 15 minutes of it work (the migrations themselves took 2 to 4 seconds in the rehearsals; the rest is the dump, the Release workflow and the Vercel deploy).
 
-Release 4 applies migrations **0089 to 0095** (not 0089 to 0094): guards, company functions, company keys, forced policies, console first admin, company refs, `provision_company`. Prod must be at release 3 first (migrations through 0088, control `0004`). Every command that touches prod prints `Target project: <host>` first; stop if it is not the host you expect.
+Release 4 applies migrations **0089 to 0095** (not 0089 to 0094): guards, company functions, company keys, forced policies, console first admin, company refs, `provision_company`. Prod must be at release 3 first (migrations through 0088, control `0004`). Release also applies control migration `0005_provision.sql` to the control project (additive: a unique index and `console_set_company`). Every command that touches prod prints `Target project: <host>` first; stop if it is not the host you expect.
 
 Commands below that read prod use `ENV_FILE=.env.prod` and `--tenant academy` (read from the control project). Put no secret on a command line.
 
@@ -49,25 +49,34 @@ Commands below that read prod use `ENV_FILE=.env.prod` and `--tenant academy` (r
    npm run window:checksums -- --compare "D:/Backups/implant-course/pre-window/checksums-before.json" "D:/Backups/implant-course/pre-window/checksums-after.json"
    ```
 
-   Expected last line `PASS`, exit 0. Expected lines (rehearsal): `EXPECTED app_private.file_no_counters: table only after (0091)`, `EXPECTED app_private.schema_migrations` rows 88 to 95 and its two column hashes (the runner recording 0089 to 0095), and `REPORTED public.audit_log` (migrations write audit rows; auth session tables are reported the same way). Any `DIFFERENT` line is a failure: stop and roll back. The compare hashes only columns present on both sides, so new columns never matter; a table or column on one side only fails unless it is in `EXPECTED_SCHEMA_CHANGES` in `scripts/window-checksums.ts`, with the migration that makes it.
+   Expected last line `PASS`, exit 0. Expected lines (rehearsal): `EXPECTED app_private.file_no_counters: table only after (0091)`, `EXPECTED app_private.schema_migrations` rows 88 to 95 and its two column hashes (the runner recording 0089 to 0095), and `REPORTED public.audit_log` (migrations write audit rows; auth session tables are reported the same way). Any `DIFFERENT` line is a failure: stop and roll back. Columns are compared one by one. A table or a column present on one side only fails unless it is in `EXPECTED_SCHEMA_CHANGES` in `scripts/window-checksums.ts`, with the migration that makes it. If the only differences are in `auth.users` sign-in or refresh timestamp columns (`last_sign_in_at`, `updated_at`; open tabs refreshing tokens during the window), check them by hand: that is not an automatic rollback. Any other `DIFFERENT` line is.
 
-6. **Lift the suspension** in the console (Reactivate) now that the compare has passed (a suspended site answers 503, so it cannot be smoke-tested), wait up to 60 seconds, and reload the site. If anything below fails, suspend again and use the rollback.
-
-7. **Session check and smoke test.**
+6. **Session check before the lift.** Academy is still suspended and nobody has signed in on the new code, so this confirms that no existing session is bound to another company (run it as soon as the compare has passed):
 
    ```bash
    ENV_FILE=.env.prod npx tsx scripts/session-check.ts --tenant academy
    ```
 
-   Expected `PASS` (after the smoke test at least one session is bound to academy; any other company id in the list prints `PROBLEM`). Smoke test on `https://kaleidoscope.imploid.net`:
+   Expected `PASS` (`no bound sessions yet` is normal here). Any other company id prints `PROBLEM`: stop and roll back.
+
+7. **Lift the suspension** in the console (Reactivate) now that the compare and the session check have passed (a suspended site answers 503, so it cannot be smoke-tested), wait up to 60 seconds, and reload the site. If anything below fails, suspend again and use the rollback. Smoke test on `https://kaleidoscope.imploid.net`:
 
    - Sign in with 2FA (this binds the session to the company).
    - Open a patient and its Implants tab.
    - Schedule: open a surgery day, make a booking and cancel it.
-   - Inventory: stock page lists batches; open a receive form without saving.
+   - Inventory: the stock page lists batches; open a receive form without saving.
    - Statistics: the results page loads with data.
    - Export: a Statistics export downloads.
+   - Patients, Recall list loads (see the performance item below).
    - Admin, Users lists the same people; a delegate login's `/my` shows the schedule.
+
+   Then run the session check a second time:
+
+   ```bash
+   ENV_FILE=.env.prod npx tsx scripts/session-check.ts --tenant academy
+   ```
+
+   Expected `academy: N sessions` with N of at least 1 (the smoke-test sign-in is bound to academy) and `PASS`.
 
 8. **Advisors, afterwards.** Dashboard, Database, Advisors: Security and Performance. Compare with what the dashboard showed before; every new item that names `app.*`, `company_*` or the `*_area_*` / company policies needs a look. Expected new notices are Performance "unindexed foreign key" items on the composite `(company_id, ...)` keys at most; nothing may say a table has RLS disabled.
 
@@ -79,7 +88,7 @@ Use it when the compare fails, the Release stops after migrating academy, or the
 2. **Redeploy the release 3 build in Vercel** (Deployments, the last production deployment before release 4, Redeploy). Do **not** revert on master and run Release for this: the restore below removes 0089 to 0095 from `app_private.schema_migrations`, so a Release would apply them again.
 3. Restore the pre-window dump into the academy project following `D:/Backups/implant-course/pre-one-db/RESTORE.md`, section "Restore the whole academy project", with the files in `D:/Backups/implant-course/pre-window/academy`. That procedure has been proven only on local stacks (see the warning in that file); allow extra time and read it before the window.
 4. Check: `ENV_FILE=.env.prod npm run window:checksums -- --tenant academy --out <file>` then `--compare` against `checksums-before.json` must PASS with no `EXPECTED` lines for 0091 or the migrations table.
-5. Reactivate academy. Afterwards revert the release 4 merge on master (so the next Release does not migrate again) before any new release.
+5. Control migration `0005_provision.sql` stays applied on the control project: it is additive and the release 3 app ignores it. Reactivate academy. Afterwards revert the release 4 merge on master (so the next Release does not migrate again) before any new release.
 
 Migrations 0089 to 0095 are not backward compatible with the release 3 app (forced company policies, definers that need a bound session). Rolling back means going back to the dump, not just redeploying.
 
@@ -110,5 +119,24 @@ Both rehearsals gave identical after-hashes for every table. Well inside the 30 
 
 - The rehearsal dump is from 2026-11-02, before releases 2 and 3; prod has grown since. Re-take `counts.json` in step 2 and compare row counts with step 3's output.
 - Sign-in with the real hosts under `next start` was not rehearsed: under `next dev` a company's own login form redirected to the academy host (Task 7). After release 5 provisions the canary, check by hand at `https://canary.imploid.net/login`: the address bar must stay on the canary host through the sign-in and the redirect after it, and `session-check` must list the canary's sessions under its own company id. If it jumps to `kaleidoscope.imploid.net`, stop and report.
-- `recall_list()` scales with patient count: on the local test stack (about 1150 leftover E2E patients, 586 rows) it takes 3.4 s as a session user and 7.9 s through PostgREST, right at the 8 s `statement_timeout` of the `authenticated` role (it measured 41 ms on the restored academy dump). Production is nowhere near that size; watch the Recall list page in the smoke test and report it if it ever errors.
-- The console E2E (`console.spec.ts`) cannot fully run on the local hybrid setup any more: `console:local` makes the dev2 stack both control project and a company database, and since 0088/0090 the company's `on_auth_user_created` trigger refuses the console admins' sign-ups there. With stub tables standing in for the company schema, 4 of its tests pass; "a first admin created in the console can sign in" and "adding a company" need a real company database separate from the control project.
+
+## Open performance item: recall_list at scale
+
+Measured once on the main local stack (1148 patients, 833 implants on 796 patients, 586 rows), in a rolled-back transaction as a bound academy admin with an aal2 session, 3 runs each:
+
+| Case | recall_list() |
+| --- | --- |
+| (a) policies as they are (290 restrictive company/area policies) | 3.0 s (3.04, 3.04, 2.98) |
+| (b) all restrictive policies dropped inside the transaction | 1.7 s (1.69, 1.68, 1.66) |
+| Through PostgREST as the test organizer (bound session) | 7.9 s, against the 8 s `statement_timeout` of the `authenticated` role |
+| Restored academy dump (34 patients, 104 rows), after 0095 | 41 to 46 ms |
+
+`EXPLAIN ANALYZE`: the function is `cross join lateral implant_visits(p.id)`, one call per patient, each running several row-level-secured queries. One call takes about 8 ms cold; the whole list 3.0 s for 796 implant patients, so the cost is linear in patients with implants (about 3.8 ms each in a session, about 10 ms through PostgREST). The 34-patient dump is cheap because few of its patients have implants, so "80x for 34x" is not a scaling surprise.
+
+Do the window migrations cause it? Partly. The restrictive company policies (0092) are about 1.3 s of the 3.0 s (43%); the rest is the per-patient design of `recall_list` / `implant_visits` (0046, 0048), unchanged by the window. No pre-window run on the same data exists (Task 9 saw 3.1 s before and 4.3 s after on the test stack). Nothing was optimised.
+
+Threshold: investigate before any company passes about 400 patients with implants (half of the 8 s timeout at today's PostgREST cost). Academy is far below it. The local E2E stack is above it, which is why the `visits` E2E ("a missed visit shows ... recall list") fails there with `Could not load the recall list`; clean the leftover E2E patients, or raise the role timeout locally, to run it.
+
+## Console E2E (local)
+
+`npm run console:local` now builds the shape release 5 uses: the dev2 stack is the control project only (control migrations, no company schema; do not run `db:migrate` on it) and both companies are in the main stack: `dev` (localhost, academy) and `dev2` (tenant2.localhost, company `console-e2e`, created through `provision_company` and kept between runs). On 2026-11-06 all 7 `console.spec.ts` tests passed, including the first admin created in the console signing in on the company (0090 trigger, 0093, 0095, control 0005) and adding a company. To run: wipe dev2 (`npx supabase stop --no-backup --workdir .dev2`), `npm run db:dev2:start`, `npm run console:local`, then `set -a; source .env.console; set +a; npx playwright test console --project=chromium` with nothing on :3000.

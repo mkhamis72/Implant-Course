@@ -25,7 +25,7 @@ export function assertLocalStacks(dev: Vars, dev2: Vars): void {
 
 /**
  * Local console E2E: the dev2 stack (npm run db:dev2:start) becomes the control project, with companies
- * "dev" (localhost → main stack) and "dev2" (tenant2.localhost → dev2 stack). Writes .env.console for the
+ * "dev" (localhost → main stack, academy) and "dev2" (tenant2.localhost → main stack, company console-e2e). Writes .env.console for the
  * dev server: set -a; source .env.console; set +a; npx playwright test console
  */
 async function main() {
@@ -42,10 +42,21 @@ async function main() {
       anonKey: dev.NEXT_PUBLIC_SUPABASE_ANON_KEY, serviceRoleKey: dev.SUPABASE_SERVICE_ROLE_KEY, databaseUrl: dev.DATABASE_URL,
       companyId: ACADEMY_COMPANY_ID,
     });
+    // Company two lives in the MAIN stack too (the shared database): dev2 is only the control project, so no
+    // company schema sits next to the control tables (its sign-up trigger would refuse the console admins).
+    const company = new Client(pgConfig({ DATABASE_URL: dev.DATABASE_URL }));
+    await company.connect();
+    let secondCompany: string;
+    try {
+      const found = (await company.query('select id from public.companies where slug = $1', ['console-e2e'])).rows[0]?.id as string | undefined;
+      secondCompany = found ?? (await company.query('select public.provision_company($1, $2) as id', ['console-e2e', 'Console E2E Company'])).rows[0].id;
+    } finally {
+      await company.end();
+    }
     await registerTenant(control, {
-      slug: 'dev2', name: 'Dev Company Two', hosts: ['tenant2.localhost'], supabaseUrl: dev2.NEXT_PUBLIC_SUPABASE_URL,
-      anonKey: dev2.NEXT_PUBLIC_SUPABASE_ANON_KEY, serviceRoleKey: dev2.SUPABASE_SERVICE_ROLE_KEY, databaseUrl: dev2.DATABASE_URL,
-      companyId: ACADEMY_COMPANY_ID,
+      slug: 'dev2', name: 'Dev Company Two', hosts: ['tenant2.localhost'], supabaseUrl: dev.NEXT_PUBLIC_SUPABASE_URL,
+      anonKey: dev.NEXT_PUBLIC_SUPABASE_ANON_KEY, serviceRoleKey: dev.SUPABASE_SERVICE_ROLE_KEY, databaseUrl: dev.DATABASE_URL,
+      companyId: secondCompany,
     });
   } finally {
     await control.end();
@@ -56,7 +67,7 @@ async function main() {
     NEXT_PUBLIC_CONTROL_ANON_KEY: dev2.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     CONSOLE_HOST: 'console.localhost',
   }), { mode: 0o600 });
-  console.log('Control project: dev2 stack. Companies: dev (localhost), dev2 (tenant2.localhost). Wrote .env.console.');
+  console.log('Control project: dev2 stack. Control only; companies dev (localhost, academy) and dev2 (tenant2.localhost, console-e2e) are both in the main stack. Wrote .env.console.');
 }
 
 if (process.argv[1]?.endsWith('console-local.ts')) {
