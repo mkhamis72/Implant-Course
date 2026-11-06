@@ -41,5 +41,8 @@ describe('fingerprintQueries', () => {
     // CRLF bodies from a Windows checkout hash like prod's LF ones
     expect(sql).toContain("else pg_get_functiondef(p.oid) end, chr(13), '')");
     expect(sql).toContain("replace(pg_get_viewdef(c.oid), chr(13), '')");
+    // Supabase-internal roles differ between Supabase versions
+    expect(sql).toContain("rolname not like 'supabase\\_%'");
+    expect(sql).toContain("g.rolname not like 'supabase\\_%'");
   });
 });
