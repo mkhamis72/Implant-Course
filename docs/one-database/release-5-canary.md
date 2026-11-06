@@ -1,6 +1,6 @@
 # Release 5: cleanup and the canary
 
-Owner steps, from `web/` of the worktree on the branch `one-db-release-5`. Release 5 ships migration **0096** (`0096_cleanup.sql`) and the canary tooling (`scripts/canary-check.ts`). Production company `academy` (id `a7c0de00-0000-4000-8000-000000000001`, host `kaleidoscope.imploid.net`).
+Owner steps, from `web/` of the worktree on the branch `one-db-release-5`. Release 5 ships migrations **0096** (`0096_cleanup.sql`) and **0097** (`0097_pin_search_path.sql`, Advisors search_path fix) and the canary tooling (`scripts/canary-check.ts`). Production company `academy` (id `a7c0de00-0000-4000-8000-000000000001`, host `kaleidoscope.imploid.net`).
 
 ## Before shipping
 
@@ -12,7 +12,7 @@ Owner steps, from `web/` of the worktree on the branch `one-db-release-5`. Relea
    ! cd "/d/Claude/Claude Code/implant-course-one-db/web" && git checkout one-db-release-5 && npx supabase stop --no-backup && npm run db:start && npm run db:migrate && ./scripts/ship.sh verify auth admin delegates
    ```
 
-   (`db:migrate` applies 0001 to 0096; the DB tests' global setup creates the test users; nothing may listen on :3000 for the E2E specs.) Then `npm run console:local` before any console E2E run.
+   (`db:migrate` applies 0001 to 0097; the DB tests' global setup creates the test users; nothing may listen on :3000 for the E2E specs.) Then `npm run console:local` before any console E2E run.
 4. Switch the repo public (Vercel Hobby deploy), as for every release; private again afterwards.
 
 ## What 0096 drops
