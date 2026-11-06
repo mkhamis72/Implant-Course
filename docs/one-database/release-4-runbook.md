@@ -165,7 +165,7 @@ Built to look like prod at release 3, grants included: a wiped dev2 stack migrat
 | --- | --- | --- |
 | "marked as STABLE/IMMUTABLE, but expression is VOLATILE" at a `PERFORM` | 14: `finding_number`, `finding_choice`, `check_restoration_problem`, `check_technique`, `detail_date`, `complication_details`, `check_restoration_details`, `clean_items`, `admin_company`, `my_schedule`, `my_restorations`, `my_report`, `admin_user_history`, `analysis_codes` | The PERFORM is the permission/active-user guard (`require_perm`, `require_active`), which reads the session and may raise. Marking these VOLATILE would stop the planner caching them and is not needed. Pre-existing pattern of every reader; `admin_company` only gained a company lookup in 0090. |
 | "target type is different type than source type" (text to uuid / array / enum) | `provision_company` (0095), `void_followup`, `create_surgery_slot`, `save_radiograph` | String-literal initialisers and `case ... 'restored'` results that Postgres casts implicitly; the check does not model the literal cast. No runtime effect (the DB tests exercise all four). |
-| "unused parameter p_academy_if_unbound" | `app_private.admin_company` | Deliberate: kept so the release 3 callers still work. Task 11 (release 5 cleanup) removes it. |
+| "unused parameter p_academy_if_unbound" | `app_private.admin_company` | Deliberate: kept so the release 3 callers still work. Not removed by release 5's 0096: removing it means redefining every caller, a separate follow-up (see `release-5-canary.md`, "Not done by 0096"). |
 
 ## Rehearsals (2026-11-06, local, `restore-check` of the 2026-11-02 academy dump)
 
