@@ -6,7 +6,13 @@ Owner steps, from `web/` of the worktree on the branch `one-db-release-5`. Relea
 
 1. **Release 4's window is closed and verified** (`release-4-runbook.md`): the compare PASSed, `session-check` PASSed, the smoke test is done and no rollback is pending. Do not ship release 5 while a rollback to the pre-window dump is still possible: 0096 drops columns the dump-era app reads, so after it only a restore from a dump taken after release 5 helps.
 2. Release 4 has been live long enough that nobody runs the release 3 build any more (no old Vercel deployment is promoted, no old tab sessions expected).
-3. `git log one-db-release-5` is the code to ship; its checks have passed (`./scripts/ship.sh verify`, plus the E2E specs `auth admin delegates`).
+3. `git log one-db-release-5` is the code to ship; its checks have passed on a local main stack that went through release 4 first. If the stack was rebuilt at 0095 for release 4's verify (`release-4-runbook.md`, Before the window, step 2), `test:db` applies 0096 to it itself; from any other state rebuild it the same way:
+
+   ```bash
+   ! cd "/d/Claude/Claude Code/implant-course-one-db/web" && git checkout one-db-release-5 && npx supabase stop --no-backup && npm run db:start && npm run db:migrate && ./scripts/ship.sh verify auth admin delegates
+   ```
+
+   (`db:migrate` applies 0001 to 0096; the DB tests' global setup creates the test users; nothing may listen on :3000 for the E2E specs.) Then `npm run console:local` before any console E2E run.
 4. Switch the repo public (Vercel Hobby deploy), as for every release; private again afterwards.
 
 ## What 0096 drops
@@ -20,6 +26,10 @@ It runs while release 4's app is live and removes only what release 4 no longer 
 - 42 plain `<table>_company_id_idx` indexes that another index on the table already covers.
 
 The five global uniques that 0091 replaced were dropped by 0095.
+
+## When
+
+0096 runs while release 4's app is live, in one transaction: it drops 42 indexes, two functions, a sequence, the four `profiles` columns and three `id` columns. Each takes an exclusive lock on its table, held until 0096 commits (seconds), so requests to those tables wait that long. Ship at a quiet hour, away from the nightly backup at 00:00 UTC (its `pg_dump` holds locks on every table). The migration starts with `set local lock_timeout = '5s'`: if any lock is not granted within 5 seconds it fails with `canceling statement due to lock timeout`, the whole of 0096 rolls back and **Release stops before the deploy**, so nothing changes for the users. That is safe: wait for a quieter moment and re-run the Release workflow (Actions, Release, Re-run all jobs).
 
 ## Ship
 

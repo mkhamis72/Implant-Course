@@ -66,6 +66,10 @@ describe('projectMismatch', () => {
     expect(projectMismatch('https://abc123.supabase.co', 'postgresql://postgres:x@db.zzz999.supabase.co:5432/postgres')).toContain('different projects');
     expect(projectMismatch('https://abc123.supabase.co', 'postgresql://postgres.zzz999:x@aws-0-eu-central-1.pooler.supabase.com:5432/postgres')).toContain('different projects');
   });
+  it('reads a ref only from a real supabase.co host (dots are literal)', () => {
+    expect(projectMismatch('https://abc123xsupabasexco', 'postgresql://postgres:x@abc123.supabase.co:5432/postgres')).toContain('different projects');
+    expect(projectMismatch('https://abc123.supabase.co', 'postgresql://postgres:x@dbxabc123.supabase.co:5432/postgres')).toContain('different projects');
+  });
   it('compares hosts on a local stack', () => {
     expect(projectMismatch('http://127.0.0.1:54321', 'postgresql://postgres:postgres@127.0.0.1:54322/postgres')).toBeNull();
     expect(projectMismatch('http://127.0.0.1:54321', 'postgresql://postgres:postgres@db.example.com:5432/postgres')).toContain('different projects');

@@ -74,7 +74,7 @@ export function canaryInputs(env: Env): { url: string; anonKey: string; email: s
 export function projectMismatch(supabaseUrl: string, databaseUrl: string): string | null {
   const api = new URL(supabaseUrl);
   const db = new URL(databaseUrl);
-  const ref = (host: string) => host.match(/^(?:db.)?([a-z0-9]+).supabase.co$/)?.[1];
+  const ref = (host: string) => host.match(/^(?:db\.)?([a-z0-9]+)\.supabase\.co$/)?.[1];
   const apiRef = ref(api.hostname);
   const dbRef = ref(db.hostname) ?? decodeURIComponent(db.username).split('.')[1];
   const same = apiRef || dbRef ? apiRef === dbRef : api.hostname === db.hostname;

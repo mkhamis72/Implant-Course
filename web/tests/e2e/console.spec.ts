@@ -181,13 +181,16 @@ test('adding a company checks its keys first', async ({ page }) => {
       await main.query('set local session_replication_role = replica');
       const id = (await main.query('select id from public.companies where slug = $1', [slug])).rows[0]?.id;
       if (id) {
-        for (const t of ['public.products', 'public.consent_form_versions', 'public.settings', 'public.branding', 'public.branding_logos', 'app_private.file_no_counters', 'public.audit_log']) {
-          await main.query(`delete from ${t} where company_id = $1`, [id]);
-        }
+        // Every company table (provision_company writes settings, branding, products, consent_form_versions,
+        // file_no_counters and their audit rows; members, logins or sessions only if the run got that far).
+        const tables = (await main.query<{ t: string }>('select x::text as t from app.company_tables() x')).rows.map((r) => r.t);
+        for (const t of [...tables, 'app.session_companies']) await main.query(`delete from ${t} where company_id = $1`, [id]);
         await main.query('delete from public.companies where id = $1', [id]);
       }
       await main.query('commit');
-    } catch {
+    } catch (error) {
+      // Leftovers make the per-company DB tests fail later: say so here instead of hiding it.
+      console.warn(`console.spec teardown: company ${slug} was not removed from the main stack: ${(error as Error).message}`);
       await main.query('rollback').catch(() => {});
     } finally {
       await main.end();
