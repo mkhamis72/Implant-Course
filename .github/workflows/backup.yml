@@ -254,17 +254,25 @@ jobs:
           PASSPHRASE="$(clean "$PASSPHRASE")"
           bad=()
           shopt -s nullglob
+          CHECK_EXPORT='const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            const t = d && d.tables;
+            const ok = d.format === "company-export-v1" && typeof d.company_id === "string" && !Number.isNaN(Date.parse(d.exported_at))
+              && t && Array.isArray(t["public.patients"]) && Array.isArray(t["auth.users"]);
+            if (!ok) process.exit(1);
+            console.log(Object.keys(t).length + " tables, exported_at " + d.exported_at);'
           # in = the GitHub artifact, offsite = the R2 copy; each must be complete on its own.
           for dir in in offsite; do
             control_files=0; company_files=0
             for f in "$dir"/*.dump.gpg; do
               name="$dir/$(basename "$f" .dump.gpg)"
-              # A company's own JSON export (company-export): readable, and it holds the company's patients and accounts.
+              # A company's own JSON export (company-export): parsed as a whole (a truncated file fails), with its format,
+              # company, export time and the company's patients and accounts. ubuntu-latest ships Node.
               case "$(basename "$f")" in *.company.dump.gpg)
                 if ! gpg --batch --pinentry-mode loopback --decrypt --passphrase-fd 3 3<<<"$PASSPHRASE" "$f" > "$RUNNER_TEMP/check.dump" \
-                   || ! grep -q '"format":"company-export-v1"' "$RUNNER_TEMP/check.dump" \
-                   || ! grep -q '"public.patients"' "$RUNNER_TEMP/check.dump" || ! grep -q '"auth.users"' "$RUNNER_TEMP/check.dump"; then
+                   || ! info=$(node -e "$CHECK_EXPORT" "$RUNNER_TEMP/check.dump"); then
                   bad+=("$name: company export unreadable or incomplete")
+                else
+                  echo "$name: $info"
                 fi
                 continue ;;
               esac
