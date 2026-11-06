@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs, asPostgres } from './helpers';
-import { makeCourse, makeProduct, receive, setPerms } from './fixtures';
+import { withTx, actAs, asPostgres, asCompany } from './helpers';
+import { makeCourse, makeProduct, pendingLogin, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
 const AREAS = ['patients', 'schedule', 'courses', 'checklists', 'inventory', 'delegates'];
@@ -17,15 +17,16 @@ const can = async (c: Client, area: string, level: string) =>
 describe('permissions: helpers and defaults', () => {
   it('a new organizer starts with View everywhere; an admin demoted to organizer too', async () => {
     await withTx(async (c) => {
+      await pendingLogin(c, 'zz-perm-new@example.com');
       const { rows } = await c.query(
         `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-perm-new@example.com') returning id`,
       );
       const id = rows[0].id;
       const perms = await c.query('select area, level from public.user_permissions where user_id = $1 order by area', [id]);
       expect(perms.rows).toEqual([...AREAS].sort().map((area) => ({ area, level: 'view' })));
-      await c.query(`update public.profiles set role = 'admin', active = true where user_id = $1`, [id]);
+      await c.query(`update public.company_members set role = 'admin', active = true where company_id = 'a7c0de00-0000-4000-8000-000000000001' and user_id = $1`, [id]);
       await c.query('delete from public.user_permissions where user_id = $1', [id]);
-      await c.query(`update public.profiles set role = 'organizer' where user_id = $1`, [id]);
+      await c.query(`update public.company_members set role = 'organizer' where company_id = 'a7c0de00-0000-4000-8000-000000000001' and user_id = $1`, [id]);
       const again = await c.query(`select count(*)::int as n from public.user_permissions where user_id = $1 and level = 'view'`, [id]);
       expect(again.rows[0].n).toBe(6);
     });
@@ -86,7 +87,7 @@ describe('permissions: helpers and defaults', () => {
   it('re-saving an unchanged role keeps an organizer at None everywhere', async () => {
     await withTx(async (c) => {
       await setPerms(c, users.target, {});
-      await c.query(`update public.profiles set role = 'organizer' where user_id = $1`, [users.target]);
+      await c.query(`update public.company_members set role = 'organizer' where company_id = 'a7c0de00-0000-4000-8000-000000000001' and user_id = $1`, [users.target]);
       const { rows } = await c.query('select count(*)::int as n from public.user_permissions where user_id = $1', [users.target]);
       expect(rows[0].n).toBe(0);
     });
@@ -105,14 +106,14 @@ describe('permissions: helpers and defaults', () => {
 
   it('a delegate profile is not an active (staff) user', async () => {
     await withTx(async (c) => {
-      await asPostgres(c);
+      await asCompany(c);
       const d = (await c.query(`insert into public.delegates (full_name) values ('Zz Perm Delegate') returning id`)).rows[0].id;
-      await c.query(`update public.profiles set role = 'delegate', delegate_id = $2, active = true where user_id = $1`, [users.target, d]);
+      await c.query(`update public.company_members set role = 'delegate', delegate_id = $2, active = true where company_id = 'a7c0de00-0000-4000-8000-000000000001' and user_id = $1`, [users.target, d]);
       await actAs(c, users.target);
       const r = await c.query('select public.is_active_user() as staff, public.is_delegate_user() as delegate, public.my_delegate_id() as me');
       expect(r.rows[0]).toEqual({ staff: false, delegate: true, me: d });
       await asPostgres(c);
-      await refused(c, () => c.query(`update public.profiles set delegate_id = null where user_id = $1`, [users.target]), /profiles_delegate_link/);
+      await refused(c, () => c.query(`update public.company_members set delegate_id = null where company_id = 'a7c0de00-0000-4000-8000-000000000001' and user_id = $1`, [users.target]), /company_members_delegate_link/);
     });
   });
 });
@@ -276,6 +277,10 @@ describe('permissions: guard rails', () => {
         // One database (0088, spec §4): admin-only login creation for the caller's bound company (a pending
         // row for a new account and its removal when Auth fails, a membership for an existing one).
         'create_pending_login', 'add_existing_member', 'cancel_pending_login',
+        // One database (0093): the console's first admin for a company and its cancel; service role only, no company session.
+        'console_add_first_admin', 'console_cancel_pending_login',
+        // One database (0095): a new company and its starting data; service role only, no company session.
+        'provision_company',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
@@ -287,7 +292,7 @@ describe('permissions: guard rails', () => {
         select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relkind = 'r'
           and not exists (select 1 from pg_policies pp where pp.schemaname = 'public' and pp.tablename = c.relname
-                          and pp.permissive = 'RESTRICTIVE')`);
+                          and pp.permissive = 'RESTRICTIVE' and pp.policyname like '%\\_area\\_%')`);
       const shared = new Set(['profiles', 'settings', 'user_permissions', 'chairs', 'supervisors', 'lecturers', 'stock_lots',
         // Branding (0040): closed tables (no grants), reached only through the definer functions.
         'branding', 'branding_logos',
@@ -295,6 +300,9 @@ describe('permissions: guard rails', () => {
         'stored_files',
         // Admin user tools (0074): select for admins only, written only by the admin_* definer functions.
         'admin_events',
+        // Research export log (0070): admin-only select (restrictive research_exports_admin_read), written
+        // only by the log_research_export definer.
+        'research_exports',
         // One database (0083): the company list, select of the bound company only, no API writes.
         'companies',
         // One database (0085, spec §4): memberships, select of the user's own row (admins all), no API

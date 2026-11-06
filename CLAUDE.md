@@ -18,18 +18,19 @@ npm run db:start            # local Supabase stack (Docker Desktop must be runni
 npm run test:db             # DB tests against the local stack; APPLIES PENDING MIGRATIONS FIRST (see Gotchas)
 npm run test:db -- friction # single DB test file
 npm run test:e2e            # Playwright, 1 worker, starts/reuses the dev server (~12 min full run)
-npm run db:dev2:start         # second local stack (company B for the isolation E2E): writes web/.env.dev2 + web/tenants.local.json; then ENV_FILE=.env.dev2 npm run db:migrate once; db:dev2:stop
-TENANTS_FILE=tenants.local.json npx playwright test isolation --project=chromium   # needs both stacks, nothing on :3000; skips without TENANTS_FILE
+npm run db:dev2:start         # second local stack (the console E2E uses it as control project): writes web/.env.dev2 + web/tenants.local.json; then `npm run console:local` (it applies the control migrations; never `db:migrate` dev2: company tables next to the control tables break the console sign-up); wipe with `npx supabase stop --no-backup --workdir .dev2`; db:dev2:stop
+TENANTS_FILE=<file> npx playwright test isolation company-session --project=chromium   # one stack, two companies: a.localhost + localhost = academy, b.localhost = company B (its "companyId"), paused.localhost "status": "suspended" (tests/e2e/companies.ts); nothing on :3000; skips without TENANTS_FILE
 npx playwright test schedule -g "clash"   # single spec / test
 npm run db:migrate          # apply supabase/migrations/*.sql not yet in app_private.schema_migrations
 npm run console:admin -- you@example.com   # console admin in the control project (needs CONTROL_SERVICE_ROLE_KEY in the env file)
-npm run console:local   # dev2 stack as control project + .env.console for console E2E (then: set -a; source .env.console; set +a; npx playwright test console --project=chromium, nothing on :3000)
+npm run console:local   # dev2 stack as the control project only (companies are in the main stack) + .env.console for console E2E (then: set -a; source .env.console; set +a; npx playwright test console --project=chromium, nothing on :3000)
 npm run create-user -- you@example.com "Name" [--role admin | --role delegate --delegate <id>]   # temporary password; ENV_FILE=.env.prod targets prod
 npm run db:migrate -- --tenant academy      # one company from the control project (ENV_FILE=.env.prod); --all-tenants = every company, stops at the first failure
-npm run tenant:register -- <slug> "<Name>" <hosts…>   # (re)point a company in the control registry at the project in ENV_FILE; replaces its Vault secrets
+npm run tenant:register -- <slug> "<Name>" <hosts…> [--provision | --company <id>]   # (re)point a company in the control registry at the project in ENV_FILE; replaces its Vault secrets; --provision first creates the company in the shared database (provision_company, 0095)
 npm run tenant:check -- <slug>              # health of one registered company (ENV_FILE=.env.prod)
 npm run build                               # next build — Release runs it after tsc, lint and unit tests
 npm run tenants:export -- --dir <dir>       # backup workflow: one env file per company (masked under GitHub Actions)
+npm run company:export -- --tenant <slug> --out <file|->   # one company's rows as JSON; company:restore -- --tenant <slug> --in <file> (or --delete) replaces/erases them (docs/operations.md §D)
 ./scripts/ship.sh verify [e2e specs…]   # on a feature branch, all committed: tsc, lint, unit, test:db (local), named E2E specs
 ./scripts/ship.sh ship                  # push → PR → merge → watch release.yml (migrates PROD, then deploys) — the owner runs this (auto mode blocks Claude): `! cd web && ./scripts/ship.sh ship`, after switching the repo public
 ```
@@ -99,6 +100,7 @@ Runbook: `docs/operations.md` (provisioning, accounts, releases, backup/restore)
 ## Tests
 
 - **DB tests** (`tests/db/`): each test runs in `withTx` (always rolled back); `actAs(c, userId)` impersonates a user via JWT claims, `asPostgres(c)` resets role; `setPerms(c, user, {...})` sets area permissions. Test users come from `inject('testUsers')` (`tests/support/test-users.ts`): `organizer` is pinned to Edit everywhere, `viewer` has View everywhere + Edit on Inventory, `delegate` is a delegate login linked to the "Test Delegate Login" delegate.
+- `actAs(c, user)` binds the session to academy by default; pass `{ session_id }` to test an unbound session. A new `auth.users` row needs a pending login first (`pendingLogin()` in `tests/db/fixtures.ts`; `addPendingLogin` / `ensureUser({ pending })` in `scripts/users.ts`): without one, `handle_new_user` refuses it (0090).
 - **E2E** (`tests/e2e/`): the `chromium` project runs everything except `mobile.spec.ts`, which runs in the `phone` project (360px). Log in with `login(page, TEST_USERS.organizer.email)`; name data with `uniqueName()` (prefix `E2E `, cleaned up in global teardown). Wait for server-derived state rather than optimistic UI. Prefer `getByRole('combobox', { name })` for selects. Pages load their data on the server: data seeded through the API after a page has loaded needs `page.reload()`. E2E implants (`seedProduct`/`seedImplantStock`) use system `E2E` and a unique brand, so choose them with `chooseImplant(page, brand, 'Ø4.0 × 10 mm')` (`implants.spec.ts`): brand, then size. Read emails through Mailpit's API: `GET http://127.0.0.1:54324/api/v1/search?query=to:"<addr>"`, then `/api/v1/message/<ID>` (`.HTML`); see `resetLink()` in `password-reset.spec.ts` and `checklists.spec.ts`.
 - Component tests mock server actions with `vi.mock('./actions', …)`.
 - Date inputs carry `min`/`max` (`patients/CLAUDE.md` → Dates at entry), and jsdom blocks a submit outside them: test dates must fall inside the range (forms with `ChartData` use `data.today`, so fixtures with a future `today` stay valid).

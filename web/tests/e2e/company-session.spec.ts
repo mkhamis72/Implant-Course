@@ -1,40 +1,11 @@
-import { test, expect, type BrowserContext, type Page } from '@playwright/test';
-import { readFileSync, existsSync } from 'node:fs';
-import { Client } from 'pg';
-import { pgConfig } from '../../scripts/db';
-import { adminClient, setProfile } from '../../scripts/users';
+import { test, expect, type BrowserContext } from '@playwright/test';
+import { adminClient, pendingLoginFor, setProfile } from '../../scripts/users';
 import { TEST_PASSWORD, TEST_USERS } from '../support/test-users';
+import { A, ACADEMY, B, companyB, purgeCompany, REFUSED, signIn, SKIP_REASON, withPg } from './companies';
 
 // Runs only with a registry of two companies on the same local stack (a.localhost = academy, b.localhost = company B):
 // TENANTS_FILE=<file> npx playwright test company-session --project=chromium
-const file = process.env.TENANTS_FILE;
-type Entry = { slug: string; hosts: string[]; companyId?: string };
-const tenants: Entry[] = file && existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : [];
-const companyB = tenants.find((t) => t.hosts.includes('b.localhost'))?.companyId;
-test.skip(!tenants.some((t) => t.hosts.includes('a.localhost')) || !companyB, 'needs TENANTS_FILE with a.localhost and b.localhost on one stack');
-
-const A = 'http://a.localhost:3000';
-const B = 'http://b.localhost:3000';
-const ACADEMY = 'a7c0de00-0000-4000-8000-000000000001';
-const REFUSED = 'You do not have access to this company.';
-
-async function withPg<T>(fn: (pg: Client) => Promise<T>): Promise<T> {
-  const pg = new Client(pgConfig());
-  await pg.connect();
-  try {
-    return await fn(pg);
-  } finally {
-    await pg.end();
-  }
-}
-
-async function signIn(page: Page, email: string) {
-  await page.goto(`${A}/login`);
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(TEST_PASSWORD);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
-}
+test.skip(!companyB, SKIP_REASON);
 
 /** The sign-in session id from the auth cookie (possibly chunked; "base64-" + JSON with the access token). */
 async function sessionId(context: BrowserContext): Promise<string> {
@@ -52,6 +23,7 @@ test.describe('the session belongs to the company it signed in on', () => {
   const email = `icm-company-session-${Date.now()}@example.com`;
 
   test.beforeAll(async () => {
+    await pendingLoginFor(email);
     const { data, error } = await adminClient().auth.admin.createUser({ email, password: TEST_PASSWORD, email_confirm: true });
     if (error) throw error;
     userId = data.user!.id;
@@ -62,7 +34,6 @@ test.describe('the session belongs to the company it signed in on', () => {
         `delete from public.company_members where company_id = $1 and user_id = (select id from auth.users where email = $2)`,
         [companyB, TEST_USERS.organizer.email],
       );
-      // Mirrored into academy's member row (0085).
       await setProfile(pg, userId, { full_name: 'E2E Company Session', role: 'organizer', active: true });
     });
   });
@@ -70,7 +41,7 @@ test.describe('the session belongs to the company it signed in on', () => {
   test.afterAll(async () => {
     if (userId) await adminClient().auth.admin.deleteUser(userId);
     // Company B exists only for this spec (DB tests expect academy to be the only company).
-    await withPg((pg) => pg.query('delete from public.companies where id = $1', [companyB]));
+    await purgeCompany(companyB!);
   });
 
   test("academy's cookies on company B's host are refused, and that session ends", async ({ page, context }) => {

@@ -49,6 +49,27 @@ export function maskLines({ tenant, secrets }: Company, env: Env): string[] {
   return [secrets.serviceRoleKey, secrets.databaseUrl, tenant.anon_key].map((v) => `::add-mask::${v}`);
 }
 
+/**
+ * Which database a company lives in: the database host, port and name plus the project ref (the Supabase
+ * URL's host), lower-cased, without a trailing slash. Companies sharing one database share this key.
+ */
+export function databaseKey({ tenant, secrets }: Company): string {
+  const db = new URL(secrets.databaseUrl);
+  const ref = new URL(tenant.supabase_url).host;
+  return `${db.host}${db.pathname.replace(/\/+$/, '')}|${ref}`.toLowerCase();
+}
+
+/** The first company of each distinct database, in order: a database is migrated and dumped once. */
+export function distinctDatabases(companies: Company[]): Company[] {
+  const seen = new Set<string>();
+  return companies.filter((c) => {
+    const key = databaseKey(c);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function companyLabel(t: TenantRow): string {
   return `${t.slug} ${new URL(t.supabase_url).host}`;
 }

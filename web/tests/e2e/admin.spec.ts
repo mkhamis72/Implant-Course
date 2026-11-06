@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
-import { adminClient, setProfile } from '../../scripts/users';
+import { adminClient, pendingLoginFor, setProfile } from '../../scripts/users';
 import { login } from './helpers';
 
 test.describe('admin users', () => {
@@ -55,6 +55,7 @@ test.describe('admin users', () => {
 test('an admin resets a lost password, the user signs in with it, then the admin deletes the user', async ({ page, browser }) => {
   const admin = adminClient();
   const email = `icm-remove-${Date.now()}@example.com`;
+  await pendingLoginFor(email);
   const { data, error } = await admin.auth.admin.createUser({ email, password: `Unknown-${Date.now()}`, email_confirm: true });
   expect(error).toBeNull();
   const userId = data.user!.id;

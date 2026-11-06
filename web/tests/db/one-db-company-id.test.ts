@@ -9,8 +9,14 @@ const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
 const SINGLETONS = ['public.settings', 'public.branding', 'public.branding_logos'];
 // Tables created after 0084 that set company_id explicitly: no academy default, keyed by their own primary key.
-const EXPLICIT_COMPANY = ['public.company_members'];
+const EXPLICIT_COMPANY = ['public.company_members', 'app_private.pending_logins', 'app_private.file_no_counters'];
 const MIGRATION = join(process.cwd(), 'supabase', 'migrations', '0084_company_id.sql');
+/** 0083's app.company_tables(), which 0084 ran with: 0092 lists only tables that already have company_id. */
+function companyTables0083(): string {
+  const sql = readFileSync(join(process.cwd(), 'supabase', 'migrations', '0083_companies.sql'), 'utf8');
+  const start = sql.indexOf('create function app.company_tables()');
+  return sql.slice(start, sql.indexOf('$;', start) + 3).replace('create function', 'create or replace function');
+}
 
 type TableInfo = {
   name: string; relname: string; pk: string[]; notnull: boolean; default_expr: string | null;
@@ -40,7 +46,7 @@ async function tables(c: Client): Promise<TableInfo[]> {
 }
 
 describe('company_id on every company table (0084)', () => {
-  it('adds a not-null company_id defaulting to academy, with an FK to companies and an index', async () => {
+  it('adds a not-null company_id defaulting to the session company (0092), with an FK to companies and an index', async () => {
     await withTx(async (c) => {
       await asPostgres(c);
       const all = await tables(c);
@@ -48,7 +54,7 @@ describe('company_id on every company table (0084)', () => {
       for (const t of all.filter((x) => !EXPLICIT_COMPANY.includes(x.name))) {
         expect({ name: t.name, notnull: t.notnull, fk: t.fk_to_companies, index: t.leading_index })
           .toEqual({ name: t.name, notnull: true, fk: true, index: true });
-        expect(t.default_expr, t.name).toContain(ACADEMY_ID);
+        expect(t.default_expr, t.name).toBe('app.current_company_id()');
       }
     });
   });
@@ -58,9 +64,11 @@ describe('company_id on every company table (0084)', () => {
       await asPostgres(c);
       const all = await tables(c);
       for (const t of all) {
-        const expected = SINGLETONS.includes(t.name) ? ['company_id']
-          : t.pk.length === 1 && t.pk[0] === 'id' ? ['company_id', 'id'] : null;
+        // 0091 made company_id the singletons' primary key, replacing their unique (company_id).
+        const singleton = SINGLETONS.includes(t.name);
+        const expected = !singleton && t.pk.length === 1 && t.pk[0] === 'id' ? ['company_id', 'id'] : null;
         expect({ name: t.name, key: t.key_cols }).toEqual({ name: t.name, key: expected });
+        if (singleton) expect({ name: t.name, pk: t.pk }).toEqual({ name: t.name, pk: ['company_id'] });
       }
       const composite = all.filter((t) => t.key_cols === null).map((t) => t.name);
       expect(composite).toEqual(expect.arrayContaining(['app_private.research_codes', 'public.medical_history', 'public.user_permissions']));
@@ -71,7 +79,12 @@ describe('company_id on every company table (0084)', () => {
     await withTx(async (c) => {
       await asPostgres(c);
       for (const t of await tables(c)) {
-        const { rows } = await c.query(`select count(*)::int as n from ${t.name} where company_id <> $1`, [ACADEMY_ID]);
+        // The backfill: nothing of the single-company data sits in another company. Companies provisioned later
+        // (the console E2E leaves some on the local stack) legitimately hold rows of their own.
+        const { rows } = await c.query(
+          `select count(*)::int as n from ${t.name} where company_id <> $1
+             and company_id in (select id from public.companies where created_at <= (select created_at from public.companies where id = $1))`,
+          [ACADEMY_ID]);
         expect({ name: t.name, n: rows[0].n }).toEqual({ name: t.name, n: 0 });
       }
     });
@@ -106,6 +119,7 @@ describe('company_id on every company table (0084)', () => {
       const before = (await c.query(
         'select (select count(*) from public.stock_movements)::int as moves, (select count(*) from public.audit_log)::int as audits, (select max(id) from public.audit_log)::text as last_audit',
       )).rows[0];
+      await c.query(companyTables0083());
       await c.query(readFileSync(MIGRATION, 'utf8'));
       const after = (await c.query(
         'select (select count(*) from public.stock_movements)::int as moves, (select count(*) from public.audit_log)::int as audits, (select max(id) from public.audit_log)::text as last_audit',

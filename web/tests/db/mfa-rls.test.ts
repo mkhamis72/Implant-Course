@@ -23,11 +23,11 @@ describe('RLS requires aal2 once a user has 2FA', () => {
     });
   });
 
-  it('a 2FA admin with an aal1 token cannot change roles', async () => {
+  it('a 2FA admin with an aal1 token cannot change settings', async () => {
     await withTx(async (c) => {
       await addVerifiedFactor(c, users.admin);
       await actAs(c, users.admin, { aal: 'aal1' });
-      const r = await c.query("update public.profiles set role = 'admin' where user_id = $1", [users.target]);
+      const r = await c.query('update public.settings set expiry_alert_days = expiry_alert_days');
       expect(r.rowCount).toBe(0);
     });
   });
@@ -37,7 +37,7 @@ describe('RLS requires aal2 once a user has 2FA', () => {
       await addVerifiedFactor(c, users.admin);
       await actAs(c, users.admin, { aal: 'aal2' });
       expect((await c.query('select 1 from public.settings')).rows).toHaveLength(1);
-      const r = await c.query("update public.profiles set full_name = full_name where user_id = $1", [users.target]);
+      const r = await c.query('update public.settings set expiry_alert_days = expiry_alert_days');
       expect(r.rowCount).toBe(1);
     });
   });

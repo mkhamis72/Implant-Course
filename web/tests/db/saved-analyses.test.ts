@@ -1,6 +1,6 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs, asPostgres, asCompany } from './helpers';
 import { makeCourse, makeDelegate, makePatient, place, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
@@ -79,7 +79,7 @@ describe('saved analyses (0079)', () => {
   it('keeps the analysis when its course is deleted', async () => {
     await withTx(async (c) => {
       await editors(c);
-      await asPostgres(c);
+      await asCompany(c);
       const course = await makeCourse(c);
       await actAs(c, users.target);
       const id = await save(c, null, 'Course one', course, config({ course, f: 'jaw', o: 'failed' }));

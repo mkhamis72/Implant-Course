@@ -28,6 +28,23 @@ describe('migrateAllTenants', () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  it('migrates a database shared by several companies once (same host and ref, case and trailing slash ignored)', async () => {
+    const shared = (slug: string, url: string): Company => ({
+      tenant: { slug, name: slug, status: 'active', supabase_url: url, anon_key: 'anon' },
+      secrets: { serviceRoleKey: 'svc', databaseUrl: 'postgresql://postgres.x:pw@127.0.0.1:5432/postgres' },
+    });
+    const log: string[] = [];
+    const run = vi.fn().mockResolvedValue([]);
+    await migrateAllTenants([
+      shared('aa', 'https://abcdef.supabase.co'), shared('bb', 'https://ABCDEF.supabase.co/'),
+      shared('cc', 'https://ghijkl.supabase.co'), company('dd'),
+    ], undefined, run, (l) => log.push(l));
+    expect(run).toHaveBeenCalledTimes(3);
+    expect(log.filter((l) => l.startsWith('Target project:'))).toEqual([
+      'Target project: aa abcdef.supabase.co', 'Target project: cc ghijkl.supabase.co', 'Target project: dd ddref.supabase.co',
+    ]);
+  });
+
   it('refuses an empty registry', async () => {
     await expect(migrateAllTenants([], undefined, vi.fn(), () => {})).rejects.toThrow('No companies in the control project.');
   });

@@ -2,6 +2,7 @@ import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
 import { adminClient, ensureUser, setPermissions, setProfile } from '../../scripts/users';
 import { assertSafeTestTarget } from '../../scripts/test-guard';
+import { ACADEMY_COMPANY_ID } from '../../src/lib/tenant/types';
 
 // No default: a password committed to the repo would be a known admin login. See assertSafeTestTarget.
 export const TEST_PASSWORD = process.env.TEST_USER_PASSWORD ?? '';
@@ -41,59 +42,48 @@ export async function ensureTestUsers(): Promise<TestUserIds> {
   assertSafeTestTarget();
   const admin = adminClient();
   const ids = {} as TestUserIds;
-  for (const key of Object.keys(TEST_USERS) as TestUserKey[]) {
-    ids[key] = await ensureUser(admin, {
-      email: TEST_USERS[key].email,
-      password: TEST_PASSWORD,
-      emailConfirm: key !== 'unverified',
-    });
-  }
-  const { data: factors, error } = await admin.auth.admin.mfa.listFactors({ userId: ids.mfa });
-  if (error) throw error;
-  for (const factor of factors.factors) {
-    await admin.auth.admin.mfa.deleteFactor({ id: factor.id, userId: ids.mfa });
-  }
   const pg = new Client(pgConfig());
   await pg.connect();
   try {
-    // Profiles table exists only after migration 0001; skip silently before that.
-    const { rows } = await pg.query("select to_regclass('public.profiles') as t");
-    if (rows[0].t) {
-      // Roles & permissions exist from migration 0030: before that the delegate login is a plain inactive organizer.
-      const perms = await pg.query("select to_regclass('public.user_permissions') as t");
-      const hasPerms = Boolean(perms.rows[0].t);
-      for (const key of Object.keys(PROFILES) as TestUserKey[]) {
-        const profile = PROFILES[key];
-        if (profile.role !== 'delegate') {
-          await setProfile(pg, ids[key], profile);
-        } else if (hasPerms) {
-          const existing = await pg.query('select id from public.delegates where full_name = $1 order by created_at limit 1', [TEST_DELEGATE_NAME]);
-          const delegateId = existing.rows[0]?.id
-            ?? (await pg.query('insert into public.delegates (full_name, email) values ($1, $2) returning id', [TEST_DELEGATE_NAME, TEST_USERS.delegate.email])).rows[0].id;
-          await pg.query('update public.delegates set active = true where id = $1', [delegateId]);
-          await setProfile(pg, ids[key], { ...profile, delegate_id: delegateId });
-        } else {
-          await setProfile(pg, ids[key], { full_name: profile.full_name, role: 'organizer', active: false });
-        }
+    // Both global setups migrate first, so the schema is current: no per-migration guards.
+    // A new account needs a pending login (0090).
+    for (const key of Object.keys(TEST_USERS) as TestUserKey[]) {
+      ids[key] = await ensureUser(admin, {
+        email: TEST_USERS[key].email,
+        password: TEST_PASSWORD,
+        emailConfirm: key !== 'unverified',
+        pending: { pg },
+      });
+    }
+    const { data: factors, error } = await admin.auth.admin.mfa.listFactors({ userId: ids.mfa });
+    if (error) throw error;
+    for (const factor of factors.factors) {
+      await admin.auth.admin.mfa.deleteFactor({ id: factor.id, userId: ids.mfa });
+    }
+    for (const key of Object.keys(PROFILES) as TestUserKey[]) {
+      const profile = PROFILES[key];
+      if (profile.role !== 'delegate') {
+        await setProfile(pg, ids[key], profile);
+        continue;
       }
-      // Pin permissions so a re-created organizer isn't left with the View-only default.
-      if (hasPerms) {
-        for (const key of Object.keys(PROFILES) as TestUserKey[]) {
-          if (PROFILES[key].role === 'organizer') await setPermissions(pg, ids[key], key === 'viewer' ? VIEWER : ALL_EDIT);
-        }
-      }
-      // Supervisors exist only after migration 0024; each test user supervises under its own id.
-      const sup = await pg.query("select to_regclass('public.supervisors') as t");
-      if (sup.rows[0].t) {
-        for (const key of Object.keys(PROFILES) as TestUserKey[]) {
-          if (PROFILES[key].role === 'delegate') continue;
-          await pg.query(
-            `insert into public.supervisors (id, full_name, active) values ($1, $2, $3)
-             on conflict (id) do update set full_name = excluded.full_name, active = excluded.active`,
-            [ids[key], PROFILES[key].full_name, PROFILES[key].active],
-          );
-        }
-      }
+      const existing = await pg.query('select id from public.delegates where company_id = $1 and full_name = $2 order by created_at limit 1', [ACADEMY_COMPANY_ID, TEST_DELEGATE_NAME]);
+      const delegateId = existing.rows[0]?.id
+        ?? (await pg.query('insert into public.delegates (company_id, full_name, email) values ($1, $2, $3) returning id', [ACADEMY_COMPANY_ID, TEST_DELEGATE_NAME, TEST_USERS.delegate.email])).rows[0].id;
+      await pg.query('update public.delegates set active = true where id = $1', [delegateId]);
+      await setProfile(pg, ids[key], { ...profile, delegate_id: delegateId });
+    }
+    // Pin permissions so a re-created organizer isn't left with the View-only default.
+    for (const key of Object.keys(PROFILES) as TestUserKey[]) {
+      if (PROFILES[key].role === 'organizer') await setPermissions(pg, ids[key], key === 'viewer' ? VIEWER : ALL_EDIT);
+    }
+    // Each staff test user supervises under its own id.
+    for (const key of Object.keys(PROFILES) as TestUserKey[]) {
+      if (PROFILES[key].role === 'delegate') continue;
+      await pg.query(
+        `insert into public.supervisors (company_id, id, full_name, active) values ($4, $1, $2, $3)
+         on conflict (id) do update set full_name = excluded.full_name, active = excluded.active`,
+        [ids[key], PROFILES[key].full_name, PROFILES[key].active, ACADEMY_COMPANY_ID],
+      );
     }
   } finally {
     await pg.end();

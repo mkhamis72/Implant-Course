@@ -1,5 +1,5 @@
 import { describe, it, expect, inject } from 'vitest';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs, asPostgres, actAsBound } from './helpers';
 
 const users = inject('testUsers');
 
@@ -21,16 +21,16 @@ describe('audit_log', () => {
     });
   });
 
-  it('records profile changes', async () => {
+  it('records profile changes in the session company (0092)', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.admin);
-      await c.query("update public.profiles set full_name = 'Renamed' where user_id = $1", [users.target]);
+      await actAsBound(c, users.admin);
+      await c.query("select public.admin_set_name($1, 'Renamed')", [users.target]);
       await asPostgres(c);
       const { rows } = await c.query(
-        "select after->>'full_name' as name from public.audit_log where table_name = 'profiles' and row_id = $1 order by id desc limit 1",
+        "select company_id, after->>'full_name' as name from public.audit_log where table_name = 'profiles' and row_id = $1 order by id desc limit 1",
         [users.target],
       );
-      expect(rows[0].name).toBe('Renamed');
+      expect(rows[0]).toEqual({ company_id: 'a7c0de00-0000-4000-8000-000000000001', name: 'Renamed' });
     });
   });
 

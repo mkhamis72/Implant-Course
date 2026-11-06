@@ -2,7 +2,7 @@
 
 Question: can the security-definer functions in `public` and `app_private` enforce company isolation through RLS by being owned by a `NOBYPASSRLS` role `tenant_definer`, instead of an explicit company check added to each one by hand (spec §5)?
 
-Script: `web/scripts/spike-tenant-definer.ts`. Everything runs in one transaction (`lock_timeout` 5 s, `statement_timeout` 60 s) that always rolls back, and the script then confirms the role is gone.
+Script: `web/scripts/spike-tenant-definer.ts`. Everything runs in one transaction (`lock_timeout` 5 s, `statement_timeout` 60 s) that always rolls back, and the script then confirms the role is gone. The script was deleted in Task 10 (historical; this note keeps the result).
 
 ## Local run (2026-11-02)
 

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
-import { adminClient } from '../../scripts/users';
+import { adminClient, pendingLoginFor } from '../../scripts/users';
 import { TEST_PASSWORD, TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 
@@ -9,6 +9,7 @@ import { login } from './helpers';
 test('a user without a profile is refused at sign-in, not sent round a redirect loop', async ({ page }) => {
   const admin = adminClient();
   const email = `icm-noprofile-${Date.now()}@example.com`;
+  await pendingLoginFor(email);
   const { data } = await admin.auth.admin.createUser({ email, password: TEST_PASSWORD, email_confirm: true });
   const pg = new Client(pgConfig());
   await pg.connect();

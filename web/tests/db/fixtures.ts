@@ -141,12 +141,18 @@ export async function book(
 
 export type Perms = Partial<Record<'patients' | 'schedule' | 'courses' | 'checklists' | 'inventory' | 'delegates' | 'research', 'view' | 'edit' | null>>;
 
-/** Sets a user's area permissions directly (bypasses RLS; call as postgres). Unlisted areas become None. */
-export async function setPerms(c: Client, user: string, perms: Perms): Promise<void> {
+/** Sets a user's area permissions in the company (academy by default) directly (bypasses RLS; call as
+ *  postgres). Unlisted areas become None there; other companies' rows stay. */
+export async function setPerms(
+  c: Client, user: string, perms: Perms, company = 'a7c0de00-0000-4000-8000-000000000001',
+): Promise<void> {
   await c.query('reset role');
-  await c.query('delete from public.user_permissions where user_id = $1', [user]);
+  await c.query('delete from public.user_permissions where company_id = $1 and user_id = $2', [company, user]);
   for (const [area, level] of Object.entries(perms)) {
-    if (level) await c.query('insert into public.user_permissions (user_id, area, level) values ($1, $2, $3)', [user, area, level]);
+    if (level) {
+      await c.query('insert into public.user_permissions (company_id, user_id, area, level) values ($1, $2, $3, $4)',
+        [company, user, area, level]);
+    }
   }
 }
 
@@ -176,4 +182,19 @@ export async function legacyFailure(c: Client, site: string, date: string, user:
   const { rows } = await c.query(`update public.implant_sites set state = 'failed' where id = $1 returning patient_id, tooth`, [site]);
   await c.query(`select app_private.set_tooth($1, $2::smallint, 'failed')`, [rows[0].patient_id, rows[0].tooth]);
   await actAs(c, user);
+}
+
+/** A pending login for the email (as postgres), so an auth.users insert creates its membership (0088):
+ *  without one, handle_new_user refuses the sign-up (0090). Academy and an active organizer by default. */
+export async function pendingLogin(
+  c: Client,
+  email: string,
+  opts: { company?: string; role?: 'admin' | 'organizer' | 'delegate'; fullName?: string; delegateId?: string | null } = {},
+): Promise<void> {
+  await asPostgres(c);
+  await c.query(
+    `insert into app_private.pending_logins (company_id, email, full_name, role, delegate_id, created_by)
+     values ($1, lower($2), $3, $4, $5, '00000000-0000-0000-0000-000000000000')`,
+    [opts.company ?? 'a7c0de00-0000-4000-8000-000000000001', email, opts.fullName ?? '', opts.role ?? 'organizer', opts.delegateId ?? null],
+  );
 }

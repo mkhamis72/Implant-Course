@@ -1,13 +1,19 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { TEST_PASSWORD } from '../support/test-users';
 
-/** A Supabase client signed in as a test user: goes through the same RLS and functions as the app. */
-export async function apiAs(email: string): Promise<SupabaseClient> {
+const ACADEMY_COMPANY_ID = 'a7c0de00-0000-4000-8000-000000000001';
+
+/** A Supabase client signed in as a test user: goes through the same RLS and functions as the app.
+ *  Its session is bound to the company (academy by default) as the app does at sign-in: the guards
+ *  give an unbound session no access (0089). */
+export async function apiAs(email: string, company = ACADEMY_COMPANY_ID): Promise<SupabaseClient> {
   const api = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const { error } = await api.auth.signInWithPassword({ email, password: TEST_PASSWORD });
   if (error) throw error;
+  const { error: bindError } = await api.rpc('bind_my_session', { p_company: company });
+  if (bindError) throw bindError;
   return api;
 }
 

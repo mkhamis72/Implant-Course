@@ -37,7 +37,8 @@ export async function registerCompany(_prev: FormState, formData: FormData): Pro
   if (!parsed.success) return failedWithoutSecrets(parsed.error.issues[0].message, formData);
   const c = parsed.data;
   const control = createConsoleServiceClient();
-  if (await getCompany(control, c.slug)) {
+  // A registry row without a company id is a registration whose company was never created: adding it again finishes it.
+  if ((await getCompany(control, c.slug))?.company_id) {
     return failedWithoutSecrets('A company with this slug already exists — open it to replace its keys.', formData);
   }
   const problem = await checkProblem({ supabaseUrl: c.supabaseUrl, anonKey: c.anonKey, serviceRoleKey: c.serviceRoleKey });
@@ -47,6 +48,16 @@ export async function registerCompany(_prev: FormState, formData: FormData): Pro
     p_service_role_key: c.serviceRoleKey, p_database_url: c.databaseUrl, p_actor: admin.email,
   });
   if (error) return failedWithoutSecrets(error.message, formData);
+  // The company itself, with its starting data, in the shared database (0095), then its id on the registry row.
+  const db = createClient(c.supabaseUrl, c.serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: companyId, error: provisionError } = await db.rpc('provision_company', { p_slug: c.slug, p_name: c.name });
+  if (provisionError || !companyId) {
+    return failedWithoutSecrets(`Registered, but the company could not be created in the database: ${provisionError?.message ?? 'no id returned'}`, formData);
+  }
+  const { error: saveError } = await control.rpc('console_set_company', { p_slug: c.slug, p_company_id: companyId, p_actor: admin.email });
+  if (saveError) {
+    return failedWithoutSecrets(`Company ${companyId} was created in the database, but its id could not be saved in the registry: ${saveError.message}`, formData);
+  }
   revalidatePath('/console');
   redirect(`/console/companies/${c.slug}`);
 }
@@ -104,20 +115,25 @@ export async function firstAdmin(_prev: FirstAdminState, formData: FormData): Pr
   const company = await getCompany(control, parsed.data.slug);
   const key = company && (await serviceKeyOf(control, parsed.data.slug));
   if (!company || !key) return failed(`Unknown company ${parsed.data.slug}`, formData);
+  if (!company.company_id) return failed(`${parsed.data.slug} has no company in the database yet`, formData);
+  const companyId = company.company_id;
   try {
     const db = createClient(company.supabase_url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-    const r = await createFirstAdmin(db, { email: parsed.data.email, fullName: parsed.data.fullName });
+    const r = await createFirstAdmin(db, { companyId, email: parsed.data.email, fullName: parsed.data.fullName });
     // The login exists now: a failed log entry must not hide the password. Never log the password.
     const { error: logError } = await control.rpc('console_log', {
       p_slug: parsed.data.slug,
-      p_action: r.created ? 'first_admin_created' : 'admin_password_reset',
+      // console_log (control 0003) knows two actions: an added shared account is a created admin there.
+      p_action: r.outcome === 'reset' ? 'admin_password_reset' : 'first_admin_created',
       p_detail: parsed.data.email,
       p_actor: admin.email,
     });
-    const ok = r.created ? 'Admin login created.' : 'Password reset for the existing login.';
+    const ok = r.outcome === 'created' ? 'Admin login created.'
+      : r.outcome === 'reset' ? 'Password reset for the existing login.'
+      : `Added ${parsed.data.email} as admin. They sign in with their existing password.`;
     return {
       ok: logError ? `${ok} The change could not be recorded in the history.` : ok,
-      password: r.password,
+      password: r.outcome === 'added' ? undefined : r.password,
       email: parsed.data.email,
     };
   } catch (e) {

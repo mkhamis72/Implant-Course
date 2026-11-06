@@ -119,15 +119,15 @@ One sender serves every company; the email names the company. Locally the emails
 
 ## D. Backups and restore
 
-**What a backup holds:** the data (not the schema) of the app tables plus Supabase's sign-in accounts (`auth` schema), encrypted. The schema comes from the migrations in this repo.
+**What a backup holds:** the data (not the schema) of the app tables plus Supabase's sign-in accounts (`auth` schema), encrypted. The schema comes from the migrations in this repo. Since the one-database release a database can hold several companies, so a backup has two kinds of file: a **whole-database dump** (every company in that database; taken once per distinct database, named after the first company on it) and, for every company, its **own export** (`company-export`: that company's rows and its members' accounts as JSON, restorable alone).
 
-- **Backup** runs nightly and writes one encrypted file per company, `<slug>-<date>.dump.gpg`, plus `_control-<date>.dump.gpg` (the company registry only), in the artifact `backups-*`, kept 14 days, and copies the same encrypted files to the Cloudflare R2 bucket under `<date>/<run id>/`, kept and locked for a year (see Off-site copy below). A failure for one company doesn't stop the others; the run turns red and ends with "Backup failed for: …". The run also pings every company and the control project to keep them awake; a failed ping doesn't stop the others and is named in "Keep-awake failed for: …". A failed off-site copy also turns the run red ("Off-site copy failed or did not run").
+- **Backup** runs nightly and writes, per distinct database, `<slug>-<date>.dump.gpg` (the whole database, named after the first company on it), per company `<slug>-<date>.company.dump.gpg` (the company's own JSON export; the `.dump` in the name only keeps it inside the artifact and off-site globs), plus `_control-<date>.dump.gpg` (the company registry only), in the artifact `backups-*`, kept 14 days, and copies the same encrypted files to the Cloudflare R2 bucket under `<date>/<run id>/`, kept and locked for a year (see Off-site copy below). A failure for one company doesn't stop the others; the run turns red and ends with "Backup failed for: …". The run also pings every company and the control project to keep them awake; a failed ping doesn't stop the others and is named in "Keep-awake failed for: …". A failed off-site copy also turns the run red ("Off-site copy failed or did not run").
 - **Monthly verify** runs on its own at 06:00 UTC on the 1st, after that night's backup; GitHub emails you if it fails (scheduled runs notify whoever last changed the workflow's schedule). Run it by hand any time: Actions → Backup → Run workflow → mode `verify`. It checks the newest artifact **and** the newest off-site set, and must finish green with "Every backup is readable and complete, in GitHub and off-site." It also accepts the older `prod-backup-*` artifacts for their remaining days. Verify decrypts with the GitHub secret, so it proves GitHub can read the backups, not that **you** can: keep `BACKUP_PASSPHRASE` in your password manager (it was lost once and replaced on 2026-10-08; backups made before that can't be read).
 - **Restore rehearsal** (before go-live, then twice a year). There are no free Supabase slots for a scratch project, so use the local dev2 stack and wipe it afterwards. It holds patient data while you work, so never leave it.
   1. `npx supabase stop --workdir .dev2 --no-backup`, then `npm run db:dev2:start` and `ENV_FILE=.env.dev2 npm run db:migrate`.
   2. Download and decrypt the newest backup outside the repo (steps 1, 5 and 6 below). Run them with `docker exec supabase_db_implant-course-dev2 psql -U postgres -d postgres …` after `docker cp`-ing `data.sql` in. If your local `pg_restore` is older than the backup's, run it through `docker run --rm -v <dir>:/work postgres:18 pg_restore …`.
   3. Compare the row count of every `COPY` block in `data.sql` with `select count(*)` of that table in dev2.
-  4. `npx supabase stop --workdir .dev2 --no-backup`, delete the downloaded and decrypted files, then rebuild dev2 for the tests (`npm run db:dev2:start`, `ENV_FILE=.env.dev2 npm run db:migrate`, `npm run console:local`).
+  4. `npx supabase stop --workdir .dev2 --no-backup`, delete the downloaded and decrypted files, then rebuild dev2 for the console tests: `npm run db:dev2:start`, `npm run console:local` (control project only: do not `db:migrate` the rebuilt dev2; the company schema's sign-up trigger would refuse the console admins).
 
   Last rehearsal: 2026-10-08, backup run 37782802942. All 57 tables matched, all 5 accounts kept their passwords, and new writes continued the ID sequences.
 
@@ -140,24 +140,26 @@ One sender serves every company; the email names the company. Locally the emails
 6. GitHub → Environments → `production` → add the secrets `R2_ENDPOINT` (that endpoint), `R2_BUCKET` (`implant-course-backups`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`. Keep the Cloudflare login in your password manager: it is the way in if GitHub is lost.
 7. Run Backup by hand, then Backup with mode `verify`: both copies must pass. In the bucket, try to delete one file: R2 must refuse it.
 
-**Restore**, if a company's project or the control project is lost or damaged.
+**Before this release every tenant must have its company id** in the control project (register with `--company <uuid>` or `--provision`). The nightly company export fails for one without, naming it ("no company id in the control project") and turning the run red.
+
+**Restore a whole database**, if a company's project (or the control project) is lost or damaged. For one company inside a healthy shared database use **Restore one company's data** below instead.
 
 You need:
 - **GnuPG:** included in Git for Windows (Git Bash), or install Gpg4win;
 - **PostgreSQL client tools** (`pg_restore`, `psql`) at least as new as the `pg_dump` that made the backup. The Backup workflow installs the newest client (18 as of 2026-10), so use 18 or later, e.g. from the PostgreSQL Windows installer with "Command Line Tools" only. An older `pg_restore` stops with "unsupported version in file header".
 
-**Restore one company** (the others are untouched). Steps, in Git Bash from `web/`:
+**Restore a database** (every company in it comes back). Steps, in Git Bash from `web/`:
 1. Download the newest `backups-*` artifact and unzip it. If it has expired (14 days) or GitHub is unavailable, download the file from the R2 bucket instead: Cloudflare dashboard → R2 → `implant-course-backups` → the date and run folder → the company's file → Download. Then decrypt the company's file: `gpg --decrypt <slug>-<date>.dump.gpg > <slug>.dump`. It asks for the passphrase.
 2. Create a new Supabase project (Frankfurt), with the same auth settings as §A.1.
 3. Make an env file `.env.restore` with the new project's `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (session pooler) and `DATABASE_CA_CERT`, plus the `CONTROL_SUPABASE_URL` and `CONTROL_DATABASE_URL` lines copied from `.env.prod` (`tenant:register` reads the company from the first group and the control project from the second).
 4. Apply the schema to the new project directly: `ENV_FILE=.env.restore npm run db:migrate`. If the backup is older than the newest migrations, check out the commit the backup belongs to first: the newest migration it has is the newest migration file at that date. Then `git checkout master` again before the next steps.
 5. Turn the dump into SQL: `pg_restore --data-only --no-owner -f data.sql <slug>.dump`.
-6. **Fresh project only.** The TRUNCATE below (with `companies … CASCADE`) is for a brand-new project. After the one-database cut-over it would wipe every company; plan 3 rewrites this step. Load it in one transaction, with triggers off so nothing is created twice. This is Supabase's documented restore method. The migrations seeded `settings`, `branding`, the sample `products`, the consent form `consent_form_versions` (0072), the company list `companies` (0083) and the academy memberships `company_members` (0085), and auditing those seeds wrote `audit_log` rows, so empty those seven first. Without `audit_log`, the load stops with `duplicate key value violates unique constraint "audit_log_pkey"`:
+6. **Fresh project only.** The TRUNCATE below (with `companies … CASCADE`) is for a brand-new project and wipes every company in it, which is what a whole-database restore wants; never run it on a database that is in use. Load it in one transaction, with triggers off so nothing is created twice. This is Supabase's documented restore method. The migrations seeded `settings`, `branding`, the sample `products`, the consent form `consent_form_versions` (0072), the company list `companies` (0083) and the academy memberships `company_members` (0085) and academy's file number counter `app_private.file_no_counters` (0091), and auditing those seeds wrote `audit_log` rows, so empty those eight first. Without `audit_log`, the load stops with `duplicate key value violates unique constraint "audit_log_pkey"`:
 
    ```bash
    psql "<new session pooler URI>" --single-transaction -v ON_ERROR_STOP=1 \
      -c "SET session_replication_role = replica" \
-     -c "TRUNCATE public.settings, public.products, public.branding, public.consent_form_versions, public.companies, public.company_members, public.audit_log CASCADE" \
+     -c "TRUNCATE public.settings, public.products, public.branding, public.consent_form_versions, public.companies, public.company_members, app_private.file_no_counters, public.audit_log CASCADE" \
      -f data.sql
    ```
 
@@ -165,6 +167,29 @@ You need:
 8. Check it: `ENV_FILE=.env.prod npm run tenant:check -- <slug>`. Sign-in accounts come back with the data: everyone keeps their password and 2FA.
 
 `.env.restore` can be deleted afterwards: the control project now holds the new keys. If the restored company is the academy, update the academy values in `.env.prod` only if you still use them. Also update Vercel's `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` to the new project: otherwise the documented rollback (removing the `CONTROL_*` variables, §G) would point at the dead project.
+
+**Restore one company's data** (a mistake or damage in one company; the other companies in the database are untouched). Needs the company's own export `<slug>-<date>.company.dump.gpg` from the artifact or R2.
+1. Decrypt it outside the repo: `gpg --decrypt <slug>-<date>.company.dump.gpg > <slug>.json`. The file holds password hashes and patient data: treat it like a database dump and delete it afterwards.
+2. **Suspend the company** in the console (Companies, the company, Suspend; type the slug), wait up to 60 seconds for the host cache and confirm its site shows 503. The restore deletes the company's rows and loads the file's rows back: anything the company's users write meanwhile would be interleaved with that and lost. Other companies keep working.
+3. Take a fresh export of the company, so the restore can itself be undone: `ENV_FILE=.env.prod npm run company:export -- --tenant <slug> --out before-<slug>.json`.
+4. `ENV_FILE=.env.prod npm run company:restore -- --tenant <slug> --in <slug>.json`. It refuses a file whose company id is not the company's, or with a row that carries another company's id, or a table list that differs from the database's. In one transaction it deletes that company's rows (company tables in reverse foreign-key order, including its `company_members`) and loads the file's rows back; `profiles` and `auth.users` are only inserted when missing and never deleted, because a person can belong to another company. Triggers are off during the load (`session_replication_role = replica`; if the database role may not set it, the restore stops before changing anything), so audit rows and the stock ledger come back exactly as exported. The foreign keys of the restored rows are then checked and any failure rolls everything back. A log is written next to the file (`<file>.restore.log`).
+5. **Lift the suspension** in the console (Reactivate), wait up to 60 seconds, then check the company in the app (patients, stock on hand). If it is wrong, suspend again and restore `before-<slug>.json` the same way. Delete the downloaded and decrypted files.
+
+**Delete one company's data** (a data-protection request, or after a company leaves). Irreversible: export first and keep that file encrypted until the request is settled.
+1. `ENV_FILE=.env.prod npm run company:export -- --tenant <slug> --out erase-<slug>.json`; the list of people is in its `public.company_members` table.
+2. `ENV_FILE=.env.prod npm run company:restore -- --tenant <slug> --delete` removes every company-table row of the company (the same transaction, triggers and checks as a restore, with nothing reloaded). The company row itself, `companies`, stays. To remove it too, end the company's sign-in sessions first: their bindings in `app.session_companies` reference the company (`session_companies_company_id_fkey`), so a plain delete of the company fails while any exist; and the company's own audit trigger would log its deletion under the deleted company, which fails too (`audit_log_company_id_fkey`), so it is off for that one statement (foreign keys stay checked). As postgres, in one transaction (tried in a rolled-back transaction on the local stack, 2026-11-06):
+
+   ```sql
+   begin;
+   delete from auth.sessions where id in (select session_id from app.session_companies where company_id = '<company id>');
+   delete from app.session_companies where company_id = '<company id>';
+   alter table public.companies disable trigger companies_audit;
+   delete from public.companies where id = '<company id>';
+   alter table public.companies enable trigger companies_audit;
+   commit;
+   ```
+3. Remove the people only if they have no other membership (they may belong to another company): as postgres, `delete from auth.users u where u.id in (<user ids from step 1>) and not exists (select 1 from public.company_members m where m.user_id = u.id)`. Their `profiles` rows go with them. A user who is still a member somewhere stays.
+4. Deregister the company from the control project in the console (hosts and Vault secrets), and delete `erase-<slug>.json` once the request is closed. Nightly backups still hold the company's data until the 14-day artifacts expire and the year-long R2 copies are deleted by their lifecycle rule; say so in the reply to the data subject.
 
 **Restore the control project:** create a fresh project; run `ENV_FILE=.env.prod npm run db:migrate -- --control` (with `CONTROL_*` pointing at it); load `_control-<date>.dump` the same way (no TRUNCATE needed). Read each company's slug, name and hosts with `select slug, name, hosts from public.tenants`. Re-run `tenant:register` for every company (Vault secrets aren't in the backup; use an env file with that company's keys, as in step 3 above), then `tenant:check -- <slug>` for each. Update `CONTROL_SUPABASE_URL` and `CONTROL_SERVICE_ROLE_KEY` in Vercel and `CONTROL_DATABASE_URL`, `CONTROL_SUPABASE_URL` and `CONTROL_ANON_KEY` in GitHub; re-run Release.
 
@@ -254,4 +279,4 @@ Steps (Git Bash, from `web/`):
 
 From then on, every Release migrates the company, every Backup run saves it (`<slug>-<date>.dump.gpg`, also copied to R2), and its health shows on the console's Companies page. App emails (checklist notices) still go through the one `SMTP_*` sender set in Vercel.
 
-*Locally:* `npm run db:dev2:start`, `ENV_FILE=.env.dev2 npm run db:migrate`, `npm run console:local` (refuses non-local stacks; writes `.env.console`), then `set -a; source .env.console; set +a; npm run dev` and open `http://console.localhost:3000/console`. The console E2E (`npx playwright test console --project=chromium`, with the same env loaded and nothing on :3000) skips without `CONSOLE_HOST`; `npm run console:admin` is for real projects.
+*Locally:* `npm run db:dev2:start`, `npm run console:local` (dev2 is the control project only, do not migrate it; both companies are in the main stack; refuses non-local stacks; writes `.env.console`), then `set -a; source .env.console; set +a; npm run dev` and open `http://console.localhost:3000/console`. The console E2E (`npx playwright test console --project=chromium`, with the same env loaded and nothing on :3000) skips without `CONSOLE_HOST`; `npm run console:admin` is for real projects.

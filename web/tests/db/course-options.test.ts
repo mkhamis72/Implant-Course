@@ -1,5 +1,5 @@
 import { describe, it, expect, inject } from 'vitest';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs, asPostgres, asCompany } from './helpers';
 import { makeCourse, setPerms } from './fixtures';
 
 const users = inject('testUsers');
@@ -7,7 +7,7 @@ const users = inject('testUsers');
 describe('course_options', () => {
   it('lists courses for a user with Patients view but no Courses view, newest first', async () => {
     await withTx(async (c) => {
-      await asPostgres(c);
+      await asCompany(c);
       const older = await makeCourse(c, '2030-01-01', '2030-01-05');
       const newer = await makeCourse(c, '2030-06-01', '2030-06-05');
       await setPerms(c, users.target, { patients: 'view' });

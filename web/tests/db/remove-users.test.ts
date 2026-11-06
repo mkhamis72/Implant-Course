@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs, actAsBound, asPostgres } from './helpers';
-import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, place, receive, setPerms } from './fixtures';
+import { withTx, actAs, actAsBound, asPostgres, asCompany } from './helpers';
+import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, pendingLogin, place, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -11,15 +11,12 @@ async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp) {
   await c.query('rollback to savepoint s');
 }
 
-/** A fresh login (as postgres): the auth trigger gives it an inactive organizer profile. */
-async function newUser(c: Client, email: string, profile: { role?: string; delegate_id?: string } = {}): Promise<string> {
-  await asPostgres(c);
-  const id = (await c.query('insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id', [email])).rows[0].id;
-  await c.query(
-    `update public.profiles set full_name = 'Zz Remove ' || $2, role = $3, delegate_id = $4, active = true where user_id = $1`,
-    [id, email, profile.role ?? 'organizer', profile.delegate_id ?? null],
-  );
-  return id;
+/** A fresh active academy login (as postgres), from a pending login (0088). */
+async function newUser(
+  c: Client, email: string, profile: { role?: 'admin' | 'organizer' | 'delegate'; delegate_id?: string } = {},
+): Promise<string> {
+  await pendingLogin(c, email, { fullName: `Zz Remove ${email}`, role: profile.role, delegateId: profile.delegate_id });
+  return (await c.query('insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id', [email])).rows[0].id;
 }
 
 const deleteUser = (c: Client, user: string) => c.query('select public.delete_user($1)', [user]);
@@ -133,7 +130,7 @@ describe('delete_delegate', () => {
 describe('checklist assignees', () => {
   it('are organizers or admins, never delegate logins', async () => {
     await withTx(async (c) => {
-      await asPostgres(c);
+      await asCompany(c);
       const list = (await c.query(`insert into public.checklists (title) values ('Zz Assignee list') returning id`)).rows[0].id;
       const assign = (user: string, position: number) =>
         c.query(`insert into public.checklist_items (checklist_id, position, text, assignee_id) values ($1, $2, 'Task', $3)`, [list, position, user]);
@@ -148,7 +145,7 @@ describe('checklist assignees', () => {
       await asPostgres(c);
       const n = await count(
         c,
-        `select count(*)::int as n from public.checklist_items i join public.profiles p on p.user_id = i.assignee_id where p.role = 'delegate'`,
+        `select count(*)::int as n from public.checklist_items i join public.company_members m on m.company_id = i.company_id and m.user_id = i.assignee_id where m.role = 'delegate'`,
         [],
       );
       expect(n).toBe(0);

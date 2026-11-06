@@ -112,6 +112,7 @@ export function FirstAdminForm({ slug }: { slug: string }) {
       <h2 className="mb-3 text-lg font-semibold">First admin</h2>
       <p className="mb-3 text-sm text-muted">
         If a login with this email already exists in the company, it becomes an active admin and gets a new temporary password.
+        If another company also uses it, it becomes an admin here and keeps its own password.
       </p>
       <form key={attempt} action={formAction} className="space-y-3">
         <input type="hidden" name="slug" value={slug} />

@@ -1,6 +1,6 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs, asPostgres, asCompany } from './helpers';
 import {
   addTalk, book, enroll, makeChair, makeCourse, makeDelegate, makeLecturer, makePatient, makeProduct, makeSession, place, receive,
 } from './fixtures';
@@ -9,9 +9,9 @@ const users = inject('testUsers');
 
 /** Turns the `target` test user into a delegate login for a fresh delegate, inside the transaction. */
 async function asDelegate(c: Client): Promise<string> {
-  await asPostgres(c);
+  await asCompany(c);
   const me = await makeDelegate(c, 'Zz Me Delegate');
-  await c.query(`update public.profiles set role = 'delegate', delegate_id = $2, active = true where user_id = $1`, [users.target, me]);
+  await c.query(`update public.company_members set role = 'delegate', delegate_id = $2, active = true where company_id = 'a7c0de00-0000-4000-8000-000000000001' and user_id = $1`, [users.target, me]);
   return me;
 }
 
@@ -42,7 +42,7 @@ describe('delegate logins', () => {
         await c.query('savepoint s');
         try {
           const r = await c.query(`select count(*)::int as n from public.${tablename}`);
-          // their own profile and membership (0085); settings holds only the idle timeout and expiry alert days
+          // their own profile and membership (0085); settings holds only the idle timeout and expiry alert days. The company row is staff-only (0092).
           if (['profiles', 'company_members', 'settings'].includes(tablename)) expect({ tablename, n: r.rows[0].n }).toEqual({ tablename, n: 1 });
           else if (tablename !== 'user_permissions') expect({ tablename, n: r.rows[0].n }).toEqual({ tablename, n: 0 });
         } catch (e) {
@@ -97,7 +97,7 @@ describe('delegate logins', () => {
       expect(r.rows).toEqual([{ patient_name: 'Zz Mine Patient', tooth: 46, role: 'placing' }]);
 
       await asPostgres(c);
-      await c.query('update public.profiles set active = false where user_id = $1', [users.target]);
+      await c.query('update public.company_members set active = false where user_id = $1', [users.target]);
       await actAs(c, users.target);
       await c.query('savepoint s');
       await expect(c.query(`select * from public.my_schedule('2030-03-01', '2030-03-05')`)).rejects.toThrow(/delegate logins/);

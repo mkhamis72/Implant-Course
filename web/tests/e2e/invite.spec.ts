@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
-import { adminClient, setProfile } from '../../scripts/users';
+import { adminClient, pendingLoginFor, setProfile } from '../../scripts/users';
 import { expectDashboard } from './helpers';
 
 test('invited user accepts invite, sets a password and reaches the dashboard', async ({ page }) => {
   const admin = adminClient();
   const email = `icm-invite-${Date.now()}@example.com`;
+  await pendingLoginFor(email);
   const { data, error } = await admin.auth.admin.generateLink({ type: 'invite', email });
   expect(error).toBeNull();
   const userId = data.user!.id;
@@ -29,6 +30,7 @@ test('invited user accepts invite, sets a password and reaches the dashboard', a
 test('mismatched passwords are rejected', async ({ page }) => {
   const admin = adminClient();
   const email = `icm-invite-mm-${Date.now()}@example.com`;
+  await pendingLoginFor(email);
   const { data } = await admin.auth.admin.generateLink({ type: 'invite', email });
   const pg = new Client(pgConfig());
   await pg.connect();
