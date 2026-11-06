@@ -11,6 +11,8 @@ import { applyTenantArg } from './tenant-env';
  * non-system role; ACLs are sorted and NULL is replaced by the built-in default, so equal privileges compare equal.
  * Function and view bodies are hashed without carriage returns: migrations applied from a Windows checkout keep CRLF in
  * function bodies, prod's (applied from Linux CI) don't, and the same function must compare equal.
+ * Supabase's own roles (supabase_*) and memberships in them are left out: they differ between Supabase versions
+ * (local CLI image vs hosted) and no migration touches them.
  *   schema-fingerprint [--tenant academy] --out <file>
  *   schema-fingerprint --compare <before> <after>      exit 1 on any difference
  */
@@ -70,8 +72,9 @@ export function fingerprintQueries(schemas = FINGERPRINT_SCHEMAS): string[] {
        from pg_default_acl d left join pg_namespace n on n.oid = d.defaclnamespace
       where d.defaclnamespace = 0 or n.nspname in ${ns}`,
     `select 'role ' || rolname as k, concat_ws(' | ', 'super=' || rolsuper, 'bypassrls=' || rolbypassrls, 'login=' || rolcanlogin,
-            (select string_agg(g.rolname, ',' order by g.rolname) from pg_auth_members m join pg_roles g on g.oid = m.roleid where m.member = r.oid)) as v
-       from pg_roles r where rolname not like 'pg\\_%'`,
+            (select string_agg(g.rolname, ',' order by g.rolname) from pg_auth_members m join pg_roles g on g.oid = m.roleid
+              where m.member = r.oid and g.rolname not like 'supabase\\_%')) as v
+       from pg_roles r where rolname not like 'pg\\_%' and rolname not like 'supabase\\_%'`,
   ];
 }
 
