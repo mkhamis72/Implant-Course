@@ -9,6 +9,8 @@ import { applyTenantArg } from './tenant-env';
  * Release 4 rollback proof: the schema, grants and roles of the app schemas (public, app_private, app), with no row data.
  * One entry per schema, relation, column, function, constraint, index, policy, trigger, type, default privilege and
  * non-system role; ACLs are sorted and NULL is replaced by the built-in default, so equal privileges compare equal.
+ * Function and view bodies are hashed without carriage returns: migrations applied from a Windows checkout keep CRLF in
+ * function bodies, prod's (applied from Linux CI) don't, and the same function must compare equal.
  *   schema-fingerprint [--tenant academy] --out <file>
  *   schema-fingerprint --compare <before> <after>      exit 1 on any difference
  */
@@ -28,7 +30,7 @@ export function fingerprintQueries(schemas = FINGERPRINT_SCHEMAS): string[] {
     `select 'rel ' || n.nspname || '.' || c.relname as k,
             concat_ws(' | ', c.relkind, pg_get_userbyid(c.relowner), ${acl('c.relacl', "case when c.relkind = 'S' then 's' else 'r' end::\"char\"", 'c.relowner')},
                       'rls=' || c.relrowsecurity, 'force=' || c.relforcerowsecurity,
-                      case when c.relkind in ('v', 'm') then md5(pg_get_viewdef(c.oid)) end) as v
+                      case when c.relkind in ('v', 'm') then md5(replace(pg_get_viewdef(c.oid), chr(13), '')) end) as v
        from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname in ${ns} and c.relkind in ('r', 'p', 'v', 'm', 'S', 'f')`,
     `select 'col ' || n.nspname || '.' || c.relname || '.' || a.attname as k,
@@ -40,7 +42,7 @@ export function fingerprintQueries(schemas = FINGERPRINT_SCHEMAS): string[] {
       where n.nspname in ${ns} and c.relkind in ('r', 'p', 'v', 'm', 'f') and a.attnum > 0 and not a.attisdropped`,
     `select 'fn ' || p.oid::regprocedure::text as k,
             concat_ws(' | ', p.prokind, pg_get_userbyid(p.proowner), ${acl('p.proacl', "'f'", 'p.proowner')}, 'definer=' || p.prosecdef,
-                      md5(case when p.prokind = 'a' then p.prosrc else pg_get_functiondef(p.oid) end)) as v
+                      md5(replace(case when p.prokind = 'a' then p.prosrc else pg_get_functiondef(p.oid) end, chr(13), ''))) as v
        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
       where n.nspname in ${ns} and not exists (select 1 from pg_depend e where e.objid = p.oid and e.deptype = 'e')`,
     `select 'con ' || n.nspname || '.' || coalesce(c.relname, t.typname, '-') || '.' || o.conname as k, pg_get_constraintdef(o.oid) as v

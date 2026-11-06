@@ -38,5 +38,8 @@ describe('fingerprintQueries', () => {
     expect(sql).toContain('pg_default_acl');
     expect(sql).toContain("'role ' || rolname");
     expect(sql).toContain('a.attacl');
+    // CRLF bodies from a Windows checkout hash like prod's LF ones
+    expect(sql).toContain("else pg_get_functiondef(p.oid) end, chr(13), '')");
+    expect(sql).toContain("replace(pg_get_viewdef(c.oid), chr(13), '')");
   });
 });
