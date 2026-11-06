@@ -123,3 +123,8 @@ Final: parked — release-4 runbook references release-5-canary.md, absent on on
 Final: parked — runbook lacks "if the hosted rollback fails, re-promote the release-4 deployment (DB is still a consistent 0095)" — Ruling: real, surfaced to the owner before the window.
 Final: parked — window-rollback.ts doesn't check the dump belongs to the target project — Ruling: real, cheap guard; surfaced to the owner before the window.
 Final: parked (out of scope) — compare prod's fingerprint-before against a fresh local 0088 fingerprint before the window to catch hosted-only ACL differences — Ruling: surfaced as a recommended pre-window step.
+
+## Backlog after release 4 (shipped 2026-11-06)
+
+- **Unindexed foreign keys** (Supabase Advisors, Performance, INFO, 2026-11-06): 103 — 66 are the composite `(company_id, …)` keys from 0091/0094, 37 older single-column ones (mostly `created_by` / `voided_by` → profiles). They only slow a delete or key change on the referenced row; negligible with one company. Revisit when deletes get slow or several companies hold real data: add `(company_id, <fk column>)` indexes for the composite keys on the busy tables first. 0096 drops 42 of the 45 unused `*_company_id_idx`; the ~10 other unused indexes are just low traffic.
+- **recall_list** ~3 s at 796 implant patients (see Task 10): revisit past ~400 implant patients.
