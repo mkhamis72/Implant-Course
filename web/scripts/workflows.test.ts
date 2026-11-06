@@ -109,7 +109,15 @@ describe('backup.yml', () => {
   it('verify mode reads each company export too', () => {
     const verify = runOf(jobs.verify, 'Decrypt');
     expect(verify).toContain('*.company.dump.gpg');
-    expect(verify).toContain('"format":"company-export-v1"');
+    expect(verify).toContain('d.format === "company-export-v1"');
+  });
+  it('verify mode parses each company export as JSON (a truncated file fails), not by grepping for strings', () => {
+    const verify = runOf(jobs.verify, 'Decrypt');
+    expect(verify).toContain('JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))');
+    expect(verify).toContain('!Number.isNaN(Date.parse(d.exported_at))');
+    expect(verify).toContain('Array.isArray(t["public.patients"]) && Array.isArray(t["auth.users"])');
+    expect(verify).toContain('! info=$(node -e "$CHECK_EXPORT" "$RUNNER_TEMP/check.dump")');
+    expect(verify).not.toContain('grep -q \'"format":"company-export-v1"\'');
   });
   it('backs up every exported company, refusing an empty export', () => {
     expect(runOf(jobs.backup, 'Export')).toContain('npm run tenants:export -- --dir "$RUNNER_TEMP/tenants"');
