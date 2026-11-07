@@ -148,3 +148,11 @@ export async function voidComponent(input: Record<string, unknown>): Promise<Res
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   return run(parsed.data.patientId, 'void_component', { p_component: parsed.data.id, p_reason: parsed.data.reason });
 }
+
+/** Removes an implant entered by mistake: the placement, what was recorded on it and its stock movements (0099). */
+export async function removePlacement(input: Record<string, unknown>): Promise<Result> {
+  await requirePermission('patients', 'edit');
+  const parsed = voidSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  return run(parsed.data.patientId, 'remove_placement', { p_site: parsed.data.id, p_reason: parsed.data.reason });
+}

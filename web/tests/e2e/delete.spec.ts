@@ -23,12 +23,12 @@ test('deletes a patient from the header after typing their name', async ({ page 
   await expect(page.getByText(/not found|could not be found/i).first()).toBeVisible();
 });
 
-test('refuses to delete a patient with a placed implant', async ({ page }) => {
+test('deletes a duplicate patient with a placed implant and returns the implant to stock (0099)', async ({ page }) => {
   const api = await apiAs(TEST_USERS.organizer.email);
-  const delegate = await seedDelegate(api, uniqueName('Dr Keep'));
-  const stock = await seedImplantStock(api, { brand: uniqueName('Keep'), qty: 1, lot: `E2E-K${Date.now()}`, expiry: null });
+  const delegate = await seedDelegate(api, uniqueName('Dr Dup'));
+  const stock = await seedImplantStock(api, { brand: uniqueName('Dup'), qty: 1, lot: `E2E-K${Date.now()}`, expiry: null });
   await login(page, TEST_USERS.organizer.email);
-  const name = uniqueName('Keep me');
+  const name = uniqueName('Duplicate');
   const patientId = await createPatientViaUi(page, { full_name: name });
   const me = (await api.auth.getUser()).data.user!.id;
   const { error } = await placeImplant(api, {
@@ -36,10 +36,14 @@ test('refuses to delete a patient with a placed implant', async ({ page }) => {
     p_placed_on: new Date().toISOString().slice(0, 10), p_placing_delegate: delegate, p_supervisor: me,
   });
   expect(error).toBeNull();
+  await page.goto(`/inventory/lots/${stock.lotId}`);
+  await expect(page.getByTestId('on-hand')).toHaveText('0');
   await page.goto(`/patients/${patientId}/implants`);
   await confirmDelete(page, 'patient', name);
-  await expect(page.getByRole('alert').filter({ hasText: 'Archive them instead' })).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`/patients/${patientId}/implants`));
+  await expect(page).toHaveURL(/\/patients$/);
+  await page.goto(`/inventory/lots/${stock.lotId}`);
+  await expect(page.getByTestId('on-hand')).toHaveText('1');
+  await expect(page.getByTestId('usage-row')).toHaveCount(0);
 });
 
 test('deletes a patient from the Patients list', async ({ page }) => {

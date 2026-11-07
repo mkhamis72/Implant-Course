@@ -125,3 +125,19 @@ test('corrects the batch of a failed implant (I7)', async ({ page }) => {
   await page.goto(`/inventory/lots/${s.rightLot}`);
   await expect(page.getByTestId('usage-row')).toHaveCount(1);
 });
+
+test('removes an implant entered on the wrong tooth; the stock returns and History says why', async ({ page }) => {
+  const s = await placedImplant(page);
+  await page.goto(`/inventory/lots/${s.wrongLot}`);
+  await expect(page.getByTestId('on-hand')).toHaveText('1');
+  await page.goto(`/patients/${s.patientId}?tooth=36`);
+  await panel(page).getByRole('tab', { name: 'Corrections' }).click();
+  await page.getByLabel('Reason for removing the implant').fill('Placed on 46, not 36');
+  await page.getByRole('button', { name: 'Remove implant' }).click();
+  await page.getByRole('button', { name: 'Yes, remove the implant on tooth 36' }).click();
+  await page.goto(`/inventory/lots/${s.wrongLot}`);
+  await expect(page.getByTestId('on-hand')).toHaveText('2');
+  await expect(page.getByTestId('usage-row')).toHaveCount(0);
+  await page.goto(`/patients/${s.patientId}/history`);
+  await expect(page.getByTestId('history-entry').filter({ hasText: 'Implant on tooth 36 removed (entered by mistake): Placed on 46, not 36' })).toHaveCount(1);
+});

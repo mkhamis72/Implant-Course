@@ -172,12 +172,13 @@ describe('deleting records that restorations depend on', () => {
     });
   });
 
-  it('delete_patient still refuses a patient whose implants moved stock', async () => {
+  it('delete_patient removes a patient whose implants moved stock, restorations included (0099)', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
       const r = await addCrown(c, s.patient, await s.placeAt(36), await daysAgo(c, 20));
       await record(c, r, await daysAgo(c, 2), 'wear', 'none');
-      await refused(c, () => c.query('select public.delete_patient($1)', [s.patient]), /stock movements .* Archive them instead/);
+      await c.query('select public.delete_patient($1)', [s.patient]);
+      expect((await c.query('select count(*)::int as n from public.restorations where patient_id = $1', [s.patient])).rows[0].n).toBe(0);
     });
   });
 

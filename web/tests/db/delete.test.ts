@@ -48,11 +48,13 @@ describe('deleting a patient', () => {
     });
   });
 
-  it('refuses a patient with a placed implant', async () => {
+  it('removes a patient with a placed implant too, returning the stock (0099)', async () => {
     await withTx(async (c) => {
       const w = await world(c);
       await place(c, { patient: w.patient, tooth: 36, product: w.product, lot: w.lot, delegate: w.delegate, supervisor: w.supervisor });
-      await refused(c, () => c.query('select public.delete_patient($1)', [w.patient]), /stock movements .* Archive them instead/);
+      await c.query('select public.delete_patient($1)', [w.patient]);
+      expect(await count(c, 'select count(*) as n from public.patients where id = $1', w.patient)).toBe(0);
+      expect(await count(c, 'select coalesce(sum(delta), 0) as n from public.stock_movements where stock_lot_id = $1', w.lot)).toBe(5);
     });
   });
 

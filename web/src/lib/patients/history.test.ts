@@ -38,6 +38,18 @@ describe('describeChange', () => {
 });
 
 describe('describeChange — implants', () => {
+  it('describes an implant removed as entered by mistake, and hides the step that stored the reason (0099)', () => {
+    const before = { tooth: 36, state: 'placed', removal_reason: null };
+    const marked = { ...before, removal_reason: 'Wrong tooth' };
+    expect(describeChange(entry({ table_name: 'implant_sites', action: 'DELETE', before: marked, after: null }))).toBe(
+      'Implant on tooth 36 removed (entered by mistake): Wrong tooth',
+    );
+    expect(describeChange(entry({ table_name: 'implant_sites', action: 'DELETE', before, after: null }))).toBe(
+      'Implant on tooth 36 deleted',
+    );
+    expect(isHiddenFromHistory(entry({ table_name: 'implant_sites', before, after: marked }))).toBe(true);
+    expect(isHiddenFromHistory(entry({ table_name: 'implant_sites', action: 'DELETE', before: marked, after: null }))).toBe(false);
+  });
   it('describes implant records', () => {
     expect(describeChange(entry({ table_name: 'implant_sites', action: 'INSERT', after: { tooth: 36, state: 'planned' } }))).toBe(
       'Implant on tooth 36: Planned',
