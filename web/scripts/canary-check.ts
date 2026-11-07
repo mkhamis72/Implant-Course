@@ -124,7 +124,12 @@ async function main() {
 
   const results: TableResult[] = [];
   for (const table of tables) {
-    const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq('company_id', ACADEMY_ID);
+    let { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq('company_id', ACADEMY_ID);
+    // A HEAD answer has no body, so a refused table comes back without its code: ask again with GET to read it
+    // (42501 = closed to the session). limit(0) returns no rows either way.
+    if (error && !error.code) {
+      ({ count, error } = await supabase.from(table).select('*', { count: 'exact' }).eq('company_id', ACADEMY_ID).limit(0));
+    }
     results.push(error ? { table, academyRows: null, errorCode: error.code, errorMessage: error.message } : { table, academyRows: count ?? 0 });
   }
   const own = await supabase.from('settings').select('*', { count: 'exact', head: true }).eq('company_id', input.companyId);

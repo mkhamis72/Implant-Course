@@ -1,0 +1,20 @@
+/** Patients list: the course and supervisor filters (search_patients, 0098). */
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** A course or supervisor id from the URL, or '' (= all) for anything that isn't one. */
+export function idParam(value: string): string {
+  const v = value.trim().toLowerCase();
+  return UUID.test(v) ? v : '';
+}
+
+export type SupervisorRow = { id: string; full_name: string; active: boolean };
+
+/** Active supervisors first, then inactive ones (past implants still name them), each group by name. */
+export function supervisorChoices(rows: SupervisorRow[]): { id: string; label: string }[] {
+  const byName = (a: SupervisorRow, b: SupervisorRow) => a.full_name.localeCompare(b.full_name);
+  return [
+    ...rows.filter((r) => r.active).sort(byName).map((r) => ({ id: r.id, label: r.full_name })),
+    ...rows.filter((r) => !r.active).sort(byName).map((r) => ({ id: r.id, label: `${r.full_name} (inactive)` })),
+  ];
+}

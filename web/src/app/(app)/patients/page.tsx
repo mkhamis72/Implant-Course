@@ -6,7 +6,9 @@ import { ageOn } from '@/lib/patients/age';
 import type { Patient } from '@/lib/patients/types';
 import { PATIENT_FILTERS, PATIENT_FILTER_LABELS, SCAN_FILTERS, TOOTH_FILTERS, parseStages, teethByPatient, toothBoundFilters, type StageSite } from '@/lib/patients/stages';
 import { firstParam, type PageSearchParams } from '@/lib/search-params';
+import { idParam, supervisorChoices, type SupervisorRow } from '@/lib/patients/list-filters';
 import { DeletePatient } from './delete-patient';
+import { FilterMenu } from './filter-menu';
 
 export default async function PatientsPage({ searchParams }: { searchParams: PageSearchParams }) {
   const profile = await requirePermission('patients');
@@ -15,9 +17,22 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
   const q = firstParam(sp.q);
   const archived = firstParam(sp.archived);
   const stages = parseStages(sp.stage);
+  const course = idParam(firstParam(sp.course));
+  const supervisor = idParam(firstParam(sp.supervisor));
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('search_patients', { q, include_archived: archived === '1', stages });
-  if (error) throw new Error('Could not load patients');
+  const [search, courseRows, supervisorRows] = await Promise.all([
+    supabase.rpc('search_patients', {
+      q, include_archived: archived === '1', stages, course: course || null, supervisor: supervisor || null,
+    }),
+    // course_options() needs View on Patients, like this page (the courses table needs Courses or Schedule).
+    supabase.rpc('course_options'),
+    // Inactive supervisors too: past implants and bookings still name them.
+    supabase.from('supervisors').select('id, full_name, active'),
+  ]);
+  const { data, error } = search;
+  if (error || courseRows.error || supervisorRows.error) throw new Error('Could not load patients');
+  const courses = (courseRows.data ?? []) as { id: string; name: string }[];
+  const supervisors = supervisorChoices((supervisorRows.data ?? []) as SupervisorRow[]);
   // The search returns one row more than it shows, to tell whether there are more.
   const rows = (data ?? []) as Patient[];
   const patients = rows.slice(0, 50);
@@ -60,34 +75,22 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
           <input type="checkbox" name="archived" value="1" defaultChecked={archived === '1'} />
           Include archived
         </label>
-        <fieldset className="basis-full">
-          <legend className="label">Teeth and implants</legend>
-          <div className="flex flex-wrap gap-2">
-            {PATIENT_FILTERS.map((s) => (
-              <label
-                key={s}
-                className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-line-strong bg-surface px-3 text-sm hover:bg-sunken has-[:checked]:border-accent has-[:checked]:bg-accent-soft"
-              >
-                <input type="checkbox" name="stage" value={s} defaultChecked={stages.includes(s)} />
-                {PATIENT_FILTER_LABELS[s]}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <fieldset className="basis-full">
-          <legend className="label">Scan / impression</legend>
-          <div className="flex flex-wrap gap-2">
-            {SCAN_FILTERS.map((s) => (
-              <label
-                key={s}
-                className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-line-strong bg-surface px-3 text-sm hover:bg-sunken has-[:checked]:border-accent has-[:checked]:bg-accent-soft"
-              >
-                <input type="checkbox" name="stage" value={s} defaultChecked={stages.includes(s)} />
-                {PATIENT_FILTER_LABELS[s]}
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <label className="block w-full sm:w-48">
+          <span className="label">Course</span>
+          <select className="input" name="course" defaultValue={course}>
+            <option value="">All courses</option>
+            {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+        <label className="block w-full sm:w-48">
+          <span className="label">Supervisor</span>
+          <select className="input" name="supervisor" defaultValue={supervisor}>
+            <option value="">All supervisors</option>
+            {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </label>
+        <FilterMenu label="Teeth and implants" name="stage" options={PATIENT_FILTERS} labels={PATIENT_FILTER_LABELS} checked={stages} />
+        <FilterMenu label="Scan / impression" name="stage" options={SCAN_FILTERS} labels={PATIENT_FILTER_LABELS} checked={stages} align="end" />
         <button className="btn-secondary btn">Search</button>
       </form>
       <div className="card overflow-x-auto">
