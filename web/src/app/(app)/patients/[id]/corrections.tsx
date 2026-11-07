@@ -8,7 +8,7 @@ import { COMPONENT_LABELS, type ChartData, type ImplantSite, type LotOnHand } fr
 import { formatDate } from '@/lib/format';
 import { CourseOptions, NoneEnrolled } from './implant-forms';
 import { visitResult } from '@/lib/visits/visits';
-import { correctBatch, correctPlacement, voidComponent, voidFollowup } from './implant-actions';
+import { correctBatch, correctPlacement, removePlacement, voidComponent, voidFollowup } from './implant-actions';
 
 type Result = { error?: string };
 
@@ -127,6 +127,59 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
   );
 }
 
+/** What removing a mistaken placement takes with it, e.g. "2 components and 1 follow-up visit". */
+export function removalSummary(site: Pick<ImplantSite, 'components' | 'followups'>): string {
+  const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+  const components = site.components.filter((c) => !c.voided_at).length;
+  const visits = site.followups.filter((f) => !f.voided_at).length;
+  return [components && plural(components, 'component'), visits && plural(visits, 'follow-up visit')]
+    .filter(Boolean)
+    .join(' and ');
+}
+
+/** Removes an implant entered by mistake (wrong tooth or patient), after a reason and a second click. */
+function RemovePlacement({ site, reason, setReason, confirming, setConfirming, pending, onRemove }: {
+  site: ImplantSite;
+  reason: string;
+  setReason: (v: string) => void;
+  confirming: boolean;
+  setConfirming: (v: boolean) => void;
+  pending: boolean;
+  onRemove: () => void;
+}) {
+  if (!['placed', 'restored', 'failed'].includes(site.state)) return null;
+  const extra = removalSummary(site);
+  return (
+    <div className="space-y-2 border-t border-line pt-4">
+      <p className="font-medium">Entered by mistake?</p>
+      <p className="text-muted">
+        Removes this implant from tooth {site.tooth}
+        {extra ? `, with its ${extra} and everything else recorded on it` : ' and everything recorded on it'}. Its stock goes
+        back to inventory, as if it was never entered. Use this for a wrong tooth or a wrong (duplicate) patient, then place it
+        again on the right one.
+      </p>
+      <label className="block">
+        <span className="label">Reason for removing the implant</span>
+        <input className="input" value={reason} onChange={(e) => { setReason(e.target.value); setConfirming(false); }} />
+      </label>
+      {confirming ? (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-danger btn" disabled={pending} onClick={onRemove}>
+            Yes, remove the implant on tooth {site.tooth}
+          </button>
+          <button type="button" className="btn-secondary btn" disabled={pending} onClick={() => setConfirming(false)}>
+            Keep it
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="btn-secondary btn" disabled={pending} onClick={() => setConfirming(true)}>
+          Remove implant
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** bare: inside the Corrections tab (no collapsible wrapper). */
 function Shell({ bare, children }: { bare: boolean; children: React.ReactNode }) {
   if (bare) return <div className="text-sm">{children}</div>;
@@ -149,6 +202,8 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
   const [batchReason, setBatchReason] = useState('');
   const [followupReason, setFollowupReason] = useState('');
   const [componentReason, setComponentReason] = useState('');
+  const [removeReason, setRemoveReason] = useState('');
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const current = currentComponent(site);
   const products = component
@@ -263,6 +318,15 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
             </button>
           </div>
         )}
+        <RemovePlacement
+          site={site}
+          reason={removeReason}
+          setReason={setRemoveReason}
+          confirming={confirmRemove}
+          setConfirming={setConfirmRemove}
+          pending={pending}
+          onRemove={() => run(() => removePlacement({ id: site.id, patientId, reason: removeReason }))}
+        />
         {error && <p role="alert" className="text-bad">{error}</p>}
         {ok && <p role="status" className="text-ok">{ok}</p>}
       </div>

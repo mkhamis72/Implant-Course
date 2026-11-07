@@ -61,8 +61,13 @@ function stateLabel(value: unknown): string {
   return STATE_LABELS[(value as ToothState) ?? 'present'] ?? String(value);
 }
 
-/** Link rows that only repeat what their restoration entry already says (the row holds no tooth to name). */
-export const isHiddenFromHistory = (e: HistoryEntry) => e.table_name === 'restoration_sites';
+/**
+ * Link rows that only repeat what their restoration entry already says (the row holds no tooth to name), and the
+ * step of remove_placement that stores the reason just before the implant is deleted (its delete says it all).
+ */
+export const isHiddenFromHistory = (e: HistoryEntry) =>
+  e.table_name === 'restoration_sites'
+  || (e.table_name === 'implant_sites' && e.action === 'UPDATE' && !!e.after?.removal_reason && !e.before?.removal_reason);
 
 export function describeChange(e: HistoryEntry): string {
   const fields = changedFields(e.before, e.after);
@@ -88,6 +93,11 @@ export function describeChange(e: HistoryEntry): string {
     case 'implant_sites': {
       const tooth = (e.after ?? e.before)?.tooth;
       const label = (v: unknown) => SITE_STATE_LABELS[v as SiteState] ?? String(v);
+      if (e.action === 'DELETE') {
+        return e.before?.removal_reason
+          ? `Implant on tooth ${tooth} removed (entered by mistake): ${e.before.removal_reason}`
+          : `Implant on tooth ${tooth} deleted`;
+      }
       if (e.action === 'INSERT' || !e.before) return `Implant on tooth ${tooth}: ${label(e.after?.state)}`;
       if (e.after?.failure_type && !e.before.failure_type) {
         const type = FAILURE_TYPE_LABELS[e.after.failure_type as FailureType] ?? String(e.after.failure_type);

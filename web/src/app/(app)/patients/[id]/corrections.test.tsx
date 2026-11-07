@@ -3,7 +3,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import type { ChartData, ImplantSite } from '@/lib/inventory/types';
 
 vi.mock('./implant-actions', () => ({
-  correctBatch: vi.fn(), correctPlacement: vi.fn(), voidComponent: vi.fn(), voidFollowup: vi.fn(),
+  correctBatch: vi.fn(), correctPlacement: vi.fn(), removePlacement: vi.fn(), voidComponent: vi.fn(), voidFollowup: vi.fn(),
 }));
 import { Corrections } from './corrections';
 
@@ -73,5 +73,29 @@ describe('<Corrections> placement details', () => {
     render(<Corrections patientId="pt" site={{ ...site, course_id: null } as ImplantSite} data={data} />);
     const box = screen.getByRole('group', { name: 'Placement details' });
     expect(within(box).getByRole('combobox', { name: 'Course' })).toHaveValue('');
+  });
+});
+
+describe('<Corrections> remove an implant entered by mistake', () => {
+  it('says what goes with it, asks a second time, then sends the reason', async () => {
+    const { removePlacement } = await import('./implant-actions');
+    vi.mocked(removePlacement).mockResolvedValue({});
+    const withRecords = {
+      ...site,
+      components: [{ id: 'k1', component_type: 'cover_screw', voided_at: null }, { id: 'k2', component_type: 'healing_abutment', voided_at: 'x' }],
+      followups: [{ id: 'f1', voided_at: null, date: '2026-05-20', check_type: 'review', result: 'ok' }],
+    } as unknown as ImplantSite;
+    render(<Corrections patientId="pt" site={withRecords} data={data} />);
+    expect(screen.getByText(/with its 1 component and 1 follow-up visit/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Reason for removing the implant'), { target: { value: 'Wrong tooth' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove implant' }));
+    expect(vi.mocked(removePlacement)).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, remove the implant on tooth 36' }));
+    expect(vi.mocked(removePlacement)).toHaveBeenCalledWith({ id: 's1', patientId: 'pt', reason: 'Wrong tooth' });
+  });
+
+  it('is not offered for a planned implant', () => {
+    render(<Corrections patientId="pt" site={{ ...site, state: 'planned' } as unknown as ImplantSite} data={data} />);
+    expect(screen.queryByRole('button', { name: 'Remove implant' })).not.toBeInTheDocument();
   });
 });

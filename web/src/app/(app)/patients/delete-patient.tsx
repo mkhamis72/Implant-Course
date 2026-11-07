@@ -7,7 +7,7 @@ export function DeletePatient(p: { id: string; name: string; triggerLabel?: stri
     <ConfirmDelete
       {...p}
       noun="patient"
-      consequences="Their chart, plans, notes and surgery bookings are deleted too. A patient with a placed implant or fitted component can't be deleted — archive them instead."
+      consequences="Their chart, plans, notes, surgery bookings, placed implants and fitted components are deleted too, and the implants' and components' stock goes back to inventory. Use this for a duplicate or mistaken patient; archive a real patient instead."
       action={deletePatient}
     />
   );
