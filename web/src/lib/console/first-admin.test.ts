@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createFirstAdmin } from './first-admin';
+import { createFirstAdmin, inviteFirstAdmin } from './first-admin';
 
 vi.mock('server-only', () => ({}));
 
@@ -77,5 +77,64 @@ describe('createFirstAdmin', () => {
     await expect(createFirstAdmin(client, ARGS)).rejects.toThrow('The login could not be created: email exists');
     expect(warn).toHaveBeenCalledWith('The pending admin login could not be removed:', 'boom');
     warn.mockRestore();
+  });
+});
+
+describe('inviteFirstAdmin', () => {
+  const ORIGIN = 'https://acme.imploid.net';
+  const INVITE = { ...ARGS, companyName: 'Acme Dental', origin: ORIGIN };
+  function fakeInvite(opts: { existing?: string; elsewhere?: boolean; confirmed?: boolean; inviteError?: string } = {}) {
+    const base = fakeCompany({ existing: opts.existing, elsewhere: opts.elsewhere });
+    const client = base.client as unknown as { auth: Record<string, unknown> & { admin: Record<string, unknown> } };
+    Object.assign(client.auth.admin, {
+      inviteUserByEmail: vi.fn(async (email: string, o: object) => {
+        base.calls.push(`invite ${email} ${JSON.stringify(o)}`);
+        return { data: {}, error: opts.inviteError ? { message: opts.inviteError } : null };
+      }),
+      getUserById: vi.fn(async () => ({ data: { user: { id: opts.existing, email_confirmed_at: opts.confirmed ? '2026-11-01T00:00:00Z' : null } }, error: null })),
+    });
+    client.auth.resetPasswordForEmail = vi.fn(async (email: string, o: object) => {
+      base.calls.push(`reset ${email} ${JSON.stringify(o)}`);
+      return { data: {}, error: null };
+    });
+    const send = vi.fn(async () => 'sent' as const);
+    return { ...base, send };
+  }
+  const redirect = JSON.stringify({ redirectTo: `${ORIGIN}/auth/confirm` });
+
+  it('invites a new address to the company’s own address; no password anywhere', async () => {
+    const { client, calls, send } = fakeInvite();
+    const r = await inviteFirstAdmin(client, { ...INVITE, email: ' Owner@Acme.com ' }, send);
+    expect(r).toEqual({ outcome: 'invited' });
+    expect(calls).toEqual([addCall, `invite owner@acme.com ${redirect}`]);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('cancels the pending admin login when the invite fails', async () => {
+    const { client, calls, send } = fakeInvite({ inviteError: 'SMTP down' });
+    await expect(inviteFirstAdmin(client, INVITE, send)).rejects.toThrow('The invite could not be sent: SMTP down');
+    expect(calls).toEqual([addCall, `invite owner@acme.com ${redirect}`, cancelCall]);
+  });
+
+  it('invites the company’s own login again while it never confirmed', async () => {
+    const { client, calls, send } = fakeInvite({ existing: 'u1' });
+    expect(await inviteFirstAdmin(client, INVITE, send)).toEqual({ outcome: 'reinvited' });
+    expect(calls).toEqual([addCall, 'update u1 ban_duration', `invite owner@acme.com ${redirect}`]);
+  });
+
+  it('sends a password-reset email to the company’s own confirmed login', async () => {
+    const { client, calls, send } = fakeInvite({ existing: 'u1', confirmed: true });
+    expect(await inviteFirstAdmin(client, INVITE, send)).toEqual({ outcome: 'reset_sent' });
+    expect(calls).toEqual([addCall, 'update u1 ban_duration', `reset owner@acme.com ${redirect}`]);
+  });
+
+  it('adds an account another company uses, keeps its password and sends a notice without a link', async () => {
+    const { client, calls, send } = fakeInvite({ existing: 'u1', elsewhere: true, confirmed: true });
+    expect(await inviteFirstAdmin(client, INVITE, send)).toEqual({ outcome: 'added', noticeSent: true });
+    expect(calls).toEqual([addCall, 'update u1 ban_duration']);
+    const [mail] = send.mock.calls[0] as unknown as [{ to: string; subject: string; html: string }];
+    expect(mail.to).toBe('owner@acme.com');
+    expect(mail.subject).toBe("You've been added to Acme Dental");
+    expect(mail.html).not.toContain('href');
   });
 });

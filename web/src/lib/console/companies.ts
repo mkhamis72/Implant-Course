@@ -1,6 +1,7 @@
 import 'server-only';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { checkTenant } from '@/lib/tenant/check';
+import { ACADEMY_COMPANY_ID } from '@/lib/tenant/types';
 
 export type CompanyRow = { slug: string; name: string; hosts: string[]; status: 'active' | 'suspended'; supabase_url: string; anon_key: string; company_id: string | null };
 export type CompanyHealth = { problems: string[]; users: number | null; patients: number | null };
@@ -30,6 +31,23 @@ export async function companyAudit(control: SupabaseClient, slug: string) {
 export async function serviceKeyOf(control: SupabaseClient, slug: string): Promise<string | null> {
   const { data } = await control.rpc('tenant_secret', { p_slug: slug, p_name: 'service_role_key' });
   return (data as string | null) ?? null;
+}
+
+export type SharedProject = { supabaseUrl: string; anonKey: string; serviceRoleKey: string; databaseUrl: string };
+
+/** Every company lives in one shared database (one-database plan): a new company gets the project and keys of
+ *  the registry row that serves academy, so the console never asks for them. */
+export async function sharedProject(control: SupabaseClient): Promise<SharedProject> {
+  const { data, error } = await control.from('tenants').select('slug, supabase_url, anon_key')
+    .eq('company_id', ACADEMY_COMPANY_ID).order('created_at').limit(1);
+  const host = (data as { slug: string; supabase_url: string; anon_key: string }[] | null)?.[0];
+  if (error || !host) throw new Error('No registered company serves academy, so the shared database is unknown.');
+  const [svc, db] = await Promise.all([
+    control.rpc('tenant_secret', { p_slug: host.slug, p_name: 'service_role_key' }),
+    control.rpc('tenant_secret', { p_slug: host.slug, p_name: 'database_url' }),
+  ]);
+  if (!svc.data || !db.data) throw new Error(`The keys of ${host.slug} could not be read from the vault.`);
+  return { supabaseUrl: host.supabase_url, anonKey: host.anon_key, serviceRoleKey: svc.data as string, databaseUrl: db.data as string };
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {

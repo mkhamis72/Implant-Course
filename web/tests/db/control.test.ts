@@ -11,6 +11,7 @@ const CONSOLE_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control',
 const LOG_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0003_console_log.sql'), 'utf8');
 const COMPANY_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0004_tenant_company.sql'), 'utf8');
 const PROVISION_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0005_provision.sql'), 'utf8');
+const ONBOARDING_SQL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0006_onboarding_log.sql'), 'utf8');
 const users = inject('testUsers');
 
 /** The control schema applied inside the test's own (rolled-back) transaction on the dev database. */
@@ -19,6 +20,7 @@ async function withControl(fn: (c: Client) => Promise<void>) {
     await c.query(CONTROL_SQL);
     await c.query(CONSOLE_SQL);
     await c.query(LOG_SQL);
+    await c.query(ONBOARDING_SQL);
     await fn(c);
   });
 }
@@ -261,6 +263,19 @@ describe('console_log (0003)', () => {
       await refused(c, () => log(c, 'zz-academy', 'first_admin_created'), /permission denied/);
       await actAs(c, null);
       await refused(c, () => log(c, 'zz-academy', 'first_admin_created'), /permission denied/);
+    });
+  });
+
+  it('records an emailed first-admin invite and an address added to Vercel (0006)', async () => {
+    await withControl(async (c) => {
+      await asPostgres(c);
+      await registerTenant(c, academy);
+      await c.query('set local role service_role');
+      await log(c, 'zz-academy', 'first_admin_invited');
+      await log(c, 'zz-academy', 'domain_added');
+      await asPostgres(c);
+      const actions = (await c.query(`select action from public.tenant_audit where slug = 'zz-academy' and action in ('first_admin_invited', 'domain_added') order by action`)).rows;
+      expect(actions.map((r) => r.action)).toEqual(['domain_added', 'first_admin_invited']);
     });
   });
 
