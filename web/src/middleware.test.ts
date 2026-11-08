@@ -58,3 +58,20 @@ describe('middleware console routing', () => {
     expect(updateConsoleSession).not.toHaveBeenCalled();
   });
 });
+
+describe('middleware landing page', () => {
+  const req = (host: string, path: string) => new NextRequest(`http://${host}${path}`, { headers: { host } });
+
+  beforeEach(() => {
+    vi.mocked(updateSession).mockReset();
+    vi.mocked(updateConsoleSession).mockReset();
+  });
+
+  it.each(['/', '/login', '/patients'])('the bare domain shows the landing page on %s and reaches no company', async (path) => {
+    const res = await middleware(req('imploid.net', path));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('Implant Course Manager');
+    expect(updateSession).not.toHaveBeenCalled();
+    expect(updateConsoleSession).not.toHaveBeenCalled();
+  });
+});

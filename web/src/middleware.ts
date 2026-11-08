@@ -4,8 +4,11 @@ import { routeConsole } from '@/lib/console/route';
 import { consoleHost } from '@/lib/console/env';
 import { updateConsoleSession } from '@/lib/console/middleware';
 import { blockedResponse } from '@/lib/tenant/responses';
+import { isLandingHost, landingResponse } from '@/lib/tenant/landing';
 
 export async function middleware(request: NextRequest) {
+  // The bare domain belongs to no company: one plain page, whatever the path.
+  if (isLandingHost(request.headers.get('host'))) return landingResponse();
   switch (routeConsole(request.headers.get('host'), request.nextUrl.pathname, consoleHost())) {
     case 'not-found':
       return blockedResponse('not-found');
