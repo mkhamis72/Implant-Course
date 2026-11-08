@@ -4,6 +4,7 @@ import { todayIso } from '@/lib/dates';
 import { talkTimeline } from '@/lib/schedule/timeline';
 import type { DaySessionRow, TalkKind } from '@/lib/schedule/talks';
 import { DeleteTalk } from './delete-talk';
+import { ChevronIcon, ClockIcon, CupIcon } from './icons';
 
 /** One session of the timetable: a coloured bar that opens onto its talks, with the breaks between them. */
 export function SessionBlock({ kind, session: s, open, editable }: {
@@ -11,22 +12,22 @@ export function SessionBlock({ kind, session: s, open, editable }: {
 }) {
   const items = talkTimeline(s.talks);
   return (
-    <details open={open} data-testid={`talk-session-${s.id}`} className="group">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-accent px-5 py-3 text-white [&::-webkit-details-marker]:hidden">
+    <details open={open} data-testid={`talk-session-${s.id}`} className="timetable-session group">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 pressable rounded-2xl bg-accent px-5 py-3 text-white [&::-webkit-details-marker]:hidden">
         <span className="min-w-0">
           <span className="block font-semibold">{s.title}</span>
-          <span className="block text-sm opacity-90">
+          <span className="block text-sm">
             {s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)}{s.course?.name && <> · {s.course.name}</>}
           </span>
         </span>
-        <span aria-hidden="true" className="transition-transform group-open:rotate-180">▾</span>
+        <ChevronIcon className="shrink-0 text-xl transition-transform group-open:rotate-180 motion-reduce:transition-none" />
       </summary>
       <div className="card mt-2 text-center">
         {items.length === 0 && <p className="text-sm text-muted">No talks yet.</p>}
         <ol>
           {items.map((item, i) =>
             item.kind === 'break' ? (
-              <li key={`break-${i}`} className="py-2 text-sm text-muted">☕ Break {item.from}–{item.to}</li>
+              <li key={`break-${i}`} className="py-2 text-sm text-muted"><CupIcon /> Break {item.from}–{item.to}</li>
             ) : (
               <li
                 key={item.talk.id}
@@ -34,14 +35,14 @@ export function SessionBlock({ kind, session: s, open, editable }: {
                 className="space-y-1 border-t-2 border-dashed border-line py-4 first:border-t-0"
               >
                 <p className="text-sm font-medium text-accent tabular-nums">
-                  <span aria-hidden="true">🕘 </span>{formatTime(item.talk.starts_at)}–{formatTime(item.talk.ends_at)}
+                  <ClockIcon /> {formatTime(item.talk.starts_at)}–{formatTime(item.talk.ends_at)}
                 </p>
                 {item.talk.lecturer && <p className="text-accent">{item.talk.lecturer.full_name}</p>}
                 <p className="text-lg text-ink">{item.talk.topic}</p>
                 {item.talk.notes && <p className="text-sm text-muted">{item.talk.notes}</p>}
                 {editable && (
-                  <div className="flex justify-center gap-4 text-sm">
-                    <Link href={`/schedule/${kind}/${item.talk.id}/edit`} aria-label={`Edit ${item.talk.topic}`} className="text-accent hover:underline">Edit</Link>
+                  <div className="flex justify-center gap-2 text-sm">
+                    <Link href={`/schedule/${kind}/${item.talk.id}/edit`} aria-label={`Edit ${item.talk.topic}`} className="inline-flex min-h-11 items-center px-3 text-accent hover:underline">Edit</Link>
                     <DeleteTalk talkId={item.talk.id} kind={kind} />
                   </div>
                 )}

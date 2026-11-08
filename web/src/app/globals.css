@@ -176,6 +176,27 @@
   .btn:active:not(:disabled) {
     transform: scale(0.97);
   }
+  /* Tappable non-button surfaces (timetable bars, day buttons): no grey tap flash, a slight press instead. */
+  .pressable {
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 100ms ease-out, filter 100ms ease-out;
+  }
+  .pressable:active {
+    transform: scale(0.98);
+    filter: brightness(0.93);
+  }
+  /* A timetable session glides open where the browser can animate <details> (else it opens at once). */
+  .timetable-session {
+    interpolate-size: allow-keywords;
+  }
+  .timetable-session::details-content {
+    block-size: 0;
+    overflow: hidden;
+    transition: block-size 250ms ease, content-visibility 250ms allow-discrete;
+  }
+  .timetable-session[open]::details-content {
+    block-size: auto;
+  }
   /* The button whose save is running (src/lib/ui/press-feedback.ts): a spinner, and it doesn't look unavailable. */
   .btn[data-pressed]:disabled {
     opacity: 0.85;
@@ -426,8 +447,12 @@
 
 /* Reduced motion: no scaling, spinning, pulsing or sliding; the panel cross-fades instead. */
 @media (prefers-reduced-motion: reduce) {
-  .btn:active:not(:disabled) {
+  .btn:active:not(:disabled),
+  .pressable:active {
     transform: none;
+  }
+  .timetable-session::details-content {
+    transition: none;
   }
   .btn[data-pressed]:disabled::before {
     animation: none;
