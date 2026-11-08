@@ -3,11 +3,15 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 vi.mock('./actions', () => ({
   onboardCompany: vi.fn(),
+  addDomain: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
+const vercel = { status: vi.fn() };
+vi.mock('@/lib/console/vercel', () => ({ vercelConfigured: () => true, domainStatus: (h: string) => vercel.status(h) }));
 
 import { CompaniesTable } from './companies-table';
 import { RegisterForm } from './companies/new/register-form';
+import { AddressPanel } from './companies/[slug]/address-panel';
 
 describe('CompaniesTable', () => {
   it('shows one row per company', async () => {
@@ -42,5 +46,21 @@ describe('RegisterForm', () => {
     expect(slug.value).toBe('delta');
     expect(screen.getByLabelText('Email')).toBeTruthy();
     expect(screen.getByLabelText('Full name')).toBeTruthy();
+  });
+});
+
+describe('AddressPanel', () => {
+  it('says why Vercel could not be asked and still offers the retry', async () => {
+    vercel.status.mockRejectedValueOnce(new Error('Vercel: You don’t have permission to access this team.'));
+    render(await AddressPanel({ slug: 'demo', hosts: ['demo.imploid.net'] }));
+    expect(screen.getByText(/You don’t have permission to access this team/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add demo.imploid.net to Vercel' })).toBeTruthy();
+  });
+
+  it('offers no retry for a live address', async () => {
+    vercel.status.mockResolvedValueOnce('live');
+    render(await AddressPanel({ slug: 'demo', hosts: ['demo.imploid.net'] }));
+    expect(screen.getByText('Live')).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });
