@@ -3,7 +3,7 @@
 import { useActionState } from 'react';
 import { valueOf, type FormState } from '@/lib/patients/form-state';
 import { TemporaryPassword } from '@/components/temporary-password';
-import { firstAdmin, replaceCompanyKeys, setCompanyStatus, updateCompany, type FirstAdminState } from '../../actions';
+import { addDomain, firstAdmin, replaceCompanyKeys, setCompanyStatus, updateCompany, type FirstAdminState } from '../../actions';
 
 /** useActionState plus a sequence number carried in each result, so the form remounts (React 19 resets uncontrolled inputs). */
 function useRemountingAction(action: (prev: FirstAdminState, formData: FormData) => Promise<FirstAdminState>) {
@@ -105,14 +105,20 @@ export function ReplaceKeysForm({ slug }: { slug: string }) {
   );
 }
 
-export function FirstAdminForm({ slug }: { slug: string }) {
+export function FirstAdminForm({ slug, byEmail }: { slug: string; byEmail: boolean }) {
   const { state, formAction, pending, attempt } = useRemountingAction(firstAdmin);
   return (
     <section className="card">
       <h2 className="mb-3 text-lg font-semibold">First admin</h2>
       <p className="mb-3 text-sm text-muted">
-        If a login with this email already exists in the company, it becomes an active admin and gets a new temporary password.
-        If another company also uses it, it becomes an admin here and keeps its own password.
+        {byEmail ? (
+          <>A new address gets an invite email; a login this company already has gets a password-reset email (or the
+            invite again if never accepted). If another company also uses it, it becomes an admin here, keeps its own
+            password and gets a notice.</>
+        ) : (
+          <>If a login with this email already exists in the company, it becomes an active admin and gets a new temporary
+            password. If another company also uses it, it becomes an admin here and keeps its own password.</>
+        )}
       </p>
       <form key={attempt} action={formAction} className="space-y-3">
         <input type="hidden" name="slug" value={slug} />
@@ -124,7 +130,7 @@ export function FirstAdminForm({ slug }: { slug: string }) {
           <label className="label" htmlFor="admin-name">Full name</label>
           <input id="admin-name" name="fullName" className="input" required defaultValue={valueOf(state, 'fullName', '')} />
         </div>
-        <button className="btn" disabled={pending}>Create admin login</button>
+        <button className="btn" disabled={pending}>{byEmail ? 'Send invite' : 'Create admin login'}</button>
       </form>
       <Messages state={state} />
       {state.password && (
@@ -135,5 +141,18 @@ export function FirstAdminForm({ slug }: { slug: string }) {
         </div>
       )}
     </section>
+  );
+}
+
+/** Retries adding one address to the Vercel project (Address panel). */
+export function AddDomainButton({ slug, host }: { slug: string; host: string }) {
+  const [state, formAction, pending] = useActionState<FormState, FormData>(addDomain, {});
+  return (
+    <form action={formAction} className="inline">
+      <input type="hidden" name="slug" value={slug} />
+      <input type="hidden" name="host" value={host} />
+      <button className="btn-secondary btn" disabled={pending} aria-label={`Add ${host} to Vercel`}>Add to Vercel</button>
+      <Messages state={state} />
+    </form>
   );
 }

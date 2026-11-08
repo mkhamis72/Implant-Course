@@ -8,7 +8,19 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 vi.mock('@/lib/console/session', () => ({ requireConsoleAdmin: vi.fn(async () => ({ userId: 'u1', email: 'owner@example.com' })) }));
-vi.mock('@/lib/console/first-admin', () => ({ createFirstAdmin: vi.fn(async () => ({ outcome: 'created', password: 'Temp-Pass-123' })) }));
+vi.mock('@/lib/console/first-admin', () => ({
+  createFirstAdmin: vi.fn(async () => ({ outcome: 'created', password: 'Temp-Pass-123' })),
+  inviteFirstAdmin: vi.fn(async () => ({ outcome: 'invited' })),
+}));
+const flags = { email: false, vercel: true };
+vi.mock('@/lib/flags', () => ({ emailEnabled: () => flags.email }));
+vi.mock('@/lib/console/vercel', () => ({ vercelConfigured: () => flags.vercel, addProjectDomain: vi.fn(async () => undefined) }));
+vi.mock('@/lib/tenant/current', () => ({ requestOrigin: async () => 'https://console.imploid.net' }));
+const SHARED = { supabaseUrl: 'https://abcdefgh.supabase.co', anonKey: 'anon', serviceRoleKey: 'svc-key', databaseUrl: 'postgres://db' };
+vi.mock('@/lib/console/companies', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  sharedProject: vi.fn(async () => SHARED),
+}));
 const dbRpc = vi.fn();
 vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn(() => ({ rpc: dbRpc })) }));
 vi.mock('@/lib/tenant/check', () => ({ checkTenant: vi.fn() }));
@@ -24,8 +36,10 @@ vi.mock('@/lib/console/supabase', () => ({
 
 import { createClient } from '@supabase/supabase-js';
 import { checkTenant } from '@/lib/tenant/check';
-import { createFirstAdmin } from '@/lib/console/first-admin';
-import { firstAdmin, registerCompany, replaceCompanyKeys, setCompanyStatus } from './actions';
+import { createFirstAdmin, inviteFirstAdmin } from '@/lib/console/first-admin';
+import { addProjectDomain } from '@/lib/console/vercel';
+import { sharedProject } from '@/lib/console/companies';
+import { addDomain, firstAdmin, onboardCompany, replaceCompanyKeys, setCompanyStatus, updateCompany } from './actions';
 
 const check = vi.mocked(checkTenant);
 const KEY = 'k'.repeat(30);
@@ -37,11 +51,8 @@ function form(data: Record<string, string>) {
   for (const [k, v] of Object.entries(data)) f.set(k, v);
   return f;
 }
-const registerData = {
-  slug: 'acme', name: 'Acme', hosts: 'acme.example.com', supabaseUrl: 'https://abcdefgh.supabase.co',
-  anonKey: KEY, serviceRoleKey: KEY, databaseUrl: 'postgres://u:p@host:5432/db',
-};
-const keysData = { slug: 'acme', supabaseUrl: registerData.supabaseUrl, anonKey: KEY, serviceRoleKey: KEY, databaseUrl: registerData.databaseUrl };
+const onboardData = { slug: 'acme', name: 'Acme', hosts: 'acme.imploid.net', email: 'ann@acme.com', fullName: 'Ann Admin' };
+const keysData = { slug: 'acme', supabaseUrl: 'https://abcdefgh.supabase.co', anonKey: KEY, serviceRoleKey: KEY, databaseUrl: 'postgres://u:p@host:5432/db' };
 const noSecrets = (values?: Record<string, string>) => {
   expect(values).toBeDefined();
   for (const k of ['anonKey', 'serviceRoleKey', 'databaseUrl']) expect(values).not.toHaveProperty(k);
@@ -50,82 +61,112 @@ const noSecrets = (values?: Record<string, string>) => {
 beforeEach(() => {
   vi.clearAllMocks();
   existing = null;
+  flags.email = false;
+  flags.vercel = true;
   check.mockResolvedValue([]);
   rpc.mockResolvedValue({ data: null, error: null });
   dbRpc.mockResolvedValue({ data: NEW_COMPANY, error: null });
 });
 
-describe('registerCompany', () => {
-  it('refuses an existing slug before checking or saving anything', async () => {
+describe('onboardCompany', () => {
+  const logged = (action: string) =>
+    rpc.mock.calls.filter(([fn, a]) => fn === 'console_log' && a.p_action === action).map(([, a]) => a.p_detail);
+
+  it('refuses a slug whose company already exists, before saving anything', async () => {
     existing = { ...row, company_id: NEW_COMPANY };
-    const r = await registerCompany({}, form(registerData));
-    expect(r.error).toBe('A company with this slug already exists — open it to replace its keys.');
-    noSecrets(r.values);
-    expect(check).not.toHaveBeenCalled();
+    const r = await onboardCompany({}, form(onboardData));
+    expect(r.error).toBe('A company with this slug already exists — open it from the list.');
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it('does not save when the check reports problems', async () => {
-    check.mockResolvedValue(['service key rejected']);
-    const r = await registerCompany({}, form(registerData));
-    expect(r.error).toContain("Not saved — the project didn't pass the check: service key rejected");
-    noSecrets(r.values);
-    expect(rpc).not.toHaveBeenCalled();
-  });
-
-  it('does not save when the project cannot be reached', async () => {
-    check.mockRejectedValue(new Error('fetch failed'));
-    const r = await registerCompany({}, form(registerData));
-    expect(r.error).toBe("Not saved — couldn't reach the project: fetch failed");
-    noSecrets(r.values);
-    expect(rpc).not.toHaveBeenCalled();
-  });
-
-  it('strips keys from a validation error too', async () => {
-    const r = await registerCompany({}, form({ ...registerData, slug: 'X' }));
-    expect(r.error).toBeTruthy();
-    noSecrets(r.values);
-    expect(r.values?.name).toBe('Acme');
-  });
-
-  it('saves with the actor, creates the company in the database, stores its id and redirects to the company', async () => {
-    await expect(registerCompany({}, form(registerData))).rejects.toThrow('REDIRECT:/console/companies/acme');
-    expect(rpc).toHaveBeenCalledWith('console_register_tenant', expect.objectContaining({ p_slug: 'acme', p_actor: 'owner@example.com' }));
-    expect(vi.mocked(createClient)).toHaveBeenCalledWith(registerData.supabaseUrl, registerData.serviceRoleKey, expect.anything());
+  it('registers with the shared database keys, creates the company, adds the address and invites the admin', async () => {
+    flags.email = true;
+    const r = await onboardCompany({}, form(onboardData));
+    expect(rpc).toHaveBeenCalledWith('console_register_tenant', {
+      p_slug: 'acme', p_name: 'Acme', p_hosts: ['acme.imploid.net'], p_supabase_url: SHARED.supabaseUrl, p_anon_key: 'anon',
+      p_service_role_key: 'svc-key', p_database_url: 'postgres://db', p_actor: 'owner@example.com',
+    });
+    expect(vi.mocked(createClient)).toHaveBeenCalledWith(SHARED.supabaseUrl, 'svc-key', expect.anything());
     expect(dbRpc).toHaveBeenCalledWith('provision_company', { p_slug: 'acme', p_name: 'Acme' });
-    expect(rpc).toHaveBeenLastCalledWith('console_set_company', { p_slug: 'acme', p_company_id: NEW_COMPANY, p_actor: 'owner@example.com' });
+    expect(rpc).toHaveBeenCalledWith('console_set_company', { p_slug: 'acme', p_company_id: NEW_COMPANY, p_actor: 'owner@example.com' });
+    expect(vi.mocked(addProjectDomain)).toHaveBeenCalledWith('acme.imploid.net');
+    expect(logged('domain_added')).toEqual(['acme.imploid.net']);
+    expect(vi.mocked(inviteFirstAdmin)).toHaveBeenCalledWith(expect.anything(), {
+      companyId: NEW_COMPANY, companyName: 'Acme', email: 'ann@acme.com', fullName: 'Ann Admin', origin: 'https://acme.imploid.net',
+    });
+    expect(logged('first_admin_invited')).toEqual(['ann@acme.com']);
+    expect(r.ok).toBe('Company added.');
+    expect(r.slug).toBe('acme');
+    expect(r.steps?.map((s) => [s.label, s.ok])).toEqual([['Company', true], ['Address', true], ['First admin', true]]);
+    expect(r.steps?.[2].detail).toBe('Invite sent to ann@acme.com.');
+    expect(r.password).toBeUndefined();
   });
 
-  it('finishes a registration whose company was never created (a registry row without a company id)', async () => {
-    existing = { ...row, company_id: null };
-    await expect(registerCompany({}, form(registerData))).rejects.toThrow('REDIRECT:/console/companies/acme');
-    expect(rpc).toHaveBeenLastCalledWith('console_set_company', expect.objectContaining({ p_company_id: NEW_COMPANY }));
+  it('with email off, creates the login and returns its temporary password once', async () => {
+    const r = await onboardCompany({}, form(onboardData));
+    expect(vi.mocked(inviteFirstAdmin)).not.toHaveBeenCalled();
+    expect(r.password).toBe('Temp-Pass-123');
+    expect(logged('first_admin_created')).toEqual(['ann@acme.com']);
+  });
+
+  it('still adds the company when Vercel or the invite fail, and says what to redo', async () => {
+    flags.email = true;
+    vi.mocked(addProjectDomain).mockRejectedValueOnce(new Error('Vercel did not add acme.imploid.net: forbidden'));
+    vi.mocked(inviteFirstAdmin).mockRejectedValueOnce(new Error('The invite could not be sent: SMTP down'));
+    const r = await onboardCompany({}, form(onboardData));
+    expect(r.ok).toBe('Company added.');
+    expect(r.steps?.map((s) => s.ok)).toEqual([true, false, false]);
+    expect(r.steps?.[1].detail).toContain('forbidden');
+    expect(r.steps?.[2].detail).toContain('SMTP down');
+    expect(logged('domain_added')).toEqual([]);
+  });
+
+  it('without Vercel settings, leaves the address to the manual steps', async () => {
+    flags.vercel = false;
+    const r = await onboardCompany({}, form(onboardData));
+    expect(vi.mocked(addProjectDomain)).not.toHaveBeenCalled();
+    expect(r.steps?.[1]).toMatchObject({ label: 'Address', ok: false });
+  });
+
+  it('stops before registering when the shared database is unknown', async () => {
+    vi.mocked(sharedProject).mockRejectedValueOnce(new Error('No registered company serves academy, so the shared database is unknown.'));
+    const r = await onboardCompany({}, form(onboardData));
+    expect(r.error).toContain('No registered company serves academy');
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it('says so when the company cannot be created, and stores no id', async () => {
     dbRpc.mockResolvedValue({ data: null, error: { message: 'A company with this slug already exists.' } });
-    const r = await registerCompany({}, form(registerData));
+    const r = await onboardCompany({}, form(onboardData));
     expect(r.error).toBe('Registered, but the company could not be created in the database: A company with this slug already exists.');
-    noSecrets(r.values);
     expect(rpc).not.toHaveBeenCalledWith('console_set_company', expect.anything());
-  });
-
-  it('names the created company when its id cannot be stored', async () => {
-    rpc.mockImplementation(async (fn: string) => (fn === 'console_set_company' ? { data: null, error: { message: 'boom' } } : { data: null, error: null }));
-    const r = await registerCompany({}, form(registerData));
-    expect(r.error).toBe(`Company ${NEW_COMPANY} was created in the database, but its id could not be saved in the registry: boom`);
-    noSecrets(r.values);
   });
 
   it('a retry after the id could not be saved stores the same company (provision_company hands back the empty company)', async () => {
     rpc.mockImplementation(async (fn: string) => (fn === 'console_set_company' ? { data: null, error: { message: 'boom' } } : { data: null, error: null }));
-    expect((await registerCompany({}, form(registerData))).error).toContain(NEW_COMPANY);
-    // The registry row now exists without a company id; the database's provision_company returns the same id again.
+    expect((await onboardCompany({}, form(onboardData))).error)
+      .toBe(`Company ${NEW_COMPANY} was created in the database, but its id could not be saved in the registry: boom`);
     existing = { ...row, company_id: null };
     rpc.mockResolvedValue({ data: null, error: null });
-    await expect(registerCompany({}, form(registerData))).rejects.toThrow('REDIRECT:/console/companies/acme');
+    expect((await onboardCompany({}, form(onboardData))).ok).toBe('Company added.');
     expect(dbRpc).toHaveBeenCalledTimes(2);
-    expect(rpc).toHaveBeenLastCalledWith('console_set_company', { p_slug: 'acme', p_company_id: NEW_COMPANY, p_actor: 'owner@example.com' });
+    expect(rpc).toHaveBeenCalledWith('console_set_company', { p_slug: 'acme', p_company_id: NEW_COMPANY, p_actor: 'owner@example.com' });
+  });
+});
+
+describe('updateCompany and addDomain', () => {
+  it('adds only the new addresses to Vercel', async () => {
+    existing = { ...row, hosts: ['acme.example.com'] };
+    const r = await updateCompany({}, form({ slug: 'acme', name: 'Acme', hosts: 'acme.example.com\nnew.imploid.net' }));
+    expect(r.ok).toBe('Saved.');
+    expect(vi.mocked(addProjectDomain).mock.calls).toEqual([['new.imploid.net']]);
+  });
+
+  it('retries only an address of the company', async () => {
+    existing = row;
+    expect((await addDomain({}, form({ slug: 'acme', host: 'evil.example.com' }))).error).toBe('evil.example.com is not an address of acme.');
+    expect(vi.mocked(addProjectDomain)).not.toHaveBeenCalled();
+    expect((await addDomain({}, form({ slug: 'acme', host: 'acme.example.com' }))).ok).toBe('acme.example.com added to Vercel.');
   });
 });
 
@@ -211,6 +252,20 @@ describe('firstAdmin', () => {
     const r = await firstAdmin({}, form(admin));
     expect(r.password).toBe('Temp-Pass-123');
     expect(r.ok).toContain('could not be recorded in the history');
+  });
+
+  it('with email on, invites on the company address and records it, with no password', async () => {
+    existing = linked;
+    withKey();
+    flags.email = true;
+    const r = await firstAdmin({}, form(admin));
+    expect(vi.mocked(inviteFirstAdmin)).toHaveBeenCalledWith(expect.anything(), {
+      companyId: linked.company_id, companyName: 'Acme', email: 'a@b.com', fullName: 'Ann Admin', origin: 'https://acme.example.com',
+    });
+    expect(r.ok).toBe('Invite sent to a@b.com.');
+    expect(r.password).toBeUndefined();
+    const call = rpc.mock.calls.find(([name]) => name === 'console_log')!;
+    expect(call[1]).toEqual({ p_slug: 'acme', p_action: 'first_admin_invited', p_detail: 'a@b.com', p_actor: 'owner@example.com' });
   });
 
   it('shows no password for an account another company uses', async () => {
