@@ -33,6 +33,20 @@ async function signIn(page: Page, who = email, password = PASSWORD) {
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
+/** The first link to /auth/confirm in the newest email to `to` (local Mailpit). */
+async function emailedLink(to: string): Promise<string> {
+  let link = '';
+  await expect.poll(async () => {
+    const res = await fetch(`http://127.0.0.1:54324/api/v1/search?query=${encodeURIComponent(`to:"${to}"`)}`);
+    const id = (await res.json()).messages?.[0]?.ID;
+    if (!id) return '';
+    const msg = await (await fetch(`http://127.0.0.1:54324/api/v1/message/${id}`)).json();
+    link = (msg.HTML as string).match(/href="([^"]*\/auth\/confirm[^"]*)"/)?.[1]?.replace(/&amp;/g, '&') ?? '';
+    return link;
+  }, { timeout: 30_000 }).not.toBe('');
+  return link;
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async () => {
@@ -111,61 +125,69 @@ test('suspending a company takes its site offline; reactivating brings it back',
   await expect(page.getByRole('table')).toContainText('E2E suspension');
 });
 
-test('a first admin created in the console can sign in on the company', async ({ page, browser }) => {
+test('a first admin invited from the console gets an email linking to the company’s own address', async ({ page }) => {
   test.setTimeout(120_000);
   await signInWith2fa(page);
   await page.goto(`${C}/console/companies/dev2`);
   const adminEmail = `icm-first-admin-${Date.now()}@example.com`;
   await page.getByLabel('Email').fill(adminEmail);
   await page.getByLabel('Full name').fill('E2E First Admin');
-  await page.getByRole('button', { name: 'Create admin login' }).click();
-  const password = (await page.getByTestId('temporary-password').locator('code').textContent())!.trim();
+  await page.getByRole('button', { name: 'Send invite' }).click();
+  await expect(page.getByRole('status').filter({ hasText: `Invite sent to ${adminEmail}.` })).toBeVisible();
   // Company two is in the main stack; dev2 is only the control project.
   const company = parse(readFileSync('.env.local'));
   const db = createClient(company.NEXT_PUBLIC_SUPABASE_URL, company.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   try {
-    const ctx = await browser.newContext();
-    const p2 = await ctx.newPage();
-    await p2.goto('http://tenant2.localhost:3000/login');
-    await p2.getByLabel('Email').fill(adminEmail);
-    await p2.getByLabel('Password').fill(password);
-    await p2.getByRole('button', { name: 'Sign in' }).click();
-    await p2.waitForURL((u) => !u.pathname.startsWith('/login'));
-    await ctx.close();
+    expect(await emailedLink(adminEmail)).toMatch(/^http:\/\/tenant2\.localhost:3000\/auth\/confirm\?token_hash=[^&]+&type=invite$/);
+    await expect(page.getByRole('table')).toContainText('first_admin_invited');
   } finally {
     const { data } = await db.from('profiles').select('user_id').eq('email', adminEmail).maybeSingle();
     if (data) await db.auth.admin.deleteUser(data.user_id);
   }
 });
 
-test('adding a company checks its keys first', async ({ page }) => {
+test('adding a company takes one form: name, address and first admin; the shared keys are copied', async ({ page }) => {
   test.setTimeout(120_000);
   test.skip(!existsSync('.env.dev2') || !existsSync('.env.local'), 'needs the dev2 (control) and main stacks');
   const dev2 = parse(readFileSync('.env.dev2'));
   const company = parse(readFileSync('.env.local'));
   const slug = `zz-e2e-${Date.now().toString(36)}`;
+  const adminEmail = `icm-onboard-${Date.now()}@example.com`;
   try {
     await signInWith2fa(page);
     await page.getByRole('link', { name: 'Add company' }).click();
+    await expect(page.getByLabel(/key/i)).toHaveCount(0);
+    await page.getByLabel('Company name').fill('E2E Added Co');
+    await expect(page.getByLabel('Slug')).toHaveValue('e2e-added-co');
     await page.getByLabel('Slug').fill(slug);
-    await page.getByLabel('Name', { exact: true }).fill('E2E Added Co');
-    await page.getByLabel('Addresses (one per line)').fill(`${slug}.localhost`);
-    // The local gateway answers /auth/v1/settings without checking the anon key, so the bad key here is the service key.
-    const keys = async (service: string) => {
-      await page.getByLabel('Supabase URL').fill(company.NEXT_PUBLIC_SUPABASE_URL);
-      await page.getByLabel('Anon key').fill(company.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-      await page.getByLabel('Service role key').fill(service);
-      await page.getByLabel('Database URL (session pooler)').fill(company.DATABASE_URL);
-    };
-    await keys('not-a-real-key-not-a-real-key');
-    await page.getByRole('button', { name: 'Check and add' }).click();
-    await expect(page.getByRole('alert').filter({ hasText: "didn't pass the check" })).toBeVisible();
-    await keys(company.SUPABASE_SERVICE_ROLE_KEY);
-    await page.getByRole('button', { name: 'Check and add' }).click();
+    await expect(page.getByLabel('Address (one per line)')).toHaveValue(`${slug}.localhost`);
+    await page.getByLabel('Full name').fill('E2E Onboard Admin');
+    await page.getByLabel('Email').fill(adminEmail);
+    await page.getByRole('button', { name: 'Add company' }).click();
+    await expect(page.getByRole('heading', { name: 'Company added.' })).toBeVisible();
+    await expect(page.getByText(`Invite sent to ${adminEmail}.`)).toBeVisible();
+    await expect(page.getByText(/Vercel is not connected/)).toBeVisible();
+    expect(await emailedLink(adminEmail)).toMatch(new RegExp(`^http://${slug}\\.localhost:3000/auth/confirm\\?token_hash=`));
+    await page.getByRole('link', { name: 'Open the company' }).click();
     await expect(page).toHaveURL(new RegExp(`/console/companies/${slug}$`));
+    await expect(page.getByRole('heading', { name: 'Address' })).toBeVisible();
+    await expect(page.getByText(/Add Existing/)).toBeVisible();
+    // Adding it again is refused: the company exists.
+    await page.goto(`${C}/console/companies/new`);
+    await page.getByLabel('Company name').fill('E2E Added Co');
+    await page.getByLabel('Slug').fill(slug);
+    await page.getByLabel('Full name').fill('E2E Onboard Admin');
+    await page.getByLabel('Email').fill(adminEmail);
+    await page.getByRole('button', { name: 'Add company' }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'already exists' })).toBeVisible();
     await page.goto(`${C}/console`);
     await expect(page.getByTestId(`company-${slug}`)).toContainText('OK');
   } finally {
+    {
+      const db = createClient(company.NEXT_PUBLIC_SUPABASE_URL, company.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+      const { data } = await db.from('profiles').select('user_id').eq('email', adminEmail).maybeSingle();
+      if (data) await db.auth.admin.deleteUser(data.user_id);
+    }
     const pg = await import('pg');
     const c = new pg.Client({ connectionString: dev2.DATABASE_URL });
     await c.connect();

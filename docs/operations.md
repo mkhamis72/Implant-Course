@@ -249,7 +249,20 @@ Unknown hosts get 404; a suspended company gets 503. If the control project is d
 
 *Lost authenticator:* control project → Authentication → Users → the user → delete the factor, run `console:admin` again for that email (new temporary password), sign in and set up 2FA at once.
 
-*Using it:* the Companies page shows each company's health (a live check of its project) and counts. A company's page lets you suspend it (reason, and type the slug to confirm) and reactivate it, edit its name and addresses, replace its keys (checked before saving), and create its first admin login (a one-time password, shown once). **Add company** needs an existing, migrated project: the keys and database URL are checked before anything is saved, and an existing slug is refused. Every change, including creating or resetting a first admin login (the target email, never the password), is recorded in the company's History table with the admin's email. `tenant:register` / `tenant:check` still work and are recorded as `script`.
+*Using it:* the Companies page shows each company's health (a live check of its project) and counts. A company's page lets you suspend it (reason, and type the slug to confirm) and reactivate it, edit its name and addresses, replace its keys (checked before saving), invite its first admin (see below), and shows whether each address is live on Vercel (**Add to Vercel** retries one that isn't). Every change, including an invited, created or reset first admin (the target email, never a password) and each address added to Vercel, is recorded in the company's History table with the admin's email. `tenant:register` / `tenant:check` still work and are recorded as `script`.
+
+**Add a company (shared database, multi-tenant part 5).** Console → **Add company**: company name, slug and address (suggested from the name: `<slug>.imploid.net`), and the first admin's name and email. One click then:
+1. registers the company with the shared database's keys, copied from the company that serves academy (no keys to paste);
+2. creates the company with its starting data (`provision_company`: settings, branding, catalogue, consent forms);
+3. adds the address to the Vercel project;
+4. emails the first admin an invite on the company's own address. A login this company already has gets a password-reset email instead; someone another company already uses keeps their password and gets a notice. With `EMAIL_ENABLED=false` it shows a one-time password instead.
+
+The result lists each step. Once the company exists, a failed address or invite doesn't undo it: redo it from the company's page. An existing slug is refused. The new address can show "not found" for up to a minute after Vercel reports it live (registry cache).
+
+*One-time setup for automatic addresses:*
+- GoDaddy (imploid.net → DNS): a CNAME with name `*` and value `cname.vercel-dns.com`. Names that have their own record (kaleidoscope, osdic, console, www, Resend's) keep it.
+- Vercel → Account Settings → Tokens: a token scoped to the team that owns `implant-course`. In the project's Environment Variables (Production): `VERCEL_API_TOKEN` ⟨secret⟩, `VERCEL_PROJECT_ID` (Settings → General → Project ID), and `VERCEL_TEAM_ID` if the project belongs to a team. Redeploy (Release) to pick them up.
+- Without these the console still adds the company and shows the manual address steps on its page (Vercel **Add Existing**, plus a GoDaddy CNAME if there's no wildcard).
 
 **Add a company on another Supabase account.**
 
@@ -271,10 +284,10 @@ Steps (Git Bash, from `web/`):
    - `ALLOW_TEST_FIXTURES=0`;
    - the `CONTROL_SUPABASE_URL` and `CONTROL_DATABASE_URL` lines copied from `.env.prod`.
 3. **Schema:** `ENV_FILE=.env.<slug> npm run db:migrate`. The first line must name the **new** project's host.
-4. **Register:** `ENV_FILE=.env.<slug> npm run tenant:register -- <slug> "<Company name>" <host>`. Or use **Add company** in the console, which checks the keys and database URL before saving.
+4. **Register:** `ENV_FILE=.env.<slug> npm run tenant:register -- <slug> "<Company name>" <host>`. (The console's **Add company** only adds companies to the shared database.)
 5. **Check:** `ENV_FILE=.env.prod npm run tenant:check -- <slug>` must end with `OK`. A certificate error here means the project uses a different CA. Then paste both certificates, one after the other, into `web/prod-ca.crt` and into the GitHub secret `PROD_DATABASE_CA_CERT`, which Release and Backup use for every company.
 6. **Address:** normally `<name>.imploid.net`. Vercel → Domains → **Add Existing** `<host>` on the `implant-course` project (Production). At GoDaddy (imploid.net → DNS) add a CNAME, name `<name>`, value as Vercel shows (`….vercel-dns-017.com`), and save. Wait for **Valid Configuration**. A host that isn't in the company's registered addresses gets 404.
-7. **First admin:** console → the company → create first admin (a one-time password, shown once). Or `ENV_FILE=.env.prod npm run create-user -- --tenant <slug> admin@company.com "Name" --role admin`.
+7. **First admin:** console → the company → **First admin** (an invite email on the company's address). Or `ENV_FILE=.env.prod npm run create-user -- --tenant <slug> admin@company.com "Name" --role admin`.
 8. **Clean up:** delete `web/.env.<slug>`, because Vault now holds its keys. If the company owns the account, they can also rotate the service key later: replace it from the console (**Replace keys**).
 
 From then on, every Release migrates the company, every Backup run saves it (`<slug>-<date>.dump.gpg`, also copied to R2), and its health shows on the console's Companies page. App emails (checklist notices) still go through the one `SMTP_*` sender set in Vercel.
