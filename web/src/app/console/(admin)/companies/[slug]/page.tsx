@@ -3,7 +3,9 @@ import { requireConsoleAdmin } from '@/lib/console/session';
 import { createConsoleServiceClient } from '@/lib/console/supabase';
 import { companyAudit, getCompany } from '@/lib/console/companies';
 import { formatDateTime } from '@/lib/format';
+import { emailEnabled } from '@/lib/flags';
 import { DetailsForm, FirstAdminForm, ReplaceKeysForm, StatusForm } from './forms';
+import { AddressPanel } from './address-panel';
 
 export default async function CompanyPage({ params }: { params: Promise<{ slug: string }> }) {
   await requireConsoleAdmin();
@@ -21,9 +23,10 @@ export default async function CompanyPage({ params }: { params: Promise<{ slug: 
         </h1>
       </div>
       <DetailsForm slug={company.slug} name={company.name} hosts={company.hosts} />
+      <AddressPanel slug={company.slug} hosts={company.hosts} />
+      <FirstAdminForm slug={company.slug} byEmail={emailEnabled()} />
       <StatusForm slug={company.slug} status={company.status} />
       <ReplaceKeysForm slug={company.slug} />
-      <FirstAdminForm slug={company.slug} />
       <section className="card">
         <h2 className="mb-3 text-lg font-semibold">History</h2>
         {history.length === 0 ? (

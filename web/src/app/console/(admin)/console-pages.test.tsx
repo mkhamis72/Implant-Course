@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 vi.mock('./actions', () => ({
-  registerCompany: vi.fn(),
+  onboardCompany: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
 
@@ -27,12 +27,20 @@ describe('CompaniesTable', () => {
 });
 
 describe('RegisterForm', () => {
-  it('never pre-fills the key fields', () => {
-    render(<RegisterForm />);
-    for (const label of ['Anon key', 'Service role key', 'Database URL (session pooler)']) {
-      const input = screen.getByLabelText(label) as HTMLInputElement;
-      expect(input.type).toBe('password');
-      expect(input.defaultValue).toBe('');
-    }
+  it('asks for no keys, and suggests the slug and address from the name until they are edited', () => {
+    render(<RegisterForm baseDomain="imploid.net" />);
+    expect(screen.queryByLabelText(/key/i)).toBeNull();
+    expect(screen.queryByLabelText(/Database URL/i)).toBeNull();
+    const slug = screen.getByLabelText('Slug') as HTMLInputElement;
+    const hosts = screen.getByLabelText('Address (one per line)') as HTMLTextAreaElement;
+    fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Delta Dental Centre' } });
+    expect(slug.value).toBe('delta-dental-centre');
+    expect(hosts.value).toBe('delta-dental-centre.imploid.net');
+    fireEvent.change(slug, { target: { value: 'delta' } });
+    expect(hosts.value).toBe('delta.imploid.net');
+    fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Delta Two' } });
+    expect(slug.value).toBe('delta');
+    expect(screen.getByLabelText('Email')).toBeTruthy();
+    expect(screen.getByLabelText('Full name')).toBeTruthy();
   });
 });

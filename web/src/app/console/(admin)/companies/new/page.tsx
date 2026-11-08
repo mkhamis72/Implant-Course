@@ -1,4 +1,7 @@
 import { requireConsoleAdmin } from '@/lib/console/session';
+import { consoleHost } from '@/lib/console/env';
+import { baseDomain } from '@/lib/console/onboarding';
+import { emailEnabled } from '@/lib/flags';
 import { RegisterForm } from './register-form';
 
 export default async function NewCompanyPage() {
@@ -9,9 +12,12 @@ export default async function NewCompanyPage() {
         <h1>Add company</h1>
       </div>
       <p className="mb-4 text-sm text-muted">
-        The Supabase project must already exist and be migrated (<code>ENV_FILE=… npm run db:migrate</code>). Keys are checked before anything is saved, and never shown again.
+        The company gets its own space in the shared database, with the product catalogue and consent forms, and its
+        address is added to Vercel. {emailEnabled()
+          ? 'The first admin is emailed an invite to set their password.'
+          : 'Email is off: the first admin gets a temporary password to pass on.'}
       </p>
-      <RegisterForm />
+      <RegisterForm baseDomain={baseDomain(consoleHost())} />
     </div>
   );
 }
