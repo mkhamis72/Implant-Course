@@ -26,7 +26,7 @@ test('the menu opens, navigates and closes on a phone', async ({ page }) => {
 test('main pages fit the phone screen without sideways scrolling', async ({ page }) => {
   await login(page, TEST_USERS.organizer.email);
   for (const path of ['/', '/patients', '/schedule', '/inventory', '/checklists', '/courses', '/delegates', '/account/security',
-    '/schedule/new', '/inventory/receive', '/inventory/recall', '/checklists/templates', '/patients/new']) {
+    '/schedule/new', '/schedule/lectures', '/inventory/receive', '/inventory/recall', '/checklists/templates', '/patients/new']) {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expectNoSideways(page);

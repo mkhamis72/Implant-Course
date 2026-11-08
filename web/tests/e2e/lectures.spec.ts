@@ -18,7 +18,8 @@ test('organizer adds, edits and deletes a talk in a lecture session', async ({ p
   await login(page, TEST_USERS.organizer.email);
   await page.goto(`/schedule/lectures?date=${date}`);
   const card = page.getByTestId(`talk-session-${sessionId}`);
-  await expect(card).toContainText('Hall A');
+  // The timetable shows no hall: one per course.
+  await expect(card).not.toContainText('Hall A');
   await expect(card).toContainText('09:00–13:00');
 
   await card.getByRole('link', { name: 'Add talk' }).click();
@@ -120,4 +121,31 @@ test('organizers cannot open lecturer settings', async ({ page }) => {
   await login(page, TEST_USERS.organizer.email);
   await page.goto('/admin/lecturers');
   await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
+});
+
+test('the timetable shows breaks between talks and day buttons for the days with sessions', async ({ page }) => {
+  const admin = await apiAs(TEST_USERS.admin.email);
+  const lecturerId = await seedLecturer(admin, uniqueName('Lecturer'));
+  const api = await apiAs(TEST_USERS.organizer.email);
+  const date = randomFutureDate();
+  const next = new Date(Date.parse(`${date}T00:00:00Z`) + 2 * 86400000).toISOString().slice(0, 10);
+  const courseId = await seedCourse(api, { name: uniqueName('Course'), start: date, end: next });
+  const sessionId = await seedSession(api, { courseId, type: 'lecture', title: 'Morning lectures', date, start: '09:00', end: '13:00' });
+  const later = await seedSession(api, { courseId, type: 'lecture', title: 'Closing lectures', date: next, start: '09:00', end: '11:00' });
+  for (const [start, end, topic] of [['09:00', '10:00', 'Bone grafting'], ['10:30', '11:30', 'Soft tissue']]) {
+    const { error } = await api.rpc('create_talk', { p_session: sessionId, p_start: start, p_end: end, p_lecturer: lecturerId, p_topic: topic });
+    if (error) throw error;
+  }
+
+  await login(page, TEST_USERS.organizer.email);
+  await page.goto(`/schedule/lectures?date=${date}`);
+  const card = page.getByTestId(`talk-session-${sessionId}`);
+  await expect(card.getByText('Break 10:00–10:30')).toBeVisible();
+  const days = page.getByRole('navigation', { name: 'Day' });
+  const day = (iso: string) => String(Number(iso.slice(8, 10)));
+  await expect(days.locator('[aria-current="date"]')).toContainText(day(date));
+  // The other course day is a button too; it opens that day's sessions.
+  await days.locator(`a[href$="date=${next}"]`).first().click();
+  await expect(page).toHaveURL(new RegExp(`date=${next}`));
+  await expect(page.getByTestId(`talk-session-${later}`)).toContainText('Closing lectures');
 });
