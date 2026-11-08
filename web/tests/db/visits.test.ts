@@ -221,6 +221,19 @@ describe('implant_visits', () => {
     });
   });
 
+  it('with no patient lists every patient\'s visits, as for one patient (recall_list reads them in one pass)', async () => {
+    await withTx(async (c) => {
+      const a = await placedSite(c, 11, 'Zz Visit All A');
+      const b = await placedSite(c, 200, 'Zz Visit All B');
+      const all = (await c.query('select site_id, visit_key, status from public.implant_visits(null)')).rows;
+      for (const p of [a, b]) {
+        const one = (await c.query('select site_id, visit_key, status from public.implant_visits($1)', [p.patient])).rows;
+        expect(one.length).toBeGreaterThan(0);
+        expect(all.filter((v) => v.site_id === p.site)).toEqual(one);
+      }
+    });
+  });
+
   it('a Schedule-only user and a delegate get no visit statuses', async () => {
     await withTx(async (c) => {
       const { patient } = await placedSite(c, 30);
