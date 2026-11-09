@@ -79,6 +79,7 @@ export async function sendPasswordLink(userId: string): Promise<{ email: string 
   }
 }
 
+/** signedInBefore: an established account (has a password, or a live session); sessions alone are not enough, as revoking them clears lastSignInAt. */
 export type PreviousAccount = { email: string; signedInBefore: boolean };
 
 /** Sets a login's sign-in email. Returns the address it had, so the caller can put it back, and whether the user ever signed in. */
@@ -89,7 +90,7 @@ export async function changeAuthEmail(userId: string, email: string): Promise<{ 
     if (!found) return { error: NOT_FOUND };
     if (found.email.toLowerCase() === email.toLowerCase()) return { error: 'That is already their sign-in email.' };
     await auth.admin.updateEmail(companyId, userId, email);
-    return { previous: { email: found.email, signedInBefore: found.lastSignInAt !== null } };
+    return { previous: { email: found.email, signedInBefore: found.hasPassword || found.lastSignInAt !== null } };
   } catch (e) {
     logFailure('updateEmail', e);
     return { error: describe(e) };

@@ -67,7 +67,15 @@ describe('changeAuthEmail', () => {
   it('returns the old address and whether they ever signed in', async () => {
     admin.listUsers.mockResolvedValue([row({ lastSignInAt: new Date() })]);
     expect(await changeAuthEmail('u1', 'new@example.com')).toEqual({ previous: { email: 'a@example.com', signedInBefore: true } });
-    admin.listUsers.mockResolvedValue([row()]);
+    admin.listUsers.mockResolvedValue([row({ hasPassword: false })]);
+    expect(await changeAuthEmail('u1', 'new@example.com')).toEqual({ previous: { email: 'a@example.com', signedInBefore: false } });
+  });
+  it('email_change_notifies_old_address_after_sessions_revoked: a user with a password but no live session is established', async () => {
+    admin.listUsers.mockResolvedValue([row({ hasPassword: true, lastSignInAt: null })]);
+    expect(await changeAuthEmail('u1', 'new@example.com')).toEqual({ previous: { email: 'a@example.com', signedInBefore: true } });
+  });
+  it('a pending invite (no password, no session) is not established', async () => {
+    admin.listUsers.mockResolvedValue([row({ hasPassword: false, lastSignInAt: null })]);
     expect(await changeAuthEmail('u1', 'new@example.com')).toEqual({ previous: { email: 'a@example.com', signedInBefore: false } });
   });
   it('refuses the address they already have, and a taken address', async () => {
