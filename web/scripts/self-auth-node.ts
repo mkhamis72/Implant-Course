@@ -30,6 +30,11 @@ async function build(url: string, secretVar: string): Promise<SelfAuth> {
   });
 }
 
+/** A separate instance on any database (the caller closes it): tests point one at a scratch control database. */
+export function nodeAuthFor(url: string, secretVar: string): Promise<SelfAuth> {
+  return build(url, secretVar);
+}
+
 let instance: Promise<SelfAuth> | null = null;
 let consoleInstance: Promise<SelfAuth> | null = null;
 

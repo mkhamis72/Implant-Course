@@ -195,6 +195,63 @@ You need:
 
 **Free plan pause:** if the Supabase dashboard shows the project as paused, open it and choose **Restore project**. The nightly backup's requests normally prevent this.
 
+### Self-Auth rehearsal (before the switch-over)
+
+A full run of the switch-over on copies of last night's prod and control data, on the local dev2 stack, ending with a simulated rollback. Nothing here touches a live database except the one read-only dump in step B1. The copies hold patient data and password hashes: never leave them, and wipe everything at the end (step D).
+
+`self-auth:import` (`web/scripts/self-auth-import.ts`) is a dry run unless given `--apply`. It prints counts, the split plan, ids and masked emails (`s***@example.com`), never hashes or secrets. It stops before changing anything if it finds a user column it doesn't handle, a hash that isn't bcrypt, a user without an email, or an id that Self-Auth already holds for another company. Re-running it is safe.
+
+You need two worktrees: the old app at the tag (`git worktree add ../ic-before restore/before-self-auth`, then `npm ci` in its `web/`) and this branch (`feat/self-auth`). Commands run in Git Bash from the worktree's `web/` that is named.
+
+**A. App database (prod copy on dev2)**
+
+1. Fresh dev2, schema as prod has it today. From `ic-before/web`: `npx supabase stop --workdir .dev2 --no-backup`, `npm run db:dev2:start`, `ENV_FILE=.env.dev2 npm run db:migrate` (stops at 0100).
+2. Load last night's prod data as in §D *Restore a database* steps 1, 5 and 6, but into dev2: download the newest `backups-*` artifact, `gpg --decrypt <slug>-<date>.dump.gpg > prod.dump` (outside the repo), `pg_restore --data-only --no-owner -f data.sql prod.dump`, then `docker cp data.sql supabase_db_implant-course-dev2:/tmp/data.sql` and run step 6's command with `docker exec supabase_db_implant-course-dev2 psql -U postgres -d postgres --single-transaction -v ON_ERROR_STOP=1 -c "SET session_replication_role = replica" -c "TRUNCATE <step 6's list> CASCADE" -f /tmp/data.sql`.
+3. Note the counts the import must reproduce: `docker exec supabase_db_implant-course-dev2 psql -U postgres -d postgres -c "select (select count(*) from auth.users where deleted_at is null) users, (select count(*) from auth.users where deleted_at is null and coalesce(encrypted_password,'') = '') invited, (select count(distinct user_id) from auth.mfa_factors where factor_type = 'totp' and status = 'verified') totp, (select count(*) from public.company_members) memberships"`. Expected today: 12 users, 2 invited, memberships ≥ 12.
+4. Choose a rehearsal admin (an academy admin) and give them a known password and authenticator **on this copy only**, before the import, so both the new app and the rolled-back old app accept them. Make a secret with `node -e "console.log(require('otplib').authenticator.generateSecret())"` (from `web/`) and add it to your authenticator app by hand. Then:
+   ```bash
+   docker exec supabase_db_implant-course-dev2 psql -U postgres -d postgres -c "
+     update auth.users set encrypted_password = extensions.crypt('<rehearsal password>', extensions.gen_salt('bf', 10)) where email = '<admin email>';
+     update auth.mfa_factors set secret = '<secret>' where user_id = (select id from auth.users where email = '<admin email>') and factor_type = 'totp' and status = 'verified';"
+   ```
+   (If the admin has no factor, the update changes 0 rows and they'll enrol on first sign-in.)
+5. Apply Migration A and 0102. Copy `SELF_AUTH_SECRET`, `SELF_AUTH_PRIVATE_JWK` and `SELF_AUTH_KID` from `.env.local` into `.env.dev2`. From `feat/self-auth`'s `web/`: `npm run db:dev2:start` is already running, so only `ENV_FILE=.env.dev2 npm run db:migrate` (applies 0101 and 0102).
+6. Dry run: `ENV_FILE=.env.dev2 npm run self-auth:import -- --db app`. Check: "User columns found" with no stop; the users, invited and 2FA counts match step 3; "Accounts (one per membership)" equals the memberships count; every split line names the right person and companies.
+7. Apply: `ENV_FILE=.env.dev2 npm run self-auth:import -- --db app --apply`. It must end with "Import complete." and "Check: N of N accounts in place". Run the dry run again: "already in Self-Auth" must equal the accounts count and every split must say `done`.
+8. Click-through, new app. Next reads `.env.local`, not `ENV_FILE`, so in `feat/self-auth/web`: `cp .env.local .env.local.bak`, then `cp .env.dev2 .env.local` and delete any `CONTROL_*` line from it (single-company mode: localhost is the academy), then `npm run dev`. At http://localhost:3000 sign in as the rehearsal admin with the step 4 password and a code from the step 4 authenticator. Open Dashboard, Patients (one patient), Schedule, Courses, Inventory (one lot: the ledger's "by" names show), Checklists, Delegates, Admin → Users (invited users show as pending). Sign out. If a split person exists, sign in as them only if you know their password (don't reset a real user's password for this).
+9. Undo the splits for the rollback (skip if step 6 listed none): `ENV_FILE=.env.dev2 npm run self-auth:import -- --db app --undo-splits` (dry run), then with `--apply`. Each split company's rows go back to the person's original id.
+10. Simulated rollback. Stop the new app and `mv .env.local.bak .env.local` in `feat/self-auth/web`. In `ic-before/web`, copy the same rehearsal values to its `.env.local` (the Self-Auth lines are ignored there) and `npm run dev` (the old app at `restore/before-self-auth`, same database with Migration A applied). Sign in through Supabase Auth as the rehearsal admin, same password and authenticator. Open Patients, Schedule and Inventory; sign out and in again (session binding). A split person's other company must be reachable again (check `select company_id from public.company_members where user_id = '<their id>'` lists both). To go forward again, re-run step 7: it splits again and skips the accounts already imported.
+
+**B. Control database (control copy on dev2, after A)**
+
+The nightly `_control-*` backup holds only the company registry (`tenants`, `tenant_audit`), not the console accounts, so take one encrypted read-only dump of them first.
+
+1. Owner, read-only on the live control project: `pg_dump --data-only --format=custom --no-owner --table=auth.users --table=auth.mfa_factors --table=public.console_admins --table=public.tenants "<CONTROL_DATABASE_URL>" | gpg --symmetric --cipher-algo AES256 -o control-auth-<date>.dump.gpg`. Keep it with the backups; decrypt to `control.dump` outside the repo.
+2. Rebuild dev2 as the control project: `npx supabase stop --workdir .dev2 --no-backup`, `npm run db:dev2:start`. Make `.env.rehearsal-control` with `CONTROL_DATABASE_URL` and `CONTROL_SUPABASE_URL` from `.env.dev2`'s `DATABASE_URL` and `NEXT_PUBLIC_SUPABASE_URL`, plus `CONTROL_SELF_AUTH_SECRET` (any 32+ character value), `SELF_AUTH_PRIVATE_JWK` and `SELF_AUTH_KID` from `.env.local`.
+3. From `ic-before/web`: `ENV_FILE=.env.rehearsal-control npm run db:migrate -- --control` (0001–0006). Load: `pg_restore --data-only --no-owner -f control.sql control.dump`, `docker cp control.sql supabase_db_implant-course-dev2:/tmp/control.sql`, `docker exec supabase_db_implant-course-dev2 psql -U postgres -d postgres --single-transaction -v ON_ERROR_STOP=1 -c "SET session_replication_role = replica" -f /tmp/control.sql`.
+4. From `feat/self-auth/web`: `ENV_FILE=.env.rehearsal-control npm run db:migrate -- --control` (0007), then `ENV_FILE=.env.rehearsal-control npm run self-auth:import -- --db control` (expect 1 user, 1 with 2FA), then with `--apply` (expect "Import complete.").
+5. Optional sign-in check without the live authenticator: `docker exec supabase_db_implant-course-dev2 psql -U postgres -d postgres -c "select u.\"realEmail\", (select count(*) from self_auth.totp_factor t where t.user_id = u.id and t.confirmed) totp, (select count(*) from self_auth.account a where a.\"userId\" = u.id and a.password like '\$2%') bcrypt from self_auth.\"user\" u"` must show the admin with totp 1 and bcrypt 1.
+
+**C. Clean up:** `npx supabase stop --workdir .dev2 --no-backup`; delete `prod.dump`, `data.sql`, `control.dump`, `control.sql`, `ic-before/web/.env.local`, `.env.rehearsal-control` and the Self-Auth lines added to `.env.dev2`; `git worktree remove ../ic-before`. Rebuild dev2 for the console tests as in *Restore rehearsal* step 4.
+
+**Results** (fill in on the day):
+
+| Step | Expected | Result | Notes |
+|---|---|---|---|
+| A2 data load | no error | | backup run id: |
+| A3 counts | 12 users, 2 invited, 2FA n, memberships m | | |
+| A6 dry run | no stop; counts = A3; splits listed | | splits: |
+| A7 apply | Import complete; N of N | | |
+| A7 second dry run | all already in Self-Auth; splits done | | |
+| A8 new app sign-in (password + TOTP) | dashboard | | |
+| A8 click-through | every page loads, names show | | |
+| A9 undo splits | rows moved back | | |
+| A10 old app sign-in via Supabase | dashboard, pages load | | |
+| A10 split person's companies | both on original id | | |
+| B4 control dry run / apply | 1 user, 1 with 2FA; Import complete | | |
+| B5 console admin | totp 1, bcrypt 1 | | |
+| C cleanup | files and stack gone | | |
+
 ## E. Keys and secrets
 
 - To rotate a company's service role key or database password: change it in Supabase, then re-run `tenant:register` for that company (the control project's Vault holds them), then `tenant:check`. For a company other than the academy, `tenant:register` reads that company's values from an env file like `.env.restore` in §D step 3 (with the new key or password), not from `.env.prod`.
