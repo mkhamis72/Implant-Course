@@ -58,7 +58,7 @@ All commands are run with `ENV_FILE=.env.prod` (see the top of this page).
 
 - **New staff login (admin or organizer):**
   - Use Admin → Users → **Create login**.
-  - While `EMAIL_ENABLED=false`, the app shows a one-time temporary password. Hand it over in person; they change it under Account security.
+  - While `EMAIL_ENABLED=false`, the app shows a one-time temporary password. Hand it over in person; they change it themselves under Account security → **Password** (current password = the one-time password, then the new one twice). Changing it signs out their other devices; it works with email on or off.
   - With email on, the same form sends an invitation. Its link verifies the address and lets them set a password.
 - **New delegate login:**
   - On the delegate's page (admin only), click **Create login**. The delegate needs an email address first.
@@ -70,7 +70,7 @@ All commands are run with `ENV_FILE=.env.prod` (see the top of this page).
 - **From the command line:**
   - Staff: `npm run create-user -- dr@example.com "Dr Name" [--role admin]`.
   - Delegate: `npm run create-user -- d@example.com "Dr Name" --role delegate --delegate <delegate id>`.
-- **Reset a password** (lost, or never received): Admin → Users → **Reset password**, or **Reset password** in the Login section of a delegate's page. It shows a new one-time password to hand over, whether email is on or off. From the command line, run the same `create-user` command again for that email.
+- **Reset a password** (lost, or never received): Admin → Users → **Reset password**, or **Reset password** in the Login section of a delegate's page. With email on, it emails the user a reset link (the admin sees "couldn't be sent" if the mail fails, never "sent"); with email off, it shows a new one-time password to hand over once and signs them out everywhere. Anyone signed in can change their own password under Account security → **Password**; **Forgot your password?** there (email on only) emails them a reset link. From the command line, run the same `create-user` command again for that email.
 - **Change a sign-in email** (typo, new address): Admin → Users → **Change email** on the user's row. It changes the sign-in address and the app record together (and the linked delegate's email), signs them out everywhere, and emails a notice (no link) to the new address, and to the old one if they have signed in before. Don't edit `auth.users` or `profiles` in the Supabase dashboard: the two would disagree. You can't change your own here; use Account → Security.
 - **Lost authenticator (company users):** Admin → Users → **Reset 2FA** (shown only when the user has one). It removes their authenticator and signs them out everywhere; at their next sign-in they must set up a new one before the app (or the database) lets them do anything else.
 - **Invite never arrived:** Admin → Users → **Resend invite**, shown while email is on and the user has never signed in. Each row's **History** lists the last email, name and 2FA changes made by admins.
@@ -300,11 +300,11 @@ The previous app ignores all of these, so setting them early changes nothing exc
 2. **Public key as a standby key**, in **both** the company project and the control project: `ENV_FILE=.env.switch npm run self-auth:keys -- jwks` prints the public key only (`kty`, `crv`, `x`, `y`, `kid`; never `d`). Supabase Dashboard → Project Settings → JWT Keys → import it as a **standby** key (do not rotate: the current key stays in use for the old app).
 3. **Check that Supabase accepts Self-Auth's tokens** (read-only; the databases have no `self_auth` tables yet, and this doesn't need them): `ENV_FILE=.env.switch npm run self-auth:keys -- check` must print `branding_for: 200, …`, and `ENV_FILE=.env.switch npm run self-auth:keys -- check --control` must print `is_console_admin: 200, …`. A `401` means the key isn't imported in that project (or `SELF_AUTH_KID` doesn't match): fix it before going on. The token is signed locally for a made-up session and expires in 5 minutes; neither call changes data.
 4. **Maintenance on.** Set the Vercel variables above with `MAINTENANCE=1`. The current production app (the old code) has no maintenance mode, so this takes effect when step 5 deploys the new app; until then maintenance is announced, not enforced. That is safe: the import (step 6) runs after the deploy, so it still picks up any Supabase Auth change made before it. Keep steps 4 and 5 close together. (No preview check: a preview of `feat/self-auth` would run the new code against the live, not yet migrated database. Step 7's smoke test, under maintenance, is the check.)
-5. **Merge `feat/self-auth` into `master`.** The release takes its own backup (note `pre-release-backups-…` and the R2 folder from its log), runs Migration A (`0101`, `0102`, control `0007`), holds Migration B, and deploys the new app, still in maintenance. Its deploy hook builds **without** Vercel's build cache (`?buildCache=false`, documented by Vercel for deploy hooks): the vendored `@mkhamis72/self-auth` 0.1.1 tarball has no lockfile integrity hash, so a cached copy must not be reused. Check it in Vercel → the new deployment → Build Logs (no "Restored build cache" line). If it did use a cache, redeploy that deployment with "Use existing Build Cache" **off** before step 6.
+5. **Merge `feat/self-auth` into `master`.** The release takes its own backup (note `pre-release-backups-…` and the R2 folder from its log), runs Migration A (`0101`, `0102`, control `0007`), holds Migration B, and deploys the new app, still in maintenance. Its deploy hook builds **without** Vercel's build cache (`?buildCache=false`, documented by Vercel for deploy hooks): the vendored `@mkhamis72/self-auth` tarball (`web/vendor/`, 0.1.2) is a local file dependency, so a cached copy of an earlier build of it must not be reused. Check it in Vercel → the new deployment → Build Logs (no "Restored build cache" line). If it did use a cache, redeploy that deployment with "Use existing Build Cache" **off** before step 6.
    Then check Self-Auth reaches its tables over the URL Vercel uses (now that Migration A made them): `ENV_FILE=.env.switch npm run self-auth:keys -- reach` must print `Self-Auth database: reachable over SELF_AUTH_DATABASE_URL.` ("not migrated yet" means the release hasn't applied Migration A to this database; "unreachable (<code>)" means the URL, its role or its password is wrong: fix the URL in `.env.switch` and in Vercel).
 6. **Import the accounts**, dry run first each time:
    ```bash
-   ENV_FILE=.env.switch npm run self-auth:import -- --db control           # dry run: 1 user, 1 with 2FA
+   ENV_FILE=.env.switch npm run self-auth:import -- --db control           # dry run: 1 user, 1 with 2FA (an inactive or banned console admin is listed as "disabled:" and imported disabled)
    ENV_FILE=.env.switch npm run self-auth:import -- --db control --apply   # "Import complete."
    ENV_FILE=.env.switch npm run self-auth:import -- --db app               # dry run: counts and splits as in the rehearsal
    ENV_FILE=.env.switch npm run self-auth:import -- --db app --apply       # "Import complete." and "Check: N of N"
@@ -318,6 +318,10 @@ The previous app ignores all of these, so setting them early changes nothing exc
    - a password reset email arrives at a mailbox you can read, and its link opens on the company's address;
    - sign out, sign in again; another company's address treats you as signed out.
    Delete the cookie afterwards (`document.cookie = "icm_maintenance_bypass=; path=/; max-age=0"`).
+7a. **Close Supabase Auth** (still in maintenance), in **both** Supabase projects (the company project and the control project). No new backup is needed: the release backup from step 5, minutes earlier, already holds `auth.sessions` and every other `auth` table.
+   - Dashboard → Authentication → **Sign In / Providers** (`https://supabase.com/dashboard/project/<ref>/auth/providers`) → **Email** → switch the Email provider **off** (the provider's enable toggle; at the time of writing it reads "Enable Email provider": check the label on the day) and **Save**. Supabase Auth then refuses email/password sign-in (and email links) for the old app and for anyone calling the Supabase Auth API directly. Leave "Allow new users to sign up" off as it is.
+   - SQL editor (as postgres): `delete from auth.sessions;` Refresh tokens go with them (`auth.refresh_tokens.session_id` references `auth.sessions` with `on delete cascade`), so no Supabase session can be renewed. An access token Supabase already issued stays valid until it expires (the project's JWT expiry, 1 hour by default); nothing can renew it.
+   - Note both in the log. Re-enable them only in a rollback (§F step 4a).
 8. **Maintenance off.** Set `MAINTENANCE=0` in Vercel and redeploy the current deployment (Deployments → the current one → ⋯ → Redeploy, "Use existing Build Cache" **off**). Check a company address shows the sign-in page.
 9. **Email the users** (BCC, from the usual sender):
 
@@ -342,6 +346,7 @@ The previous app ignores all of these, so setting them early changes nothing exc
 | 5 release run id, `pre-release-backups-…`, R2 folder | |
 | 6 control / app import counts, splits | |
 | 7 smoke test (admin, delegate, console, split) | |
+| 7a Email provider off + `auth.sessions` cleared (company / control) | |
 | 8 maintenance off at | |
 
 **After the window** (when you are sure there is no going back, normally a few days later):
@@ -352,7 +357,8 @@ The previous app ignores all of these, so setting them early changes nothing exc
    ```
    (Migration B checks every table and stops naming the counts if any remain.) A row is someone the import gave no account because they have no membership. Remove them the old way: `delete from auth.users where id = '<id>'` (Migration A's trigger deletes the profile and clears `created_by`), or, if they should keep access, give them a membership and re-run the import. On the control project, `select user_id from public.console_admins a where not exists (select 1 from self_auth."user" u where u.id = a.user_id)` must be empty.
 2. Turn the hold off: GitHub → Settings → Environments → `production` → Environment variables → `SELF_AUTH_B_HOLD` = `0`. Then Actions → Release → Run workflow on `master`. It backs up, applies `0008_self_auth_b.sql` (control) and `0103_self_auth_b.sql` (each company database), and deploys. From now on the old app no longer works: §F no longer applies; restoring means the pre-release backup.
-3. Remove what Supabase Auth used: in both Supabase projects, Authentication → turn off sign-ups and the custom SMTP (revoke its Resend key in Resend if it was a separate key); delete `.env.switch`. Keep the Self-Auth key imported in JWT Keys.
+3. **Ban the old Supabase Auth users** in both projects, after Migration B is applied (SQL editor, as postgres): `update auth.users set banned_until = '2999-12-31' where banned_until is null or banned_until < '2999-12-31';` Ban, not delete: after Migration B nothing of the app references `auth.users` any more, but the rows are the record of who had Supabase accounts (their ids are the ids in `audit_log`), a ban is reversible, and a delete would also cascade into Supabase's own `auth.identities` and `auth.mfa_factors`. With the Email provider already off (§E step 7a) this is a second lock: a banned user can't get a Supabase session even if the provider were switched on again by mistake.
+4. Remove what Supabase Auth used: in both Supabase projects, Authentication → turn off sign-ups and the custom SMTP (revoke its Resend key in Resend if it was a separate key); delete `.env.switch`. Keep the Self-Auth key imported in JWT Keys.
 
 ## F. Rollback after the switch-over (first hours only, before *After the window*)
 
@@ -368,6 +374,7 @@ Use it if the new sign-in fails in a way you can't fix quickly. Migration A kept
 2. `MAINTENANCE=1` in Vercel, then Deployments → the current (new) deployment → ⋯ → **Redeploy**, "Use existing Build Cache" **off**, so nobody signs in or writes during the rollback. Serving check: the new deployment is Current and shows "We'll be back soon".
 3. **Fresh backup before rewriting rows.** Actions → Backup → Run workflow, mode `backup`, must finish green. Note the run id and file names in the §E log.
 4. Undo the splits so that people in two companies get both companies back on their Supabase id: `ENV_FILE=.env.switch npm run self-auth:import -- --db app --undo-splits` (dry run), then with `--apply`. The Self-Auth accounts stay.
+4a. **Open Supabase Auth again**, in **both** Supabase projects, before the old app is back (§E step 7a undone): Dashboard → Authentication → **Sign In / Providers** → **Email** → switch the Email provider **on** and **Save**. Check that "Allow new users to sign up" is still off. The sessions deleted in step 7a stay gone: everyone signs in again in the old app.
 5. **Put the old app back.**
    - Vercel → Deployments (Production) → the last production deployment **before** the merge (its commit is `master` just before the merge: `git log --first-parent master`) → ⋯ → **Redeploy**, "Use existing Build Cache" **off**. This builds the old app (Supabase Auth) again as a new production deployment. It ignores `MAINTENANCE`, so sign-in is open again once it is live. Serving check: the redeployed one is Current, with the pre-merge commit's SHA.
    - Revert the merge on `master` so the next release can't bring the new app back: `git revert -m 1 <merge commit>` on a branch, then a pull request into `master`, merged as usual. Its Release backs up, has nothing to migrate (the database keeps Migration A, which the old app works with; `schema_migrations` keeps the rows, so nothing is re-run later) and deploys `master`, now the old code, without build cache. Serving check: that deployment is Current, with the revert commit's SHA, and shows the old sign-in.
@@ -380,8 +387,8 @@ Use it if the new sign-in fails in a way you can't fix quickly. Migration A kept
 1. Announce a new window. §E step 1 (backups and the control accounts dump). The standby key from step 2 is still imported; run step 3's checks again.
 2. `MAINTENANCE=1` in Vercel (takes effect with the next deploy, as in §E step 4).
 3. Revert the revert: `git revert <revert commit>` on a branch (plus the fix), pull request into `master`, merge. Its Release backs up, applies anything new (Migration B stays held) and deploys the new app, in maintenance, without build cache. **Serving check** (see §F): that deployment is Current, with the new merge commit's SHA, and a company address shows "We'll be back soon". If it built but isn't Current, auto-assignment is off (a Promote or Instant Rollback happened): undo it as described in §F, promoting this newest deployment. Then `ENV_FILE=.env.switch npm run self-auth:keys -- reach`.
-4. Import again, dry runs first: `--db control`, `--db control --apply`, `--db app`, `--db app --apply`. The splits are redone. Accounts already in Self-Auth are skipped, not updated: a password, 2FA or invite changed in the old app since the rollback is **not** carried over. The dry run's "already in Self-Auth" count shows who is affected. Tell those people to use "Forgot password" (or reset their 2FA in Admin → Users).
-5. §E steps 7 to 9: smoke test with the bypass; then `MAINTENANCE=0` and Redeploy ("Use existing Build Cache" **off**) followed by the serving check (Current is that redeploy, and a company address shows the new sign-in page); then email the users.
+4. Import again, dry runs first: `--db control`, `--db control --apply`, `--db app`, `--db app --apply`. The splits are redone. Accounts already in Self-Auth are skipped, not updated: a password, 2FA or invite changed in the old app since the rollback is **not** carried over. The dry run's "already in Self-Auth" count shows who is affected. Accounts made in Self-Auth during the first window (invites, new logins) are not in Supabase Auth: the final check lists them as "made in Self-Auth only", which is expected, not a failure. Tell those people to use "Forgot password" (or reset their 2FA in Admin → Users).
+5. §E steps 7 to 9: smoke test with the bypass; step 7a again (Email provider off and `delete from auth.sessions;` in both projects); then `MAINTENANCE=0` and Redeploy ("Use existing Build Cache" **off**) followed by the serving check (Current is that redeploy, and a company address shows the new sign-in page); then email the users.
 
 ## G. Control project (companies)
 
@@ -439,6 +446,8 @@ The result lists each step. Once the company exists, a failed address or invite 
 - Without these the console still adds the company and shows the manual address steps on its page (Vercel **Add Existing**, plus a GoDaddy CNAME if there's no wildcard).
 
 **Add a company on another Supabase account.**
+
+> **Not supported with Self-Auth.** Self-Auth keeps every company's accounts in the shared company database (the app's one `DATABASE_URL` / `SELF_AUTH_DATABASE_URL`), so a company on its own project could not sign in. `tenant:register` refuses a project other than the shared one ("… is not the shared company database …") before changing anything. Add companies with the console's **Add company** until Self-Auth supports one database per project. The steps below are kept for that day.
 
 The app doesn't care which Supabase account a company's project lives in. The control registry stores each company's project URL, and its keys in Vault. Release, Backup, keep-awake and the console all work from there.
 
