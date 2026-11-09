@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Client as PgClient, type Client } from 'pg';
 import { pgConfig } from './db';
 import { ACADEMY_COMPANY_ID } from '../src/lib/tenant/types';
-import { nodeAuth } from './self-auth-node';
+import { nodeAuth, sentEmails } from './self-auth-node';
 
 export function adminClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -64,12 +64,23 @@ export async function ensureUser(
   return data.user.id;
 }
 
+async function resetPasswordInPlace(companyId: string, email: string, newPassword: string): Promise<void> {
+  const auth = await nodeAuth();
+  const before = sentEmails.length;
+  await auth.requestPasswordReset({ companyId, email });
+  const mail = sentEmails.slice(before).find((m) => m.kind === 'reset' && m.to.toLowerCase() === email);
+  const token = mail ? new URL(mail.url).searchParams.get('token') : null;
+  if (!token) throw new Error(`no reset link was issued for ${email}`);
+  const done = await auth.resetPassword({ token, newPassword });
+  if (!done || done.companyId !== companyId) throw new Error(`password reset for ${email} failed`);
+}
+
 /** Finds or creates the company's Self-Auth account through the package. Pass `pending` (a new account needs a
  *  pending login in the company's database, as the provisioning trigger requires one). An existing account
- *  keeps its id when `password` signs in (it is also re-enabled); otherwise `recreate` deletes and creates it
- *  again, and without `recreate` the call fails (Self-Auth has no set-password call: use the reset link). */
+ *  keeps its id; when `password` doesn't sign in, the password is reset in place through the reset flow (the
+ *  mail adapter keeps the link in `sentEmails`). Accounts are never deleted here: ids stay stable. */
 export async function ensureTenantUser(opts: {
-  email: string; password: string; companyId?: string; pending?: { pg: Client }; recreate?: boolean;
+  email: string; password: string; companyId?: string; pending?: { pg: Client };
 }): Promise<string> {
   const email = opts.email.trim().toLowerCase();
   const companyId = opts.companyId ?? ACADEMY_COMPANY_ID;
@@ -82,8 +93,9 @@ export async function ensureTenantUser(opts: {
       await auth.signOut(res.sessionToken);
       return existing.userId;
     }
-    if (!opts.recreate) throw new Error(`${email} already has an account here and the password differs (use the password reset link)`);
-    await auth.admin.deleteUser(companyId, existing.userId);
+    if (res.reason !== 'invalid_credentials') throw new Error(`cannot sign in as ${email}: ${res.reason}`);
+    await resetPasswordInPlace(companyId, email, opts.password);
+    return existing.userId;
   }
   if (opts.pending) await addPendingLogin(opts.pending.pg, email, companyId);
   return (await auth.admin.createUser({ companyId, email, password: opts.password })).userId;

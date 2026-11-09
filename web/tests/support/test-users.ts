@@ -62,7 +62,7 @@ export async function ensureTestUsers(): Promise<TestUserIds> {
       }
     }
     for (const key of Object.keys(TEST_USERS) as TestUserKey[]) {
-      ids[key] = await ensureTenantUser({ email: TEST_USERS[key].email, password: TEST_PASSWORD, pending: { pg }, recreate: true });
+      ids[key] = await ensureTenantUser({ email: TEST_USERS[key].email, password: TEST_PASSWORD, pending: { pg } });
     }
     // No test user starts with a 2FA factor.
     await pg.query('delete from self_auth.totp_factor where user_id = any($1)', [Object.values(ids)]);
