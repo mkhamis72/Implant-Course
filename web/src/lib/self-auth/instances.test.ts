@@ -34,6 +34,15 @@ describe('instances', () => {
     expect(c.cfg.dbToken.privateJwk).toEqual(t.cfg.dbToken.privateJwk);
     expect(CONSOLE_COMPANY).toBe('console');
   });
+  it('malformed_jwk_error_has_no_key_material', async () => {
+    process.env.SELF_AUTH_PRIVATE_JWK = '{"d":"SECRETKEYMATERIAL" oops';
+    vi.resetModules();
+    const { tenantAuth: fresh } = await import('./tenant');
+    const err = await fresh().catch((e) => e);
+    expect(String(err.message)).toBe('SELF_AUTH_PRIVATE_JWK is not valid JSON');
+    expect(JSON.stringify(err, Object.getOwnPropertyNames(err))).not.toMatch(/SECRETKEYMATERIAL/);
+    expect(err.cause).toBeUndefined();
+  });
   it('SELF_AUTH_DATABASE_URL (session pooler) overrides DATABASE_URL for the tenant', async () => {
     process.env.SELF_AUTH_DATABASE_URL = 'postgresql://session-pooler';
     // module caches per process, so build through a fresh import

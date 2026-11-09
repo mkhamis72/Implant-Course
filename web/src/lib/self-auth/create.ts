@@ -9,13 +9,22 @@ function required(name: string): string {
   return v;
 }
 
+// JSON.parse errors can quote part of the input, which here is a private key: drop them.
+function parseJwk(raw: string) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error('SELF_AUTH_PRIVATE_JWK is not valid JSON');
+  }
+}
+
 /** One Self-Auth instance. Both the tenant and the console sign database tokens with the same key pair. */
 export function buildSelfAuth(databaseUrl: string, secretVar: string): Promise<SelfAuth> {
   return createSelfAuth({
     databaseUrl,
     secret: required(secretVar),
     appName: 'Implant Course',
-    dbToken: { privateJwk: JSON.parse(required('SELF_AUTH_PRIVATE_JWK')), kid: required('SELF_AUTH_KID') },
+    dbToken: { privateJwk: parseJwk(required('SELF_AUTH_PRIVATE_JWK')), kid: required('SELF_AUTH_KID') },
     email: emailAdapter,
     links: { resetPassword: resetLink, acceptInvite: inviteLink },
     // The context never carries tokens or URLs; log only the operation and the error's message.
@@ -27,7 +36,7 @@ export function buildSelfAuth(databaseUrl: string, secretVar: string): Promise<S
 export function cached(build: () => Promise<SelfAuth>): () => Promise<SelfAuth> {
   let p: Promise<SelfAuth> | null = null;
   return () => {
-    p ??= build().catch((e) => { p = null; throw e; });
+    p ??= (async () => build())().catch((e) => { p = null; throw e; });
     return p;
   };
 }

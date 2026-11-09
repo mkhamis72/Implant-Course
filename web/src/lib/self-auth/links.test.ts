@@ -27,6 +27,17 @@ describe('links', () => {
     controlTenants.mockResolvedValue([{ ...academy, hosts: ['localhost'] }]);
     expect(await companyBaseUrl(ACADEMY_COMPANY_ID)).toMatch(/^http:\/\/localhost/);
   });
+  it('console_links_use_console_host', async () => {
+    process.env.CONSOLE_HOST = 'console.imploid.net';
+    expect(await companyBaseUrl('console')).toBe('https://console.imploid.net');
+    process.env.CONSOLE_HOST = 'localhost:3000';
+    expect(await companyBaseUrl('console')).toBe('http://localhost:3000');
+    process.env.CONSOLE_HOST = '127.0.0.1:3000';
+    expect(await companyBaseUrl('console')).toBe('http://127.0.0.1:3000');
+    delete process.env.CONSOLE_HOST;
+    await expect(companyBaseUrl('console')).rejects.toThrow(/CONSOLE_HOST/);
+    expect(controlTenants).not.toHaveBeenCalled();
+  });
   it('reset and invite links are paths with an encoded token', () => {
     expect(resetLink('c', 'a b')).toBe('/auth/reset?token=a%20b');
     expect(inviteLink('c', 'tok')).toBe('/auth/invite?token=tok');
