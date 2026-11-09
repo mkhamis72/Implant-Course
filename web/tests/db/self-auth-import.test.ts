@@ -291,7 +291,8 @@ describe('self-auth-import (control database)', () => {
     url = u.toString();
     await withPg(async (pg) => {
       await pg.query(`create schema auth;
-        create table auth.users (id uuid primary key, email text, encrypted_password text, created_at timestamptz not null, deleted_at timestamptz);
+        create table auth.users (id uuid primary key, email text, encrypted_password text, created_at timestamptz not null, deleted_at timestamptz,
+          banned_until timestamptz);
         create table auth.mfa_factors (id uuid primary key, user_id uuid not null references auth.users(id), factor_type text not null,
           status text not null, secret text, created_at timestamptz not null);
         create table public.console_admins (user_id uuid primary key constraint console_admins_user_id_fkey references auth.users(id),
@@ -328,5 +329,44 @@ describe('self-auth-import (control database)', () => {
     const s = await consoleAuth!.totp.verify(r.sessionToken, 'console', authenticator.generate(secret));
     expect(s?.aal).toBe('aal2');
     expect(await consoleAuth!.signIn({ companyId: 'console', email: 'zz-gone@example.com', password: PASSWORD })).toMatchObject({ ok: false });
+  });
+
+  it('console_inactive_or_banned_admin_imports_disabled', async () => {
+    const stamp = Date.now();
+    const admins = {
+      inactive: { id: randomUUID(), email: `zz-console-inactive-${stamp}@example.com`, active: false, banned: null as string | null },
+      banned: { id: randomUUID(), email: `zz-console-banned-${stamp}@example.com`, active: true, banned: '2999-01-01' },
+      banEnded: { id: randomUUID(), email: `zz-console-banended-${stamp}@example.com`, active: true, banned: '2020-01-01' },
+    };
+    await withPg(async (pg) => {
+      for (const a of Object.values(admins)) {
+        await pg.query('insert into auth.users (id, email, encrypted_password, created_at, banned_until) values ($1, $2, $3, now(), $4)',
+          [a.id, a.email, HASH, a.banned]);
+        await pg.query('insert into public.console_admins (user_id, email, active) values ($1, $2, $3)', [a.id, a.email, a.active]);
+      }
+    }, url);
+
+    const dry: string[] = [];
+    const planned = await withPg(async (pg) => runImport({ db: 'control', apply: false, pg, auth: consoleAuth!, log: (l) => dry.push(l) }), url);
+    expect(planned.disabled).toBe(2);
+    expect(dry.some((l) => l.includes(admins.inactive.id) && l.includes('inactive console admin'))).toBe(true);
+    expect(dry.some((l) => l.includes(admins.banned.id) && l.includes('banned in Supabase Auth'))).toBe(true);
+    expect(dry.some((l) => l.includes(admins.banEnded.id))).toBe(false);
+
+    await withPg(async (pg) => runImport({ db: 'control', apply: true, pg, auth: consoleAuth!, log: () => undefined }), url);
+    const signIn = (email: string) => consoleAuth!.signIn({ companyId: 'console', email, password: PASSWORD });
+    expect(await signIn(admins.inactive.email)).toMatchObject({ ok: false, reason: 'disabled' });
+    expect(await signIn(admins.banned.email)).toMatchObject({ ok: false, reason: 'disabled' });
+    expect((await signIn(admins.banEnded.email)).ok).toBe(true);
+  });
+
+  it('post_check_counts_only_planned_accounts', async () => {
+    // An account made in Self-Auth during the first window (before a rollback), not in Supabase Auth: going
+    // forward again, the full re-import must still complete.
+    await consoleAuth!.admin.createUser({ companyId: 'console', email: `zz-console-new-${Date.now()}@example.com`, password: 'Window-pass-123' });
+    const log: string[] = [];
+    await withPg(async (pg) => runImport({ db: 'control', apply: true, pg, auth: consoleAuth!, log: (l) => log.push(l) }), url);
+    expect(log.at(-1)).toBe('Import complete.');
+    expect(log.some((l) => /1 made in Self-Auth only/.test(l))).toBe(true);
   });
 });

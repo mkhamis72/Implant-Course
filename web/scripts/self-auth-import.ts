@@ -15,7 +15,9 @@ import { closeNodeAuth, nodeAuth, nodeConsoleAuth } from './self-auth-node';
  * database is discovered first, and the run stops if one isn't handled below.
  * A membership that is inactive (deactivated: the old app's inactive membership + Supabase ban) is imported as a
  * disabled account, so the admin tool's reactivate (setDisabled false) finds it later.
- * Control database: every auth user becomes an account of company 'console', same id.
+ * Control database: every auth user becomes an account of company 'console', same id; an inactive console admin
+ * or a running Supabase ban (banned_until in the future) imports as a disabled account (listed in the dry run).
+ * The final check counts only the planned ids: accounts made in Self-Auth itself are reported, not an error.
  *
  * Dry run by default; prints counts, the split plan, ids and masked emails, never hashes or secrets.
  * Re-running is safe: split ids are derived, not random, the re-pointing only moves rows still on the old id,
@@ -244,10 +246,20 @@ async function planApp(pg: Client, onlyUserIds: string[] | undefined, log: (l: s
   return { accounts, repointColumns, problems };
 }
 
+/** Console admins: an inactive console_admins row, or a Supabase ban still running, imports a disabled account. */
 async function planControl(pg: Client, onlyUserIds: string[] | undefined, log: (l: string) => void): Promise<Plan> {
   const problems: string[] = [];
   const { live, totp } = await readUsers(pg, onlyUserIds, log, problems);
-  return { accounts: live.map((u) => account(u, totp, CONSOLE_COMPANY, u.id, false, false)), repointColumns: [], problems };
+  const inactive = new Set((await pg.query<{ user_id: string }>(
+    'select user_id from public.console_admins where not active')).rows.map((r) => r.user_id));
+  const banned = new Set((await pg.query<{ id: string }>(
+    'select id from auth.users where banned_until > now()')).rows.map((r) => r.id));
+  const accounts = live.map((u) => {
+    const why = [inactive.has(u.id) && 'inactive console admin', banned.has(u.id) && 'banned in Supabase Auth'].filter(Boolean);
+    if (why.length) log(`  disabled: ${maskEmail(u.email)} ${u.id} (${why.join(', ')})`);
+    return account(u, totp, CONSOLE_COMPANY, u.id, false, why.length > 0);
+  });
+  return { accounts, repointColumns: [], problems };
 }
 
 /** One transaction: the profile copied for `to`, then every handled column of the company's rows moved from `from`. */
@@ -428,11 +440,12 @@ export async function runImport(o: {
     else if (a.disabled && !r.disabled) missing.push(`${a.accountId}: deactivated in ${name(a.companyId)} but not disabled`);
   }
   if (!o.onlyUserIds) {
+    // Only the planned ids count. Accounts made in Self-Auth itself (invites, logins created during a first
+    // window before a rollback) are expected on "Going forward again" and are reported, not an error.
     const total = (await o.pg.query<{ n: number }>('select count(*)::int as n from self_auth."user"')).rows[0].n;
-    log(`Check: Self-Auth users ${total}; accounts expected (one per membership) ${accounts.length}.`);
-    if (total !== accounts.length) missing.push(`Self-Auth holds ${total} users, expected ${accounts.length}`);
+    log(`Check: Self-Auth users ${total}: ${rows.length} planned (one per membership: ${accounts.length}), ${total - rows.length} made in Self-Auth only.`);
   }
-  log(`Check: ${accounts.length - missing.filter((m) => !m.startsWith('Self-Auth holds')).length} of ${accounts.length} accounts in place with their password, 2FA and status.`);
+  log(`Check: ${accounts.length - missing.length} of ${accounts.length} accounts in place with their password, 2FA and status.`);
   if (failures.length || missing.length) {
     throw new Error(`Import incomplete (safe to re-run once fixed):\n  ${[...failures, ...missing].join('\n  ')}`);
   }
