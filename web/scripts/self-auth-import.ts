@@ -281,6 +281,54 @@ async function repoint(pg: Client, companyId: string, from: string, to: string, 
   return moved;
 }
 
+/** Why a call failed, for the log: Self-Auth's `.code`, else the error's class or name (a pool timeout, a TLS
+ *  error), never its message (which can quote input). */
+export function failureReason(e: unknown): string {
+  const code = (e as { code?: unknown } | null)?.code;
+  if (typeof code === 'string' && code) return code;
+  if (e instanceof Error) {
+    if (e.name && e.name !== 'Error') return e.name;
+    const cls = e.constructor?.name;
+    if (cls && cls !== 'Error') return cls;
+    return 'Error';
+  }
+  return 'failed';
+}
+
+/** host + database (+ the Supabase project, which the shared pooler host carries in the user name). The port is
+ *  left out: the session (5432) and transaction (6543) poolers of one project are the same database. */
+function databaseIdentity(raw: string): string {
+  const u = new URL(raw);
+  if (!/^postgres(ql)?:$/.test(u.protocol) || !u.hostname) throw new Error('not a postgres URL');
+  const host = u.hostname.toLowerCase();
+  const db = decodeURIComponent(u.pathname.slice(1)) || 'postgres';
+  const user = decodeURIComponent(u.username);
+  const project = host.endsWith('.pooler.supabase.com') && user.includes('.') ? user.slice(user.indexOf('.') + 1) : '';
+  return `${host}/${db}${project ? ` (project ${project})` : ''}`;
+}
+
+/**
+ * The import reads and re-points rows over DATABASE_URL but writes the accounts through Self-Auth, which uses
+ * SELF_AUTH_DATABASE_URL when set. If the two are different databases, the accounts would land somewhere else
+ * than the rows: stop before any change. Names hosts and databases only, never credentials.
+ */
+export function assertSelfAuthTarget(env: Record<string, string | undefined>): void {
+  const selfAuth = env.SELF_AUTH_DATABASE_URL?.trim();
+  if (!selfAuth) return;
+  const main = env.DATABASE_URL?.trim() ?? '';
+  let a: string;
+  let b: string;
+  try {
+    a = databaseIdentity(main);
+    b = databaseIdentity(selfAuth);
+  } catch {
+    throw new Error('Stopped before any change: SELF_AUTH_DATABASE_URL or DATABASE_URL is not a valid postgres URL.');
+  }
+  if (a !== b) {
+    throw new Error(`Stopped before any change: SELF_AUTH_DATABASE_URL points at ${b}, DATABASE_URL at ${a}. They must be the same database.`);
+  }
+}
+
 export async function runImport(o: {
   db: ImportDb; apply: boolean; undoSplits?: boolean; pg: Client; auth: SelfAuth; onlyUserIds?: string[]; log?: (line: string) => void;
 }): Promise<ImportSummary> {
@@ -346,9 +394,9 @@ export async function runImport(o: {
       });
       summary.imported++;
     } catch (e) {
-      const code = (e as { code?: unknown }).code;
-      if (code === 'already_imported') summary.alreadyImported++;
-      else failures.push(`${a.accountId} ${maskEmail(a.email)} in ${name(a.companyId)}: ${typeof code === 'string' ? code : 'failed'}`);
+      const reason = failureReason(e);
+      if (reason === 'already_imported') summary.alreadyImported++;
+      else failures.push(`${a.accountId} ${maskEmail(a.email)} in ${name(a.companyId)}: ${reason}`);
     }
   }
   // Deactivated memberships: disabled in that company only (never re-enabled here: that is the admin's call).
@@ -356,8 +404,7 @@ export async function runImport(o: {
     try {
       await o.auth.admin.setDisabled(a.companyId, a.accountId, true);
     } catch (e) {
-      const code = (e as { code?: unknown }).code;
-      failures.push(`${a.accountId} ${maskEmail(a.email)} in ${name(a.companyId)}: disable ${typeof code === 'string' ? code : 'failed'}`);
+      failures.push(`${a.accountId} ${maskEmail(a.email)} in ${name(a.companyId)}: disable ${failureReason(e)}`);
     }
   }
   log(`Imported ${summary.imported}; already imported ${summary.alreadyImported}; failed ${failures.length}.`);
@@ -392,6 +439,9 @@ export async function runImport(o: {
 
 async function main() {
   const args = parseImportArgs(process.argv.slice(2));
+  // The app import writes through nodeAuth() (SELF_AUTH_DATABASE_URL || DATABASE_URL); the console's through
+  // CONTROL_DATABASE_URL, the same URL it reads, so only the app import can split across two databases.
+  if (args.db === 'app') assertSelfAuthTarget(process.env);
   const target = migrateTarget(args.db === 'control' ? ['--control'] : [], process.env);
   console.log(`Target: ${target.label}`);
   const pg = new Client(target.config);

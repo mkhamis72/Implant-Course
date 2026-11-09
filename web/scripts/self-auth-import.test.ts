@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { maskEmail, parseImportArgs, splitId, unhandledColumns, USER_COLUMNS } from './self-auth-import';
+import { assertSelfAuthTarget, failureReason, maskEmail, parseImportArgs, splitId, unhandledColumns, USER_COLUMNS } from './self-auth-import';
 
 describe('self-auth-import helpers', () => {
   it('parses --db and --apply; dry run by default', () => {
@@ -35,5 +35,45 @@ describe('self-auth-import helpers', () => {
     }
     expect(USER_COLUMNS['public.company_members.user_id']).toBe('repoint');
     expect(USER_COLUMNS['public.profiles.user_id']).toBe('copy');
+  });
+});
+
+describe('self-auth-import target and failure reasons', () => {
+  const pooler = (port: number, ref = 'abcdefghij') => `postgresql://postgres.${ref}:pw@aws-0-eu-central-1.pooler.supabase.com:${port}/postgres?sslmode=require`;
+
+  it('stops before any write when SELF_AUTH_DATABASE_URL is another host or database than DATABASE_URL', () => {
+    const DATABASE_URL = pooler(6543);
+    // Unset, or the same project through another port of the pooler (session vs transaction): fine.
+    expect(() => assertSelfAuthTarget({ DATABASE_URL })).not.toThrow();
+    expect(() => assertSelfAuthTarget({ DATABASE_URL, SELF_AUTH_DATABASE_URL: pooler(5432) })).not.toThrow();
+    expect(() => assertSelfAuthTarget({ DATABASE_URL: 'postgresql://postgres:a@127.0.0.1:54322/postgres', SELF_AUTH_DATABASE_URL: 'postgresql://postgres:b@127.0.0.1:54322/postgres' })).not.toThrow();
+    for (const other of [
+      pooler(5432, 'zzzzzzzzzz'), // another project on the same shared pooler host
+      'postgresql://postgres.abcdefghij:pw@aws-0-us-east-1.pooler.supabase.com:5432/postgres',
+      'postgresql://postgres.abcdefghij:pw@aws-0-eu-central-1.pooler.supabase.com:5432/other',
+      'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
+    ]) {
+      expect(() => assertSelfAuthTarget({ DATABASE_URL, SELF_AUTH_DATABASE_URL: other })).toThrow(/Stopped before any change: SELF_AUTH_DATABASE_URL/);
+    }
+    // The message names hosts, never a password.
+    try {
+      assertSelfAuthTarget({ DATABASE_URL, SELF_AUTH_DATABASE_URL: 'postgresql://postgres:secretpw@127.0.0.1:54322/postgres' });
+    } catch (e) {
+      expect((e as Error).message).not.toContain('secretpw');
+      expect((e as Error).message).not.toContain(':pw@');
+    }
+    expect(() => assertSelfAuthTarget({ DATABASE_URL, SELF_AUTH_DATABASE_URL: 'not a url' })).toThrow(/Stopped before any change/);
+  });
+
+  it('logs the error code, else the error class, never the message', () => {
+    expect(failureReason(Object.assign(new Error('x'), { code: 'already_imported' }))).toBe('already_imported');
+    expect(failureReason(new TypeError('secret detail'))).toBe('TypeError');
+    class PoolTimeout extends Error {}
+    expect(failureReason(new PoolTimeout('secret detail'))).toBe('PoolTimeout');
+    const named = new Error('secret detail');
+    named.name = 'ConnectionError';
+    expect(failureReason(named)).toBe('ConnectionError');
+    expect(failureReason('boom')).toBe('failed');
+    expect(failureReason(null)).toBe('failed');
   });
 });

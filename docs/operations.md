@@ -110,8 +110,9 @@ One sender serves every company; the email names the company. Locally the emails
 
 - Merging to `master` runs **Release**:
   1. typecheck, lint, unit tests and a production build;
-  2. migrate production;
-  3. deploy through the hook.
+  2. back up every company database and the control project (schema and data, sign-in accounts included; artifact `pre-release-backups-*` and R2), and stop if that fails;
+  3. migrate production (Migration B of Self-Auth stays held until the production variable `SELF_AUTH_B_HOLD` is `0`, §E);
+  4. deploy through the hook.
   A red run deploys nothing. Fix it and merge again, or re-run.
 - A release migrates the control project (`db:migrate -- --control`), then every registered company in slug order (`db:migrate -- --all-tenants`, suspended ones too), and deploys only if all succeeded. A failure stops the run before the deploy and names the company; fix it and re-run Release (companies already migrated are skipped as up to date).
 - If `master` moved on while a run was waiting, that run migrates but leaves the deploy to the newer run, so code never goes live before its own migration.
@@ -119,7 +120,7 @@ One sender serves every company; the email names the company. Locally the emails
 
 ## D. Backups and restore
 
-**What a backup holds:** the data (not the schema) of the app tables plus Supabase's sign-in accounts (`auth` schema), encrypted. The schema comes from the migrations in this repo. Since the one-database release a database can hold several companies, so a backup has two kinds of file: a **whole-database dump** (every company in that database; taken once per distinct database, named after the first company on it) and, for every company, its **own export** (`company-export`: that company's rows and its members' accounts as JSON, restorable alone).
+**What a backup holds:** the data (not the schema) of the app tables plus the sign-in accounts (Supabase Auth's `auth` schema and, since the Self-Auth switch-over, `self_auth`), encrypted. The control file also holds the console admins and their accounts. The schema comes from the migrations in this repo. Since the one-database release a database can hold several companies, so a backup has two kinds of file: a **whole-database dump** (every company in that database; taken once per distinct database, named after the first company on it) and, for every company, its **own export** (`company-export`: that company's rows and its members' accounts as JSON, restorable alone).
 
 - **Backup** runs nightly and writes, per distinct database, `<slug>-<date>.dump.gpg` (the whole database, named after the first company on it), per company `<slug>-<date>.company.dump.gpg` (the company's own JSON export; the `.dump` in the name only keeps it inside the artifact and off-site globs), plus `_control-<date>.dump.gpg` (the company registry only), in the artifact `backups-*`, kept 14 days, and copies the same encrypted files to the Cloudflare R2 bucket under `<date>/<run id>/`, kept and locked for a year (see Off-site copy below). A failure for one company doesn't stop the others; the run turns red and ends with "Backup failed for: …". The run also pings every company and the control project to keep them awake; a failed ping doesn't stop the others and is named in "Keep-awake failed for: …". A failed off-site copy also turns the run red ("Off-site copy failed or did not run").
 - **Monthly verify** runs on its own at 06:00 UTC on the 1st, after that night's backup; GitHub emails you if it fails (scheduled runs notify whoever last changed the workflow's schedule). Run it by hand any time: Actions → Backup → Run workflow → mode `verify`. It checks the newest artifact **and** the newest off-site set, and must finish green with "Every backup is readable and complete, in GitHub and off-site." It also accepts the older `prod-backup-*` artifacts for their remaining days. Verify decrypts with the GitHub secret, so it proves GitHub can read the backups, not that **you** can: keep `BACKUP_PASSPHRASE` in your password manager (it was lost once and replaced on 2026-10-08; backups made before that can't be read).
@@ -252,19 +253,102 @@ The nightly `_control-*` backup holds only the company registry (`tenants`, `ten
 | B5 console admin | totp 1, bcrypt 1 | | |
 | C cleanup | files and stack gone | | |
 
-## E. Keys and secrets
+## E. Self-Auth switch-over (owner, about 1 hour, announced)
 
-- To rotate a company's service role key or database password: change it in Supabase, then re-run `tenant:register` for that company (the control project's Vault holds them), then `tenant:check`. For a company other than the academy, `tenant:register` reads that company's values from an env file like `.env.restore` in §D step 3 (with the new key or password), not from `.env.prod`.
-- To rotate the control project's keys or password: change it in Supabase, then update `web/.env.prod`, Vercel (`CONTROL_*`) and the GitHub secrets (`CONTROL_*`), then re-run Release.
-- If a key was exposed, rotate it immediately, then check Supabase's auth logs.
+Merging `feat/self-auth` into `master` deploys the new sign-in, so maintenance goes on **first** and the merge is step 5. Do the *Self-Auth rehearsal* (§D) before the day. Announce the window a few days ahead ("sign-in unavailable for about an hour").
 
-## F. Smoke check after a release
+**What the release does by itself now:** before any migration, **Release** backs up every company database and the control project (schema and data, including the `auth` and `self_auth` sign-in schemas and the console admins), encrypted, as the artifact `pre-release-backups-<run id>-<attempt>` (14 days) and in R2 under `<date>/<run id>-<attempt>/` (a year). The files are named like the nightly ones (`<slug>-<date>.dump.gpg`, `_control-<date>.dump.gpg`). If the backup or its off-site copy fails, the run stops before migrating. **Migration B** (`0103_self_auth_b.sql`, control `0008_self_auth_b.sql`) is held: the run prints `Held: …` and skips it until the GitHub production variable `SELF_AUTH_B_HOLD` is `0` (see *After the window*).
 
-1. Open the production URL. The pilot banner is visible.
-2. Sign in as admin. The dashboard loads.
-3. Create a test patient named "Pilot test …", add a checklist, and tick an item.
-4. Browser dev tools → Network → reload: the page response has `content-security-policy` and `strict-transport-security` headers.
-5. Catalog check: `npm run catalog-export` (with `ENV_FILE=.env.prod`), then compare the CSV with your supplier lists. Fix products in the app; untick **Sample** on each verified product, and deactivate products you don't stock.
+**Before the day (once):**
+- Make the switch-over env file `web/.env.switch` ⟨secret⟩ (git-ignored; delete it after the window): `CONTROL_SUPABASE_URL`, `CONTROL_DATABASE_URL`, `DATABASE_CA_CERT` (as in `.env.prod`); `DATABASE_URL` = the shared company database's **Session pooler** URI (the database academy is on), `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` of that project; `CONTROL_ANON_KEY`; and the Self-Auth values below (`SELF_AUTH_SECRET`, `CONTROL_SELF_AUTH_SECRET`, `SELF_AUTH_PRIVATE_JWK`, `SELF_AUTH_KID`). Add `SELF_AUTH_DATABASE_URL` with exactly the value you give Vercel (below), so step 3 tests that URL; the import refuses it if it points at another database than `DATABASE_URL` (it stops before changing anything; the session and transaction poolers of the same project count as the same database).
+- Make the secrets: `SELF_AUTH_SECRET` and `CONTROL_SELF_AUTH_SECRET`, two different 32+ character random values (`node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`); the signing key: `npx supabase gen signing-key --algorithm ES256` gives one JSON object with a `kid`: that object (one line) is `SELF_AUTH_PRIVATE_JWK`, its `kid` is `SELF_AUTH_KID`. `MAINTENANCE_BYPASS_TOKEN`: another 32+ character random value (shorter ones are ignored). Keep all of them in your password manager.
+
+**Vercel environment variables (Production)** for the new app, all ⟨secret⟩ except `CONSOLE_HOST` and `MAINTENANCE`:
+
+| Variable | Value |
+|---|---|
+| `SELF_AUTH_SECRET` | the company secret above |
+| `CONTROL_SELF_AUTH_SECRET` | the console secret above |
+| `SELF_AUTH_PRIVATE_JWK` | the signing key, one-line JSON |
+| `SELF_AUTH_KID` | its `kid` |
+| `SELF_AUTH_DATABASE_URL` | the shared company database's **Session pooler** URI (port 5432), user `postgres.<project ref>` (the **postgres** role: schema `self_auth` is revoked from `service_role`), ending in `?sslmode=require` |
+| `CONTROL_DATABASE_URL` | the control project's Session pooler URI, postgres role, `?sslmode=require` (the console signs in against it; before Self-Auth it was in GitHub and `.env.prod` only) |
+| `CONSOLE_HOST` | unchanged: `console.imploid.net` |
+| `MAINTENANCE` | `1` during the window, then `0` |
+| `MAINTENANCE_BYPASS_TOKEN` | the bypass token above |
+
+The previous app ignores all of these, so setting them early changes nothing except `MAINTENANCE`.
+
+**The day:**
+
+1. **Backups.** Actions → Backup → Run workflow (mode `backup`), then mode `verify`; both green. Note the run id and the file names (`<slug>-<date>.dump.gpg`, `_control-<date>.dump.gpg`) in the log below. Then the console accounts, which the nightly control file only has since this release: `pg_dump --data-only --format=custom --no-owner --table=auth.users --table=auth.mfa_factors --table=public.console_admins --table=public.tenants "<CONTROL_DATABASE_URL>" | gpg --symmetric --cipher-algo AES256 -o control-auth-<date>.dump.gpg` (as in the rehearsal, step B1). Note its name too.
+2. **Public key as a standby key**, in **both** the company project and the control project: `ENV_FILE=.env.switch npm run self-auth:keys -- jwks` prints the public key only (`kty`, `crv`, `x`, `y`, `kid`; never `d`). Supabase Dashboard → Project Settings → JWT Keys → import it as a **standby** key (do not rotate: the current key stays in use for the old app).
+3. **Check Self-Auth's connection and that Supabase accepts its tokens** (read-only): `ENV_FILE=.env.switch npm run self-auth:keys -- check` must print `Self-Auth database: reachable over SELF_AUTH_DATABASE_URL.` (Self-Auth reached its tables through the session pooler, as Vercel will) and `branding_for: 200, …`, and `ENV_FILE=.env.switch npm run self-auth:keys -- check --control` must print `is_console_admin: 200, …`. A `401` means the key isn't imported in that project (or `SELF_AUTH_KID` doesn't match): fix it before going on. The token is for a made-up session and expires in 5 minutes; neither call changes data.
+4. **Maintenance on.** Set the Vercel variables above with `MAINTENANCE=1`. Redeploy the **current** production deployment (Deployments → the current one → Redeploy) so the old app serves the "back soon" page. Check a company address and the console address show "We'll be back soon" (503). *(The old app has no maintenance mode: until step 5 deploys the new app, maintenance is announced, not enforced; keep the window short between steps 4 and 5.)*
+   - Before merging, check the **preview deployment** of `feat/self-auth` (its pull request) reaches Self-Auth through the session pooler: give the Preview environment the same Self-Auth values, `MAINTENANCE=1` and the bypass token, redeploy the preview, set the bypass cookie on its address (step 7) and load `/login`: Vercel → the preview → Logs must show no `self-auth … failed` or connection errors. If the preview answers 404 (its host isn't a registered company address), the step 3 check is your proof instead (it used the same URL), and step 7 confirms it on production while maintenance is still on. Remove the Preview values after the window.
+5. **Merge `feat/self-auth` into `master`.** In Vercel, clear the build cache for this deployment (Settings → … or Redeploy with "Use existing Build Cache" **off**): the vendored `@mkhamis72/self-auth` 0.1.1 tarball has no lockfile integrity hash, so a cached copy must not be reused. The release takes its own backup (note `pre-release-backups-…` and the R2 folder from its log), runs Migration A (`0101`, `0102`, control `0007`), holds Migration B, and deploys the new app, still in maintenance.
+6. **Import the accounts**, dry run first each time:
+   ```bash
+   ENV_FILE=.env.switch npm run self-auth:import -- --db control           # dry run: 1 user, 1 with 2FA
+   ENV_FILE=.env.switch npm run self-auth:import -- --db control --apply   # "Import complete."
+   ENV_FILE=.env.switch npm run self-auth:import -- --db app               # dry run: counts and splits as in the rehearsal
+   ENV_FILE=.env.switch npm run self-auth:import -- --db app --apply       # "Import complete." and "Check: N of N"
+   ```
+   Owner decisions (2026-11-09): a person in two companies is split (the second company gets a new id); the split re-points that company's rows in one transaction, with the stock ledger's append-only trigger and the checklist-assignee check switched off for that update only. A deactivated membership is imported as a **disabled** account in that company (reactivate from Admin → Users). `audit_log` keeps the original ids.
+7. **Smoke test with the bypass.** In your browser, on the company address, open dev tools → Console and run `document.cookie = "icm_maintenance_bypass=<token>; path=/; secure; samesite=lax"` (once per address: the company host and the console host each need it), then reload. Everyone else still sees "back soon". Check, each with 2FA:
+   - an **admin** (academy): sign in with the old password and authenticator; Dashboard, Patients (open one), Schedule, Inventory (ledger names), Admin → Users (invited users pending);
+   - a **delegate**: sign in, only their own pages;
+   - a **console admin** at the console address: sign in with password and authenticator; Companies shows every company OK;
+   - a **person in two companies** (if the import listed a split): signs in on each company's address with the same password and sees only that company;
+   - a password reset email arrives at a mailbox you can read, and its link opens on the company's address;
+   - sign out, sign in again; another company's address treats you as signed out.
+   Delete the cookie afterwards (`document.cookie = "icm_maintenance_bypass=; path=/; max-age=0"`).
+8. **Maintenance off.** Set `MAINTENANCE=0` in Vercel and redeploy the current deployment. Check a company address shows the sign-in page.
+9. **Email the users** (BCC, from the usual sender):
+
+   > Subject: Implant Course Manager: new sign-in system
+   >
+   > Hello,
+   >
+   > Today we moved Implant Course Manager to a new sign-in system. Sign in at your usual address with your usual email, password and authenticator app; nothing changes for you.
+   >
+   > If you work for more than one organisation in Implant Course Manager, sign in at each organisation's own address. Your password is the same for now; if you change it, change it at each address.
+   >
+   > If something doesn't work, use "Forgot password" on the sign-in page, or reply to this email.
+
+**Log** (fill in on the day):
+
+| Step | Value |
+|---|---|
+| 1 nightly backup run id, files | |
+| 1 control accounts dump file | |
+| 3 company / control token check | 200 / 200 |
+| 5 release run id, `pre-release-backups-…`, R2 folder | |
+| 6 control / app import counts, splits | |
+| 7 smoke test (admin, delegate, console, split) | |
+| 8 maintenance off at | |
+
+**After the window** (when you are sure there is no going back, normally a few days later):
+1. Check nothing still points at a Supabase-only person. As postgres on the company database (SQL editor), this must return no rows:
+   ```sql
+   select 'profiles' t, user_id id from public.profiles p where not exists (select 1 from self_auth."user" u where u.id = p.user_id)
+   union all select 'patients', created_by from public.patients x where created_by is not null and not exists (select 1 from self_auth."user" u where u.id = x.created_by);
+   ```
+   (Migration B checks every table and stops naming the counts if any remain.) A row is someone the import gave no account because they have no membership. Remove them the old way: `delete from auth.users where id = '<id>'` (Migration A's trigger deletes the profile and clears `created_by`), or, if they should keep access, give them a membership and re-run the import. On the control project, `select user_id from public.console_admins a where not exists (select 1 from self_auth."user" u where u.id = a.user_id)` must be empty.
+2. Turn the hold off: GitHub → Settings → Environments → `production` → Environment variables → `SELF_AUTH_B_HOLD` = `0`. Then Actions → Release → Run workflow on `master`. It backs up, applies `0008_self_auth_b.sql` (control) and `0103_self_auth_b.sql` (each company database), and deploys. From now on the old app no longer works: §F no longer applies; restoring means the pre-release backup.
+3. Remove what Supabase Auth used: in both Supabase projects, Authentication → turn off sign-ups and the custom SMTP (revoke its Resend key in Resend if it was a separate key); remove the Preview-environment Self-Auth values in Vercel; delete `.env.switch`. Keep the Self-Auth key imported in JWT Keys.
+
+## F. Rollback after the switch-over (first hours only, before *After the window*)
+
+Use it if the new sign-in fails in a way you can't fix quickly. Migration A kept every Supabase Auth table, trigger and helper working, so the old app runs on the migrated database unchanged.
+
+1. `MAINTENANCE=1` in Vercel, redeploy, so nobody writes during the rollback.
+2. Undo the splits so that people in two companies get both companies back on their Supabase id: `ENV_FILE=.env.switch npm run self-auth:import -- --db app --undo-splits` (dry run), then with `--apply`. The Self-Auth accounts stay (a later `--apply` splits again and skips them).
+3. Vercel → Deployments → the last deployment **before** the merge → **Promote** / Redeploy (it is the old app with Supabase Auth). Do **not** revert the migration: Release would not undo it, and the old app needs nothing from it undone. Then `MAINTENANCE=0` (the old app ignores it, but keep the variable honest).
+4. Sign in through Supabase Auth as an admin and check Patients, Schedule and Inventory; sign in on the console.
+5. Tell users: "We switched back to the previous sign-in. Anything you changed on your account since <time> (password, two-factor authentication, an accepted invitation) must be done again."
+6. Know the edge case (Task 2 review): during the rollback window `mfa_setup_done` accepts a factor from **either** system. Someone whose 2FA an admin reset since the switch, and who enrolled a new authenticator in the new app, can clear "set up 2FA again" in the old app with that Self-Auth factor, while the old app's sign-in still checks their old Supabase factor. After a rollback, reset 2FA again in the old app for anyone reset since the switch (Admin → Users).
+7. To go forward again later: start §E again from step 4 (the import skips accounts already imported and splits again).
 
 ## G. Control project (companies)
 
@@ -350,3 +434,17 @@ Steps (Git Bash, from `web/`):
 From then on, every Release migrates the company, every Backup run saves it (`<slug>-<date>.dump.gpg`, also copied to R2), and its health shows on the console's Companies page. App emails (checklist notices) still go through the one `SMTP_*` sender set in Vercel.
 
 *Locally:* `npm run db:dev2:start`, `npm run console:local` (dev2 is the control project only, do not migrate it; both companies are in the main stack; refuses non-local stacks; writes `.env.console`), then `set -a; source .env.console; set +a; npm run dev` and open `http://console.localhost:3000/console`. The console E2E (`npx playwright test console --project=chromium`, with the same env loaded and nothing on :3000) skips without `CONSOLE_HOST`; `npm run console:admin` is for real projects.
+
+## H. Keys and secrets
+
+- To rotate a company's service role key or database password: change it in Supabase, then re-run `tenant:register` for that company (the control project's Vault holds them), then `tenant:check`. For a company other than the academy, `tenant:register` reads that company's values from an env file like `.env.restore` in §D step 3 (with the new key or password), not from `.env.prod`.
+- To rotate the control project's keys or password: change it in Supabase, then update `web/.env.prod`, Vercel (`CONTROL_*`) and the GitHub secrets (`CONTROL_*`), then re-run Release.
+- If a key was exposed, rotate it immediately, then check Supabase's auth logs.
+
+## I. Smoke check after a release
+
+1. Open the production URL. The pilot banner is visible.
+2. Sign in as admin. The dashboard loads.
+3. Create a test patient named "Pilot test …", add a checklist, and tick an item.
+4. Browser dev tools → Network → reload: the page response has `content-security-policy` and `strict-transport-security` headers.
+5. Catalog check: `npm run catalog-export` (with `ENV_FILE=.env.prod`), then compare the CSV with your supplier lists. Fix products in the app; untick **Sample** on each verified product, and deactivate products you don't stock.

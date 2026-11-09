@@ -12,6 +12,7 @@
     "console:admin": "tsx scripts/console-admin.ts",
     "console:local": "tsx scripts/console-local.ts",
     "self-auth:import": "tsx scripts/self-auth-import.ts",
+    "self-auth:keys": "tsx scripts/self-auth-keys.ts",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:status": "supabase status",

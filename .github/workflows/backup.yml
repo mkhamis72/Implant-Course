@@ -18,7 +18,9 @@ permissions:
 
 # The backup is data only: the schema comes from the migrations in this repo, and the restore in
 # docs/operations.md loads this data onto a freshly migrated project. Sign-in accounts (auth schema)
-# are included so restored profiles and records keep matching user ids.
+# are included so restored profiles and records keep matching user ids: Supabase Auth (auth) and, since the
+# Self-Auth switch-over, Self-Auth (self_auth; skipped by pg_dump where it doesn't exist yet). The control file
+# also holds the console admins and their accounts in both systems.
 
 jobs:
   backup:
@@ -89,7 +91,7 @@ jobs:
             if [ -z "${dumped[$key]:-}" ]; then
               if ( set -euo pipefail; source "$f"
                    "$PG_BIN/pg_dump" --data-only --format=custom --no-owner \
-                     --schema=public --schema=app_private --schema=auth \
+                     --schema=public --schema=app_private --schema=auth --schema=self_auth \
                      --exclude-table=app_private.schema_migrations --exclude-table=auth.schema_migrations \
                      "$DATABASE_URL" \
                      | encrypt "out/$SLUG-$day.dump.gpg" ); then
@@ -111,6 +113,7 @@ jobs:
             fi
           done
           if ! "$PG_BIN/pg_dump" --data-only --format=custom --no-owner --table=public.tenants --table=public.tenant_audit \
+                 --table=public.console_admins --table=auth.users --table=auth.mfa_factors '--table=self_auth.*' \
                  "$CONTROL_DATABASE_URL" \
                  | encrypt "out/_control-$day.dump.gpg"; then
             rm -f "out/_control-$day.dump.gpg"

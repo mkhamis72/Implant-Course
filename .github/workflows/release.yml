@@ -42,8 +42,108 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json }
       - run: npm ci
+      # A restore point before every migration (owner's rule): each company database and the control project,
+      # schema and data, sign-in accounts included (auth and self_auth), encrypted, as an artifact and in R2.
+      # Every step here fails the job on any error, so the migration and the deploy below never run without it.
+      - name: Install the newest PostgreSQL client (a newer pg_dump can read any older server)
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          echo "PG_BIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)" >> "$GITHUB_ENV"
+      - name: Export the companies from the control project (secrets masked)
+        env:
+          CONTROL_DATABASE_URL: ${{ secrets.CONTROL_DATABASE_URL }}
+          CONTROL_SUPABASE_URL: ${{ secrets.CONTROL_SUPABASE_URL }}
+          CA: ${{ secrets.PROD_DATABASE_CA_CERT }}
+        run: |
+          set -euo pipefail
+          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+          CONTROL_DATABASE_URL="$(clean "$CONTROL_DATABASE_URL")"
+          CONTROL_SUPABASE_URL="$(clean "$CONTROL_SUPABASE_URL")"
+          CA="$(clean "$CA")"
+          test -n "$CONTROL_DATABASE_URL" && test -n "$CA" || { echo "Control database secrets are missing"; exit 1; }
+          printf '%s\n' "$CA" > "$RUNNER_TEMP/ca.crt"
+          CONTROL_DATABASE_URL="$CONTROL_DATABASE_URL" CONTROL_SUPABASE_URL="$CONTROL_SUPABASE_URL" \
+            DATABASE_CA_CERT="$RUNNER_TEMP/ca.crt" npm run tenants:export -- --dir "$RUNNER_TEMP/tenants"
+      - name: Back up every company database and the control project before migrating (encrypted, all or nothing)
+        env:
+          CONTROL_DATABASE_URL: ${{ secrets.CONTROL_DATABASE_URL }}
+          CA: ${{ secrets.PROD_DATABASE_CA_CERT }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+          PASSPHRASE="$(clean "$PASSPHRASE")"
+          CONTROL_DATABASE_URL="$(clean "$CONTROL_DATABASE_URL")"
+          CA="$(clean "$CA")"
+          test -n "$PASSPHRASE" || { echo "BACKUP_PASSPHRASE secret is missing: refusing to back up unencrypted"; exit 1; }
+          test -n "$CONTROL_DATABASE_URL" && test -n "$CA" || { echo "Database secrets are missing"; exit 1; }
+          printf '%s\n' "$CA" > "$RUNNER_TEMP/ca.crt"
+          export PGSSLMODE=verify-full PGSSLROOTCERT="$RUNNER_TEMP/ca.crt"
+          encrypt() { gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 --passphrase-fd 3 3<<<"$PASSPHRASE" --output "$1"; }
+          shopt -s nullglob
+          files=("$RUNNER_TEMP"/tenants/*.env)
+          [ ${#files[@]} -gt 0 ] || { echo "No companies were exported"; exit 1; }
+          mkdir -p out
+          day=$(date -u +%F)
+          declare -A dumped=()
+          # Same file names as the nightly backup (<slug>-<date>, _control-<date>), so Backup's verify reads them too.
+          # Schema and data: the state just before this release's migrations. A missing schema (self_auth before
+          # Migration A) is skipped by pg_dump; any failed dump stops the job here.
+          for f in "${files[@]}"; do
+            slug=$(basename "$f" .env)
+            key=$(set -euo pipefail; source "$f"; printf '%s' "$DB_KEY")
+            [ -n "$key" ] || { echo "No DB_KEY for $slug"; exit 1; }
+            if [ -z "${dumped[$key]:-}" ]; then
+              ( set -euo pipefail; source "$f"
+                "$PG_BIN/pg_dump" --format=custom --no-owner \
+                  --schema=public --schema=app_private --schema=app --schema=auth --schema=self_auth \
+                  "$DATABASE_URL" \
+                  | encrypt "out/$SLUG-$day.dump.gpg" )
+              dumped[$key]="$slug"
+            fi
+          done
+          "$PG_BIN/pg_dump" --format=custom --no-owner --schema=public --schema=auth --schema=self_auth \
+            "$CONTROL_DATABASE_URL" \
+            | encrypt "out/_control-$day.dump.gpg"
+          ls -l out
+          echo "Pre-release backup: $(cd out && ls *.dump.gpg | tr '\n' ' ')"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pre-release-backups-${{ github.run_id }}-${{ github.run_attempt }}
+          path: web/out/*.dump.gpg
+          retention-days: 14
+          if-no-files-found: error
+      - name: Copy the pre-release backup off-site (Cloudflare R2, kept a year)
+        env:
+          RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+          R2_ENDPOINT="$(clean "$R2_ENDPOINT")"
+          R2_BUCKET="$(clean "$R2_BUCKET")"
+          AWS_ACCESS_KEY_ID="$(clean "$AWS_ACCESS_KEY_ID")"
+          AWS_SECRET_ACCESS_KEY="$(clean "$AWS_SECRET_ACCESS_KEY")"
+          test -n "$R2_ENDPOINT" && test -n "$R2_BUCKET" && test -n "$AWS_ACCESS_KEY_ID" && test -n "$AWS_SECRET_ACCESS_KEY" \
+            || { echo "R2 secrets are missing"; exit 1; }
+          export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION=auto
+          export AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
+          # The attempt is in the prefix: a re-run can't overwrite the first attempt's locked files.
+          prefix="$(date -u +%F)/$RUN_ID"
+          aws s3 cp out/ "s3://$R2_BUCKET/$prefix/" --recursive --exclude '*' --include '*.dump.gpg' \
+            --endpoint-url "$R2_ENDPOINT" --no-progress
+          echo "Off-site: $prefix"
       - name: Migrate the control project, then every company (verified TLS)
         env:
+          # Migration B (Self-Auth) stays held unless the production variable SELF_AUTH_B_HOLD is 0 (§E).
+          SELF_AUTH_B_HOLD: ${{ vars.SELF_AUTH_B_HOLD }}
           CONTROL_DATABASE_URL: ${{ secrets.CONTROL_DATABASE_URL }}
           CONTROL_SUPABASE_URL: ${{ secrets.CONTROL_SUPABASE_URL }}
           PROD_DATABASE_CA_CERT: ${{ secrets.PROD_DATABASE_CA_CERT }}
