@@ -318,7 +318,7 @@ The previous app ignores all of these, so setting them early changes nothing exc
    - a password reset email arrives at a mailbox you can read, and its link opens on the company's address;
    - sign out, sign in again; another company's address treats you as signed out.
    Delete the cookie afterwards (`document.cookie = "icm_maintenance_bypass=; path=/; max-age=0"`).
-8. **Maintenance off.** Set `MAINTENANCE=0` in Vercel and redeploy the current deployment. Check a company address shows the sign-in page.
+8. **Maintenance off.** Set `MAINTENANCE=0` in Vercel and redeploy the current deployment (Deployments → the current one → ⋯ → Redeploy, "Use existing Build Cache" **off**). Check a company address shows the sign-in page.
 9. **Email the users** (BCC, from the usual sender):
 
    > Subject: Implant Course Manager: new sign-in system
@@ -358,23 +358,30 @@ The previous app ignores all of these, so setting them early changes nothing exc
 
 Use it if the new sign-in fails in a way you can't fix quickly. Migration A kept every Supabase Auth table, trigger and helper working, so the old app runs on the migrated database unchanged.
 
-1. **Freeze releases.** Merge nothing into `master` until step 4's revert is merged: any release from the current `master` would redeploy the new app.
-2. `MAINTENANCE=1` in Vercel and redeploy the current (new) deployment, so nobody signs in or writes during the rollback.
-3. Undo the splits so that people in two companies get both companies back on their Supabase id: `ENV_FILE=.env.switch npm run self-auth:import -- --db app --undo-splits` (dry run), then with `--apply`. The Self-Auth accounts stay.
-4. **Put the old app back.**
-   - Vercel → Deployments → the last production deployment **before** the merge → **Promote** (use Promote, not Redeploy: Promote serves that exact build again, while a redeploy rebuilds it with today's settings). It is the old app with Supabase Auth, and it ignores `MAINTENANCE`, so sign-in is open again from here.
-   - Revert the merge on `master` so the next release can't bring the new app back: `git revert -m 1 <merge commit>` on a branch, then a pull request into `master`, merged as usual. Its Release backs up, has nothing to migrate (the database keeps Migration A, which the old app works with; `schema_migrations` keeps the rows, so nothing is re-run later) and deploys the old app from `master`, the same code as the promoted deployment.
+**Use Redeploy, never Promote or Instant Rollback, anywhere in this section.** In Vercel, putting an *older* production deployment back on the domain (Promote of a deployment that already served production, or Instant Rollback) turns off auto-assignment of production domains. Every later production deployment, including the releases below, would then build but not be served. On Hobby, Instant Rollback also only reaches the immediately previous deployment. Redeploy instead makes a **new** production deployment of the old commit, with the current environment variables, and keeps auto-assignment on. (Vercel docs, checked 2026-11-09: [Instant Rollback](https://vercel.com/docs/instant-rollback): "After a rollback, Vercel turns off auto-assignment of production domains", and "Hobby users can roll back to the immediately previous deployment"; [Promoting deployments](https://vercel.com/docs/deployments/promoting-a-deployment); [Managing deployments → Redeploy](https://vercel.com/docs/deployments/managing-deployments#redeploy-a-project).)
+
+*If Promote or Instant Rollback was used by mistake:* the project overview's Production Deployment tile shows the rolled-back state and a **Manage** button. Click **Manage**, pick the **newest** production deployment and **Confirm**. That promotes it and turns auto-assignment back on (Vercel docs, *Undo a rollback*). Then do the step you meant to do with Redeploy.
+
+*Serving check* (after every redeploy and release below): Vercel → Deployments, filter **Production**. The deployment marked **Current** must be the one you just made, and its commit SHA must be the commit you expect (`git log --oneline -1 <commit>`). The overview's Production Deployment tile must show no rolled-back state or **Manage** button. Then open a company address and check it shows the app you expect (the old sign-in page, the new one, or "We'll be back soon").
+
+1. **Freeze releases.** Merge nothing into `master` until step 5's revert is merged: any release from the current `master` would redeploy the new app.
+2. `MAINTENANCE=1` in Vercel, then Deployments → the current (new) deployment → ⋯ → **Redeploy**, "Use existing Build Cache" **off**, so nobody signs in or writes during the rollback. Serving check: the new deployment is Current and shows "We'll be back soon".
+3. **Fresh backup before rewriting rows.** Actions → Backup → Run workflow, mode `backup`, must finish green. Note the run id and file names in the §E log.
+4. Undo the splits so that people in two companies get both companies back on their Supabase id: `ENV_FILE=.env.switch npm run self-auth:import -- --db app --undo-splits` (dry run), then with `--apply`. The Self-Auth accounts stay.
+5. **Put the old app back.**
+   - Vercel → Deployments (Production) → the last production deployment **before** the merge (its commit is `master` just before the merge: `git log --first-parent master`) → ⋯ → **Redeploy**, "Use existing Build Cache" **off**. This builds the old app (Supabase Auth) again as a new production deployment. It ignores `MAINTENANCE`, so sign-in is open again once it is live. Serving check: the redeployed one is Current, with the pre-merge commit's SHA.
+   - Revert the merge on `master` so the next release can't bring the new app back: `git revert -m 1 <merge commit>` on a branch, then a pull request into `master`, merged as usual. Its Release backs up, has nothing to migrate (the database keeps Migration A, which the old app works with; `schema_migrations` keeps the rows, so nothing is re-run later) and deploys `master`, now the old code, without build cache. Serving check: that deployment is Current, with the revert commit's SHA, and shows the old sign-in.
    - Do **not** try to undo Migration A: the old app needs nothing undone.
-5. Sign in through Supabase Auth as an admin and check Patients, Schedule and Inventory; sign in on the console. Set `MAINTENANCE=0` (unused by the old app, but keep it honest for the next deploy of the new one).
-6. Tell users: "We switched back to the previous sign-in. Anything you changed on your account since <time> (password, two-factor authentication, an accepted invitation) must be done again."
-7. Know the edge case (Task 2 review): during the rollback window `mfa_setup_done` accepts a factor from **either** system. Someone whose 2FA an admin reset since the switch, and who enrolled a new authenticator in the new app, can clear "set up 2FA again" in the old app with that Self-Auth factor, while the old app's sign-in still checks their old Supabase factor. After a rollback, reset 2FA again in the old app for anyone reset since the switch (Admin → Users).
+6. Sign in through Supabase Auth as an admin and check Patients, Schedule and Inventory; sign in on the console. Set `MAINTENANCE=0` (unused by the old app, but keep it honest for the next deploy of the new one).
+7. Tell users: "We switched back to the previous sign-in. Anything you changed on your account since <time> (password, two-factor authentication, an accepted invitation) must be done again."
+8. Know the edge case (Task 2 review): during the rollback window `mfa_setup_done` accepts a factor from **either** system. Someone whose 2FA an admin reset since the switch, and who enrolled a new authenticator in the new app, can clear "set up 2FA again" in the old app with that Self-Auth factor, while the old app's sign-in still checks their old Supabase factor. After a rollback, reset 2FA again in the old app for anyone reset since the switch (Admin → Users).
 
 **Going forward again** (after the cause is fixed on a branch):
 1. Announce a new window. §E step 1 (backups and the control accounts dump). The standby key from step 2 is still imported; run step 3's checks again.
 2. `MAINTENANCE=1` in Vercel (takes effect with the next deploy, as in §E step 4).
-3. Revert the revert: `git revert <revert commit>` on a branch (plus the fix), pull request into `master`, merge. Its Release backs up, applies anything new (Migration B stays held) and deploys the new app, in maintenance, without build cache. Then `ENV_FILE=.env.switch npm run self-auth:keys -- reach`.
+3. Revert the revert: `git revert <revert commit>` on a branch (plus the fix), pull request into `master`, merge. Its Release backs up, applies anything new (Migration B stays held) and deploys the new app, in maintenance, without build cache. **Serving check** (see §F): that deployment is Current, with the new merge commit's SHA, and a company address shows "We'll be back soon". If it built but isn't Current, auto-assignment is off (a Promote or Instant Rollback happened): undo it as described in §F, promoting this newest deployment. Then `ENV_FILE=.env.switch npm run self-auth:keys -- reach`.
 4. Import again, dry runs first: `--db control`, `--db control --apply`, `--db app`, `--db app --apply`. The splits are redone. Accounts already in Self-Auth are skipped, not updated: a password, 2FA or invite changed in the old app since the rollback is **not** carried over. The dry run's "already in Self-Auth" count shows who is affected. Tell those people to use "Forgot password" (or reset their 2FA in Admin → Users).
-5. §E steps 7 to 9: smoke test with the bypass, `MAINTENANCE=0` and redeploy, email the users.
+5. §E steps 7 to 9: smoke test with the bypass; then `MAINTENANCE=0` and Redeploy ("Use existing Build Cache" **off**) followed by the serving check (Current is that redeploy, and a company address shows the new sign-in page); then email the users.
 
 ## G. Control project (companies)
 
