@@ -198,3 +198,48 @@ export async function pendingLogin(
     [opts.company ?? 'a7c0de00-0000-4000-8000-000000000001', email, opts.fullName ?? '', opts.role ?? 'organizer', opts.delegateId ?? null],
   );
 }
+
+/**
+ * A self_auth.user row on the test's own connection (as postgres), so a rollback removes it. The Self-Auth
+ * package commits on its own pool connection and cannot join a test transaction or see its uncommitted
+ * pending login, so rows that live inside withTx are written here. For users that must really sign in, use
+ * createTestUser (tests/support/self-auth.ts), which goes through the package.
+ * The insert fires the provisioning trigger (0101): it needs a pending login for the email in `companyId`,
+ * unless a profile with `id` already exists. `email` is the real address. The login key is a placeholder, as
+ * nothing signs in with these rows. `totpSecret` adds a confirmed 2FA factor.
+ */
+export async function insertSelfAuthUser(
+  c: Client,
+  a: { id?: string; companyId?: string; email: string; totpSecret?: string },
+): Promise<string> {
+  await asPostgres(c);
+  const email = a.email.trim().toLowerCase();
+  const companyId = a.companyId ?? 'a7c0de00-0000-4000-8000-000000000001';
+  const { rows } = await c.query(
+    `insert into self_auth."user" (id, name, email, "emailVerified", "companyId", "realEmail")
+     values (coalesce($1::uuid, gen_random_uuid()), $2, 'zz-' || gen_random_uuid() || '@' || $3 || '.tenant.invalid', true, $3, $2)
+     returning id`,
+    [a.id ?? null, email, companyId]);
+  const id = rows[0].id as string;
+  if (a.totpSecret) await insertSelfAuthFactor(c, id);
+  return id;
+}
+
+/** A confirmed 2FA factor for an existing self_auth user (a later call replaces it: one factor per user).
+ *  `createdAt` is SQL, as 0101's mfa_setup_done compares it with the admin's reset time. */
+export async function insertSelfAuthFactor(c: Client, userId: string, createdAt = 'clock_timestamp()'): Promise<void> {
+  await asPostgres(c);
+  await c.query(
+    `insert into self_auth.totp_factor (user_id, secret_enc, confirmed, created_at) values ($1, 'x', true, ${createdAt})
+     on conflict (user_id) do update set confirmed = true, created_at = excluded.created_at`,
+    [userId]);
+}
+
+/** A live self_auth.session row (as postgres); returns its id. Pass an id to choose it. */
+export async function insertSelfAuthSession(c: Client, userId: string, id?: string): Promise<string> {
+  await asPostgres(c);
+  return (await c.query(
+    `insert into self_auth.session (id, "expiresAt", token, "updatedAt", "userId")
+     values (coalesce($2::uuid, gen_random_uuid()), now() + interval '1 day', gen_random_uuid()::text, now(), $1) returning id`,
+    [userId, id ?? null])).rows[0].id as string;
+}

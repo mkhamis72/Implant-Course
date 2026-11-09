@@ -1,10 +1,11 @@
 import './load-env';
 import { Client } from 'pg';
 import { pgConfig } from './db';
-import { adminClient, ensureUser, setProfile } from './users';
+import { ensureTenantUser, setProfile } from './users';
 import { temporaryPassword } from '../src/lib/admin/passwords';
 import { parseCreateUserArgs, targetLabel } from './create-user-args';
 import { applyTenantArg } from './tenant-env';
+import { closeNodeAuth } from './self-auth-node';
 
 async function main() {
   const { argv, label } = await applyTenantArg(process.argv.slice(2), process.env);
@@ -18,10 +19,11 @@ async function main() {
   const pg = new Client(pgConfig());
   await pg.connect();
   try {
-    const userId = await ensureUser(adminClient(), { email: args.email, password, pending: { pg } });
+    const userId = await ensureTenantUser({ email: args.email, password, pending: { pg } });
     await setProfile(pg, userId, { full_name: args.fullName, role: args.role, active: true, delegate_id: args.delegateId ?? null });
   } finally {
     await pg.end();
+    await closeNodeAuth();
   }
   console.log(`${{ admin: 'Admin', organizer: 'Organizer', delegate: 'Delegate login' }[args.role]} ready: ${args.email}`);
   console.log(`Temporary password: ${password}`);

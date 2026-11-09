@@ -1,7 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, actAsBound, asPostgres } from './helpers';
-import { makeDelegate, pendingLogin } from './fixtures';
+import { makeDelegate, pendingLogin, insertSelfAuthUser } from './fixtures';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -29,9 +29,8 @@ async function members(c: Client, user: string) {
     [user])).rows;
 }
 
-async function signUp(c: Client, email: string): Promise<string> {
-  await asPostgres(c);
-  return (await c.query('insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id', [email])).rows[0].id;
+async function signUp(c: Client, email: string, companyId?: string): Promise<string> {
+  return insertSelfAuthUser(c, { email, companyId });
 }
 
 const pendingCount = async (c: Client, email: string) => {
@@ -53,7 +52,7 @@ describe('create_pending_login and handle_new_user (0088)', () => {
       const b = await companyB(c);
       await actAsBound(c, users.admin, b);
       await c.query(`select public.create_pending_login(' Zz-Pending-B@Example.com ', 'Zz Pending B', 'organizer', null)`);
-      const id = await signUp(c, 'zz-pending-b@example.com');
+      const id = await signUp(c, 'zz-pending-b@example.com', b);
       expect(await members(c, id)).toEqual([{ company_id: b, role: 'organizer', active: true, delegate_id: null }]);
       expect((await profileOf(c, id)).full_name).toBe('Zz Pending B');
       expect(await pendingCount(c, 'zz-pending-b@example.com')).toBe(0);
@@ -92,7 +91,7 @@ describe('create_pending_login and handle_new_user (0088)', () => {
       await c.query(`select public.create_pending_login('zz-pending-old@example.com', 'Zz Old', 'organizer', null)`);
       await asPostgres(c);
       await c.query(`update app_private.pending_logins set created_at = now() - interval '8 days' where email = 'zz-pending-old@example.com'`);
-      await refused(c, () => signUp(c, 'zz-pending-old@example.com'), /No pending login for this address./);
+      await refused(c, () => signUp(c, 'zz-pending-old@example.com', b), /No pending login for this address./);
     });
   });
 

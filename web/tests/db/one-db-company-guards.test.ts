@@ -1,6 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, actAsBound, asPostgres } from './helpers';
+import { insertSelfAuthFactor } from './fixtures';
 
 // 0089: the guards and auth helpers read the caller's company_members row for the bound company.
 
@@ -72,10 +73,7 @@ describe('guards read the bound company (0089)', () => {
       expect(await isActive(c)).toBe(false);
 
       await asPostgres(c);
-      await c.query(
-        `insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret)
-         values (gen_random_uuid(), $1, 'zz-company-guards', 'totp', 'verified', clock_timestamp(), clock_timestamp(), 'x')`,
-        [users.viewer]);
+      await insertSelfAuthFactor(c, users.viewer);
       await c.query(`update public.company_members set mfa_setup_required = true where company_id = $1 and user_id = $2`,
         [ACADEMY_ID, users.viewer]);
       await actAs(c, users.viewer, { session_id: crypto.randomUUID(), aal: 'aal2' });

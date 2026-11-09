@@ -1,6 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, asPostgres } from './helpers';
+import { insertSelfAuthUser } from './fixtures';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -41,7 +42,7 @@ describe('console_add_first_admin (0093)', () => {
       const pending = (await c.query(
         'select company_id, role, full_name from app_private.pending_logins where email = $1', ['zz-owner@example.com'])).rows;
       expect(pending).toEqual([{ company_id: b, role: 'admin', full_name: 'Zz Owner' }]);
-      const id = (await c.query(`insert into auth.users (id, email) values (gen_random_uuid(), 'zz-owner@example.com') returning id`)).rows[0].id;
+      const id = await insertSelfAuthUser(c, { email: 'zz-owner@example.com', companyId: b });
       expect(await members(c, id)).toEqual([{ company_id: b, role: 'admin', active: true, delegate_id: null }]);
       expect((await c.query('select full_name from public.profiles where user_id = $1', [id])).rows[0].full_name).toBe('Zz Owner');
     });

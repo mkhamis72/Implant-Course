@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres, asCompany } from './helpers';
-import { makeCourse, makeProduct, pendingLogin, receive, setPerms } from './fixtures';
+import { makeCourse, makeProduct, pendingLogin, receive, setPerms, insertSelfAuthUser } from './fixtures';
 
 const users = inject('testUsers');
 const AREAS = ['patients', 'schedule', 'courses', 'checklists', 'inventory', 'delegates'];
@@ -18,10 +18,7 @@ describe('permissions: helpers and defaults', () => {
   it('a new organizer starts with View everywhere; an admin demoted to organizer too', async () => {
     await withTx(async (c) => {
       await pendingLogin(c, 'zz-perm-new@example.com');
-      const { rows } = await c.query(
-        `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-perm-new@example.com') returning id`,
-      );
-      const id = rows[0].id;
+      const id = await insertSelfAuthUser(c, { email: 'zz-perm-new@example.com' });
       const perms = await c.query('select area, level from public.user_permissions where user_id = $1 order by area', [id]);
       expect(perms.rows).toEqual([...AREAS].sort().map((area) => ({ area, level: 'view' })));
       await c.query(`update public.company_members set role = 'admin', active = true where company_id = 'a7c0de00-0000-4000-8000-000000000001' and user_id = $1`, [id]);

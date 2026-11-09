@@ -6,12 +6,14 @@ import { pendingLogin } from './fixtures';
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
 
-/** A self_auth.user row (as postgres). With an id of an existing profile, the provisioning trigger skips it. */
+/** A self_auth.user row (as postgres). With an id of an existing profile, the provisioning trigger skips it. The test users already exist in self_auth (ensureTestUsers), so a row with their id is updated in place.  */
 async function saUser(c: Client, id: string | null, email: string, realEmail = email, companyId = ACADEMY_ID): Promise<string> {
   await asPostgres(c);
   return (await c.query(
     `insert into self_auth."user" (id, name, email, "emailVerified", "companyId", "realEmail")
-     values (coalesce($1::uuid, gen_random_uuid()), 'T', $2, true, $3, $4) returning id`,
+     values (coalesce($1::uuid, gen_random_uuid()), 'T', $2, true, $3, $4)
+     on conflict (id) do update set email = excluded.email, "companyId" = excluded."companyId", "realEmail" = excluded."realEmail"
+     returning id`,
     [id, email, companyId, realEmail])).rows[0].id;
 }
 

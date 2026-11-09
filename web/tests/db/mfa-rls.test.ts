@@ -1,16 +1,12 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
+import { insertSelfAuthFactor } from './fixtures';
 
 const users = inject('testUsers');
 
 async function addVerifiedFactor(c: Client, userId: string) {
-  await asPostgres(c);
-  await c.query(
-    `insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret)
-     values (gen_random_uuid(), $1, 'test', 'totp', 'verified', now(), now(), 'x')`,
-    [userId],
-  );
+  await insertSelfAuthFactor(c, userId);
 }
 
 describe('RLS requires aal2 once a user has 2FA', () => {

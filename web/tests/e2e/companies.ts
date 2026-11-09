@@ -1,8 +1,9 @@
 import { expect, type BrowserContext, type Page } from '@playwright/test';
 import { readFileSync, existsSync } from 'node:fs';
-import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
+import { nodeAuth } from '../../scripts/self-auth-node';
 import { TEST_PASSWORD } from '../support/test-users';
 
 // Two companies on the one local stack, from TENANTS_FILE: a.localhost = academy, b.localhost = company B
@@ -48,26 +49,23 @@ export async function purgeCompany(company: string) {
 }
 
 /**
- * Company B's browser session, signed in and bound to B through the API, then handed to the browser as B's
- * auth cookies. Signing in through B's login form doesn't work under `next dev` / `next start`: the
- * action's redirect is rendered by a fetch to the server's own origin (__NEXT_PRIVATE_ORIGIN,
- * localhost:3000, which is academy's here), and that request ends the B session as belonging elsewhere.
+ * Company B's browser session, signed in through Self-Auth and bound to B through the API, then handed to the
+ * browser as B's session cookie (icm_session, host-only). Signing in through B's login form doesn't work under
+ * `next dev` / `next start`: the action's redirect is rendered by a fetch to the server's own origin
+ * (__NEXT_PRIVATE_ORIGIN, localhost:3000, which is academy's here), and that request ends the B session as
+ * belonging elsewhere.
  */
 export async function signInThroughApi(context: BrowserContext, email: string, company: string, origin = B) {
-  let jar: { name: string; value: string }[] = [];
-  const client = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    cookies: {
-      getAll: () => jar,
-      setAll: (cookies) => {
-        for (const { name, value } of cookies) jar = [...jar.filter((c) => c.name !== name), ...(value ? [{ name, value }] : [])];
-      },
-    },
+  const auth = await nodeAuth();
+  const res = await auth.signIn({ companyId: company, email, password: TEST_PASSWORD });
+  if (!res.ok) throw new Error(`sign-in failed for ${email}: ${res.reason}`);
+  const client = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${await auth.issueDbToken(res.session)}` } },
   });
-  const { error } = await client.auth.signInWithPassword({ email, password: TEST_PASSWORD });
-  if (error) throw error;
   const { error: bindError } = await client.rpc('bind_my_session', { p_company: company });
   if (bindError) throw bindError;
-  await context.addCookies(jar.map(({ name, value }) => ({ name, value, url: origin })));
+  await context.addCookies([{ name: 'icm_session', value: res.sessionToken, url: origin, httpOnly: true, sameSite: 'Lax' }]);
 }
 
 /** Signs in on the company's host and waits for the Dashboard. */

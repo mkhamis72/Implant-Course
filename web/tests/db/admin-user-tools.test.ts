@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, actAsBound, asPostgres, asCompany } from './helpers';
-import { setPerms } from './fixtures';
+import { insertSelfAuthFactor, insertSelfAuthSession, setPerms } from './fixtures';
 
 const users = inject('testUsers');
 const SELF = "You can't do this to your own account here. Use Account → Security.";
@@ -21,12 +21,7 @@ const profile = async (c: Client, id: string) =>
 
 /** createdAt is SQL: clock_timestamp() (default) is later than anything recorded earlier in the transaction (now()). */
 async function addVerifiedFactor(c: Client, userId: string, createdAt = 'clock_timestamp()') {
-  await asPostgres(c);
-  await c.query(
-    `insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret)
-     values (gen_random_uuid(), $1, 'zz-admin-tools-' || gen_random_uuid(), 'totp', 'verified', ${createdAt}, ${createdAt}, 'x')`,
-    [userId],
-  );
+  await insertSelfAuthFactor(c, userId, createdAt);
 }
 
 describe('admin user tools: guards', () => {
@@ -244,9 +239,7 @@ describe('admin_end_sessions', () => {
     await withTx(async (c) => {
       await asPostgres(c);
       const session = async (u: string) => {
-        const id = (await c.query(
-          'insert into auth.sessions (id, user_id, created_at, updated_at) values (gen_random_uuid(), $1, now(), now()) returning id',
-          [u])).rows[0].id;
+        const id = await insertSelfAuthSession(c, u);
         await c.query(`insert into app.session_companies (session_id, company_id, user_id)
                        values ($1, 'a7c0de00-0000-4000-8000-000000000001', $2)`, [id, u]);
         return id;
@@ -256,7 +249,7 @@ describe('admin_end_sessions', () => {
       await actAsBound(c, users.admin);
       await c.query('select public.admin_end_sessions($1)', [users.target]);
       await asPostgres(c);
-      const { rows } = await c.query('select id from auth.sessions where id = any($1)', [[mine, theirs]]);
+      const { rows } = await c.query('select id from self_auth.session where id = any($1)', [[mine, theirs]]);
       expect(rows.map((r) => r.id)).toEqual([theirs]);
     });
   });

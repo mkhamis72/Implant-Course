@@ -1,6 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
+import { insertSelfAuthFactor } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -145,12 +146,7 @@ describe('patients', () => {
     await withTx(async (c) => {
       await actAs(c, users.organizer);
       await newPatient(c);
-      await asPostgres(c);
-      await c.query(
-        `insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret)
-         values (gen_random_uuid(), $1, 't', 'totp', 'verified', now(), now(), 'x')`,
-        [users.organizer],
-      );
+      await insertSelfAuthFactor(c, users.organizer);
       await actAs(c, users.organizer, { aal: 'aal1' });
       expect((await c.query('select id from public.patients')).rows).toHaveLength(0);
     });
