@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { parse } from 'dotenv';
 import { Client } from 'pg';
@@ -61,7 +62,17 @@ async function main() {
   } finally {
     await control.end();
   }
+  // The console's Self-Auth secret signs nothing that leaves the machine; keep the one already written so
+  // re-running this doesn't change what existing console sessions were made with.
+  let previous: Vars = {};
+  try {
+    previous = parse(readFileSync('.env.console'));
+  } catch {
+    // First run.
+  }
   writeFileSync('.env.console', envFileText({
+    CONTROL_DATABASE_URL: dev2.DATABASE_URL,
+    CONTROL_SELF_AUTH_SECRET: previous.CONTROL_SELF_AUTH_SECRET || randomBytes(32).toString('hex'),
     CONTROL_SUPABASE_URL: dev2.NEXT_PUBLIC_SUPABASE_URL,
     CONTROL_SERVICE_ROLE_KEY: dev2.SUPABASE_SERVICE_ROLE_KEY,
     NEXT_PUBLIC_CONTROL_ANON_KEY: dev2.NEXT_PUBLIC_SUPABASE_ANON_KEY,

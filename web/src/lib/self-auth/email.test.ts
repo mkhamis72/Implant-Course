@@ -26,6 +26,11 @@ describe('email adapter', () => {
     // The url is only in the body.
     for (const m of [invite, reset]) expect(m.subject).not.toMatch(/https?:|token/);
   });
+  it('console links open on the console pages, since the console host serves only /console', async () => {
+    companyBaseUrl.mockResolvedValue('https://console.imploid.net');
+    await emailAdapter.send({ to: 'a@b.c', kind: 'reset', url: '/auth/reset?token=T3', companyId: 'console' });
+    expect(sendEmail.mock.calls[0][0].text).toContain('https://console.imploid.net/console/auth/reset?token=T3');
+  });
   it('escapes the url in html', async () => {
     await emailAdapter.send({ to: 'a@b.c', kind: 'reset', url: '/auth/reset?token=a"b&c', companyId: 'c' });
     expect(sendEmail.mock.calls[0][0].html).toContain('token=a&quot;b&amp;c');

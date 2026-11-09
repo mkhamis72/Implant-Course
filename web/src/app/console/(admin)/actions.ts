@@ -6,11 +6,9 @@ import { requireConsoleAdmin } from '@/lib/console/session';
 import { createConsoleServiceClient } from '@/lib/console/supabase';
 import { getCompany, serviceKeyOf, sharedProject, type CompanyRow } from '@/lib/console/companies';
 import { createFirstAdmin, inviteFirstAdmin, type InviteResult } from '@/lib/console/first-admin';
-import { companyOrigin } from '@/lib/console/onboarding';
 import { addProjectDomain, vercelConfigured } from '@/lib/console/vercel';
 import { firstAdminSchema, onboardSchema, secretsSchema, statusSchema, updateSchema } from '@/lib/console/schemas';
 import { checkTenant } from '@/lib/tenant/check';
-import { requestOrigin } from '@/lib/tenant/current';
 import { emailEnabled } from '@/lib/flags';
 import { failed, type FormState } from '@/lib/patients/form-state';
 
@@ -54,9 +52,7 @@ async function addDomains(control: SupabaseClient, slug: string, hosts: string[]
 const inviteMessage = (r: InviteResult, email: string) =>
   r.outcome === 'invited' ? `Invite sent to ${email}.`
   : r.outcome === 'reinvited' ? `Invite sent again to ${email} (they had not accepted the first one).`
-  : r.outcome === 'reset_sent' ? `${email} already had a login here: they were sent a password-reset email.`
-  : r.outcome === 'added' && r.noticeSent ? `Added ${email} as admin. They sign in with their existing password, and were sent a notice.`
-  : `Added ${email} as admin. They sign in with their existing password (the notice email could not be sent).`;
+  : `${email} already had a login here: they were sent a password-reset email.`;
 
 export type Step = { label: string; ok: boolean; detail: string };
 export type OnboardState = FormState & { slug?: string; steps?: Step[]; password?: string; email?: string };
@@ -111,14 +107,14 @@ export async function onboardCompany(_prev: OnboardState, formData: FormData): P
   let password: string | undefined;
   try {
     if (emailEnabled()) {
-      const r = await inviteFirstAdmin(db, { ...admin1, companyName: c.name, origin: companyOrigin(await requestOrigin(), c.hosts[0]) });
+      const r = await inviteFirstAdmin(db, admin1);
       await control.rpc('console_log', { p_slug: c.slug, p_action: 'first_admin_invited', p_detail: c.email, p_actor: admin.email });
       steps.push({ label: 'First admin', ok: true, detail: inviteMessage(r, c.email) });
     } else {
       const r = await createFirstAdmin(db, admin1);
       await control.rpc('console_log', { p_slug: c.slug, p_action: r.outcome === 'reset' ? 'admin_password_reset' : 'first_admin_created', p_detail: c.email, p_actor: admin.email });
-      password = r.outcome === 'added' ? undefined : r.password;
-      steps.push({ label: 'First admin', ok: true, detail: password ? `Login created for ${c.email}: pass on the temporary password below.` : `Added ${c.email} as admin; they keep their existing password.` });
+      password = r.password;
+      steps.push({ label: 'First admin', ok: true, detail: `Login created for ${c.email}: pass on the temporary password below.` });
     }
   } catch (e) {
     steps.push({ label: 'First admin', ok: false, detail: `${(e as Error).message}. Retry from the company page.` });
@@ -212,12 +208,10 @@ export async function firstAdmin(_prev: FirstAdminState, formData: FormData): Pr
       p_detail: parsed.data.email,
       p_actor: admin.email,
     });
-    const ok = r.outcome === 'created' ? 'Admin login created.'
-      : r.outcome === 'reset' ? 'Password reset for the existing login.'
-      : `Added ${parsed.data.email} as admin. They sign in with their existing password.`;
+    const ok = r.outcome === 'created' ? 'Admin login created.' : 'Password reset for the existing login.';
     return {
       ok: logError ? `${ok} The change could not be recorded in the history.` : ok,
-      password: r.outcome === 'added' ? undefined : r.password,
+      password: r.password,
       email: parsed.data.email,
     };
   } catch (e) {
@@ -229,8 +223,7 @@ async function inviteByEmail(
   control: SupabaseClient, db: SupabaseClient, company: CompanyRow,
   target: { companyId: string; email: string; fullName: string }, actor: string,
 ): Promise<FirstAdminState> {
-  const origin = companyOrigin(await requestOrigin(), company.hosts[0]);
-  const r = await inviteFirstAdmin(db, { ...target, companyName: company.name, origin });
+  const r = await inviteFirstAdmin(db, target);
   const { error: logError } = await control.rpc('console_log', { p_slug: company.slug, p_action: 'first_admin_invited', p_detail: target.email, p_actor: actor });
   const ok = inviteMessage(r, target.email);
   return { ok: logError ? `${ok} The change could not be recorded in the history.` : ok, email: target.email };

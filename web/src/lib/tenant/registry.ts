@@ -1,5 +1,5 @@
 import 'server-only';
-import { controlSecret, controlTenants } from './control';
+import { controlSecret, controlTenants, resetControlCache } from './control';
 import { ANY_HOST, staticTenants, type StaticTenant } from './static';
 import type { Tenant } from './types';
 
@@ -37,5 +37,10 @@ export async function tenantServiceKey(slug: string): Promise<string> {
 }
 
 export async function findTenantByCompanyId(companyId: string): Promise<Tenant | null> {
+  const known = (await all()).find((t) => t.companyId === companyId);
+  if (known || !usesControl()) return known ?? null;
+  // A company the console has just added is not in this process's cached list yet (it is refetched every 60 s):
+  // look again from the control project once before saying it is unknown (its first invite is emailed at once).
+  resetControlCache();
   return (await all()).find((t) => t.companyId === companyId) ?? null;
 }

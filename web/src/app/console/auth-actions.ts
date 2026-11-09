@@ -2,82 +2,88 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { mapAuthError } from '@/lib/auth/errors';
+import QRCode from 'qrcode';
+import { GENERIC_AUTH_ERROR, mapAuthError } from '@/lib/auth/errors';
 import { lastSeenCookieOptions } from '@/lib/supabase/middleware';
-import { createConsoleClient, createConsoleServiceClient } from '@/lib/console/supabase';
+import { createConsoleServiceClient } from '@/lib/console/supabase';
 import { requireConsoleHost, requireConsoleUser } from '@/lib/console/session';
 import { CONSOLE_LAST_SEEN_COOKIE } from '@/lib/console/middleware';
+import { clearSessionCookie, readSessionCookie, setSessionCookie } from '@/lib/self-auth/cookie';
+import { CONSOLE_COMPANY, consoleAuth } from '@/lib/self-auth/console';
 import type { Enrollment } from '@/app/(app)/account/security/actions';
 
 const ALREADY_SET_UP = 'An authenticator is already set up.';
 
 export type ConsoleAuthState = { error?: string; email?: string };
 
+const REASON_CODES = { invalid_credentials: 'invalid_credentials', disabled: 'user_disabled', locked: 'sign_in_locked' } as const;
+
 export async function signInConsole(_prev: ConsoleAuthState, formData: FormData): Promise<ConsoleAuthState> {
   await requireConsoleHost();
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
   const password = String(formData.get('password') ?? '');
-  const supabase = await createConsoleClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: mapAuthError(error), email };
+  const auth = await consoleAuth();
+  const result = await auth.signIn({ companyId: CONSOLE_COMPANY, email, password });
+  if (!result.ok) return { error: mapAuthError(REASON_CODES[result.reason] ?? 'invalid_credentials'), email };
   // Not listed: same answer as a wrong password, so valid credentials are not revealed.
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: row } = user
-    ? await createConsoleServiceClient().from('console_admins').select('active').eq('user_id', user.id).maybeSingle()
-    : { data: null };
+  const { data: row } = await createConsoleServiceClient().from('console_admins').select('active').eq('user_id', result.session.userId).maybeSingle();
   if (!row?.active) {
-    await supabase.auth.signOut({ scope: 'local' });
+    await auth.signOut(result.sessionToken);
     return { error: mapAuthError('invalid_credentials'), email };
   }
+  const maxAge = Math.max(1, Math.floor((result.session.expiresAt.getTime() - Date.now()) / 1000));
+  await setSessionCookie('console', result.sessionToken, maxAge);
   (await cookies()).set(CONSOLE_LAST_SEEN_COOKIE, String(Date.now()), lastSeenCookieOptions);
   // The admin guard decides: not listed → signed out; no factor → setup; factor → code.
   redirect('/console');
+}
+
+/** The session token for the calls that act on it; no cookie means sign in again. */
+async function consoleToken(): Promise<string> {
+  const token = await readSessionCookie('console');
+  if (!token) redirect('/console/login');
+  return token;
 }
 
 export async function verifyConsoleMfa(_prev: ConsoleAuthState, formData: FormData): Promise<ConsoleAuthState> {
   await requireConsoleHost();
   await requireConsoleUser();
   const code = String(formData.get('code') ?? '').replace(/\s/g, '');
-  const supabase = await createConsoleClient();
-  const { data, error: listError } = await supabase.auth.mfa.listFactors();
-  if (listError) return { error: mapAuthError(listError) };
-  const factor = data.totp.find((f) => f.status === 'verified');
-  if (!factor) redirect('/console/mfa/setup');
-  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
-  if (error) return { error: mapAuthError(error) };
+  const token = await consoleToken();
+  // The same session is raised to aal2.
+  const session = await (await consoleAuth()).totp.verify(token, CONSOLE_COMPANY, code);
+  if (!session) return { error: mapAuthError('mfa_verification_failed') };
   redirect('/console');
 }
 
 export async function startConsoleEnroll(): Promise<Enrollment | { error: string }> {
   await requireConsoleHost();
   await requireConsoleUser();
-  const supabase = await createConsoleClient();
-  const { data: existing, error: listError } = await supabase.auth.mfa.listFactors();
-  if (listError) return { error: mapAuthError(listError) };
-  if (existing.all.some((f) => f.status === 'verified')) return { error: ALREADY_SET_UP };
-  for (const f of existing.all) if (f.status === 'unverified') await supabase.auth.mfa.unenroll({ factorId: f.id });
-  const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: `Console ${new Date().toISOString()}` });
-  if (error) return { error: mapAuthError(error) };
-  return { factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret };
+  const token = await consoleToken();
+  try {
+    // Replaces an unconfirmed secret; a confirmed authenticator must be removed first (never from an aal1 session).
+    const { secret, otpauthUrl } = await (await consoleAuth()).totp.startEnroll(token, CONSOLE_COMPANY);
+    const qrCode = await QRCode.toDataURL(otpauthUrl, { width: 180, margin: 1 });
+    return { factorId: 'totp', qrCode, secret };
+  } catch (e) {
+    if ((e as { code?: string }).code === 'totp_already_enrolled') return { error: ALREADY_SET_UP };
+    return { error: GENERIC_AUTH_ERROR };
+  }
 }
 
-export async function confirmConsoleEnroll(factorId: string, code: string): Promise<{ ok: true } | { error: string }> {
+export async function confirmConsoleEnroll(_factorId: string, code: string): Promise<{ ok: true } | { error: string }> {
   await requireConsoleHost();
   await requireConsoleUser();
-  const supabase = await createConsoleClient();
-  // Enrolment is only for a first authenticator: never let an aal1 session add or replace one.
-  const { data: existing, error: listError } = await supabase.auth.mfa.listFactors();
-  if (listError) return { error: mapAuthError(listError) };
-  if (existing.all.some((f) => f.status === 'verified')) return { error: ALREADY_SET_UP };
-  if (!existing.all.some((f) => f.id === factorId && f.factor_type === 'totp' && f.status === 'unverified')) return { error: 'Start the setup again.' };
-  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: code.replace(/\s/g, '') });
-  if (error) return { error: mapAuthError(error) };
+  const token = await consoleToken();
+  const session = await (await consoleAuth()).totp.confirmEnroll(token, CONSOLE_COMPANY, code.replace(/\s/g, ''));
+  if (!session) return { error: mapAuthError('mfa_verification_failed') };
   return { ok: true };
 }
 
 export async function signOutConsole(): Promise<void> {
-  const supabase = await createConsoleClient();
-  await supabase.auth.signOut({ scope: 'local' });
+  const token = await readSessionCookie('console');
+  if (token) await (await consoleAuth()).signOut(token);
+  await clearSessionCookie('console');
   (await cookies()).delete(CONSOLE_LAST_SEEN_COOKIE);
   redirect('/console/login');
 }

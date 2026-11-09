@@ -1,6 +1,7 @@
 import 'server-only';
 import type { EmailAdapter } from '@mkhamis72/self-auth';
 import { sendEmail } from '@/lib/email/send';
+import { CONSOLE_COMPANY } from './constants';
 import { companyBaseUrl } from './links';
 
 // Ported from supabase/templates/{invite,recovery}.html.
@@ -15,7 +16,9 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').repl
 export const emailAdapter: EmailAdapter = {
   async send(msg) {
     const t = TEMPLATES[msg.kind];
-    const url = msg.url.startsWith('/') ? `${await companyBaseUrl(msg.companyId)}${msg.url}` : msg.url;
+    // The console host serves only /console…, so its links land on the console's own pages.
+    const path = msg.companyId === CONSOLE_COMPANY ? `/console${msg.url}` : msg.url;
+    const url = msg.url.startsWith('/') ? `${await companyBaseUrl(msg.companyId)}${path}` : msg.url;
     const result = await sendEmail({
       to: msg.to,
       subject: t.subject,
