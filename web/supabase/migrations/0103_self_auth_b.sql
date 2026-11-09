@@ -73,7 +73,9 @@ begin
   update public.company_members set mfa_setup_required = false where company_id = v_company and user_id = v_user;
 end $$;
 
--- 0101's bind_session without auth.sessions: a binding survives while its Self-Auth session is alive.
+-- 0101's bind_session without auth.sessions: a binding survives while its Self-Auth session is alive. Binding
+-- itself needs a live Self-Auth session of the caller (id and user), so a token whose session doesn't exist in
+-- self_auth.session (a leftover Supabase Auth token, a revoked or expired session) binds nothing.
 create or replace function app.bind_session(p_company uuid) returns void
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -81,7 +83,9 @@ declare
   v_user uuid := app.current_user_id();
   v_bound app.session_companies;
 begin
-  if v_session is null or v_user is null then
+  if v_session is null or v_user is null
+     or not exists (select 1 from self_auth.session s
+                    where s.id = v_session and s."userId" = v_user and s."expiresAt" > now()) then
     perform app_private.fail('No sign-in session.');
   end if;
   if not exists (select 1 from public.company_members m

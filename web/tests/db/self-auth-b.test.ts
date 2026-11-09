@@ -187,6 +187,54 @@ describe('Migration B (0103): auth.* branches gone, keys on self_auth."user"', (
   });
 });
 
+describe('Migration B (0103): bind_session', () => {
+  it('bind_rejects_session_not_in_self_auth', async () => {
+    const leftovers = await unimportedMembers();
+    if (leftovers.length) {
+      await withPg(async (pg) => runImport({ db: 'app', apply: true, pg, auth: await nodeAuth(), onlyUserIds: leftovers, log: () => undefined }));
+    }
+    await withTx(async (c) => {
+      await removeSupabaseOnlyUsers(c);
+      await c.query(B_APP);
+      const m = (await c.query(`select m.user_id, m.company_id from public.company_members m
+        join self_auth."user" u on u.id = m.user_id order by m.created_at limit 1`)).rows[0] as { user_id: string; company_id: string };
+      const other = (await c.query('select id as user_id from self_auth."user" where id <> $1 limit 1', [m.user_id])).rows[0] as { user_id: string };
+      const session = async (user: string, expires: string) => (await c.query(
+        `insert into self_auth.session ("expiresAt", token, "updatedAt", "userId")
+         values (now() + $2::interval, gen_random_uuid()::text, now(), $1) returning id`, [user, expires])).rows[0].id as string;
+      const tryBind = async (sessionId: string): Promise<string> => {
+        await c.query('savepoint b');
+        await c.query(`select set_config('request.jwt.claims', $1, true)`,
+          [JSON.stringify({ sub: m.user_id, role: 'authenticated', session_id: sessionId, aal: 'aal2' })]);
+        await c.query('set local role authenticated');
+        try {
+          await c.query('select public.bind_my_session($1)', [m.company_id]);
+          await c.query('reset role');
+          await c.query('release savepoint b');
+          return 'bound';
+        } catch (e) {
+          await c.query('rollback to savepoint b');
+          return (e as Error).message;
+        }
+      };
+      const live = await session(m.user_id, '1 hour');
+      const expired = await session(m.user_id, '-1 hour');
+      const othersSession = await session(other.user_id, '1 hour');
+
+      // A made-up id (an old Supabase Auth token's), an expired session and another user's live session are refused.
+      expect(await tryBind(randomUUID())).toBe('No sign-in session.');
+      expect(await tryBind(expired)).toBe('No sign-in session.');
+      expect(await tryBind(othersSession)).toBe('No sign-in session.');
+      expect((await c.query('select count(*)::int n from app.session_companies where session_id = any($1::uuid[])',
+        [[expired, othersSession]])).rows[0].n).toBe(0);
+      // The user's own live Self-Auth session binds.
+      expect(await tryBind(live)).toBe('bound');
+      expect((await c.query('select company_id from app.session_companies where session_id = $1', [live])).rows)
+        .toEqual([{ company_id: m.company_id }]);
+    });
+  });
+});
+
 describe('Migration B for the control database (0008)', () => {
   const DB = 'zz_self_auth_b_control';
   let url = '';

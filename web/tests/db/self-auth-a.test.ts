@@ -1,7 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
-import { withTx, actAs, actAsBound, asPostgres } from './helpers';
-import { pendingLogin } from './fixtures';
+import { withTx, actAs, actAsBound, asCompany, asPostgres } from './helpers';
+import { makeDelegate, makePatient, pendingLogin } from './fixtures';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -185,6 +185,40 @@ describe('Migration A: Self-Auth schema and dual-source auth helpers (0101)', ()
       await c.query('delete from self_auth."user" where id = $1', [id]);
       expect((await c.query('select 1 from public.profiles where user_id = $1', [id])).rowCount).toBe(0);
       expect((await c.query('select 1 from public.company_members where user_id = $1', [id])).rowCount).toBe(0);
+    });
+  });
+
+  it('end_sessions_leaves_other_company_self_auth_session', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      const b = (await c.query(`insert into public.companies (slug, name) values ('zz-sa-end', 'Zz Sa End') returning id`)).rows[0].id;
+      await saUser(c, users.organizer, 'zz-org@example.com');
+      const here = await saSession(c, users.organizer, '1 hour');
+      const there = await saSession(c, users.organizer, '1 hour');
+      await bind(c, here, users.organizer);
+      await c.query('insert into app.session_companies (session_id, company_id, user_id) values ($1, $2, $3)',
+        [there, b, users.organizer]);
+      await actAsBound(c, users.admin);
+      await c.query('select public.admin_end_sessions($1)', [users.organizer]);
+      await asPostgres(c);
+      expect((await c.query('select 1 from self_auth.session where id = $1', [here])).rowCount).toBe(0);
+      expect((await c.query('select 1 from self_auth.session where id = $1', [there])).rowCount).toBe(1);
+    });
+  });
+
+  it('created_by_nulled_on_user_delete', async () => {
+    await withTx(async (c) => {
+      await pendingLogin(c, 'zz-sa-maker@example.com');
+      const id = await saUser(c, null, 'internal-key-4', 'zz-sa-maker@example.com');
+      await asCompany(c, ACADEMY_ID, id);
+      const patient = await makePatient(c, 'Zz Created By');
+      const delegate = await makeDelegate(c, 'Zz Created By');
+      await asPostgres(c);
+      expect((await c.query('select created_by from public.patients where id = $1', [patient])).rows[0].created_by).toBe(id);
+      expect((await c.query('select created_by from public.delegates where id = $1', [delegate])).rows[0].created_by).toBe(id);
+      await c.query('delete from self_auth."user" where id = $1', [id]);
+      expect((await c.query('select created_by from public.patients where id = $1', [patient])).rows).toEqual([{ created_by: null }]);
+      expect((await c.query('select created_by from public.delegates where id = $1', [delegate])).rows).toEqual([{ created_by: null }]);
     });
   });
 
