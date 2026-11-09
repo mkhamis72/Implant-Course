@@ -1,10 +1,12 @@
-import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
 import { routeHost } from '@/lib/tenant/route';
 import { blockedResponse, forwardHeaders } from '@/lib/tenant/responses';
 import { contentSecurityPolicy } from '@/lib/security-headers';
-import { classifyPath, decideRedirect, verifiedAal, type Aal } from '@/lib/auth/redirects';
+import { classifyPath, decideRedirect, type Aal } from '@/lib/auth/redirects';
 import { isIdleExpired } from '@/lib/idle';
+import { SESSION_COOKIE_NAME, sessionCookieOptions } from '@/lib/self-auth/cookie-options';
+import { tenantAuth } from '@/lib/self-auth/tenant';
 
 /** httpOnly timestamp of the user's last request, so the server enforces the idle timeout too. */
 export const LAST_SEEN_COOKIE = 'icm_last_seen';
@@ -26,6 +28,7 @@ function redirectTo(request: NextRequest, response: NextResponse, pathname: stri
   return redirect;
 }
 
+/** Runs on the Node runtime (config in src/middleware.ts): Self-Auth talks to Postgres. */
 export async function updateSession(request: NextRequest) {
   const route = await routeHost(request.headers.get('host'));
   if (route.kind !== 'tenant') return blockedResponse(route.kind);
@@ -35,42 +38,29 @@ export async function updateSession(request: NextRequest) {
     r.headers.set('Content-Security-Policy', csp);
     return r;
   };
-  // Rebuilt after cookie changes too, so server code always sees the routed company, never a browser-sent one.
-  const next = () => NextResponse.next({ request: { headers: forwardHeaders(request.headers, tenant.slug) } });
+  // Server code always sees the routed company, never a browser-sent one.
+  const response = NextResponse.next({ request: { headers: forwardHeaders(request.headers, tenant.slug) } });
 
-  let response = next();
-  const supabase = createServerClient(tenant.supabaseUrl, tenant.anonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = next();
-        cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
-      },
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const token = request.cookies.get(SESSION_COOKIE_NAME.tenant)?.value || null;
+  const auth = token ? await tenantAuth() : null;
+  // Company-bound: Self-Auth only returns a session that belongs to THIS host's company.
+  const session = token && auth ? await auth.getSession(token, tenant.companyId) : null;
+  // No session behind the cookie (expired, revoked, disabled, or another company's): drop it.
+  if (token && !session) response.cookies.set(SESSION_COOKIE_NAME.tenant, '', sessionCookieOptions(0));
 
   let aal: Aal = null;
-  if (user) {
-    // Factors come from the Auth server (getUser); aal from the verified JWT. Never use
-    // mfa.getAuthenticatorAssuranceLevel() without a token here: it reads the editable cookie.
-    const { data } = await supabase.auth.getClaims();
-    aal = verifiedAal(user.factors, data?.claims?.aal);
+  if (session && auth) {
+    const needsTotp = session.aal === 'aal1' && (await auth.totp.hasTotp(session.userId));
+    aal = { current: session.aal, next: needsTotp ? 'aal2' : session.aal };
   }
 
   const path = request.nextUrl.pathname;
-  if (user && classifyPath(path) !== 'public') {
+  if (session && token && auth && classifyPath(path) !== 'public') {
     const raw = request.cookies.get(LAST_SEEN_COOKIE)?.value;
-    const { data: settings } = await supabase.from('settings').select('session_timeout_minutes').maybeSingle();
-    const timeout = settings?.session_timeout_minutes ?? DEFAULT_TIMEOUT_MINUTES;
+    const timeout = await sessionTimeoutMinutes(tenant.supabaseUrl, tenant.anonKey, await auth.issueDbToken(session));
     if (isIdleExpired(raw ? Number(raw) : null, Date.now(), timeout)) {
-      await supabase.auth.signOut({ scope: 'local' });
+      await auth.signOut(token);
+      response.cookies.set(SESSION_COOKIE_NAME.tenant, '', sessionCookieOptions(0));
       const redirect = redirectTo(request, response, '/login', '?reason=idle');
       redirect.cookies.delete(LAST_SEEN_COOKIE);
       return withCsp(redirect);
@@ -78,6 +68,15 @@ export async function updateSession(request: NextRequest) {
     response.cookies.set(LAST_SEEN_COOKIE, String(Date.now()), lastSeenCookieOptions);
   }
 
-  const target = decideRedirect({ path, hasUser: !!user, aal });
+  const target = decideRedirect({ path, hasUser: !!session, aal });
   return withCsp(target ? redirectTo(request, response, target) : response);
+}
+
+async function sessionTimeoutMinutes(url: string, anonKey: string, dbToken: string): Promise<number> {
+  const supabase = createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${dbToken}` } },
+  });
+  const { data } = await supabase.from('settings').select('session_timeout_minutes').maybeSingle();
+  return data?.session_timeout_minutes ?? DEFAULT_TIMEOUT_MINUTES;
 }

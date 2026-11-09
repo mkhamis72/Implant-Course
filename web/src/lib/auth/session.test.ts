@@ -13,6 +13,13 @@ vi.mock('next/navigation', () => ({
   },
 }));
 vi.mock('@/lib/tenant/current', () => ({ currentTenant: async () => ({ slug: 'academy', companyId: A }) }));
+vi.mock('@/lib/self-auth/session', () => ({
+  currentSelfAuthSession: async () => ({ userId: 'u1', email: 'u@example.com', companyId: 'x', sessionId: 's1', aal: 'aal1' }),
+}));
+vi.mock('@/lib/self-auth/cookie', () => ({ readSessionCookie: async () => 'tok', clearSessionCookie: async () => {} }));
+vi.mock('@/lib/self-auth/tenant', () => ({
+  tenantAuth: async () => ({ signOut: async () => { calls.signOut++; } }),
+}));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => {
     const from = (table: string) => {
@@ -45,7 +52,7 @@ vi.mock('@/lib/supabase/server', () => ({
       calls.signOut++;
       return { error: null };
     };
-    return { auth: { getUser: async () => ({ data: { user: { id: 'u1', email: 'u@example.com' } } }), signOut }, rpc, from };
+    return { rpc, from };
   },
 }));
 import {

@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
+vi.mock('server-only', () => ({}));
 const set = vi.fn();
+const selfAuthSignOut = vi.fn();
+(globalThis as { __saSignOut?: () => void }).__saSignOut = () => selfAuthSignOut();
+vi.mock('@/lib/self-auth/cookie', () => ({ readSessionCookie: async () => 'tok', clearSessionCookie: async () => {} }));
+vi.mock('@/lib/self-auth/tenant', () => ({ tenantAuth: async () => ({ signOut: async () => { (globalThis as { __saSignOut?: () => void }).__saSignOut?.(); } }) }));
 vi.mock('next/headers', () => ({ cookies: async () => ({ set }) }));
 vi.mock('next/navigation', () => ({
   redirect: (to: string) => {
@@ -40,7 +45,7 @@ describe('GET /auth/confirm', () => {
   it("a link opened on a company the user doesn't belong to is refused and signed out", async () => {
     rpc.mockResolvedValueOnce({ data: null, error: { message: 'You do not have access to this company.', hint: 'user' } });
     await expect(get('token_hash=h&type=recovery')).rejects.toThrow('REDIRECT /auth/error?code=company');
-    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(selfAuthSignOut).toHaveBeenCalled();
     expect(set).not.toHaveBeenCalled();
   });
   it('a failed bind that is not a refusal opens the generic error page and keeps the session', async () => {

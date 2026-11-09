@@ -6,6 +6,10 @@ const { state, eq } = vi.hoisted(() => ({
   state: { bindError: null as unknown, role: 'organizer' as string | null, factors: [] as { status: string }[] },
   eq: vi.fn(),
 }));
+const selfAuthSignOut = vi.fn();
+(globalThis as { __saSignOut?: () => void }).__saSignOut = () => selfAuthSignOut();
+vi.mock('@/lib/self-auth/cookie', () => ({ readSessionCookie: async () => 'tok', clearSessionCookie: async () => {} }));
+vi.mock('@/lib/self-auth/tenant', () => ({ tenantAuth: async () => ({ signOut: async () => { (globalThis as { __saSignOut?: () => void }).__saSignOut?.(); } }) }));
 vi.mock('next/headers', () => ({ cookies: async () => ({ set: vi.fn() }) }));
 vi.mock('next/navigation', () => ({
   redirect: (to: string) => {
@@ -58,7 +62,7 @@ describe('login', () => {
   it('a user who is not a member of this company is refused and signed out', async () => {
     state.bindError = { message: 'You do not have access to this company.', hint: 'user' };
     expect(await login({}, form())).toEqual({ error: 'You do not have access to this company.', email: 'u@example.com' });
-    expect(signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(selfAuthSignOut).toHaveBeenCalled();
   });
   it('a failed bind that is not a refusal shows the generic message, not the refusal', async () => {
     state.bindError = { message: 'connection reset' };
