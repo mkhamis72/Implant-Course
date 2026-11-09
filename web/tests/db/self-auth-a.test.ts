@@ -7,12 +7,12 @@ const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
 
 /** A self_auth.user row (as postgres). With an id of an existing profile, the provisioning trigger skips it. */
-async function saUser(c: Client, id: string | null, email: string, realEmail = email): Promise<string> {
+async function saUser(c: Client, id: string | null, email: string, realEmail = email, companyId = ACADEMY_ID): Promise<string> {
   await asPostgres(c);
   return (await c.query(
     `insert into self_auth."user" (id, name, email, "emailVerified", "companyId", "realEmail")
      values (coalesce($1::uuid, gen_random_uuid()), 'T', $2, true, $3, $4) returning id`,
-    [id, email, ACADEMY_ID, realEmail])).rows[0].id;
+    [id, email, companyId, realEmail])).rows[0].id;
 }
 
 async function saFactor(c: Client, user: string, confirmed = true) {
@@ -140,6 +140,24 @@ describe('Migration A: Self-Auth schema and dual-source auth helpers (0101)', ()
     await withTx(async (c) => {
       await expect(saUser(c, null, 'internal-key-2', 'zz-sa-none@example.com'))
         .rejects.toThrow(/No pending login for this address\./);
+    });
+  });
+
+  it('pending_logins_scoped_to_new_users_company', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      const b = (await c.query(`insert into public.companies (slug, name) values ('zz-sa-b', 'Zz Sa B') returning id`)).rows[0].id;
+      await pendingLogin(c, 'zz-sa-two@example.com', { fullName: 'In A' });
+      await pendingLogin(c, 'zz-sa-two@example.com', { company: b, fullName: 'In B', role: 'admin' });
+      const a = await saUser(c, null, 'key-a', 'zz-sa-two@example.com');
+      const rows = async (u: string) => (await c.query(
+        'select company_id, role from public.company_members where user_id = $1', [u])).rows;
+      expect(await rows(a)).toEqual([{ company_id: ACADEMY_ID, role: 'organizer' }]);
+      const left = await c.query(`select company_id from app_private.pending_logins where email = 'zz-sa-two@example.com'`);
+      expect(left.rows).toEqual([{ company_id: b }]);
+      const bu = await saUser(c, null, 'key-b', 'zz-sa-two@example.com', b);
+      expect(await rows(bu)).toEqual([{ company_id: b, role: 'admin' }]);
+      expect((await c.query('select full_name from public.profiles where user_id = $1', [bu])).rows[0].full_name).toBe('In B');
     });
   });
 

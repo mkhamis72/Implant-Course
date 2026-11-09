@@ -128,6 +128,7 @@ end $$;
 -- ── Provisioning for Self-Auth users ─────────────────────────────────────────────────────────────────────
 -- 0090's handle_new_user, keyed on the Self-Auth user's id and real email. A user that already has a profile
 -- (imported from Supabase Auth with the same id) is not provisioned again.
+-- Accounts are per company: only the pending logins of new."companyId" are used and removed.
 create function app_private.handle_new_self_auth_user() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -139,7 +140,7 @@ begin
   end if;
   delete from app_private.pending_logins where email = v_email and created_at < now() - interval '7 days';
   select pl.full_name into v_name from app_private.pending_logins pl
-  where pl.email = v_email order by pl.created_at desc limit 1;
+  where pl.email = v_email and pl.company_id::text = new."companyId" order by pl.created_at desc limit 1;
   if not found then
     perform app_private.fail('No pending login for this address.');
   end if;
@@ -147,11 +148,11 @@ begin
   insert into public.company_members (company_id, user_id, role, active, delegate_id)
   select pl.company_id, new.id, pl.role, true, pl.delegate_id
   from app_private.pending_logins pl
-  where pl.email = v_email
+  where pl.email = v_email and pl.company_id::text = new."companyId"
     and (pl.delegate_id is null
          or exists (select 1 from public.delegates d where d.company_id = pl.company_id and d.id = pl.delegate_id))
   on conflict do nothing;
-  delete from app_private.pending_logins where email = v_email;
+  delete from app_private.pending_logins where email = v_email and company_id::text = new."companyId";
   return new;
 end $$;
 revoke all on function app_private.handle_new_self_auth_user() from public, anon, authenticated;
