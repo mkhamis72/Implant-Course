@@ -67,6 +67,18 @@ describe('updateConsoleSession', () => {
     expect(res.headers.get('set-cookie')).toContain('icm_console_session=;');
   });
 
+  it('still clears the cookie and redirects when the sign-out fails (no 500), logging only the name', async () => {
+    h.signOut.mockRejectedValue(Object.assign(new Error('secret-token-in-message'), { name: 'PgError' }));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await updateConsoleSession(request('/console/companies', SESSION, stale));
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get('location') ?? '').pathname).toBe('/console/login');
+    expect(res.headers.get('set-cookie')).toContain('icm_console_session=;');
+    expect(JSON.stringify(log.mock.calls)).not.toContain('secret-token');
+    expect(JSON.stringify(log.mock.calls)).toContain('PgError');
+    log.mockRestore();
+  });
+
   it('treats a missing last-seen cookie (new browser session) as idle', async () => {
     const res = await updateConsoleSession(request('/console', SESSION));
     expect(res.status).toBe(307);

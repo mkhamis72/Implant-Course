@@ -34,6 +34,9 @@ async function prepare(db: SupabaseClient, a: Target) {
     await cancelPending(db, a.companyId, email);
     throw new Error(`The login could not be read: ${codeOf(e)}`);
   }
+  // The company already has this account: a pending row the RPC wrote would only wait to turn a later account of
+  // the address into an admin unasked.
+  if (existing) await cancelPending(db, a.companyId, email);
   return { email, auth, existing };
 }
 

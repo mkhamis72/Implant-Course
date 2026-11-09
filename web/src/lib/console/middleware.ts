@@ -51,7 +51,12 @@ export async function updateConsoleSession(request: NextRequest): Promise<Respon
     // The last-seen cookie is a session cookie but the session cookie persists: no (or a garbled) cookie means a new browser session, so sign in again.
     const lastSeen = raw ? Number(raw) : NaN;
     if (!Number.isFinite(lastSeen) || isIdleExpired(lastSeen, Date.now(), CONSOLE_IDLE_MINUTES)) {
-      await auth.signOut(token);
+      try {
+        await auth.signOut(token);
+      } catch (e) {
+        // The visitor is sent to the login page either way; the session still expires on its own.
+        console.error('console idle sign-out failed:', e instanceof Error ? e.name : 'error');
+      }
       const url = request.nextUrl.clone();
       url.pathname = '/console/login';
       url.search = '?reason=idle';

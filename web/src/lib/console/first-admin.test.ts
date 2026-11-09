@@ -58,9 +58,16 @@ describe('createFirstAdmin', () => {
     admin.listUsers.mockResolvedValue([account({ disabled: true })]);
     const r = await createFirstAdmin(fakeDb(), ARGS);
     expect(r.outcome).toBe('reset');
-    expect(calls).toEqual([addCall, 'setPassword', 'setDisabled']);
+    expect(calls).toEqual([addCall, cancelCall, 'setPassword', 'setDisabled']);
     expect(admin.setPassword).toHaveBeenCalledWith(COMPANY, 'old-id', r.password);
     expect(admin.setDisabled).toHaveBeenCalledWith(COMPANY, 'old-id', false);
+  });
+
+  it('removes a pending row the RPC wrote when the company already has the account', async () => {
+    admin.listUsers.mockResolvedValue([account()]);
+    await createFirstAdmin(fakeDb(), ARGS);
+    expect(calls).toContain(cancelCall);
+    expect(calls.indexOf(cancelCall)).toBeGreaterThan(calls.indexOf(addCall));
   });
 
   it('removes the pending row again when creating the account fails', async () => {
@@ -108,6 +115,12 @@ describe('inviteFirstAdmin', () => {
     expect(requestPasswordReset).toHaveBeenCalledWith({ companyId: COMPANY, email: 'owner@acme.com' });
   });
 
+  it('removes a pending row the RPC wrote when the company already has the account', async () => {
+    admin.listUsers.mockResolvedValue([account()]);
+    await inviteFirstAdmin(fakeDb(), ARGS);
+    expect(calls).toContain(cancelCall);
+  });
+
   it('lifts a deactivation on an existing account', async () => {
     admin.listUsers.mockResolvedValue([account({ disabled: true })]);
     await inviteFirstAdmin(fakeDb(), ARGS);
@@ -124,6 +137,5 @@ describe('inviteFirstAdmin', () => {
     admin.listUsers.mockResolvedValue([account()]);
     requestPasswordReset.mockRejectedValue(code('boom'));
     await expect(inviteFirstAdmin(fakeDb(), ARGS)).rejects.toThrow('The password-reset email could not be sent');
-    expect(calls).not.toContain(cancelCall);
   });
 });
