@@ -295,16 +295,19 @@ export function failureReason(e: unknown): string {
   return 'failed';
 }
 
-/** host + database (+ the Supabase project, which the shared pooler host carries in the user name). The port is
- *  left out: the session (5432) and transaction (6543) poolers of one project are the same database. */
+/** Which database a URL reaches. A Supabase project is named by its ref, whichever way it is reached: the direct
+ *  host db.<ref>.supabase.co, or the shared pooler host with user postgres.<ref> (any port: session 5432 and
+ *  transaction 6543 are the same database). Anything else is host + database; the port is left out. */
 function databaseIdentity(raw: string): string {
   const u = new URL(raw);
   if (!/^postgres(ql)?:$/.test(u.protocol) || !u.hostname) throw new Error('not a postgres URL');
   const host = u.hostname.toLowerCase();
   const db = decodeURIComponent(u.pathname.slice(1)) || 'postgres';
   const user = decodeURIComponent(u.username);
-  const project = host.endsWith('.pooler.supabase.com') && user.includes('.') ? user.slice(user.indexOf('.') + 1) : '';
-  return `${host}/${db}${project ? ` (project ${project})` : ''}`;
+  const direct = /^db\.([a-z0-9]+)\.supabase\.co$/.exec(host);
+  if (direct) return `Supabase project ${direct[1]}/${db}`;
+  if (host.endsWith('.pooler.supabase.com') && user.includes('.')) return `Supabase project ${user.slice(user.indexOf('.') + 1).toLowerCase()}/${db}`;
+  return `${host}/${db}`;
 }
 
 /**

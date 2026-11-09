@@ -7,27 +7,74 @@ import { applyTenantArg } from './tenant-env';
 import { closeNodeAuth, nodeAuth, nodeConsoleAuth } from './self-auth-node';
 
 /**
- * Switch-over helpers (docs/operations.md §E steps 2 and 3).
+ * Switch-over helpers (docs/operations.md §E).
  *   jwks                      prints the PUBLIC key (Self-Auth's jwks()) to import into Supabase as a standby key.
- *   check [--tenant <slug>]   looks up a made-up session through Self-Auth's own connection (SELF_AUTH_DATABASE_URL
- *                             or DATABASE_URL: proves it reaches self_auth, e.g. through the session pooler), then
- *                             mints a database token and calls the read-only branding_for on the company project:
- *                             200 means Supabase accepts Self-Auth's tokens, 401 means the key isn't imported.
+ *   check [--tenant <slug>]   (step 3, before Migration A) mints a database token and calls the read-only branding_for
+ *                             on the company project: 200 means Supabase accepts Self-Auth's tokens, 401 means the key
+ *                             isn't imported. Touches no self_auth table.
  *   check --control           the same on the control project, with is_console_admin (authenticated only).
- * Prints statuses only, never a token or a key's private part.
+ *   reach [--tenant <slug>]   (after the release that applies Migration A) looks up a made-up session through
+ *                             Self-Auth's own connection (SELF_AUTH_DATABASE_URL, else DATABASE_URL): proves it reaches
+ *                             self_auth, e.g. through the session pooler. Before Migration A: "not migrated yet".
+ * Prints statuses only, never a token, a key's private part or a database URL.
  */
-const USAGE = 'Usage: npm run self-auth:keys -- jwks | check [--tenant <slug>] | check --control';
+const USAGE = 'Usage: npm run self-auth:keys -- jwks | check [--tenant <slug>] | check --control | reach [--tenant <slug>]';
 
-export type KeysArgs = { cmd: 'jwks' } | { cmd: 'check'; control: boolean; rest: string[] };
+export type KeysArgs = { cmd: 'jwks' } | { cmd: 'check'; control: boolean; rest: string[] } | { cmd: 'reach'; rest: string[] };
+
+const tenantRest = (rest: string[]) => rest.length === 0 || (rest.length === 2 && rest[0] === '--tenant' && !!rest[1]);
 
 export function parseKeysArgs(argv: string[]): KeysArgs {
   const [cmd, ...rest] = argv;
   if (cmd === 'jwks' && rest.length === 0) return { cmd };
   if (cmd === 'check') {
     if (rest.length === 1 && rest[0] === '--control') return { cmd, control: true, rest: [] };
-    if (rest.length === 0 || (rest.length === 2 && rest[0] === '--tenant' && rest[1])) return { cmd, control: false, rest };
+    if (tenantRest(rest)) return { cmd, control: false, rest };
   }
+  if (cmd === 'reach' && tenantRest(rest)) return { cmd, rest };
   throw new Error(USAGE);
+}
+
+/** Undefined table or schema (Postgres 42P01 / 3F000), however the auth library wraps it. */
+function notMigrated(e: unknown, depth = 0): boolean {
+  if (depth > 3 || !e) return false;
+  const code = (e as { code?: unknown }).code;
+  if (code === '42P01' || code === '3F000') return true;
+  if (notMigrated((e as { cause?: unknown }).cause, depth + 1)) return true;
+  return e instanceof Error && /(relation|schema) .* does not exist/.test(e.message);
+}
+
+/** Self-Auth looks up a random token over its own URL: null (no such session) proves it reached its tables. */
+export async function reachCheck(
+  auth: { getSession(token: string, companyId: string): Promise<unknown> }, companyId: string, via: string,
+): Promise<{ ok: boolean; line: string }> {
+  try {
+    await auth.getSession(randomUUID(), companyId);
+    return { ok: true, line: `Self-Auth database: reachable over ${via}.` };
+  } catch (e) {
+    if (notMigrated(e)) {
+      return { ok: false, line: `Self-Auth database: reachable over ${via}, but not migrated yet (no self_auth tables). Run this after the release that applies Migration A.` };
+    }
+    const code = (e as { code?: unknown } | null)?.code;
+    const reason = typeof code === 'string' && code ? code : e instanceof Error ? e.name : 'failed';
+    return { ok: false, line: `Self-Auth database: unreachable over ${via} (${reason}).` };
+  }
+}
+
+/** --tenant overlays that company's env from the control project; the company id comes from its database. */
+async function companyIdFor(rest: string[]): Promise<string> {
+  const { label } = await applyTenantArg(rest, process.env);
+  console.log(`Target project: ${label ?? process.env.NEXT_PUBLIC_SUPABASE_URL}`);
+  const slug = rest[1] ?? 'academy';
+  const pg = new Client(pgConfig(process.env));
+  await pg.connect();
+  try {
+    const id = (await pg.query<{ id: string }>('select id from public.companies where slug = $1', [slug])).rows[0]?.id;
+    if (!id) throw new Error(`No company with slug ${slug} in this database`);
+    return id;
+  } finally {
+    await pg.end();
+  }
 }
 
 /** A short-lived token for a made-up user and session: enough for PostgREST to check its signature. */
@@ -68,7 +115,10 @@ async function main() {
     return;
   }
   let result: { ok: boolean; line: string };
-  if (args.control) {
+  if (args.cmd === 'reach') {
+    const companyId = await companyIdFor(args.rest);
+    result = await reachCheck(await nodeAuth(), companyId, process.env.SELF_AUTH_DATABASE_URL ? 'SELF_AUTH_DATABASE_URL' : 'DATABASE_URL');
+  } else if (args.control) {
     const token = await probeToken(await nodeConsoleAuth(), 'console');
     result = await probe({
       supabaseUrl: required(process.env, 'CONTROL_SUPABASE_URL'),
@@ -76,23 +126,9 @@ async function main() {
       rpc: 'is_console_admin', body: {}, token,
     });
   } else {
-    const { label } = await applyTenantArg(args.rest, process.env);
-    console.log(`Target project: ${label ?? process.env.NEXT_PUBLIC_SUPABASE_URL}`);
-    const slug = args.rest[1] ?? 'academy';
-    const pg = new Client(pgConfig(process.env));
-    await pg.connect();
-    let companyId: string | undefined;
-    try {
-      companyId = (await pg.query<{ id: string }>('select id from public.companies where slug = $1', [slug])).rows[0]?.id;
-    } finally {
-      await pg.end();
-    }
-    if (!companyId) throw new Error(`No company with slug ${slug} in this database`);
-    const auth = await nodeAuth();
-    // A random token: no session, so null, but only after Self-Auth has queried its tables over its own URL.
-    await auth.getSession(randomUUID(), companyId);
-    console.log(`Self-Auth database: reachable over ${process.env.SELF_AUTH_DATABASE_URL ? 'SELF_AUTH_DATABASE_URL' : 'DATABASE_URL'}.`);
-    const token = await probeToken(auth, companyId);
+    // Before Migration A: only a signed token, no self_auth table is touched.
+    const companyId = await companyIdFor(args.rest);
+    const token = await probeToken(await nodeAuth(), companyId);
     result = await probe({
       supabaseUrl: required(process.env, 'NEXT_PUBLIC_SUPABASE_URL'), anonKey: required(process.env, 'NEXT_PUBLIC_SUPABASE_ANON_KEY'),
       rpc: 'branding_for', body: { p_company: companyId }, token,

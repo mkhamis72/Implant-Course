@@ -47,9 +47,13 @@ describe('self-auth-import target and failure reasons', () => {
     expect(() => assertSelfAuthTarget({ DATABASE_URL })).not.toThrow();
     expect(() => assertSelfAuthTarget({ DATABASE_URL, SELF_AUTH_DATABASE_URL: pooler(5432) })).not.toThrow();
     expect(() => assertSelfAuthTarget({ DATABASE_URL: 'postgresql://postgres:a@127.0.0.1:54322/postgres', SELF_AUTH_DATABASE_URL: 'postgresql://postgres:b@127.0.0.1:54322/postgres' })).not.toThrow();
+    // A Supabase project is its ref: the direct host db.<ref>.supabase.co and the pooler user postgres.<ref> agree.
+    expect(() => assertSelfAuthTarget({ DATABASE_URL: 'postgresql://postgres:pw@db.abcdefghij.supabase.co:5432/postgres', SELF_AUTH_DATABASE_URL: pooler(5432) })).not.toThrow();
+    expect(() => assertSelfAuthTarget({ DATABASE_URL: pooler(5432), SELF_AUTH_DATABASE_URL: 'postgresql://postgres:pw@DB.abcdefghij.supabase.co/postgres' })).not.toThrow();
     for (const other of [
       pooler(5432, 'zzzzzzzzzz'), // another project on the same shared pooler host
-      'postgresql://postgres.abcdefghij:pw@aws-0-us-east-1.pooler.supabase.com:5432/postgres',
+      'postgresql://postgres:pw@db.zzzzzzzzzz.supabase.co:5432/postgres', // another project's direct host
+      'postgresql://postgres@aws-0-eu-central-1.pooler.supabase.com:5432/postgres', // pooler without a project ref
       'postgresql://postgres.abcdefghij:pw@aws-0-eu-central-1.pooler.supabase.com:5432/other',
       'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
     ]) {

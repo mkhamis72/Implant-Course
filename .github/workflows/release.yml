@@ -176,5 +176,7 @@ jobs:
             echo "master is now at $tip (this run migrated $GITHUB_SHA); leaving the deploy to that release."
             exit 0
           fi
-          curl --fail --silent --show-error -X POST "$HOOK" > /dev/null
+          # No build cache (Vercel's documented ?buildCache=false): the vendored @mkhamis72/self-auth tarball has no
+          # lockfile integrity hash, so a cached copy must never stand in for the one in this commit.
+          curl --fail --silent --show-error -X POST "$HOOK?buildCache=false" > /dev/null
           echo "Vercel deployment triggered."

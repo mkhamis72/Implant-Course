@@ -1,6 +1,6 @@
 -- Self-Auth, Migration A (backward compatible). The Self-Auth tables, and every helper that reads auth.* now
 -- also reads self_auth.*, so redeploying the previous app release (Supabase Auth) keeps working. The foreign
--- keys to auth.users are dropped here; Migration B (0102) re-adds them pointing at self_auth."user" once the
+-- keys to auth.users are dropped here; Migration B (0103) re-adds them pointing at self_auth."user" once the
 -- rollback window has closed.
 
 -- ── Self-Auth schema (packages/self-auth/sql/0001_self_auth.sql, verbatim) ───────────────────────────────

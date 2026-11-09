@@ -95,6 +95,11 @@ describe('release.yml', () => {
     const step = deploy.steps.find((s) => s.name?.startsWith('Migrate'));
     expect(step?.env?.SELF_AUTH_B_HOLD).toBe('${{ vars.SELF_AUTH_B_HOLD }}');
   });
+  it('builds every deploy without Vercel build cache (the vendored self-auth tarball has no lockfile integrity)', () => {
+    const run = runOf(deploy, 'Deploy');
+    expect(run).toContain('curl --fail --silent --show-error -X POST "$HOOK?buildCache=false"');
+    expect(run).not.toMatch(/-X POST "\$HOOK"/);
+  });
   it('deploys unconditionally after the migration step (no step-level if)', () => {
     const step = deploy.steps.find((s) => s.name?.startsWith('Deploy'));
     expect(step).toBeDefined();
