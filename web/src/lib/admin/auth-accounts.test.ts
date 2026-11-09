@@ -89,12 +89,16 @@ describe('changeAuthEmail', () => {
 describe('sendPasswordLink', () => {
   it("asks Self-Auth to email the account's address; no link comes back", async () => {
     expect(await sendPasswordLink('u1')).toEqual({ email: 'a@example.com' });
-    expect(requestPasswordReset).toHaveBeenCalledWith({ companyId: COMPANY, email: 'a@example.com' });
+    expect(requestPasswordReset).toHaveBeenCalledWith({ companyId: COMPANY, email: 'a@example.com', reportSendErrors: true });
   });
   it('is refused for a deactivated account', async () => {
     admin.listUsers.mockResolvedValue([row({ disabled: true })]);
     expect(await sendPasswordLink('u1')).toHaveProperty('error');
     expect(requestPasswordReset).not.toHaveBeenCalled();
+  });
+  it('admin_send_failure_is_reported: a failed send is not reported as sent', async () => {
+    requestPasswordReset.mockRejectedValueOnce(new CodedError('send_failed'));
+    expect(await sendPasswordLink('u1')).toEqual({ error: "The email couldn't be sent. Try again later, or check the email settings." });
   });
 });
 

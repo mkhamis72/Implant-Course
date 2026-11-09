@@ -85,7 +85,8 @@ export async function inviteFirstAdmin(db: SupabaseClient, a: Target): Promise<I
     try {
       if (existing.disabled) await auth.admin.setDisabled(a.companyId, existing.userId, false);
       // The reset link is also how an account without a password gets its first one.
-      await auth.requestPasswordReset({ companyId: a.companyId, email });
+      // reportSendErrors: a failed send rejects (send_failed) instead of resolving silently as on the public form.
+      await auth.requestPasswordReset({ companyId: a.companyId, email, reportSendErrors: true });
     } catch (e) {
       throw new Error(`The password-reset email could not be sent: ${codeOf(e)}`);
     }

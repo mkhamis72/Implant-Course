@@ -20,6 +20,7 @@ function describe(e: unknown): string {
   if (code === 'user_not_found') return NOT_FOUND;
   if (code === 'email_taken') return EMAIL_TAKEN;
   if (code === 'invalid_email') return 'Enter a valid email address.';
+  if (code === 'send_failed') return "The email couldn't be sent. Try again later, or check the email settings.";
   return GENERIC_AUTH_ERROR;
 }
 
@@ -72,7 +73,8 @@ export async function sendPasswordLink(userId: string): Promise<{ email: string 
     const found = (await auth.admin.listUsers(companyId)).find((u) => u.userId === userId);
     if (!found) return { error: NOT_FOUND };
     if (found.disabled) return { error: 'This account is deactivated. Reactivate it first.' };
-    await auth.requestPasswordReset({ companyId, email: found.email });
+    // reportSendErrors: a failed send rejects (send_failed), so the admin never sees "sent" for a mail that didn't go.
+    await auth.requestPasswordReset({ companyId, email: found.email, reportSendErrors: true });
     return { email: found.email };
   } catch (e) {
     logFailure('requestPasswordReset', e);

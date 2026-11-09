@@ -105,14 +105,14 @@ describe('inviteFirstAdmin', () => {
   it('sends a password-reset email to the company\'s own account that already has a password', async () => {
     admin.listUsers.mockResolvedValue([account()]);
     expect(await inviteFirstAdmin(fakeDb(), ARGS)).toEqual({ outcome: 'reset_sent' });
-    expect(requestPasswordReset).toHaveBeenCalledWith({ companyId: COMPANY, email: 'owner@acme.com' });
+    expect(requestPasswordReset).toHaveBeenCalledWith({ companyId: COMPANY, email: 'owner@acme.com', reportSendErrors: true });
     expect(admin.invite).not.toHaveBeenCalled();
   });
 
   it('sends the link again to an account that never set a password', async () => {
     admin.listUsers.mockResolvedValue([account({ hasPassword: false })]);
     expect(await inviteFirstAdmin(fakeDb(), ARGS)).toEqual({ outcome: 'reinvited' });
-    expect(requestPasswordReset).toHaveBeenCalledWith({ companyId: COMPANY, email: 'owner@acme.com' });
+    expect(requestPasswordReset).toHaveBeenCalledWith({ companyId: COMPANY, email: 'owner@acme.com', reportSendErrors: true });
   });
 
   it('removes a pending row the RPC wrote when the company already has the account', async () => {
