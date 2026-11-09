@@ -8,7 +8,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
  */
 export const MAINTENANCE_BYPASS_COOKIE = 'icm_maintenance_bypass';
 export const MAINTENANCE_BYPASS_HEADER = 'x-maintenance-bypass';
-const MIN_TOKEN_LENGTH = 16;
+const MIN_TOKEN_LENGTH = 32; // docs/operations.md §E: "another 32+ character random value"
 
 type Env = Record<string, string | undefined>;
 type Req = { nextUrl: { pathname: string }; headers: Headers; cookies: { get(name: string): { value: string } | undefined } };

@@ -139,6 +139,18 @@ describe('middleware maintenance mode', () => {
     expect(updateSession).not.toHaveBeenCalled();
   });
 
+  it('maintenance_bypass_token_needs_32_chars (as docs/operations.md §E says)', async () => {
+    vi.stubEnv('MAINTENANCE', '1');
+    const t31 = 'a'.repeat(31);
+    vi.stubEnv('MAINTENANCE_BYPASS_TOKEN', t31);
+    expect((await middleware(req('academy.example.com', '/login', { headers: { 'x-maintenance-bypass': t31 } }))).status).toBe(503);
+    expect(updateSession).not.toHaveBeenCalled();
+    const t32 = 'a'.repeat(32);
+    vi.stubEnv('MAINTENANCE_BYPASS_TOKEN', t32);
+    await middleware(req('academy.example.com', '/login', { headers: { 'x-maintenance-bypass': t32 } }));
+    expect(updateSession).toHaveBeenCalledTimes(1);
+  });
+
   it('is off unless MAINTENANCE is exactly 1', async () => {
     for (const v of ['', '0', 'false']) {
       vi.stubEnv('MAINTENANCE', v);
