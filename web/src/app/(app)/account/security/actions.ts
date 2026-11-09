@@ -7,6 +7,7 @@ import { GENERIC_AUTH_ERROR, mapAuthError } from '@/lib/auth/errors';
 import { requireSignedIn } from '@/lib/auth/session';
 import { createLimiter } from '@/lib/auth/rate-limit';
 import { FORGOT_TOO_MANY } from '@/lib/auth/password-reset';
+import { MIN_PASSWORD_LENGTH } from '@/lib/auth/link-password';
 import { emailEnabled } from '@/lib/flags';
 import { userMessage } from '@/lib/db-errors';
 import { readSessionCookie } from '@/lib/self-auth/cookie';
@@ -71,9 +72,35 @@ export async function finishMfaSetup(): Promise<{ error?: string }> {
   return {};
 }
 
+export type ChangePasswordState = { ok?: string; error?: string };
+
+/**
+ * Self-service change with the current password, for everyone (email on or off). Wrong guesses count toward the
+ * sign-in lockout in Self-Auth. Every other session of the user ends; this one stays.
+ */
+export async function changeOwnPassword(_prev: ChangePasswordState, formData: FormData): Promise<ChangePasswordState> {
+  const current = String(formData.get('current') ?? '');
+  const password = String(formData.get('password') ?? '');
+  const confirm = String(formData.get('confirm') ?? '');
+  const { token, companyId, auth } = await sessionContext();
+  if (!current) return { error: 'Enter your current password.' };
+  if (password.length < MIN_PASSWORD_LENGTH) return { error: `Use at least ${MIN_PASSWORD_LENGTH} characters.` };
+  if (password !== confirm) return { error: 'The passwords do not match.' };
+  let changed: boolean;
+  try {
+    changed = await auth.changePassword(token, companyId, current, password);
+  } catch (e) {
+    if ((e as { code?: string }).code === 'weak_password') return { error: `Use ${MIN_PASSWORD_LENGTH} to 128 characters.` };
+    console.error('changeOwnPassword failed', e instanceof Error ? e.name : 'error');
+    return { error: GENERIC_AUTH_ERROR };
+  }
+  if (!changed) return { error: 'Your current password is not correct, or there were too many attempts. Try again later.' };
+  return { ok: 'Your password was changed. Other devices were signed out.' };
+}
+
 const perUser = createLimiter(3, 15 * 60_000);
 
-/** Changing a password is done through the emailed reset link: the signed-in user asks for one to their own address. */
+/** "Forgot your password?": the signed-in user asks for a reset link to their own address. */
 export async function emailPasswordLink(): Promise<{ sent?: string; error?: string }> {
   const profile = await requireSignedIn({ allowMfaSetup: true });
   if (!emailEnabled()) return { error: 'Email is not available. Ask an admin to reset your password.' };

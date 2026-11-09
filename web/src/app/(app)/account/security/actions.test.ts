@@ -22,15 +22,17 @@ const totp = {
   remove: vi.fn(async (..._a: unknown[]) => true),
 };
 const requestPasswordReset = vi.fn(async (..._a: unknown[]) => undefined);
-vi.mock('@/lib/self-auth/tenant', () => ({ tenantAuth: async () => ({ totp, requestPasswordReset }) }));
+const changePassword = vi.fn(async (..._a: unknown[]) => true);
+vi.mock('@/lib/self-auth/tenant', () => ({ tenantAuth: async () => ({ totp, requestPasswordReset, changePassword }) }));
 
-import { confirmEnroll, emailPasswordLink, finishMfaSetup, removeFactor, startEnroll } from './actions';
+import { changeOwnPassword, confirmEnroll, emailPasswordLink, finishMfaSetup, removeFactor, startEnroll } from './actions';
 
 beforeEach(() => {
   vi.clearAllMocks();
   totp.confirmEnroll.mockResolvedValue({ sessionId: 's1', aal: 'aal2' });
   totp.remove.mockResolvedValue(true);
   rpc.mockResolvedValue({ error: null });
+  changePassword.mockResolvedValue(true);
 });
 
 describe('startEnroll', () => {
@@ -91,5 +93,52 @@ describe('emailPasswordLink', () => {
     expect(requestPasswordReset).toHaveBeenCalledWith({ companyId: 'company-a', email: 'u@example.com' });
     expect(await emailPasswordLink()).toMatchObject({ error: expect.stringMatching(/Too many/) });
     expect(requestPasswordReset).toHaveBeenCalledTimes(3);
+  });
+});
+
+function pwForm(current: string, password: string, confirm = password): FormData {
+  const f = new FormData();
+  f.set('current', current);
+  f.set('password', password);
+  f.set('confirm', confirm);
+  return f;
+}
+
+describe('changeOwnPassword', () => {
+  it('changes the password with the current one, for this session and company', async () => {
+    expect(await changeOwnPassword({}, pwForm('old password 1', 'new password 22'))).toEqual({
+      ok: 'Your password was changed. Other devices were signed out.',
+    });
+    expect(changePassword).toHaveBeenCalledWith('tok', 'company-a', 'old password 1', 'new password 22');
+    expect(requireSignedIn).toHaveBeenCalledWith({ allowMfaSetup: true });
+  });
+  it('checks length and confirmation before calling Self-Auth', async () => {
+    expect(await changeOwnPassword({}, pwForm('old password 1', 'short'))).toEqual({ error: 'Use at least 10 characters.' });
+    expect(await changeOwnPassword({}, pwForm('old password 1', 'new password 22', 'other password 3'))).toEqual({
+      error: 'The passwords do not match.',
+    });
+    expect(await changeOwnPassword({}, pwForm('', 'new password 22'))).toEqual({ error: 'Enter your current password.' });
+    expect(changePassword).not.toHaveBeenCalled();
+  });
+  it('a wrong current password (or a lockout) says so', async () => {
+    changePassword.mockResolvedValue(false);
+    expect(await changeOwnPassword({}, pwForm('wrong', 'new password 22'))).toEqual({
+      error: 'Your current password is not correct, or there were too many attempts. Try again later.',
+    });
+  });
+  it('a too-long password is refused', async () => {
+    changePassword.mockRejectedValue(Object.assign(new Error('weak_password'), { code: 'weak_password' }));
+    expect(await changeOwnPassword({}, pwForm('old password 1', 'x'.repeat(129)))).toEqual({
+      error: 'Use 10 to 128 characters.',
+    });
+  });
+  it('other failures show the generic error and log only the error name', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    changePassword.mockRejectedValue(new TypeError('secret detail'));
+    expect(await changeOwnPassword({}, pwForm('old password 1', 'new password 22'))).toEqual({
+      error: 'Something went wrong. Please try again.',
+    });
+    expect(log).toHaveBeenCalledWith('changeOwnPassword failed', 'TypeError');
+    log.mockRestore();
   });
 });

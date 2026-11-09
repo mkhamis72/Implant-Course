@@ -6,6 +6,7 @@ import { tenantAuth } from '@/lib/self-auth/tenant';
 import { emailEnabled } from '@/lib/flags';
 import { FinishSetup } from './finish-setup';
 import { PasswordLink } from './password-link';
+import { ChangePassword } from './change-password';
 
 export default async function SecurityPage() {
   const profile = await requireSignedIn({ allowMfaSetup: true }); // staff and delegate logins alike; the one page open while 2FA set-up is required
@@ -35,13 +36,10 @@ export default async function SecurityPage() {
           <EnrollTotp start={startEnroll} confirm={confirmEnroll} />
         )}
       </section>
-      <section className="card space-y-2">
+      <section className="card space-y-4">
         <h2 className="font-semibold">Password</h2>
-        {emailEnabled() ? (
-          <PasswordLink />
-        ) : (
-          <p className="text-sm text-muted">Ask an admin to reset your password.</p>
-        )}
+        <ChangePassword />
+        {emailEnabled() && <PasswordLink />}
       </section>
     </div>
   );

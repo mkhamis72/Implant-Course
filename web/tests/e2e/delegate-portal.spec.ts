@@ -85,9 +85,9 @@ test('the delegate page shows an existing login', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Reset password' })).toBeVisible();
 });
 
-test('a delegate can reach Account security and its password link', async ({ page }) => {
+test('a delegate can reach Account security and change their password there', async ({ page }) => {
   await login(page, TEST_USERS.delegate.email);
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Account security' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Account security' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Email me a link to change my password' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Change password' })).toBeVisible();
 });
