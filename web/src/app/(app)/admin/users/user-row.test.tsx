@@ -12,7 +12,7 @@ const user: Profile = {
   user_id: '1b4e28ba-2fa1-41d2-883f-0016d3cca427', full_name: 'Dr Org', email: 'org@example.com', role: 'organizer',
   active: true, delegate_id: null, mfa_setup_required: false, permissions: {},
 };
-const account = (over: Partial<Account> = {}): Account => ({ lastSignIn: '2026-10-23T08:05:00Z', hasFactor: true, history: [], ...over });
+const account = (over: Partial<Account> = {}): Account => ({ lastSignIn: '2026-10-23T08:05:00Z', hasFactor: true, invitePending: false, history: [], ...over });
 
 function renderRow(props: { isSelf?: boolean; account?: Account; emailOn?: boolean } = {}) {
   return render(
@@ -53,17 +53,17 @@ describe('UserRow', () => {
     expect(screen.getByRole('button', { name: 'Reset 2FA for org@example.com' })).toBeInTheDocument();
   });
 
-  it('shows Resend invite only for a never-signed-in user with email on', () => {
-    renderRow({ account: account({ lastSignIn: null }) });
+  it('shows Resend invite only for a user who has no password yet, with email on', () => {
+    renderRow({ account: account({ lastSignIn: null, invitePending: true }) });
     expect(screen.getByRole('button', { name: 'Resend invite to org@example.com' })).toBeInTheDocument();
     expect(screen.getByText('Last sign-in: Never')).toBeInTheDocument();
   });
 
-  it('hides Resend invite once signed in, or with email off', () => {
+  it('hides Resend invite once they have a password, or with email off', () => {
     const { unmount } = renderRow();
     expect(screen.queryByRole('button', { name: /Resend invite/ })).not.toBeInTheDocument();
     unmount();
-    renderRow({ account: account({ lastSignIn: null }), emailOn: false });
+    renderRow({ account: account({ lastSignIn: null, invitePending: true }), emailOn: false });
     expect(screen.queryByRole('button', { name: /Resend invite/ })).not.toBeInTheDocument();
   });
 

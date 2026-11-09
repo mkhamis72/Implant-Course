@@ -22,6 +22,8 @@ export type Account = {
   lastSignIn: string | null | undefined;
   /** Has a verified 2FA factor (Reset 2FA is offered only then). */
   hasFactor: boolean;
+  /** The account has no password yet: an invitation is still waiting (Resend invite is offered). */
+  invitePending: boolean;
   history: HistoryEntry[];
 };
 
@@ -82,7 +84,7 @@ export function UserRow({ user, isSelf, account, emailOn }: { user: Profile; isS
             <ResetPassword userId={user.user_id} label={`Reset password for ${user.email}`} />
             {/* While set-up is still required, a reset that half-failed can be retried. */}
             <ResetTwoFactor userId={user.user_id} email={user.email} available={account.hasFactor || user.mfa_setup_required} />
-            {account.lastSignIn === null && emailOn && (
+            {account.invitePending && emailOn && (
               <form action={inviteAction}>
                 <input type="hidden" name="user_id" value={user.user_id} />
                 <button className="btn-secondary btn py-1" disabled={invitePending} aria-label={`Resend invite to ${user.email}`}>

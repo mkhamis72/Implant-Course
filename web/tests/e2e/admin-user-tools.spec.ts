@@ -1,30 +1,10 @@
 import { test, expect, type Browser, type Page } from '@playwright/test';
-import { Client } from 'pg';
 import { authenticator } from 'otplib';
-import { pgConfig } from '../../scripts/db';
-import { adminClient, pendingLoginFor, setProfile } from '../../scripts/users';
 import { TEST_USERS } from '../support/test-users';
 import { login, expectDashboard } from './helpers';
+import { withLogin } from './logins';
 
-// A throwaway organizer login with a known password; deleted afterwards.
-async function withUser(prefix: string, fn: (u: { id: string; email: string; password: string }) => Promise<void>) {
-  const admin = adminClient();
-  const email = `icm-${prefix}-${Date.now()}@example.com`;
-  const password = 'Tools-password-123';
-  await pendingLoginFor(email);
-  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-  expect(error).toBeNull();
-  const id = data.user!.id;
-  const pg = new Client(pgConfig());
-  await pg.connect();
-  try {
-    await setProfile(pg, id, { full_name: 'E2E Tools Tester', role: 'organizer', active: true });
-    await fn({ id, email, password });
-  } finally {
-    await pg.end();
-    await admin.auth.admin.deleteUser(id).catch(() => {});
-  }
-}
+const withUser = withLogin;
 
 /** Signs in as the user in a separate browser, runs fn, closes it. */
 async function asUser(browser: Browser, email: string, password: string, fn: (page: Page) => Promise<void>) {

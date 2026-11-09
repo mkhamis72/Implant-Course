@@ -34,12 +34,12 @@ describe('setPasswordFromLink', () => {
     await expect(setPasswordFromLink('invite', form())).rejects.toThrow('REDIRECT /login?notice=invite_accepted');
     expect(acceptInvite).toHaveBeenCalledWith({ token: 'tkn', password: 'long-enough-1' });
   });
-  it('a link for another company is "not valid here" (reset and invite)', async () => {
+  it('a link for another company says the password was changed (reset and invite)', async () => {
     resetPassword.mockResolvedValue({ userId: 'u9', companyId: 'company-b' });
     acceptInvite.mockResolvedValue({ userId: 'u9', companyId: 'company-b' });
     for (const kind of ['reset', 'invite'] as const) {
       expect(await setPasswordFromLink(kind, form())).toEqual({
-        error: 'This link is not valid here. Open the link from your email on the address it was sent for.',
+        error: "Your password was changed — sign in at your company's address.",
       });
     }
   });
@@ -58,7 +58,10 @@ describe('setPasswordFromLink', () => {
     await expect(setPasswordFromLink('reset', form({ token: '' }))).rejects.toThrow('REDIRECT /auth/error?code=missing_token');
   });
   it('an unexpected failure shows the generic message', async () => {
-    resetPassword.mockRejectedValueOnce(new Error('db'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    resetPassword.mockRejectedValueOnce(new Error('secret-detail tkn'));
     expect(await setPasswordFromLink('reset', form())).toEqual({ error: 'Something went wrong. Please try again.' });
+    expect(log).toHaveBeenCalledWith('setPasswordFromLink failed', 'Error');
+    log.mockRestore();
   });
 });

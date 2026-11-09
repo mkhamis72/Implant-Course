@@ -56,9 +56,13 @@ test.describe('company isolation in one database', () => {
     });
     ids.bAdmin = await newLogin(bAdminEmail, companyB!, 'E2E Iso B Admin', 'admin');
     ids.bOrganizer = await newLogin(bOrganizerEmail, companyB!, 'E2E Iso B Organizer');
-    // Academy's throwaway target for the admin actions: 2FA set-up pending, so Reset 2FA is offered.
+    // Academy's throwaway target for the admin actions: 2FA set-up pending, so Reset 2FA is offered, and no
+    // password yet (an invite still waiting), so Resend invite is offered.
     ids.target = await newLogin(targetEmail, ACADEMY, targetName);
-    await withPg((pg) => pg.query('update public.company_members set mfa_setup_required = true where company_id = $1 and user_id = $2', [ACADEMY, ids.target]));
+    await withPg(async (pg) => {
+      await pg.query('update public.company_members set mfa_setup_required = true where company_id = $1 and user_id = $2', [ACADEMY, ids.target]);
+      await pg.query('delete from self_auth.account where "userId" = $1', [ids.target]);
+    });
 
     // Company B's data, written through the API by B's admin in a session bound to B.
     const api = await apiAs(bAdminEmail, companyB);
@@ -178,16 +182,16 @@ test.describe('company isolation in one database', () => {
 
     // B's organizer and A's target are both as they were.
     const state = (user: string) => withPg(async (pg) => (await pg.query(
-      `select m.company_id, m.role, m.active, m.mfa_setup_required, p.full_name, u.email, u.banned_until
-       from public.company_members m join public.profiles p on p.user_id = m.user_id join auth.users u on u.id = m.user_id
+      `select m.company_id, m.role, m.active, m.mfa_setup_required, p.full_name, u."realEmail" as email, coalesce(u.disabled, false) as disabled
+       from public.company_members m join public.profiles p on p.user_id = m.user_id join self_auth."user" u on u.id = m.user_id
        where m.user_id = $1`, [user])).rows);
     expect(await state(ids.bOrganizer)).toEqual([{
       company_id: companyB, role: 'organizer', active: true, mfa_setup_required: false, full_name: 'E2E Iso B Organizer',
-      email: bOrganizerEmail, banned_until: null,
+      email: bOrganizerEmail, disabled: false,
     }]);
     expect(await state(ids.target)).toEqual([{
       company_id: ACADEMY, role: 'organizer', active: true, mfa_setup_required: true, full_name: targetName,
-      email: targetEmail, banned_until: null,
+      email: targetEmail, disabled: false,
     }]);
   });
 

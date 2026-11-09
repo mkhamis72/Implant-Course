@@ -1,25 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { createLogin, rpc, deleteAuthUser, setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink, sendEmail, hasVerifiedFactor } = vi.hoisted(() => ({
-  createLogin: vi.fn(), rpc: vi.fn(), deleteAuthUser: vi.fn(), setTemporaryPassword: vi.fn(),
-  changeAuthEmail: vi.fn(), resetAuthFactors: vi.fn(), inviteLink: vi.fn(), sendEmail: vi.fn(), hasVerifiedFactor: vi.fn(),
+const { createLogin, rpc, deleteAuthUser, sendPasswordLink, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, sendEmail, hasVerifiedFactor } = vi.hoisted(() => ({
+  createLogin: vi.fn(), rpc: vi.fn(), deleteAuthUser: vi.fn(), sendPasswordLink: vi.fn(), setAuthDisabled: vi.fn(),
+  changeAuthEmail: vi.fn(), resetAuthFactors: vi.fn(), listAccounts: vi.fn(), sendEmail: vi.fn(), hasVerifiedFactor: vi.fn(),
 }));
-const { memberOfMyCompany, sharedWithAnotherCompany, activeInAnotherCompany, profileRemains } = vi.hoisted(() => ({
-  memberOfMyCompany: vi.fn(), sharedWithAnotherCompany: vi.fn(), activeInAnotherCompany: vi.fn(), profileRemains: vi.fn(),
-}));
-const { SHARED } = vi.hoisted(() => ({ SHARED: 'This user also belongs to another company. Ask support to change their sign-in details.' }));
-vi.mock('@/lib/admin/same-company', () => ({
-  memberOfMyCompany, sharedWithAnotherCompany, activeInAnotherCompany, profileRemains,
-  USER_NOT_FOUND: 'User not found.', SHARED_USER: SHARED,
-}));
+const { memberOfMyCompany, profileRemains } = vi.hoisted(() => ({ memberOfMyCompany: vi.fn(), profileRemains: vi.fn() }));
+vi.mock('@/lib/admin/same-company', () => ({ memberOfMyCompany, profileRemains, USER_NOT_FOUND: 'User not found.' }));
 vi.mock('@/lib/tenant/current', () => ({ currentTenant: vi.fn(async () => ({ slug: 'academy', companyId: 'a7c0de00-0000-4000-8000-000000000001' })) }));
 const { ME } = vi.hoisted(() => ({ ME: '9c1d6e2a-3b4f-4a5e-8d7c-1f2e3d4c5b6a' }));
 vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: ME })) }));
 vi.mock('@/lib/admin/create-login', () => ({ createLogin }));
-vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink, hasVerifiedFactor }));
+vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, sendPasswordLink, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, hasVerifiedFactor }));
 vi.mock('@/lib/email/send', () => ({ sendEmail }));
 vi.mock('@/lib/branding/get', () => ({ getBranding: vi.fn(async () => ({ name: 'Academy' })) }));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
 const { flagged } = vi.hoisted(() => ({ flagged: { value: false } }));
 const { fromTable, eqs } = vi.hoisted(() => ({ fromTable: vi.fn(), eqs: vi.fn() }));
 const memberQuery: { select: () => unknown; eq: (c: string, v: unknown) => unknown; maybeSingle: () => Promise<unknown> } = {
@@ -30,14 +23,12 @@ const memberQuery: { select: () => unknown; eq: (c: string, v: unknown) => unkno
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc, from: (t: string) => (fromTable(t), memberQuery) })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 import { changeEmail, editName, inviteUser, removeUser, resendInvite, resetPassword, resetTwoFactor, savePermissions, setUserActive, setUserRole } from './actions';
-import { createAdminClient } from '@/lib/supabase/admin';
 
 beforeEach(() => {
   vi.clearAllMocks();
   flagged.value = false;
   memberOfMyCompany.mockResolvedValue(true);
-  sharedWithAnotherCompany.mockResolvedValue(false);
-  activeInAnotherCompany.mockResolvedValue(false);
+  setAuthDisabled.mockResolvedValue(null);
   profileRemains.mockResolvedValue(false);
 });
 
@@ -120,14 +111,26 @@ describe('removeUser', () => {
 
 describe('resetPassword', () => {
   const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
-  it('sets and passes back a new one-time password', async () => {
-    setTemporaryPassword.mockResolvedValue({ password: 'New-Temp-1' });
-    expect(await resetPassword({}, form({ user_id: id }))).toEqual({ ok: 'New one-time password set.', password: 'New-Temp-1' });
-    expect(setTemporaryPassword).toHaveBeenCalledWith(id);
+  afterEach(() => vi.unstubAllEnvs());
+  it('has Self-Auth email the user a link; the admin gets no password and no link', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    sendPasswordLink.mockResolvedValue({ email: 'new@example.com' });
+    expect(await resetPassword({}, form({ user_id: id }))).toEqual({ ok: 'Password reset email sent to new@example.com.' });
+    expect(sendPasswordLink).toHaveBeenCalledWith(id);
   });
   it('is not for your own account', async () => {
     expect(await resetPassword({}, form({ user_id: ME }))).toHaveProperty('error');
-    expect(setTemporaryPassword).not.toHaveBeenCalled();
+    expect(sendPasswordLink).not.toHaveBeenCalled();
+  });
+  it('needs email', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'false');
+    expect(await resetPassword({}, form({ user_id: id }))).toHaveProperty('error');
+    expect(sendPasswordLink).not.toHaveBeenCalled();
+  });
+  it('passes on a Self-Auth refusal', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    sendPasswordLink.mockResolvedValue({ error: 'User not found.' });
+    expect(await resetPassword({}, form({ user_id: id }))).toEqual({ error: 'User not found.' });
   });
 });
 
@@ -319,29 +322,33 @@ describe('editName', () => {
 
 describe('resendInvite', () => {
   const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
-  it('sends the invite and records it', async () => {
-    inviteLink.mockResolvedValue({ email: 'new@example.com', link: 'https://academy.example.com/auth/confirm?token_hash=h&type=invite' });
-    sendEmail.mockResolvedValue('sent');
+  afterEach(() => vi.unstubAllEnvs());
+  it('has Self-Auth email the invitation again for a user without a password, and records it', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    listAccounts.mockResolvedValue(new Map([[id, { lastSignIn: null, hasFactor: false, hasPassword: false }]]));
+    sendPasswordLink.mockResolvedValue({ email: 'new@example.com' });
     rpcAnswers({});
     expect(await resendInvite({}, form({ user_id: id }))).toEqual({ ok: 'Invitation sent again to new@example.com.' });
-    expect(inviteLink).toHaveBeenCalledWith(id);
-    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'new@example.com', subject: "You're invited to Academy" }));
+    expect(sendPasswordLink).toHaveBeenCalledWith(id);
     expect(rpc).toHaveBeenCalledWith('admin_record_event', { p_user: id, p_kind: 'invite_resent' });
   });
-  it('records nothing when the email could not be sent', async () => {
-    inviteLink.mockResolvedValue({ email: 'new@example.com', link: 'https://x/auth/confirm' });
-    sendEmail.mockResolvedValue('failed');
-    expect(await resendInvite({}, form({ user_id: id }))).toEqual({ error: "The invite couldn't be sent. Try again, or use Reset password." });
+  it('is refused once they have a password', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    listAccounts.mockResolvedValue(new Map([[id, { lastSignIn: null, hasFactor: false, hasPassword: true }]]));
+    expect(await resendInvite({}, form({ user_id: id }))).toHaveProperty('error');
+    expect(sendPasswordLink).not.toHaveBeenCalled();
+  });
+  it('records nothing when Self-Auth refuses', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    listAccounts.mockResolvedValue(new Map([[id, { lastSignIn: null, hasFactor: false, hasPassword: false }]]));
+    sendPasswordLink.mockResolvedValue({ error: 'Something went wrong. Please try again.' });
+    expect(await resendInvite({}, form({ user_id: id }))).toHaveProperty('error');
     expect(rpc).not.toHaveBeenCalled();
   });
   it('is off while email is off', async () => {
     vi.stubEnv('EMAIL_ENABLED', 'false');
-    try {
-      expect(await resendInvite({}, form({ user_id: id }))).toHaveProperty('error');
-      expect(inviteLink).not.toHaveBeenCalled();
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    expect(await resendInvite({}, form({ user_id: id }))).toHaveProperty('error');
+    expect(sendPasswordLink).not.toHaveBeenCalled();
   });
 });
 
@@ -363,15 +370,15 @@ describe('company check before any Auth change', () => {
     memberOfMyCompany.mockResolvedValue(false);
     expect(await run(form(fields))).toEqual({ error: 'User not found.' });
     expect(memberOfMyCompany).toHaveBeenCalledWith(id);
-    expect(createAdminClient).not.toHaveBeenCalled();
-    for (const fn of [deleteAuthUser, setTemporaryPassword, changeAuthEmail, resetAuthFactors, inviteLink, hasVerifiedFactor, sendEmail, rpc]) {
+    for (const fn of [deleteAuthUser, sendPasswordLink, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, hasVerifiedFactor, sendEmail, rpc]) {
       expect(fn).not.toHaveBeenCalled();
     }
   });
   it('resetPassword goes ahead for a member', async () => {
-    setTemporaryPassword.mockResolvedValue({ password: 'Temp-Pass-123' });
-    expect(await resetPassword({}, form({ user_id: id }))).toMatchObject({ ok: 'New one-time password set.' });
-    expect(setTemporaryPassword).toHaveBeenCalledTimes(1);
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    sendPasswordLink.mockResolvedValue({ email: 'a@example.com' });
+    expect(await resetPassword({}, form({ user_id: id }))).toMatchObject({ ok: 'Password reset email sent to a@example.com.' });
+    expect(sendPasswordLink).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -396,54 +403,30 @@ describe('setUserRole', () => {
 
 describe('setUserActive', () => {
   const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
-  const updateUserById = vi.fn();
-  beforeEach(() => {
-    updateUserById.mockReset().mockResolvedValue({ error: null });
-    vi.mocked(createAdminClient).mockResolvedValue({ auth: { admin: { updateUserById } } } as never);
-  });
-  it('deactivates the membership through set_member_active, then bans the sign-in', async () => {
+  it("deactivates the membership through set_member_active, then disables this company's sign-in (which ends its sessions)", async () => {
     rpcAnswers({});
     expect(await setUserActive({}, form({ user_id: id, active: 'false' }))).toEqual({ ok: 'User deactivated.' });
     expect(rpc).toHaveBeenCalledWith('set_member_active', { p_user: id, p_active: false });
-    expect(activeInAnotherCompany).toHaveBeenCalledWith(id);
-    expect(updateUserById).toHaveBeenCalledWith(id, { ban_duration: '876000h' });
+    expect(setAuthDisabled).toHaveBeenCalledWith(id, true);
   });
-  it('bans no sign-in while another company still has the user active', async () => {
-    rpcAnswers({});
-    activeInAnotherCompany.mockResolvedValue(true);
-    expect(await setUserActive({}, form({ user_id: id, active: 'false' }))).toEqual({ ok: 'User deactivated.' });
-    expect(rpc).toHaveBeenCalledWith('set_member_active', { p_user: id, p_active: false });
-    expect(updateUserById).not.toHaveBeenCalled();
-  });
-  it('reactivates and lifts the ban', async () => {
+  it('reactivates the membership and the sign-in', async () => {
     rpcAnswers({});
     expect(await setUserActive({}, form({ user_id: id, active: 'true' }))).toEqual({ ok: 'User reactivated.' });
     expect(rpc).toHaveBeenCalledWith('set_member_active', { p_user: id, p_active: true });
-    expect(updateUserById).toHaveBeenCalledWith(id, { ban_duration: 'none' });
+    expect(setAuthDisabled).toHaveBeenCalledWith(id, false);
   });
-  it('touches no ban when the database refuses', async () => {
+  it('reports a Self-Auth failure', async () => {
+    rpcAnswers({});
+    setAuthDisabled.mockResolvedValue('Something went wrong. Please try again.');
+    expect(await setUserActive({}, form({ user_id: id, active: 'false' }))).toEqual({ error: 'Something went wrong. Please try again.' });
+  });
+  it('touches no sign-in when the database refuses', async () => {
     rpcAnswers({ set_member_active: { message: 'User not found.', hint: 'user' } });
     expect(await setUserActive({}, form({ user_id: id, active: 'false' }))).toEqual({ error: 'User not found.' });
-    expect(updateUserById).not.toHaveBeenCalled();
+    expect(setAuthDisabled).not.toHaveBeenCalled();
   });
-});
-
-describe('users shared with another company', () => {
-  const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
-  const cases: [string, (f: FormData) => Promise<unknown>, Record<string, string>][] = [
-    ['resetPassword', (f) => resetPassword({}, f), { user_id: id }],
-    ['changeEmail', (f) => changeEmail({}, f), { user_id: id, email: 'new@example.com' }],
-    ['resetTwoFactor', (f) => resetTwoFactor({}, f), { user_id: id }],
-    ['editName', (f) => editName({}, f), { user_id: id, full_name: 'New Name' }],
-    ['resendInvite', (f) => resendInvite({}, f), { user_id: id }],
-  ];
-  it.each(cases)('%s refuses them before any Auth call', async (_name, run, fields) => {
-    sharedWithAnotherCompany.mockResolvedValue(true);
-    expect(await run(form(fields))).toEqual({ error: SHARED });
-    expect(sharedWithAnotherCompany).toHaveBeenCalledWith(id);
-    expect(createAdminClient).not.toHaveBeenCalled();
-    for (const fn of [setTemporaryPassword, changeAuthEmail, resetAuthFactors, hasVerifiedFactor, inviteLink, sendEmail, rpc]) {
-      expect(fn).not.toHaveBeenCalled();
-    }
+  it('is not for your own account', async () => {
+    expect(await setUserActive({}, form({ user_id: ME, active: 'false' }))).toHaveProperty('error');
+    expect(setAuthDisabled).not.toHaveBeenCalled();
   });
 });

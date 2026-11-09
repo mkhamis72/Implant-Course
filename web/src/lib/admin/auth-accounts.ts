@@ -1,136 +1,130 @@
 import 'server-only';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { mapAuthError } from '@/lib/auth/errors';
-import { requestOrigin } from '@/lib/tenant/current';
-import { temporaryPassword } from './passwords';
+import type { UserSummary } from '@mkhamis72/self-auth';
+import { tenantAuth } from '@/lib/self-auth/tenant';
+import { currentTenant } from '@/lib/tenant/current';
+import { GENERIC_AUTH_ERROR } from '@/lib/auth/errors';
+
+/** This host's Self-Auth company and instance. The company always comes from the host, never from the client. */
+async function ctx() {
+  const [{ companyId }, auth] = await Promise.all([currentTenant(), tenantAuth()]);
+  return { companyId, auth };
+}
+
+const NOT_FOUND = 'User not found.';
+const EMAIL_TAKEN = 'Another account already uses that email.';
+
+/** The user-facing text for a Self-Auth failure. Only the error's code is read, never its message. */
+function describe(e: unknown): string {
+  const code = (e as { code?: unknown } | null)?.code;
+  if (code === 'user_not_found') return NOT_FOUND;
+  if (code === 'email_taken') return EMAIL_TAKEN;
+  if (code === 'invalid_email') return 'Enter a valid email address.';
+  return GENERIC_AUTH_ERROR;
+}
+
+function logFailure(op: string, e: unknown) {
+  console.error(`admin ${op} failed`, e instanceof Error ? e.name : 'error');
+}
+
+/** One account of this company, by id; null when it isn't there. Throws when Self-Auth can't answer. */
+async function account(userId: string): Promise<UserSummary | null> {
+  const { companyId, auth } = await ctx();
+  return (await auth.admin.listUsers(companyId)).find((u) => u.userId === userId) ?? null;
+}
 
 /**
- * Deletes a sign-in account. Call only after delete_user / delete_delegate removed the profile: the database
- * decides whether removing is allowed, and delete_user keeps the profile of someone another company still has
- * (check with profileRemains). Returns an error message, or null.
+ * Deletes this company's sign-in account. Call only after delete_user / delete_delegate removed the profile: the
+ * database decides whether removing is allowed, and delete_user keeps the profile of someone another company still
+ * has (check with profileRemains). Returns an error message, or null.
  */
 export async function deleteAuthUser(userId: string): Promise<string | null> {
   const prefix = 'The user was removed from the app, but their sign-in account was not deleted: ';
-  let admin;
   try {
-    admin = await createAdminClient();
-  } catch (error) {
-    return prefix + (error as Error).message;
+    const { companyId, auth } = await ctx();
+    await auth.admin.deleteUser(companyId, userId);
+    return null;
+  } catch (e) {
+    logFailure('deleteUser', e);
+    return prefix + describe(e);
   }
-  const { error } = await admin.auth.admin.deleteUser(userId);
-  return error ? prefix + mapAuthError(error) : null;
 }
 
-/** Replaces a login's password with a new one-time password for the admin to hand over. */
-export async function setTemporaryPassword(userId: string): Promise<{ password: string } | { error: string }> {
-  let admin;
+/** Deactivates or reactivates the sign-in. Deactivating also ends this company's sessions of the account. */
+export async function setAuthDisabled(userId: string, disabled: boolean): Promise<string | null> {
   try {
-    admin = await createAdminClient();
-  } catch (error) {
-    return { error: (error as Error).message };
+    const { companyId, auth } = await ctx();
+    await auth.admin.setDisabled(companyId, userId, disabled);
+    return null;
+  } catch (e) {
+    logFailure('setDisabled', e);
+    return describe(e);
   }
-  const password = temporaryPassword();
-  const { error } = await admin.auth.admin.updateUserById(userId, { password });
-  return error ? { error: mapAuthError(error) } : { password };
 }
 
-async function adminAuth() {
-  return (await createAdminClient()).auth.admin;
+/**
+ * Emails the user a link to set a new password (to the address on the account; the link is never shown to the
+ * admin). Also how a pending invitation is sent again: a login without a password sets its first one the same way.
+ */
+export async function sendPasswordLink(userId: string): Promise<{ email: string } | { error: string }> {
+  try {
+    const { companyId, auth } = await ctx();
+    const found = (await auth.admin.listUsers(companyId)).find((u) => u.userId === userId);
+    if (!found) return { error: NOT_FOUND };
+    if (found.disabled) return { error: 'This account is deactivated. Reactivate it first.' };
+    await auth.requestPasswordReset({ companyId, email: found.email });
+    return { email: found.email };
+  } catch (e) {
+    logFailure('requestPasswordReset', e);
+    return { error: describe(e) };
+  }
 }
 
 export type PreviousAccount = { email: string; signedInBefore: boolean };
 
-/**
- * Sets a login's sign-in email (Auth moves the email identity with it). Returns the address it
- * had, so the caller can put it back, and whether the user ever signed in.
- */
+/** Sets a login's sign-in email. Returns the address it had, so the caller can put it back, and whether the user ever signed in. */
 export async function changeAuthEmail(userId: string, email: string): Promise<{ previous: PreviousAccount } | { error: string }> {
   try {
-    const auth = await adminAuth();
-    const { data, error: readError } = await auth.getUserById(userId);
-    if (readError || !data?.user) return { error: mapAuthError(readError) };
-    const previous = { email: data.user.email ?? '', signedInBefore: !!data.user.last_sign_in_at };
-    if (previous.email.toLowerCase() === email) return { error: 'That is already their sign-in email.' };
-    // Confirmed only if it was: a pending invite stays pending, so it can be resent to the corrected address.
-    const { error } = await auth.updateUserById(userId, data.user.email_confirmed_at ? { email, email_confirm: true } : { email });
-    if (error) {
-      const message = mapAuthError(error);
-      return { error: message === mapAuthError('email_exists') ? 'Another account already uses that email.' : message };
-    }
-    return { previous };
-  } catch (error) {
-    return { error: (error as Error).message };
+    const { companyId, auth } = await ctx();
+    const found = (await auth.admin.listUsers(companyId)).find((u) => u.userId === userId);
+    if (!found) return { error: NOT_FOUND };
+    if (found.email.toLowerCase() === email.toLowerCase()) return { error: 'That is already their sign-in email.' };
+    await auth.admin.updateEmail(companyId, userId, email);
+    return { previous: { email: found.email, signedInBefore: found.lastSignInAt !== null } };
+  } catch (e) {
+    logFailure('updateEmail', e);
+    return { error: describe(e) };
   }
 }
 
-/**
- * Deletes every factor of a login (Reset 2FA; the action decides whether a reset is allowed). Returns an error
- * message, or null.
- */
+/** Removes the authenticator and ends the account's sessions (Reset 2FA; the action decides whether a reset is allowed). */
 export async function resetAuthFactors(userId: string): Promise<string | null> {
   try {
-    const auth = await adminAuth();
-    const { data, error } = await auth.mfa.listFactors({ userId });
-    if (error) return mapAuthError(error);
-    for (const factor of data?.factors ?? []) {
-      const { error: deleteError } = await auth.mfa.deleteFactor({ id: factor.id, userId });
-      if (deleteError) return mapAuthError(deleteError);
-    }
+    const { companyId, auth } = await ctx();
+    await auth.admin.resetTotp(companyId, userId);
     return null;
-  } catch (error) {
-    return (error as Error).message;
+  } catch (e) {
+    logFailure('resetTotp', e);
+    return describe(e);
   }
 }
 
-/** Whether the login has a verified 2FA factor (Reset 2FA is offered only then); null when Auth can't say. */
+/** Whether the login has a confirmed authenticator (Reset 2FA is offered only then); null when Self-Auth can't say. */
 export async function hasVerifiedFactor(userId: string): Promise<boolean | null> {
   try {
-    const { data, error } = await (await adminAuth()).mfa.listFactors({ userId });
-    if (error) return null;
-    return (data?.factors ?? []).some((f) => f.status === 'verified');
-  } catch {
+    return (await account(userId))?.hasTotp ?? false;
+  } catch (e) {
+    logFailure('listUsers', e);
     return null;
   }
 }
 
-const USERS_PER_PAGE = 1000;
+export type AccountState = { lastSignIn: string | null; hasFactor: boolean; hasPassword: boolean };
 
-/** The given members' last sign-in (null = never), by user id. Throws when Auth can't answer: "Never" would be wrong. */
-export async function listSignIns(userIds: string[]): Promise<Map<string, string | null>> {
-  const wanted = new Set(userIds);
-  const auth = await adminAuth();
-  const signIns = new Map<string, string | null>();
-  for (let page = 1; ; page++) {
-    const { data, error } = await auth.listUsers({ page, perPage: USERS_PER_PAGE });
-    if (error) throw new Error(`Could not load sign-in times: ${error.message}`);
-    for (const user of data.users) if (wanted.has(user.id)) signIns.set(user.id, user.last_sign_in_at ?? null);
-    if (data.users.length < USERS_PER_PAGE) return signIns;
-  }
-}
-
-/**
- * A fresh invitation link for a login that never signed in, on this request's own (routed) host, in the same
- * /auth/confirm form the Supabase invite template uses.
- */
-export async function inviteLink(userId: string): Promise<{ email: string; link: string } | { error: string }> {
-  try {
-    const auth = await adminAuth();
-    const { data, error: readError } = await auth.getUserById(userId);
-    if (readError || !data?.user?.email) return { error: mapAuthError(readError) };
-    const { user } = data;
-    if (user.last_sign_in_at) return { error: 'This user has already signed in.' };
-    // Confirmed already (made while email was off): Auth won't invite the address again.
-    if (user.email_confirmed_at) {
-      return { error: "This login's email is already confirmed, so there is no invite to resend. Use Reset password instead." };
-    }
-    const origin = await requestOrigin();
-    const { data: link, error } = await auth.generateLink({ type: 'invite', email: user.email!, options: { redirectTo: `${origin}/auth/confirm` } });
-    if (error || !link?.properties?.hashed_token) return { error: mapAuthError(error) };
-    return {
-      email: user.email!,
-      link: `${origin}/auth/confirm?token_hash=${encodeURIComponent(link.properties.hashed_token)}&type=invite`,
-    };
-  } catch (error) {
-    return { error: (error as Error).message };
-  }
+/** This company's accounts by user id (sign-in time, authenticator, password). Throws when Self-Auth can't answer: "Never" would be wrong. */
+export async function listAccounts(): Promise<Map<string, AccountState>> {
+  const { companyId, auth } = await ctx();
+  const rows = await auth.admin.listUsers(companyId);
+  return new Map(rows.map((u) => [u.userId, {
+    lastSignIn: u.lastSignInAt ? u.lastSignInAt.toISOString() : null, hasFactor: u.hasTotp, hasPassword: u.hasPassword,
+  }]));
 }

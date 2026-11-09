@@ -16,7 +16,6 @@ describe('classifyPath', () => {
     ['/login/mfa', 'mfa'],
     ['/', 'protected'],
     ['/admin/users', 'protected'],
-    ['/account/set-password', 'protected'],
     ['/deactivated', 'protected'],
     ['/loginx', 'protected'],
   ])('%s is %s', (path, kind) => {

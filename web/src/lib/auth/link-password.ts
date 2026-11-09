@@ -14,6 +14,8 @@ const EXPIRED: Record<LinkKind, string> = {
   invite: mapAuthError('otp_expired'),
 };
 
+const WRONG_HOST = "Your password was changed — sign in at your company's address.";
+
 /**
  * Sets the password from an emailed reset or invite link. The link works only on the host of the company it
  * was sent for; it signs nobody in (sign-in, and the 2FA code after it, come next on the sign-in page).
@@ -30,10 +32,12 @@ export async function setPasswordFromLink(kind: LinkKind, formData: FormData): P
   let done;
   try {
     done = kind === 'reset' ? await auth.resetPassword({ token, newPassword: password }) : await auth.acceptInvite({ token, password });
-  } catch {
+  } catch (e) {
+    console.error('setPasswordFromLink failed', e instanceof Error ? e.name : 'error');
     return { error: mapAuthError(null) };
   }
   if (!done) return { error: EXPIRED[kind] };
-  if (done.companyId !== companyId) return { error: mapAuthError('link_not_valid_here') };
+  // The token is spent and the password changed even when this isn't the company's own host.
+  if (done.companyId !== companyId) return { error: WRONG_HOST };
   redirect(`/login?notice=${kind === 'reset' ? 'password_reset' : 'invite_accepted'}`);
 }

@@ -1,20 +1,21 @@
 import { test, expect } from '@playwright/test';
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
-import { adminClient, pendingLoginFor } from '../../scripts/users';
+import { ensureTenantUser } from '../../scripts/users';
+import { nodeAuth } from '../../scripts/self-auth-node';
+import { ACADEMY_COMPANY_ID } from '../../src/lib/tenant/types';
 import { TEST_PASSWORD, TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 
 // No profile means no company membership (the row cascades), and sign-in refuses a non-member.
 test('a user without a profile is refused at sign-in, not sent round a redirect loop', async ({ page }) => {
-  const admin = adminClient();
   const email = `icm-noprofile-${Date.now()}@example.com`;
-  await pendingLoginFor(email);
-  const { data } = await admin.auth.admin.createUser({ email, password: TEST_PASSWORD, email_confirm: true });
   const pg = new Client(pgConfig());
   await pg.connect();
+  let userId = '';
   try {
-    await pg.query('delete from public.profiles where user_id = $1', [data.user!.id]);
+    userId = await ensureTenantUser({ email, password: TEST_PASSWORD, pending: { pg } });
+    await pg.query('delete from public.profiles where user_id = $1', [userId]);
     await page.goto('/login');
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password').fill(TEST_PASSWORD);
@@ -24,14 +25,8 @@ test('a user without a profile is refused at sign-in, not sent round a redirect 
     await expect(page).toHaveURL(/\/login$/);
   } finally {
     await pg.end();
-    await admin.auth.admin.deleteUser(data.user!.id);
+    if (userId) await (await nodeAuth()).admin.deleteUser(ACADEMY_COMPANY_ID, userId).catch(() => {});
   }
-});
-
-test('an inactive account cannot use the set-password page', async ({ page }) => {
-  await login(page, TEST_USERS.inactive.email);
-  await page.goto('/account/set-password');
-  await expect(page.getByRole('heading', { name: 'Account deactivated' })).toBeVisible();
 });
 
 test('a repeated query parameter does not crash the booking page', async ({ page }) => {

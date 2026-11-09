@@ -2,25 +2,21 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAdmin } from '@/lib/auth/session';
-import { mapAuthError } from '@/lib/auth/errors';
 import {
   changeEmailSchema, editNameSchema, inviteSchema, permissionsSchema, setActiveSchema, setRoleSchema, type ActionState,
 } from '@/lib/admin/schemas';
 import { createLogin } from '@/lib/admin/create-login';
 import { userMessage } from '@/lib/db-errors';
 import {
-  changeAuthEmail, deleteAuthUser, hasVerifiedFactor, inviteLink, resetAuthFactors, setTemporaryPassword,
+  changeAuthEmail, deleteAuthUser, hasVerifiedFactor, listAccounts, resetAuthFactors, sendPasswordLink, setAuthDisabled,
 } from '@/lib/admin/auth-accounts';
-import {
-  activeInAnotherCompany, memberOfMyCompany, profileRemains, SHARED_USER, sharedWithAnotherCompany, USER_NOT_FOUND,
-} from '@/lib/admin/same-company';
+import { memberOfMyCompany, profileRemains, USER_NOT_FOUND } from '@/lib/admin/same-company';
 import { currentTenant } from '@/lib/tenant/current';
-import { emailChangedNotice, inviteEmail } from '@/lib/admin/notices';
+import { emailChangedNotice } from '@/lib/admin/notices';
 import { sendEmail } from '@/lib/email/send';
 import { getBranding } from '@/lib/branding/get';
-import { emailEnabled } from '@/lib/flags';
+import { EMAIL_OFF_MESSAGE, emailEnabled } from '@/lib/flags';
 import type { FormState } from '@/lib/patients/form-state';
 import { z } from 'zod';
 
@@ -71,22 +67,10 @@ export async function setUserActive(_prev: ActionState, formData: FormData): Pro
   const { error } = await supabase.rpc('set_member_active', { p_user: user_id, p_active: active });
   if (error) return { error: userMessage(error)! };
 
-  // Ban/unban in Auth so a deactivated user cannot sign in or refresh their session; not while another company
-  // still has them active (this company's inactive membership already keeps them out here).
-  if (!active && (await activeInAnotherCompany(user_id))) {
-    revalidatePath('/admin/users');
-    return { ok: 'User deactivated.' };
-  }
-  let admin;
-  try {
-    admin = await createAdminClient();
-  } catch (error) {
-    return { error: (error as Error).message };
-  }
-  const { error: banError } = await admin.auth.admin.updateUserById(user_id, {
-    ban_duration: active ? 'none' : '876000h',
-  });
-  if (banError) return { error: mapAuthError(banError) };
+  // Disable/enable this company's own sign-in account (accounts are per company, so other companies are untouched).
+  // Deactivating also ends the account's sessions, so the user is out at once.
+  const authError = await setAuthDisabled(user_id, !active);
+  if (authError) return { error: authError };
 
   revalidatePath('/admin/users');
   return { ok: active ? 'User reactivated.' : 'User deactivated.' };
@@ -112,17 +96,17 @@ export async function removeUser(_prev: FormState, formData: FormData): Promise<
   return authError ? { error: authError } : { ok: 'User removed.' };
 }
 
-/** A new one-time password for someone who lost theirs (works with email on or off). */
+/** Emails the user a link to set a new password (the admin never sees it). Needs email. */
 export async function resetPassword(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const me = await requireAdmin();
   const userId = String(formData.get('user_id') ?? '');
   if (userId === me.user_id) return { error: 'Change your own password under Account security.' };
   if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
+  if (!emailEnabled()) return { error: EMAIL_OFF_MESSAGE };
   if (!(await memberOfMyCompany(userId))) return { error: USER_NOT_FOUND };
-  if (await sharedWithAnotherCompany(userId)) return { error: SHARED_USER };
-  const result = await setTemporaryPassword(userId);
-  if ('error' in result) return result;
-  return { ok: 'New one-time password set.', password: result.password };
+  const sent = await sendPasswordLink(userId);
+  if ('error' in sent) return sent;
+  return { ok: `Password reset email sent to ${sent.email}.` };
 }
 
 const SELF_MESSAGE = "You can't do this to your own account here. Use Account → Security.";
@@ -152,7 +136,6 @@ export async function changeEmail(_prev: ActionState, formData: FormData): Promi
   if (isSelf(user_id, me.user_id)) return { error: SELF_MESSAGE };
 
   if (!(await memberOfMyCompany(user_id))) return { error: USER_NOT_FOUND };
-  if (await sharedWithAnotherCompany(user_id)) return { error: SHARED_USER };
 
   const changed = await changeAuthEmail(user_id, email);
   if ('error' in changed) return changed;
@@ -190,7 +173,6 @@ export async function resetTwoFactor(_prev: ActionState, formData: FormData): Pr
   if (isSelf(userId, me.user_id)) return { error: SELF_MESSAGE };
 
   if (!(await memberOfMyCompany(userId))) return { error: USER_NOT_FOUND };
-  if (await sharedWithAnotherCompany(userId)) return { error: SHARED_USER };
 
   // Not a way to require 2FA of someone who never set it up, except to retry a reset that half-failed.
   const factor = await hasVerifiedFactor(userId);
@@ -232,8 +214,6 @@ export async function editName(_prev: ActionState, formData: FormData): Promise<
   const parsed = editNameSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   if (!(await memberOfMyCompany(parsed.data.user_id))) return { error: USER_NOT_FOUND };
-  // The name lives on the profile, which the other company shows too.
-  if (await sharedWithAnotherCompany(parsed.data.user_id)) return { error: SHARED_USER };
   const supabase = await createClient();
   const { error } = await supabase.rpc('admin_set_name', { p_user: parsed.data.user_id, p_name: parsed.data.full_name });
   if (error) return { error: userMessage(error)! };
@@ -241,26 +221,26 @@ export async function editName(_prev: ActionState, formData: FormData): Promise<
   return { ok: 'Name saved.' };
 }
 
-/** A new invitation email for someone who never signed in (email on only). */
+/** The invitation again, for someone who hasn't set a password yet (email on only): Self-Auth emails them a link. */
 export async function resendInvite(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireAdmin();
-  if (!emailEnabled()) return { error: "Email is off, so invites can't be resent. Use Reset password instead." };
+  if (!emailEnabled()) return { error: "Email is off, so invites can't be resent. Create the login again with a one-time password." };
   const userId = String(formData.get('user_id') ?? '');
   if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
-
   if (!(await memberOfMyCompany(userId))) return { error: USER_NOT_FOUND };
-  if (await sharedWithAnotherCompany(userId)) return { error: SHARED_USER };
 
-  const invite = await inviteLink(userId);
-  if ('error' in invite) return invite;
-  const sent = await sendEmail({ to: invite.email, ...inviteEmail({ company: (await getBranding()).name, link: invite.link }) });
-  if (sent === 'not-configured') return { error: "The app's email (SMTP) isn't set up, so the invite couldn't be sent." };
-  if (sent === 'failed') return { error: "The invite couldn't be sent. Try again, or use Reset password." };
+  const accounts = await listAccounts().catch(() => null);
+  if (!accounts) return { error: "Couldn't check this account. Try again." };
+  const account = accounts.get(userId);
+  if (!account) return { error: USER_NOT_FOUND };
+  if (account.hasPassword) return { error: 'This user has already accepted the invite. Use Reset password instead.' };
+  const sent = await sendPasswordLink(userId);
+  if ('error' in sent) return sent;
 
   const supabase = await createClient();
   const { error } = await supabase.rpc('admin_record_event', { p_user: userId, p_kind: 'invite_resent' });
   // The email is out either way; only the history line is missing.
   if (error) console.error('Recording invite_resent failed:', error.message);
   revalidatePath('/admin/users');
-  return { ok: `Invitation sent again to ${invite.email}.` };
+  return { ok: `Invitation sent again to ${sent.email}.` };
 }
