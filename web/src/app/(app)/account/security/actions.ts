@@ -91,6 +91,9 @@ export async function changeOwnPassword(_prev: ChangePasswordState, formData: Fo
     changed = await auth.changePassword(token, companyId, current, password);
   } catch (e) {
     if ((e as { code?: string }).code === 'weak_password') return { error: `Use ${MIN_PASSWORD_LENGTH} to 128 characters.` };
+    if ((e as { code?: string }).code === 'aal2_required') {
+      return { error: 'Verify with your authenticator app before changing your password.' };
+    }
     console.error('changeOwnPassword failed', e instanceof Error ? e.name : 'error');
     return { error: GENERIC_AUTH_ERROR };
   }

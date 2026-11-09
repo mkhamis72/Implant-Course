@@ -44,6 +44,7 @@ test.describe('admin users', () => {
   });
 
   test('invite form validates and reports duplicates', async ({ page }) => {
+    test.skip(emailOff, 'email is off: there is no invite form');
     const form = page.getByTestId('invite-form');
     await form.getByLabel('Full name').fill('Someone');
     await form.getByLabel('Email').fill(`  ${TEST_USERS.organizer.email.toUpperCase()} `);

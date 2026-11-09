@@ -132,6 +132,12 @@ describe('changeOwnPassword', () => {
       error: 'Use 10 to 128 characters.',
     });
   });
+  it('a session that has not passed 2FA is told to verify first', async () => {
+    changePassword.mockRejectedValue(Object.assign(new Error('aal2_required'), { code: 'aal2_required' }));
+    expect(await changeOwnPassword({}, pwForm('old password 1', 'new password 22'))).toEqual({
+      error: 'Verify with your authenticator app before changing your password.',
+    });
+  });
   it('other failures show the generic error and log only the error name', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     changePassword.mockRejectedValue(new TypeError('secret detail'));
