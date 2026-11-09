@@ -74,7 +74,7 @@ export default async function DelegatePage({ params }: { params: Promise<{ id: s
                 Login {login.email}: {login.active ? 'active' : 'inactive'} ·{' '}
                 <Link href="/admin/users" className="text-accent hover:underline">Manage in Admin → Users</Link>
               </p>
-              <p className="text-sm text-muted">Lost or never received their password? Reset it and they get an email with a link to set a new one.</p>
+              <p className="text-sm text-muted">Lost or never received their password? Reset it: with email on they get a link to set a new one, otherwise you get a one-time password to hand over.</p>
               <ResetPassword userId={login.user_id} />
             </>
           ) : (

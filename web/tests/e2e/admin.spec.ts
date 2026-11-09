@@ -52,7 +52,11 @@ test.describe('admin users', () => {
   });
 });
 
+// EMAIL_ENABLED=false (in the environment of both Playwright and the dev server) runs the email-off variants.
+const emailOff = process.env.EMAIL_ENABLED === 'false';
+
 test('an admin resets a lost password by email, the user signs in with the new one, then the admin deletes the user', async ({ page, browser }) => {
+  test.skip(emailOff, 'email is off');
   test.setTimeout(120_000);
   await withLogin('remove', async ({ id, email }) => {
     await login(page, TEST_USERS.admin.email);
@@ -136,4 +140,39 @@ test('admin edits settings with validation', async ({ page }) => {
   await page.getByLabel('Session timeout (minutes)').fill(original);
   await page.getByRole('button', { name: 'Save settings' }).click();
   await expect(page.getByText('Settings saved.')).toBeVisible();
+});
+
+test('email_off_reset_shows_one_time_password: the admin sees it once, the member signs in with it, old sessions are gone', async ({ page, browser }) => {
+  test.skip(!emailOff, 'needs EMAIL_ENABLED=false');
+  test.setTimeout(120_000);
+  await withLogin('otp', async ({ email, password }) => {
+    const theirs = await browser.newContext();
+    try {
+      const theirPage = await theirs.newPage();
+      await login(theirPage, email, password);
+      await expect(theirPage.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
+
+      await login(page, TEST_USERS.admin.email);
+      await page.goto('/admin/users');
+      const row = page.getByTestId(`user-row-${email}`);
+      await row.getByRole('button', { name: `Reset password for ${email}` }).click();
+      const otp = (await row.getByTestId('temporary-password').locator('code').textContent())!;
+      expect(otp).toMatch(/^[A-Za-z0-9_-]{16,}$/);
+
+      await theirPage.reload();
+      await expect(theirPage).toHaveURL(/\/login/);
+      await theirPage.getByLabel('Email').fill(email);
+      await theirPage.getByLabel('Password').fill(password);
+      await theirPage.getByRole('button', { name: 'Sign in' }).click();
+      await expect(theirPage.getByRole('main').getByRole('alert')).toHaveText('Incorrect email or password.');
+      await login(theirPage, email, otp);
+      await expect(theirPage.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
+
+      // Shown once: a reload of the admin page does not show it again.
+      await page.reload();
+      await expect(page.getByTestId('temporary-password')).toHaveCount(0);
+    } finally {
+      await theirs.close();
+    }
+  });
 });

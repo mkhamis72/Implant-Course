@@ -9,14 +9,14 @@ import {
 import { createLogin } from '@/lib/admin/create-login';
 import { userMessage } from '@/lib/db-errors';
 import {
-  changeAuthEmail, deleteAuthUser, hasVerifiedFactor, listAccounts, resetAuthFactors, sendPasswordLink, setAuthDisabled,
+  changeAuthEmail, deleteAuthUser, hasVerifiedFactor, listAccounts, resetAuthFactors, sendPasswordLink, setAuthDisabled, setOneTimePassword,
 } from '@/lib/admin/auth-accounts';
 import { memberOfMyCompany, profileRemains, USER_NOT_FOUND } from '@/lib/admin/same-company';
 import { currentTenant } from '@/lib/tenant/current';
 import { emailChangedNotice } from '@/lib/admin/notices';
 import { sendEmail } from '@/lib/email/send';
 import { getBranding } from '@/lib/branding/get';
-import { EMAIL_OFF_MESSAGE, emailEnabled } from '@/lib/flags';
+import { emailEnabled } from '@/lib/flags';
 import type { FormState } from '@/lib/patients/form-state';
 import { z } from 'zod';
 
@@ -96,17 +96,29 @@ export async function removeUser(_prev: FormState, formData: FormData): Promise<
   return authError ? { error: authError } : { ok: 'User removed.' };
 }
 
-/** Emails the user a link to set a new password (the admin never sees it). Needs email. */
+/**
+ * Email on: emails the user a link to set a new password (the admin never sees it). Email off: sets a one-time
+ * password, ends the member's sessions, and returns the password for the admin to hand over (shown once).
+ */
 export async function resetPassword(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const me = await requireAdmin();
   const userId = String(formData.get('user_id') ?? '');
   if (userId === me.user_id) return { error: 'Change your own password under Account security.' };
   if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
-  if (!emailEnabled()) return { error: EMAIL_OFF_MESSAGE };
   if (!(await memberOfMyCompany(userId))) return { error: USER_NOT_FOUND };
-  const sent = await sendPasswordLink(userId);
-  if ('error' in sent) return sent;
-  return { ok: `Password reset email sent to ${sent.email}.` };
+  if (emailEnabled()) {
+    const sent = await sendPasswordLink(userId);
+    if ('error' in sent) return sent;
+    return { ok: `Password reset email sent to ${sent.email}.` };
+  }
+  const result = await setOneTimePassword(userId);
+  if ('error' in result) return result;
+  // Self-Auth ended its own sessions; this ends the ones bound to the company's database as well.
+  const problem = await endSessions(await createClient(), userId);
+  return {
+    ok: problem ? `New one-time password set, but existing sessions could not be ended: ${problem}` : 'New one-time password set. Everywhere they were signed in, they are signed out.',
+    password: result.password,
+  };
 }
 
 const SELF_MESSAGE = "You can't do this to your own account here. Use Account → Security.";

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
+import { temporaryPassword } from '../../src/lib/admin/passwords';
 import { closeNodeAuth, nodeAuth } from '../../scripts/self-auth-node';
 
 // Two companies of Self-Auth (ids are DNS-label-like); the same person has a separate account in each.
@@ -79,6 +80,19 @@ describe('admin user tools on Self-Auth', () => {
     const row = (await auth.admin.listUsers(B)).find((u) => u.userId === inB)!;
     expect(row).toMatchObject({ email, disabled: false, hasTotp: true });
     expect(await auth.getSession(s.sessionToken, B)).not.toBeNull();
+  });
+
+  it('set_password_signs_in_and_ends_sessions: the one-time password works, the old password and sessions do not', async () => {
+    const email = `zz-otp-${Date.now()}@example.com`;
+    const id = await account(A, email);
+    const auth = await nodeAuth();
+    const before = await signIn(A, email);
+    const otp = temporaryPassword();
+    await auth.admin.setPassword(A, id, otp);
+    expect(await auth.getSession(before.sessionToken, A)).toBeNull();
+    expect((await auth.signIn({ companyId: A, email, password: PASSWORD })).ok).toBe(false);
+    expect((await auth.signIn({ companyId: A, email, password: otp })).ok).toBe(true);
+    await expect(auth.admin.setPassword(B, id, temporaryPassword())).rejects.toMatchObject({ code: 'user_not_found' });
   });
 
   it('reset_2fa_forces_reenroll', async () => {

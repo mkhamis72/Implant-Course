@@ -3,6 +3,7 @@ import type { UserSummary } from '@mkhamis72/self-auth';
 import { tenantAuth } from '@/lib/self-auth/tenant';
 import { currentTenant } from '@/lib/tenant/current';
 import { GENERIC_AUTH_ERROR } from '@/lib/auth/errors';
+import { temporaryPassword } from './passwords';
 
 /** This host's Self-Auth company and instance. The company always comes from the host, never from the client. */
 async function ctx() {
@@ -80,6 +81,22 @@ export async function sendPasswordLink(userId: string): Promise<{ email: string 
 }
 
 /** signedInBefore: an established account (has a password, or a live session); sessions alone are not enough, as revoking them clears lastSignInAt. */
+/**
+ * Email off: replaces the password with a new one-time password for the admin to hand over (shown once). Self-Auth
+ * ends the account's sessions and clears its sign-in lockout. The password is never logged.
+ */
+export async function setOneTimePassword(userId: string): Promise<{ password: string } | { error: string }> {
+  try {
+    const { companyId, auth } = await ctx();
+    const password = temporaryPassword();
+    await auth.admin.setPassword(companyId, userId, password);
+    return { password };
+  } catch (e) {
+    logFailure('setPassword', e);
+    return { error: describe(e) };
+  }
+}
+
 export type PreviousAccount = { email: string; signedInBefore: boolean };
 
 /** Sets a login's sign-in email. Returns the address it had, so the caller can put it back, and whether the user ever signed in. */

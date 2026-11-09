@@ -2,9 +2,13 @@
 
 import { useActionState } from 'react';
 import type { ActionState } from '@/lib/admin/schemas';
+import { TemporaryPassword } from '@/components/temporary-password';
 import { resetPassword } from './actions';
 
-/** Admin only: emails the user a link to set a new password (for a lost or never-received one). The admin never sees the link. */
+/**
+ * Admin only, for a lost or never-received password. Email on: the user is emailed a link to set a new one (the admin never
+ * sees it). Email off: a new one-time password is set and shown once.
+ */
 export function ResetPassword({ userId, label }: { userId: string; label?: string }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(resetPassword, {});
   return (
@@ -15,6 +19,7 @@ export function ResetPassword({ userId, label }: { userId: string; label?: strin
       </button>
       {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
       {state.ok && <p className="text-sm text-ok">{state.ok}</p>}
+      {state.password && <TemporaryPassword password={state.password} />}
     </form>
   );
 }

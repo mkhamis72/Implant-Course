@@ -2,14 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const COMPANY = 'company-a';
 const { admin, requestPasswordReset } = vi.hoisted(() => ({
-  admin: { listUsers: vi.fn(), deleteUser: vi.fn(), setDisabled: vi.fn(), updateEmail: vi.fn(), resetTotp: vi.fn() },
+  admin: { listUsers: vi.fn(), deleteUser: vi.fn(), setDisabled: vi.fn(), setPassword: vi.fn(), updateEmail: vi.fn(), resetTotp: vi.fn() },
   requestPasswordReset: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/self-auth/tenant', () => ({ tenantAuth: async () => ({ admin, requestPasswordReset }) }));
 vi.mock('@/lib/tenant/current', () => ({ currentTenant: async () => ({ slug: 'academy', companyId: COMPANY }) }));
 import {
-  changeAuthEmail, deleteAuthUser, hasVerifiedFactor, listAccounts, resetAuthFactors, sendPasswordLink, setAuthDisabled,
+  changeAuthEmail, deleteAuthUser, hasVerifiedFactor, listAccounts, resetAuthFactors, sendPasswordLink, setAuthDisabled, setOneTimePassword,
 } from './auth-accounts';
 
 class CodedError extends Error {
@@ -24,7 +24,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   admin.listUsers.mockResolvedValue([row()]);
-  for (const f of [admin.deleteUser, admin.setDisabled, admin.updateEmail, admin.resetTotp, requestPasswordReset]) f.mockResolvedValue(undefined);
+  for (const f of [admin.deleteUser, admin.setDisabled, admin.setPassword, admin.updateEmail, admin.resetTotp, requestPasswordReset]) f.mockResolvedValue(undefined);
 });
 
 describe('every call carries this host\'s company', () => {
@@ -116,5 +116,23 @@ describe('hasVerifiedFactor / listAccounts', () => {
   it('throws when Self-Auth cannot answer', async () => {
     admin.listUsers.mockRejectedValue(new Error('db'));
     await expect(listAccounts()).rejects.toThrow();
+  });
+});
+
+describe('setOneTimePassword', () => {
+  it("sets a long URL-safe password for this host's company and returns it", async () => {
+    const r = await setOneTimePassword('u1');
+    expect(r).toEqual({ password: expect.stringMatching(/^[A-Za-z0-9_-]{16,}$/) });
+    expect(admin.setPassword).toHaveBeenCalledWith(COMPANY, 'u1', (r as { password: string }).password);
+  });
+  it('a user of another company is "User not found." and no password is returned', async () => {
+    admin.setPassword.mockRejectedValue(new CodedError('user_not_found'));
+    expect(await setOneTimePassword('b-user')).toEqual({ error: 'User not found.' });
+  });
+  it('never logs the password', async () => {
+    admin.setPassword.mockRejectedValue(new Error('boom'));
+    const r = await setOneTimePassword('u1');
+    expect(r).toHaveProperty('error');
+    expect(JSON.stringify((console.error as unknown as { mock: { calls: unknown[] } }).mock.calls)).not.toMatch(/[A-Za-z0-9_-]{16,}/);
   });
 });

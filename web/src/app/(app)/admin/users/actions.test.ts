@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { createLogin, rpc, deleteAuthUser, sendPasswordLink, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, sendEmail, hasVerifiedFactor } = vi.hoisted(() => ({
-  createLogin: vi.fn(), rpc: vi.fn(), deleteAuthUser: vi.fn(), sendPasswordLink: vi.fn(), setAuthDisabled: vi.fn(),
+const { createLogin, rpc, deleteAuthUser, sendPasswordLink, setOneTimePassword, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, sendEmail, hasVerifiedFactor } = vi.hoisted(() => ({
+  createLogin: vi.fn(), rpc: vi.fn(), deleteAuthUser: vi.fn(), sendPasswordLink: vi.fn(), setOneTimePassword: vi.fn(), setAuthDisabled: vi.fn(),
   changeAuthEmail: vi.fn(), resetAuthFactors: vi.fn(), listAccounts: vi.fn(), sendEmail: vi.fn(), hasVerifiedFactor: vi.fn(),
 }));
 const { memberOfMyCompany, profileRemains } = vi.hoisted(() => ({ memberOfMyCompany: vi.fn(), profileRemains: vi.fn() }));
@@ -10,7 +10,7 @@ vi.mock('@/lib/tenant/current', () => ({ currentTenant: vi.fn(async () => ({ slu
 const { ME } = vi.hoisted(() => ({ ME: '9c1d6e2a-3b4f-4a5e-8d7c-1f2e3d4c5b6a' }));
 vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: ME })) }));
 vi.mock('@/lib/admin/create-login', () => ({ createLogin }));
-vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, sendPasswordLink, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, hasVerifiedFactor }));
+vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, sendPasswordLink, setOneTimePassword, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, hasVerifiedFactor }));
 vi.mock('@/lib/email/send', () => ({ sendEmail }));
 vi.mock('@/lib/branding/get', () => ({ getBranding: vi.fn(async () => ({ name: 'Academy' })) }));
 const { flagged } = vi.hoisted(() => ({ flagged: { value: false } }));
@@ -122,10 +122,34 @@ describe('resetPassword', () => {
     expect(await resetPassword({}, form({ user_id: ME }))).toHaveProperty('error');
     expect(sendPasswordLink).not.toHaveBeenCalled();
   });
-  it('needs email', async () => {
+  it('email_off_reset_shows_one_time_password: sets it, ends the sessions, shows it once', async () => {
     vi.stubEnv('EMAIL_ENABLED', 'false');
-    expect(await resetPassword({}, form({ user_id: id }))).toHaveProperty('error');
+    setOneTimePassword.mockResolvedValue({ password: 'One-Time-Pass-1234' });
+    rpcAnswers({});
+    expect(await resetPassword({}, form({ user_id: id }))).toEqual({ ok: 'New one-time password set. Everywhere they were signed in, they are signed out.', password: 'One-Time-Pass-1234' });
+    expect(setOneTimePassword).toHaveBeenCalledWith(id);
     expect(sendPasswordLink).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith('admin_end_sessions', { p_user: id });
+  });
+  it('email off: a user outside the company is refused before anything is set', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'false');
+    memberOfMyCompany.mockResolvedValue(false);
+    expect(await resetPassword({}, form({ user_id: id }))).toEqual({ error: 'User not found.' });
+    expect(setOneTimePassword).not.toHaveBeenCalled();
+  });
+  it('email off: a failure to set shows no password and ends nothing', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'false');
+    setOneTimePassword.mockResolvedValue({ error: 'Something went wrong. Please try again.' });
+    expect(await resetPassword({}, form({ user_id: id }))).toEqual({ error: 'Something went wrong. Please try again.' });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it('email off: still gives the password when Supabase-bound sessions could not be ended, and says so', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'false');
+    setOneTimePassword.mockResolvedValue({ password: 'One-Time-Pass-1234' });
+    rpcAnswers({ admin_end_sessions: { message: 'nope' } });
+    expect(await resetPassword({}, form({ user_id: id }))).toEqual({
+      ok: 'New one-time password set, but existing sessions could not be ended: nope', password: 'One-Time-Pass-1234',
+    });
   });
   it('passes on a Self-Auth refusal', async () => {
     vi.stubEnv('EMAIL_ENABLED', 'true');
@@ -370,7 +394,7 @@ describe('company check before any Auth change', () => {
     memberOfMyCompany.mockResolvedValue(false);
     expect(await run(form(fields))).toEqual({ error: 'User not found.' });
     expect(memberOfMyCompany).toHaveBeenCalledWith(id);
-    for (const fn of [deleteAuthUser, sendPasswordLink, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, hasVerifiedFactor, sendEmail, rpc]) {
+    for (const fn of [deleteAuthUser, sendPasswordLink, setOneTimePassword, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, hasVerifiedFactor, sendEmail, rpc]) {
       expect(fn).not.toHaveBeenCalled();
     }
   });
