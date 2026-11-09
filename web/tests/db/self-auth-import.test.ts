@@ -10,7 +10,7 @@ import { pgConfig } from '../../scripts/db';
 import { closeNodeAuth, nodeAuth, nodeAuthFor, sentEmails } from '../../scripts/self-auth-node';
 import { runImport, splitId } from '../../scripts/self-auth-import';
 import { actAsBound, asCompany, withTx } from './helpers';
-import { makePatient, makeProduct, receive } from './fixtures';
+import { makeCourse, makePatient, makeProduct, makeSession, receive } from './fixtures';
 
 // Supabase-era accounts (auth.users + auth.mfa_factors, bcrypt hashes and plain base32 secrets, as the live
 // proofs showed) are made here and imported through the package, as on switch-over day. The package commits on
@@ -74,6 +74,17 @@ async function deliveryBy(companyId: string, userId: string): Promise<string> {
   });
 }
 
+/** A committed course session in the company, created by the user. */
+async function sessionBy(companyId: string, userId: string): Promise<string> {
+  return withPg(async (pg) => {
+    await pg.query('begin');
+    await asCompany(pg, companyId, userId);
+    const id = await makeSession(pg, await makeCourse(pg));
+    await pg.query('commit');
+    return id;
+  });
+}
+
 /** A committed patient in the company, created by the user (created_by from the bound fixture session). */
 async function patientBy(companyId: string, userId: string, name: string): Promise<string> {
   return withPg(async (pg) => {
@@ -110,6 +121,8 @@ async function removeImportUsers() {
     await pg.query('alter table public.company_members disable trigger company_members_protect_last_admin');
     await pg.query('delete from public.stock_movements where created_by = any($1::uuid[])', [all]);
     await pg.query('delete from public.stock_lots where created_by = any($1::uuid[])', [all]);
+    // Their test sessions too: clearing created_by would re-run the session date check, which can't see the course here.
+    await pg.query('delete from public.courses where id in (select course_id from public.sessions where created_by = any($1::uuid[]))', [all]);
     // Deleting the Self-Auth user runs 0101's delete trigger: profile (and memberships) gone, created_by cleared.
     await pg.query('delete from self_auth."user" where id = any($1::uuid[])', [all]);
     await pg.query('delete from public.profiles where user_id = any($1::uuid[])', [all]);
@@ -204,6 +217,24 @@ describe('self-auth-import (app database)', () => {
     });
     await withTx(async (c) => {
       await expect(actAsBound(c, id, B)).rejects.toThrow(/access to this company/);
+    });
+  });
+
+  it('split_moves_course_sessions_despite_the_date_check', async () => {
+    // Found in the rehearsal: sessions_in_course runs as tenant_definer under RLS, so with no signed-in user it
+    // cannot see the course and refused the split's update.
+    const email = `zz-imp-sess-${Date.now()}@example.com`;
+    const id = await legacyUser({ email, hash: HASH, companies: [{ id: A, at: '2026-01-01' }, { id: B, at: '2026-02-01' }] });
+    const sessB = await sessionBy(B, id);
+    await importApp([id], true);
+    await withPg(async (pg) => {
+      expect((await pg.query('select created_by from public.sessions where id = $1', [sessB])).rows[0].created_by).toBe(splitId(id, B));
+      expect((await pg.query("select tgenabled from pg_trigger where tgname = 'sessions_in_course'")).rows).toEqual([{ tgenabled: 'O' }]);
+    });
+    const undone = await withPg(async (pg) => runImport({ db: 'app', apply: true, undoSplits: true, pg, auth: await nodeAuth(), onlyUserIds: [id] }));
+    expect(undone.splits[0].done).toBe(false);
+    await withPg(async (pg) => {
+      expect((await pg.query('select created_by from public.sessions where id = $1', [sessB])).rows[0].created_by).toBe(id);
     });
   });
 

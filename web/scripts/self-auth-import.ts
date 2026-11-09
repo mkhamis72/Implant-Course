@@ -129,11 +129,14 @@ export const USER_COLUMNS: Record<string, 'repoint' | 'copy' | 'history'> = {
 /**
  * Triggers that would refuse moving a row to the same person's new id. Each is off only around that one update,
  * inside the split's transaction (foreign keys and audit triggers stay on): the stock ledger is append-only, and
- * an assignee must be an active organizer (an inactive member's old assignments would otherwise stop the split).
+ * an assignee must be an active organizer (an inactive member's old assignments would otherwise stop the split),
+ * and the session-in-course date check runs as tenant_definer under RLS, so with no signed-in user it can't see the
+ * course (found in the rehearsal; a split changes neither the date nor the course, so there is nothing to check).
  */
 const BYPASS_TRIGGERS: Record<string, string[]> = {
   'public.stock_movements': ['stock_movements_no_change'],
   'public.checklist_items': ['checklist_items_check_assignee'],
+  'public.sessions': ['sessions_in_course'],
 };
 
 export function unhandledColumns(found: string[]): string[] {
