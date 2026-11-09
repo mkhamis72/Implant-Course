@@ -46,3 +46,13 @@ describe('createClient', () => {
     expect(h.create.mock.calls[0][2].auth).toMatchObject({ persistSession: false, autoRefreshToken: false });
   });
 });
+
+describe('createClientForSession', () => {
+  it('sends a database token for the given session, not the request cookie\'s', async () => {
+    h.token = null;
+    const { createClientForSession } = await import('./server');
+    await createClientForSession({ sessionId: 's2', userId: 'u1', companyId: 'c1', email: 'u@example.com', aal: 'aal2', expiresAt: new Date() });
+    expect(headersOf(0)?.Authorization).toBe('Bearer db-token-1');
+    expect(h.create.mock.calls[0][1]).toBe('anon');
+  });
+});

@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { authenticator } from 'otplib';
 import { TEST_USERS } from '../support/test-users';
-import { A, B, ACADEMY, SKIP_REASON, companyB, signInThroughApi } from './companies';
+import { nodeAuth } from '../../scripts/self-auth-node';
+import { login } from './helpers';
+import { A, B, ACADEMY, SKIP_REASON, companyB, signInThroughApi, withPg } from './companies';
 
 // The server session layer: the Self-Auth cookie, the middleware and the per-request database token. These
 // sign in through the API (not the login form), so they don't wait for the login action.
@@ -60,5 +63,21 @@ test('session_cookie_is_company_bound: company A\'s cookie on company B\'s host 
   await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
 });
 
-// Needs the login form on Self-Auth (Task 4): aal1 + a verified factor is redirected to /login/mfa.
-test.fixme('aal1_with_factor_goes_to_mfa: password-only sign-in of a 2FA user lands on /login/mfa', async () => {});
+test('aal1_with_factor_goes_to_mfa: password-only sign-in of a 2FA user lands on /login/mfa', async ({ page }) => {
+  const email = TEST_USERS.mfa.email;
+  const auth = await nodeAuth();
+  const first = await auth.signIn({ companyId: ACADEMY, email, password: process.env.TEST_USER_PASSWORD ?? '' });
+  if (!first.ok) throw new Error('sign-in failed');
+  const { secret } = await auth.totp.startEnroll(first.sessionToken, ACADEMY);
+  expect(await auth.totp.confirmEnroll(first.sessionToken, ACADEMY, authenticator.generate(secret))).not.toBeNull();
+  await auth.signOut(first.sessionToken);
+  try {
+    await login(page, email);
+    await expect(page).toHaveURL(/\/login\/mfa$/);
+    // Every other page still sends it back to the code page.
+    await page.goto('/patients');
+    await expect(page).toHaveURL(/\/login\/mfa$/);
+  } finally {
+    await withPg((pg) => pg.query('delete from self_auth.totp_factor where user_id = (select user_id from public.profiles where email = $1)', [email]));
+  }
+});

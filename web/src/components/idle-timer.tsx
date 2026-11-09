@@ -13,7 +13,11 @@ const HEARTBEAT_EVERY_MS = 60_000;
 
 async function signOutForIdle(signOutPath: string, loginPath: string) {
   // The server ends only this browser's session; the browser never talks to the database or Supabase Auth.
-  await fetch(signOutPath, { method: 'POST' }).catch(() => {});
+  // A failed revoke is retried once; either way the user goes to sign-in (the server's idle check is the backstop).
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch(signOutPath, { method: 'POST' }).catch(() => null);
+    if (res?.ok) break;
+  }
   window.location.assign(`${loginPath}?reason=idle`);
 }
 

@@ -43,3 +43,14 @@ describe('links', () => {
     expect(inviteLink('c', 'tok')).toBe('/auth/invite?token=tok');
   });
 });
+
+describe('single-company default', () => {
+  it('uses SITE_URL when the only host is the wildcard', async () => {
+    delete process.env.CONTROL_SUPABASE_URL;
+    process.env.TENANTS_FILE = '';
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://127.0.0.1:54321';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon';
+    process.env.SITE_URL = 'http://localhost:3000/';
+    expect(await companyBaseUrl(ACADEMY_COMPANY_ID)).toBe('http://localhost:3000');
+  });
+});

@@ -9,7 +9,8 @@ describe('classifyPath', () => {
   it.each([
     ['/login', 'public'],
     ['/brand/logo', 'public'],
-    ['/auth/confirm', 'public'],
+    ['/auth/reset', 'public'],
+    ['/auth/invite', 'public'],
     ['/auth/error', 'public'],
     ['/login/forgot', 'public'],
     ['/login/mfa', 'mfa'],
@@ -32,7 +33,7 @@ describe('decideRedirect', () => {
   });
   it('lets anonymous users see public pages', () => {
     expect(decideRedirect({ path: '/login', hasUser: false, aal: null })).toBeNull();
-    expect(decideRedirect({ path: '/auth/confirm', hasUser: false, aal: null })).toBeNull();
+    expect(decideRedirect({ path: '/auth/reset', hasUser: false, aal: null })).toBeNull();
   });
   it('lets signed-in users without 2FA through', () => {
     expect(decideRedirect({ path: '/admin/users', hasUser: true, aal: aal1 })).toBeNull();
@@ -52,16 +53,16 @@ describe('decideRedirect', () => {
   it('sends half-signed-in users from /login to /login/mfa', () => {
     expect(decideRedirect({ path: '/login', hasUser: true, aal: needsMfa })).toBe('/login/mfa');
   });
-  it('never redirects the confirm route (invite links must work while signed in)', () => {
-    expect(decideRedirect({ path: '/auth/confirm', hasUser: true, aal: aal2 })).toBeNull();
+  it('never redirects the reset route (invite links must work while signed in)', () => {
+    expect(decideRedirect({ path: '/auth/reset', hasUser: true, aal: aal2 })).toBeNull();
   });
   it('sends a user who must set up 2FA again to Account → Security from any other page', () => {
     for (const path of ['/', '/admin/users', '/patients', '/my']) {
       expect(decideRedirect({ path, hasUser: true, aal: aal1, mfaSetupRequired: true })).toBe('/account/security');
     }
   });
-  it('lets them reach Account → Security, Set password, sign-in pages and the deactivated page', () => {
-    for (const path of ['/account/security', '/account/set-password', '/login/forgot', '/auth/confirm', '/deactivated']) {
+  it('lets them reach Account → Security, sign-in pages and the deactivated page', () => {
+    for (const path of ['/account/security', '/login/forgot', '/auth/reset', '/deactivated']) {
       expect(decideRedirect({ path, hasUser: true, aal: aal1, mfaSetupRequired: true })).toBeNull();
     }
     expect(decideRedirect({ path: '/login', hasUser: true, aal: aal1, mfaSetupRequired: true })).toBe('/');

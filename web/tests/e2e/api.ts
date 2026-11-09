@@ -18,6 +18,9 @@ export async function apiAs(email: string, company = ACADEMY_COMPANY_ID): Promis
   });
   const { error: bindError } = await api.rpc('bind_my_session', { p_company: company });
   if (bindError) throw bindError;
+  // The database token is not a GoTrue session: specs ask who they are through auth.getUser(), so answer from the session.
+  const user = { id: res.session.userId, email: res.session.email };
+  (api.auth as unknown as { getUser: () => Promise<unknown> }).getUser = async () => ({ data: { user }, error: null });
   return api;
 }
 

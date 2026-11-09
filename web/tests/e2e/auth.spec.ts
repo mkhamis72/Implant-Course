@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { TEST_USERS, TEST_PASSWORD } from '../support/test-users';
+import { TEST_USERS } from '../support/test-users';
 import { login, expectDashboard } from './helpers';
 
 test('anonymous visitor is sent to login', async ({ page }) => {
@@ -24,13 +24,7 @@ test('wrong password shows a clear message and keeps the email', async ({ page }
   await expect(page.getByLabel('Email')).toHaveValue(TEST_USERS.organizer.email);
 });
 
-test('unverified email cannot sign in', async ({ page }) => {
-  await page.goto('/login');
-  await page.getByLabel('Email').fill(TEST_USERS.unverified.email);
-  await page.getByLabel('Password').fill(TEST_PASSWORD);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('main').getByRole('alert')).toContainText('Please verify your email first');
-});
+// Self-Auth has no email-verification step (accounts come from invites and admins), so there is no "unverified" sign-in to refuse.
 
 test('inactive user lands on deactivated page', async ({ page }) => {
   await login(page, TEST_USERS.inactive.email);

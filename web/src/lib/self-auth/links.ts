@@ -12,6 +12,11 @@ export async function companyBaseUrl(companyId: string): Promise<string> {
     return `${isLocal(host.replace(/:[0-9]+$/, '')) ? 'http' : 'https'}://${host}`;
   }
   const tenant = await findTenantByCompanyId(companyId);
+  if (tenant?.status === 'active' && tenant.hosts.includes('*')) {
+    // The single-company default answers on every host (local development): use the configured site address.
+    const site = process.env.SITE_URL?.trim().replace(/\/+$/, '');
+    if (site) return site;
+  }
   const host = tenant && tenant.status === 'active' ? tenant.hosts.find((h) => h !== '*') : undefined;
   if (!host) throw new Error('No host for this company');
   const bare = host.replace(/:\d+$/, '');
