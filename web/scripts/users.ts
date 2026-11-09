@@ -33,37 +33,6 @@ export async function pendingLoginFor(email: string, companyId = ACADEMY_COMPANY
   }
 }
 
-/** Finds or creates the Auth account. Pass `pending` for a company database: a new account then gets a
- *  pending login there first (the control project has no handle_new_user). */
-export async function ensureUser(
-  admin: SupabaseClient,
-  opts: { email: string; password: string; emailConfirm?: boolean; pending?: { pg: Client; companyId?: string } },
-): Promise<string> {
-  const email = opts.email.trim().toLowerCase();
-  for (let page = 1; ; page++) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) throw error;
-    const existing = data.users.find((u) => u.email?.toLowerCase() === email);
-    if (existing) {
-      const { error: updateError } = await admin.auth.admin.updateUserById(existing.id, {
-        password: opts.password,
-        ban_duration: 'none',
-      });
-      if (updateError) throw updateError;
-      return existing.id;
-    }
-    if (data.users.length < 1000) break;
-  }
-  if (opts.pending) await addPendingLogin(opts.pending.pg, email, opts.pending.companyId);
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password: opts.password,
-    email_confirm: opts.emailConfirm ?? true,
-  });
-  if (error) throw error;
-  return data.user.id;
-}
-
 async function resetPasswordInPlace(companyId: string, email: string, newPassword: string): Promise<void> {
   const auth = await nodeAuth();
   const before = sentEmails.length;
