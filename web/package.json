@@ -33,6 +33,7 @@
     "catalog-export": "tsx scripts/catalog-export.ts"
   },
   "dependencies": {
+    "@mkhamis72/self-auth": "file:vendor/mkhamis72-self-auth-0.1.0.tgz",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "echarts": "6.1.0",

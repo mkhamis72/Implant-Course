@@ -35,3 +35,7 @@ export async function tenantServiceKey(slug: string): Promise<string> {
   if (!t.serviceRoleKey) throw new Error('No service key configured');
   return t.serviceRoleKey;
 }
+
+export async function findTenantByCompanyId(companyId: string): Promise<Tenant | null> {
+  return (await all()).find((t) => t.companyId === companyId) ?? null;
+}
