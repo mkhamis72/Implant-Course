@@ -1,9 +1,10 @@
 import type { SelfAuth } from '@mkhamis72/self-auth';
+import { scopeForSecret, signingKey } from '../src/lib/self-auth/signing-key';
 
 /**
  * The tenant Self-Auth instance for scripts and tests. src/lib/self-auth/tenant.ts is the app's own, but it
  * imports 'server-only' (a build-time guard that throws outside Next), so it can't load under tsx, Vitest or
- * Playwright. This one has the same database, secret and signing key; its mail adapter keeps messages in
+ * Playwright. This one has the same database, secret and signing key (signing-key.ts); its mail adapter keeps messages in
  * memory (`sentEmails`) instead of sending them, and its links point at a placeholder host.
  */
 export const sentEmails: { to: string; kind: 'invite' | 'reset'; companyId: string; url: string }[] = [];
@@ -21,7 +22,7 @@ async function build(url: string, secretVar: string): Promise<SelfAuth> {
     databaseUrl: url,
     secret: required(secretVar),
     appName: 'Implant Course',
-    dbToken: { privateJwk: JSON.parse(required('SELF_AUTH_PRIVATE_JWK')), kid: required('SELF_AUTH_KID') },
+    dbToken: signingKey(scopeForSecret(secretVar)),
     email: { send: async (m) => { sentEmails.push({ to: m.to, kind: m.kind, companyId: m.companyId, url: m.url }); } },
     links: {
       resetPassword: (companyId, token) => `http://${companyId}.localhost:3000/auth/reset?token=${token}`,

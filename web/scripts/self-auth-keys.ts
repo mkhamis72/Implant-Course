@@ -8,7 +8,8 @@ import { closeNodeAuth, nodeAuth, nodeConsoleAuth } from './self-auth-node';
 
 /**
  * Switch-over helpers (docs/operations.md §E).
- *   jwks                      prints the PUBLIC key (Self-Auth's jwks()) to import into Supabase as a standby key.
+ *   jwks [--control]          prints the PUBLIC key (Self-Auth's jwks()) of the company (or console) signing key, to
+ *                             compare its kid with the standby key in Supabase. Supabase imports only the private key.
  *   check [--tenant <slug>]   (step 3, before Migration A) mints a database token and calls the read-only branding_for
  *                             on the company project: 200 means Supabase accepts Self-Auth's tokens, 401 means the key
  *                             isn't imported. Touches no self_auth table.
@@ -18,15 +19,16 @@ import { closeNodeAuth, nodeAuth, nodeConsoleAuth } from './self-auth-node';
  *                             self_auth, e.g. through the session pooler. Before Migration A: "not migrated yet".
  * Prints statuses only, never a token, a key's private part or a database URL.
  */
-const USAGE = 'Usage: npm run self-auth:keys -- jwks | check [--tenant <slug>] | check --control | reach [--tenant <slug>]';
+const USAGE = 'Usage: npm run self-auth:keys -- jwks [--control] | check [--tenant <slug>] | check --control | reach [--tenant <slug>]';
 
-export type KeysArgs = { cmd: 'jwks' } | { cmd: 'check'; control: boolean; rest: string[] } | { cmd: 'reach'; rest: string[] };
+export type KeysArgs = { cmd: 'jwks'; control: boolean } | { cmd: 'check'; control: boolean; rest: string[] } | { cmd: 'reach'; rest: string[] };
 
 const tenantRest = (rest: string[]) => rest.length === 0 || (rest.length === 2 && rest[0] === '--tenant' && !!rest[1]);
 
 export function parseKeysArgs(argv: string[]): KeysArgs {
   const [cmd, ...rest] = argv;
-  if (cmd === 'jwks' && rest.length === 0) return { cmd };
+  if (cmd === 'jwks' && rest.length === 0) return { cmd, control: false };
+  if (cmd === 'jwks' && rest.length === 1 && rest[0] === '--control') return { cmd, control: true };
   if (cmd === 'check') {
     if (rest.length === 1 && rest[0] === '--control') return { cmd, control: true, rest: [] };
     if (tenantRest(rest)) return { cmd, control: false, rest };
@@ -111,7 +113,8 @@ function required(env: Record<string, string | undefined>, name: string): string
 async function main() {
   const args = parseKeysArgs(process.argv.slice(2));
   if (args.cmd === 'jwks') {
-    console.log(JSON.stringify((await nodeAuth()).jwks(), null, 2));
+    // The console's key is its own when CONTROL_SELF_AUTH_PRIVATE_JWK is set (signing-key.ts).
+    console.log(JSON.stringify((await (args.control ? nodeConsoleAuth() : nodeAuth())).jwks(), null, 2));
     return;
   }
   let result: { ok: boolean; line: string };

@@ -3,7 +3,8 @@ import { parseKeysArgs, probe, probeToken, reachCheck } from './self-auth-keys';
 
 describe('self-auth-keys', () => {
   it('parses jwks and check, refusing anything else', () => {
-    expect(parseKeysArgs(['jwks'])).toEqual({ cmd: 'jwks' });
+    expect(parseKeysArgs(['jwks'])).toEqual({ cmd: 'jwks', control: false });
+    expect(parseKeysArgs(['jwks', '--control'])).toEqual({ cmd: 'jwks', control: true });
     expect(parseKeysArgs(['check'])).toEqual({ cmd: 'check', control: false, rest: [] });
     expect(parseKeysArgs(['check', '--tenant', 'academy'])).toEqual({ cmd: 'check', control: false, rest: ['--tenant', 'academy'] });
     expect(parseKeysArgs(['check', '--control'])).toEqual({ cmd: 'check', control: true, rest: [] });

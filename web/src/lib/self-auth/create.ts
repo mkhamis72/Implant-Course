@@ -2,6 +2,7 @@ import 'server-only';
 import { createSelfAuth, type SelfAuth } from '@mkhamis72/self-auth';
 import { emailAdapter } from './email';
 import { inviteLink, resetLink } from './links';
+import { scopeForSecret, signingKey } from './signing-key';
 
 function required(name: string): string {
   const v = process.env[name];
@@ -9,22 +10,13 @@ function required(name: string): string {
   return v;
 }
 
-// JSON.parse errors can quote part of the input, which here is a private key: drop them.
-function parseJwk(raw: string) {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    throw new Error('SELF_AUTH_PRIVATE_JWK is not valid JSON');
-  }
-}
-
-/** One Self-Auth instance. Both the tenant and the console sign database tokens with the same key pair. */
+/** One Self-Auth instance. The console signs database tokens with its own key pair when one is set (signing-key.ts). */
 export function buildSelfAuth(databaseUrl: string, secretVar: string): Promise<SelfAuth> {
   return createSelfAuth({
     databaseUrl,
     secret: required(secretVar),
     appName: 'Implant Course',
-    dbToken: { privateJwk: parseJwk(required('SELF_AUTH_PRIVATE_JWK')), kid: required('SELF_AUTH_KID') },
+    dbToken: signingKey(scopeForSecret(secretVar)),
     email: emailAdapter,
     links: { resetPassword: resetLink, acceptInvite: inviteLink },
     // The context never carries tokens or URLs; log only the operation and the error's message.
