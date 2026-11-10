@@ -67,4 +67,19 @@ describe('instances', () => {
       delete process.env.SELF_AUTH_DATABASE_CA_CERT;
     }
   });
+  it('tenant_instance_gets_google_client_id_console_does_not', async () => {
+    Object.assign(process.env, { GOOGLE_CLIENT_ID: 'gid.apps.googleusercontent.com', GOOGLE_CLIENT_SECRET: 'gsecret' });
+    vi.resetModules();
+    const { tenantAuth: t } = await import('./tenant');
+    const { consoleAuth: c } = await import('./console');
+    type G = { cfg: { google?: unknown } };
+    const tenant = (await t()) as unknown as G;
+    const con = (await c()) as unknown as G;
+    expect(tenant.cfg.google).toEqual({ clientId: 'gid.apps.googleusercontent.com' });
+    expect(JSON.stringify(tenant.cfg)).not.toContain('gsecret');
+    expect(con.cfg.google).toBeUndefined();
+  });
+  it('no google settings: the tenant instance has no google config', async () => {
+    expect(((await tenantAuth()) as unknown as { cfg: { google?: unknown } }).cfg.google).toBeUndefined();
+  });
 });

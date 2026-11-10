@@ -4,6 +4,7 @@ import { emailAdapter } from './email';
 import { inviteLink, resetLink } from './links';
 import { scopeForSecret, signingKey } from './signing-key';
 import { databaseCa } from './database-ca';
+import { googleConfig } from './google-config';
 
 function required(name: string): string {
   const v = process.env[name];
@@ -13,12 +14,15 @@ function required(name: string): string {
 
 /** One Self-Auth instance. The console signs database tokens with its own key pair when one is set (signing-key.ts). */
 export function buildSelfAuth(databaseUrl: string, secretVar: string): Promise<SelfAuth> {
+  // Only the company instance signs in with Google; the console never does. The client secret stays in the app.
+  const google = scopeForSecret(secretVar) === 'tenant' ? googleConfig() : null;
   return createSelfAuth({
     databaseUrl,
     databaseCa: databaseCa(),
     secret: required(secretVar),
     appName: 'Implant Course',
     dbToken: signingKey(scopeForSecret(secretVar)),
+    ...(google ? { google: { clientId: google.clientId } } : {}),
     email: emailAdapter,
     links: { resetPassword: resetLink, acceptInvite: inviteLink },
     // The context never carries tokens or URLs; log only the operation and the error's message.
