@@ -432,6 +432,7 @@ People whose company email is a Google account can sign in with a "Sign in with 
 | `google_no_account` | There's no account for this email here. Ask your admin. | Invite the person (Admin → Users) with that Google email. |
 | `google_disabled` | This account is deactivated. | Reactivate the user in Admin → Users, if that is intended. |
 | `google_unverified` | Google didn't confirm this email address. | The person must use a Google account with a confirmed email. |
+| `google_other_account` | This account uses a different Google account. Ask your admin. | The account already uses another Google account (or the address changed hands). If the person should use this one: Admin → Users → **Reset Google sign-in**. |
 | `google_failed` | Google sign-in didn't work. Try again or use your password. | Try again. If it repeats, check the two Vercel settings and the redirect URI in the Google client. |
 
 **Someone changed their Google account:** Admin → Users → the user → **Reset Google sign-in**. This also signs them out everywhere. Their next Google sign-in is remembered instead. A deactivated user stays refused until reactivated.

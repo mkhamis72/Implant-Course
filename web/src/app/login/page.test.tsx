@@ -28,6 +28,7 @@ describe('login page, Google', () => {
     ['google_no_account', "There's no account for this email here. Ask your admin."],
     ['google_disabled', 'This account is deactivated.'],
     ['google_unverified', "Google didn't confirm this email address."],
+    ['google_other_account', 'This account uses a different Google account. Ask your admin.'],
     ['google_failed', "Google sign-in didn't work. Try again or use your password."],
   ])('login_shows_each_google_error_message %s', async (code, text) => {
     googleConfig.mockReturnValue(null);

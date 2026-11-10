@@ -23,6 +23,8 @@ export function googleErrorCode(reason: string): string {
       return 'google_disabled';
     case 'email_not_verified':
       return 'google_unverified';
+    case 'google_account_mismatch':
+      return 'google_other_account';
     default:
       return 'google_failed';
   }

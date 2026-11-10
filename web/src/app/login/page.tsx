@@ -8,7 +8,7 @@ import { COMPANY_REFUSED_MESSAGE } from '@/lib/auth/company-session';
 import { mapAuthError } from '@/lib/auth/errors';
 import { googleConfig } from '@/lib/self-auth/google-config';
 
-const GOOGLE_ERRORS = ['google_no_account', 'google_disabled', 'google_unverified', 'google_failed'];
+const GOOGLE_ERRORS = ['google_no_account', 'google_disabled', 'google_unverified', 'google_other_account', 'google_failed'];
 
 export default async function LoginPage({ searchParams }: { searchParams: PageSearchParams }) {
   const branding = await getBranding();

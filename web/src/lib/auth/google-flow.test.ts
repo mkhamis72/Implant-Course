@@ -156,7 +156,7 @@ describe('googleCallback', () => {
       ['no_account', 'google_no_account'],
       ['disabled', 'google_disabled'],
       ['email_not_verified', 'google_unverified'],
-      ['google_account_mismatch', 'google_failed'],
+      ['google_account_mismatch', 'google_other_account'],
       ['invalid_token', 'google_failed'],
     ];
     for (const [reason, code] of cases) {
