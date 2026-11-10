@@ -69,17 +69,26 @@ describe('instances', () => {
   });
   it('tenant_instance_gets_google_client_id_console_does_not', async () => {
     Object.assign(process.env, { GOOGLE_CLIENT_ID: 'gid.apps.googleusercontent.com', GOOGLE_CLIENT_SECRET: 'gsecret' });
-    vi.resetModules();
-    const { tenantAuth: t } = await import('./tenant');
-    const { consoleAuth: c } = await import('./console');
-    type G = { cfg: { google?: unknown } };
-    const tenant = (await t()) as unknown as G;
-    const con = (await c()) as unknown as G;
-    expect(tenant.cfg.google).toEqual({ clientId: 'gid.apps.googleusercontent.com' });
-    expect(JSON.stringify(tenant.cfg)).not.toContain('gsecret');
-    expect(con.cfg.google).toBeUndefined();
+    try {
+      vi.resetModules();
+      const { tenantAuth: t } = await import('./tenant');
+      const { consoleAuth: c } = await import('./console');
+      type G = { cfg: { google?: unknown } };
+      const tenant = (await t()) as unknown as G;
+      const con = (await c()) as unknown as G;
+      expect(tenant.cfg.google).toEqual({ clientId: 'gid.apps.googleusercontent.com' });
+      expect(JSON.stringify(tenant.cfg)).not.toContain('gsecret');
+      expect(con.cfg.google).toBeUndefined();
+    } finally {
+      delete process.env.GOOGLE_CLIENT_ID;
+      delete process.env.GOOGLE_CLIENT_SECRET;
+    }
   });
   it('no google settings: the tenant instance has no google config', async () => {
-    expect(((await tenantAuth()) as unknown as { cfg: { google?: unknown } }).cfg.google).toBeUndefined();
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_CLIENT_SECRET;
+    vi.resetModules();
+    const { tenantAuth: fresh } = await import('./tenant');
+    expect(((await fresh()) as unknown as { cfg: { google?: unknown } }).cfg.google).toBeUndefined();
   });
 });
