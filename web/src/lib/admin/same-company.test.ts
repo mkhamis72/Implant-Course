@@ -32,7 +32,7 @@ vi.mock('@/lib/supabase/admin', () => ({
     return client('admin');
   },
 }));
-import { activeInAnotherCompany, memberOfMyCompany, profileRemains, sharedWithAnotherCompany } from './same-company';
+import { memberOfMyCompany, profileRemains } from './same-company';
 
 beforeEach(() => {
   calls.length = 0;
@@ -57,55 +57,6 @@ describe('memberOfMyCompany', () => {
   it('is false when the user is not a member here', async () => {
     answer.value = { data: null, error: null };
     expect(await memberOfMyCompany('u2')).toBe(false);
-  });
-});
-
-describe('sharedWithAnotherCompany', () => {
-  it("counts the user's memberships of other companies with the admin client", async () => {
-    answer.value = { count: 1, error: null };
-    expect(await sharedWithAnotherCompany('u1')).toBe(true);
-    expect(calls).toEqual([
-      {
-        client: 'admin',
-        table: 'company_members',
-        steps: [['select', 'user_id', { count: 'exact', head: true }], ['eq', 'user_id', 'u1'], ['neq', 'company_id', A]],
-      },
-    ]);
-  });
-  it('is false with no other membership', async () => {
-    answer.value = { count: 0, error: null };
-    expect(await sharedWithAnotherCompany('u1')).toBe(false);
-  });
-  it('is true, and logs, when the count errors', async () => {
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-    answer.value = { count: null, error: { message: 'boom' } };
-    expect(await sharedWithAnotherCompany('u1')).toBe(true);
-    expect(log).toHaveBeenCalled();
-    log.mockRestore();
-  });
-  it('is true, and logs, when the admin client is unavailable', async () => {
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-    adminUnavailable.value = true;
-    expect(await sharedWithAnotherCompany('u1')).toBe(true);
-    expect(log).toHaveBeenCalled();
-    log.mockRestore();
-  });
-});
-
-describe('activeInAnotherCompany', () => {
-  it('counts only active memberships of other companies', async () => {
-    answer.value = { count: 0, error: null };
-    expect(await activeInAnotherCompany('u1')).toBe(false);
-    expect(calls[0].steps).toEqual([
-      ['select', 'user_id', { count: 'exact', head: true }], ['eq', 'user_id', 'u1'], ['neq', 'company_id', A], ['eq', 'active', true],
-    ]);
-  });
-  it('is true, and logs, when the count errors', async () => {
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-    answer.value = { count: null, error: { message: 'boom' } };
-    expect(await activeInAnotherCompany('u1')).toBe(true);
-    expect(log).toHaveBeenCalled();
-    log.mockRestore();
   });
 });
 

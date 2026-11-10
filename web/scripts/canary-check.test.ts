@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { evaluateCanary, canaryInputs, projectMismatch } from './canary-check';
+import { describe, it, expect, vi } from 'vitest';
+import { evaluateCanary, canaryInputs, projectMismatch, signInCanary } from './canary-check';
 
 const zero = (table: string) => ({ table, academyRows: 0 });
 
@@ -73,5 +73,48 @@ describe('projectMismatch', () => {
   it('compares hosts on a local stack', () => {
     expect(projectMismatch('http://127.0.0.1:54321', 'postgresql://postgres:postgres@127.0.0.1:54322/postgres')).toBeNull();
     expect(projectMismatch('http://127.0.0.1:54321', 'postgresql://postgres:postgres@db.example.com:5432/postgres')).toContain('different projects');
+  });
+});
+
+describe('signInCanary (Self-Auth, not Supabase Auth)', () => {
+  const session = { sessionId: 's1', userId: 'u1', companyId: 'c1', email: 'c@x', aal: 'aal1' as const, expiresAt: new Date() };
+  const input = { email: 'c@x', password: 'pw', companyId: 'c1' };
+  function fakeAuth(over: { needsTotp?: boolean; ok?: boolean; verify?: unknown } = {}) {
+    return {
+      signIn: vi.fn(async () => (over.ok === false
+        ? { ok: false as const, reason: 'invalid_credentials' as const }
+        : { ok: true as const, sessionToken: 'tok', session, needsTotp: over.needsTotp ?? false })),
+      totp: { verify: vi.fn(async () => (over.verify === undefined ? { ...session, aal: 'aal2' as const } : over.verify)) },
+      issueDbToken: vi.fn(async (s: { aal: string }) => `db-token-${s.aal}`),
+      signOut: vi.fn(async () => undefined),
+    };
+  }
+
+  it('signs in to the canary company and mints a database token for the session', async () => {
+    const auth = fakeAuth();
+    const s = await signInCanary(auth as never, input);
+    expect(auth.signIn).toHaveBeenCalledWith({ companyId: 'c1', email: 'c@x', password: 'pw' });
+    expect(s.dbToken).toBe('db-token-aal1');
+    await s.signOut();
+    expect(auth.signOut).toHaveBeenCalledWith('tok');
+  });
+  it('verifies the 2FA code when the account has one, and uses the raised session', async () => {
+    const auth = fakeAuth({ needsTotp: true });
+    const s = await signInCanary(auth as never, { ...input, totp: '123456' });
+    expect(auth.totp.verify).toHaveBeenCalledWith('tok', 'c1', '123456');
+    expect(s.dbToken).toBe('db-token-aal2');
+  });
+  it('refuses without a code, with a wrong code, or a failed sign-in (and ends the session it made)', async () => {
+    const noCode = fakeAuth({ needsTotp: true });
+    await expect(signInCanary(noCode as never, input)).rejects.toThrow(/CANARY_TOTP/);
+    expect(noCode.signOut).toHaveBeenCalledWith('tok');
+    const wrong = fakeAuth({ needsTotp: true, verify: null });
+    await expect(signInCanary(wrong as never, { ...input, totp: '000000' })).rejects.toThrow(/2FA failed/);
+    expect(wrong.signOut).toHaveBeenCalledWith('tok');
+    await expect(signInCanary(fakeAuth({ ok: false }) as never, input)).rejects.toThrow(/Sign-in failed: invalid_credentials/);
+  });
+  it('the script no longer signs in through Supabase Auth', async () => {
+    const src = (await import('node:fs')).readFileSync(`${process.cwd()}/scripts/canary-check.ts`, 'utf8');
+    expect(src).not.toMatch(/auth\.signInWithPassword|auth\.mfa\./);
   });
 });

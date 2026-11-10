@@ -92,7 +92,7 @@ describe('onboardCompany', () => {
     expect(vi.mocked(addProjectDomain)).toHaveBeenCalledWith('acme.imploid.net');
     expect(logged('domain_added')).toEqual(['acme.imploid.net']);
     expect(vi.mocked(inviteFirstAdmin)).toHaveBeenCalledWith(expect.anything(), {
-      companyId: NEW_COMPANY, companyName: 'Acme', email: 'ann@acme.com', fullName: 'Ann Admin', origin: 'https://acme.imploid.net',
+      companyId: NEW_COMPANY, email: 'ann@acme.com', fullName: 'Ann Admin',
     });
     expect(logged('first_admin_invited')).toEqual(['ann@acme.com']);
     expect(r.ok).toBe('Company added.');
@@ -260,7 +260,7 @@ describe('firstAdmin', () => {
     flags.email = true;
     const r = await firstAdmin({}, form(admin));
     expect(vi.mocked(inviteFirstAdmin)).toHaveBeenCalledWith(expect.anything(), {
-      companyId: linked.company_id, companyName: 'Acme', email: 'a@b.com', fullName: 'Ann Admin', origin: 'https://acme.example.com',
+      companyId: linked.company_id, email: 'a@b.com', fullName: 'Ann Admin',
     });
     expect(r.ok).toBe('Invite sent to a@b.com.');
     expect(r.password).toBeUndefined();
@@ -268,12 +268,12 @@ describe('firstAdmin', () => {
     expect(call[1]).toEqual({ p_slug: 'acme', p_action: 'first_admin_invited', p_detail: 'a@b.com', p_actor: 'owner@example.com' });
   });
 
-  it('shows no password for an account another company uses', async () => {
+  it('says the password was reset for the company\'s own existing login', async () => {
     existing = linked;
     withKey();
-    vi.mocked(createFirstAdmin).mockResolvedValueOnce({ outcome: 'added' });
+    vi.mocked(createFirstAdmin).mockResolvedValueOnce({ outcome: 'reset', password: 'Temp-Pass-456' });
     const r = await firstAdmin({}, form(admin));
-    expect(r.ok).toBe('Added a@b.com as admin. They sign in with their existing password.');
-    expect(r.password).toBeUndefined();
+    expect(r.ok).toBe('Password reset for the existing login.');
+    expect(r.password).toBe('Temp-Pass-456');
   });
 });

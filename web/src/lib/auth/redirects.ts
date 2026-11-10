@@ -2,7 +2,7 @@ export type PathKind = 'public' | 'mfa' | 'protected';
 export type Aal = { current: string | null; next: string | null } | null;
 
 // /brand/logo: the company logo, shown on the login page before anyone signs in.
-const PUBLIC_PATHS = new Set(['/login', '/login/forgot', '/auth/confirm', '/auth/error', '/brand/logo']);
+const PUBLIC_PATHS = new Set(['/login', '/login/forgot', '/auth/reset', '/auth/invite', '/auth/error', '/auth/signout', '/brand/logo']);
 
 export function classifyPath(path: string): PathKind {
   if (PUBLIC_PATHS.has(path)) return 'public';
@@ -15,7 +15,7 @@ function needsMfa(aal: Aal): boolean {
 }
 
 // Open while an admin's 2FA reset requires set-up again (sign-in pages are public; /deactivated avoids a loop).
-const MFA_SETUP_PATHS = new Set(['/account/security', '/account/set-password', '/deactivated']);
+const MFA_SETUP_PATHS = new Set(['/account/security', '/deactivated']);
 
 /**
  * Returns the path to redirect to, or null to let the request through. `mfaSetupRequired`: the profile's

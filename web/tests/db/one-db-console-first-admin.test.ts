@@ -1,6 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, asPostgres } from './helpers';
+import { insertSelfAuthUser } from './fixtures';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -41,7 +42,7 @@ describe('console_add_first_admin (0093)', () => {
       const pending = (await c.query(
         'select company_id, role, full_name from app_private.pending_logins where email = $1', ['zz-owner@example.com'])).rows;
       expect(pending).toEqual([{ company_id: b, role: 'admin', full_name: 'Zz Owner' }]);
-      const id = (await c.query(`insert into auth.users (id, email) values (gen_random_uuid(), 'zz-owner@example.com') returning id`)).rows[0].id;
+      const id = await insertSelfAuthUser(c, { email: 'zz-owner@example.com', companyId: b });
       expect(await members(c, id)).toEqual([{ company_id: b, role: 'admin', active: true, delegate_id: null }]);
       expect((await c.query('select full_name from public.profiles where user_id = $1', [id])).rows[0].full_name).toBe('Zz Owner');
     });
@@ -96,6 +97,40 @@ describe('console_add_first_admin (0093)', () => {
           from pg_proc where oid = $1::regprocedure`, [fn]);
         expect(r, fn).toEqual({ owner: 'postgres', anon: false, authenticated: false, tenant_definer: false, service_role: true });
       }
+    });
+  });
+});
+
+describe('console_add_first_admin per company (0102)', () => {
+  it('first_admin_email_only_in_other_company: writes the pending row, no membership for the other company account, and a new account is provisioned', async () => {
+    await withTx(async (c) => {
+      const b = await companyB(c);
+      const before = await members(c, users.organizer);
+      const { rows: [{ email }] } = await c.query('select email from public.profiles where user_id = $1', [users.organizer]);
+      await addFirstAdmin(c, b, email);
+      expect(await members(c, users.organizer)).toEqual(before);
+      expect((await c.query('select company_id, role from app_private.pending_logins where email = $1', [email])).rows)
+        .toEqual([{ company_id: b, role: 'admin' }]);
+      // The tenant admin.invite creates a NEW account in the new company; its trigger uses the pending row.
+      const created = await insertSelfAuthUser(c, { email, companyId: b });
+      expect(created).not.toBe(users.organizer);
+      expect(await members(c, created)).toEqual([{ company_id: b, role: 'admin', active: true, delegate_id: null }]);
+      expect(await members(c, users.organizer)).toEqual(before);
+    });
+  });
+
+  it('first_admin_existing_account_in_same_company: made admin and active, no pending row', async () => {
+    await withTx(async (c) => {
+      const b = await companyB(c);
+      await asPostgres(c);
+      await c.query(
+        `insert into app_private.pending_logins (company_id, email, role, created_by)
+         values ($1, 'zz-same@example.com', 'organizer', '00000000-0000-0000-0000-000000000000')`, [b]);
+      const id = await insertSelfAuthUser(c, { email: 'zz-same@example.com', companyId: b });
+      await c.query('update public.company_members set active = false where user_id = $1', [id]);
+      await addFirstAdmin(c, b, 'zz-same@example.com');
+      expect(await members(c, id)).toEqual([{ company_id: b, role: 'admin', active: true, delegate_id: null }]);
+      expect((await c.query('select count(*)::int as n from app_private.pending_logins where email = $1', ['zz-same@example.com'])).rows[0].n).toBe(0);
     });
   });
 });

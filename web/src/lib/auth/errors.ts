@@ -11,6 +11,9 @@ const MESSAGES: Record<string, string> = {
   weak_password: 'That password is too weak. Use at least 10 characters.',
   email_exists: 'A user with this email already exists.',
   missing_token: 'This link is incomplete. Open the link from your email again.',
+  user_disabled: 'This account has been deactivated. Contact an admin.',
+  sign_in_locked: 'Too many failed attempts. Try again in 15 minutes.',
+  link_not_valid_here: 'This link is not valid here. Open the link from your email on the address it was sent for.',
   over_request_rate_limit: 'Too many attempts. Wait a minute and try again.',
 };
 

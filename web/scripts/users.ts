@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Client as PgClient, type Client } from 'pg';
 import { pgConfig } from './db';
 import { ACADEMY_COMPANY_ID } from '../src/lib/tenant/types';
+import { nodeAuth, sentEmails } from './self-auth-node';
 
 export function adminClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -32,35 +33,41 @@ export async function pendingLoginFor(email: string, companyId = ACADEMY_COMPANY
   }
 }
 
-/** Finds or creates the Auth account. Pass `pending` for a company database: a new account then gets a
- *  pending login there first (the control project has no handle_new_user). */
-export async function ensureUser(
-  admin: SupabaseClient,
-  opts: { email: string; password: string; emailConfirm?: boolean; pending?: { pg: Client; companyId?: string } },
-): Promise<string> {
+async function resetPasswordInPlace(companyId: string, email: string, newPassword: string): Promise<void> {
+  const auth = await nodeAuth();
+  const before = sentEmails.length;
+  await auth.requestPasswordReset({ companyId, email });
+  const mail = sentEmails.slice(before).find((m) => m.kind === 'reset' && m.to.toLowerCase() === email);
+  const token = mail ? new URL(mail.url).searchParams.get('token') : null;
+  if (!token) throw new Error(`no reset link was issued for ${email}`);
+  const done = await auth.resetPassword({ token, newPassword });
+  if (!done || done.companyId !== companyId) throw new Error(`password reset for ${email} failed`);
+}
+
+/** Finds or creates the company's Self-Auth account through the package. Pass `pending` (a new account needs a
+ *  pending login in the company's database, as the provisioning trigger requires one). An existing account
+ *  keeps its id; when `password` doesn't sign in, the password is reset in place through the reset flow (the
+ *  mail adapter keeps the link in `sentEmails`). Accounts are never deleted here: ids stay stable. */
+export async function ensureTenantUser(opts: {
+  email: string; password: string; companyId?: string; pending?: { pg: Client };
+}): Promise<string> {
   const email = opts.email.trim().toLowerCase();
-  for (let page = 1; ; page++) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) throw error;
-    const existing = data.users.find((u) => u.email?.toLowerCase() === email);
-    if (existing) {
-      const { error: updateError } = await admin.auth.admin.updateUserById(existing.id, {
-        password: opts.password,
-        ban_duration: 'none',
-      });
-      if (updateError) throw updateError;
-      return existing.id;
+  const companyId = opts.companyId ?? ACADEMY_COMPANY_ID;
+  const auth = await nodeAuth();
+  const existing = (await auth.admin.listUsers(companyId)).find((u) => u.email.toLowerCase() === email);
+  if (existing) {
+    if (existing.disabled) await auth.admin.setDisabled(companyId, existing.userId, false);
+    const res = await auth.signIn({ companyId, email, password: opts.password });
+    if (res.ok) {
+      await auth.signOut(res.sessionToken);
+      return existing.userId;
     }
-    if (data.users.length < 1000) break;
+    if (res.reason !== 'invalid_credentials') throw new Error(`cannot sign in as ${email}: ${res.reason}`);
+    await resetPasswordInPlace(companyId, email, opts.password);
+    return existing.userId;
   }
-  if (opts.pending) await addPendingLogin(opts.pending.pg, email, opts.pending.companyId);
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password: opts.password,
-    email_confirm: opts.emailConfirm ?? true,
-  });
-  if (error) throw error;
-  return data.user.id;
+  if (opts.pending) await addPendingLogin(opts.pending.pg, email, companyId);
+  return (await auth.admin.createUser({ companyId, email, password: opts.password })).userId;
 }
 
 export async function setProfile(
@@ -73,7 +80,10 @@ export async function setProfile(
   // (0090: nothing reads them on profiles). A delegate login names its delegate; staff never keep one.
   await pg.query(
     `insert into public.profiles (user_id, email, full_name)
-     select u.id, lower(u.email), $2 from auth.users u where u.id = $1
+     select * from (
+       select u.id, lower(u."realEmail"), $2 from self_auth."user" u where u.id = $1
+       union all
+       select u.id, lower(u.email), $2 from auth.users u where u.id = $1) x limit 1
      on conflict (user_id) do update set full_name = excluded.full_name`,
     [userId, p.full_name],
   );

@@ -1,23 +1,19 @@
 'use client';
 
 import { useActionState } from 'react';
-import { changeConsolePassword, type ChangePasswordState } from './actions';
+import { emailConsolePasswordLink } from './actions';
 
+type State = { sent?: string; error?: string };
+
+/** Changing the password goes through an emailed link, so the same checks apply as on the company sign-in page. */
 export function ChangePasswordForm() {
-  const [state, action, pending] = useActionState<ChangePasswordState, FormData>(changeConsolePassword, {});
+  const [state, action, pending] = useActionState<State>(() => emailConsolePasswordLink(), {});
   return (
     <form action={action} className="card max-w-md space-y-4">
-      <label className="block">
-        <span className="label">New password</span>
-        <input className="input" type="password" name="password" autoComplete="new-password" required />
-      </label>
-      <label className="block">
-        <span className="label">Confirm new password</span>
-        <input className="input" type="password" name="confirm" autoComplete="new-password" required />
-      </label>
+      <p className="text-sm text-muted">We email a link to your address where you set a new password.</p>
       {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
-      {state.ok && <p role="status" className="text-sm text-ok">{state.ok}</p>}
-      <button className="btn" disabled={pending}>Change password</button>
+      {state.sent && <p role="status" className="text-sm text-ok">{state.sent}</p>}
+      <button className="btn" disabled={pending}>Email me a link to change my password</button>
     </form>
   );
 }

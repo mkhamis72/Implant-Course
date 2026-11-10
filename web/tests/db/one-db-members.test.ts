@@ -1,7 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, actAsBound, asPostgres } from './helpers';
-import { pendingLogin } from './fixtures';
+import { pendingLogin, insertSelfAuthUser } from './fixtures';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -32,8 +32,7 @@ describe('company_members (0085)', () => {
   it('creates the row for a new login and removes it with delete_user', async () => {
     await withTx(async (c) => {
       await pendingLogin(c, 'zz-members-new@example.com');
-      const id = (await c.query(
-        `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-members-new@example.com') returning id`)).rows[0].id;
+      const id = await insertSelfAuthUser(c, { email: 'zz-members-new@example.com' });
       expect(await member(c, id)).toEqual([
         { company_id: ACADEMY_ID, role: 'organizer', active: true, delegate_id: null, mfa_setup_required: false }]);
       await actAsBound(c, users.admin);
@@ -46,9 +45,8 @@ describe('company_members (0085)', () => {
   it('removes the row when the Auth account is deleted', async () => {
     await withTx(async (c) => {
       await pendingLogin(c, 'zz-members-auth@example.com');
-      const id = (await c.query(
-        `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-members-auth@example.com') returning id`)).rows[0].id;
-      await c.query('delete from auth.users where id = $1', [id]);
+      const id = await insertSelfAuthUser(c, { email: 'zz-members-auth@example.com' });
+      await c.query('delete from self_auth."user" where id = $1', [id]);
       expect(await member(c, id)).toEqual([]);
     });
   });

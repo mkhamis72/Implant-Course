@@ -1,7 +1,9 @@
 import './load-env';
 import { Client } from 'pg';
 import { createClient } from '@supabase/supabase-js';
+import type { SelfAuth } from '@mkhamis72/self-auth';
 import { pgConfig } from './db';
+import { closeNodeAuth, nodeAuth } from './self-auth-node';
 
 /** The company that existed before the shared database: the one a canary company must never see. */
 export const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -98,6 +100,34 @@ async function companyTables(env: Env): Promise<string[]> {
   }
 }
 
+type CanaryAuth = Pick<SelfAuth, 'signIn' | 'issueDbToken' | 'signOut'> & { totp: Pick<SelfAuth['totp'], 'verify'> };
+
+/**
+ * Signs the canary in through Self-Auth (as the app does): password, then the 2FA code if the account has one.
+ * Returns a 5-minute database token for PostgREST (the run takes seconds) and a sign-out. Never prints the token.
+ */
+export async function signInCanary(
+  auth: CanaryAuth, input: { email: string; password: string; totp?: string; companyId: string },
+): Promise<{ dbToken: string; signOut: () => Promise<void> }> {
+  const r = await auth.signIn({ companyId: input.companyId, email: input.email, password: input.password });
+  if (!r.ok) throw new Error(`Sign-in failed: ${r.reason}`);
+  const signOut = () => auth.signOut(r.sessionToken);
+  let session = r.session;
+  if (r.needsTotp) {
+    if (!input.totp) {
+      await signOut();
+      throw new Error('The canary user has 2FA: set CANARY_TOTP to the current code');
+    }
+    const raised = await auth.totp.verify(r.sessionToken, input.companyId, input.totp);
+    if (!raised) {
+      await signOut();
+      throw new Error('2FA failed: the code was not accepted');
+    }
+    session = raised;
+  }
+  return { dbToken: await auth.issueDbToken(session), signOut };
+}
+
 async function main() {
   const input = canaryInputs(process.env);
   console.log(`Target project: ${new URL(input.url).hostname}`);
@@ -107,18 +137,26 @@ async function main() {
   const mismatch = projectMismatch(input.url, databaseUrl);
   if (mismatch) throw new Error(mismatch);
   if (input.companyId === ACADEMY_ID) throw new Error('CANARY_COMPANY_ID is the academy: the check needs the canary company');
-  const tables = await companyTables(process.env);
 
-  const supabase = createClient(input.url, input.anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const signedIn = await supabase.auth.signInWithPassword({ email: input.email, password: input.password });
-  if (signedIn.error) throw new Error(`Sign-in failed: ${signedIn.error.message}`);
-  const factors = await supabase.auth.mfa.listFactors();
-  const totp = factors.data?.totp.find((f) => f.status === 'verified');
-  if (totp) {
-    if (!input.totp) throw new Error('The canary user has 2FA: set CANARY_TOTP to the current code');
-    const verified = await supabase.auth.mfa.challengeAndVerify({ factorId: totp.id, code: input.totp });
-    if (verified.error) throw new Error(`2FA failed: ${verified.error.message}`);
+  try {
+    const canary = await signInCanary(await nodeAuth(), input);
+    try {
+      process.exitCode = await checkAsCanary(input, canary.dbToken);
+    } finally {
+      await canary.signOut();
+    }
+  } finally {
+    await closeNodeAuth();
   }
+}
+
+/** The checks through PostgREST with the canary's database token; returns the exit code. */
+async function checkAsCanary(input: ReturnType<typeof canaryInputs>, dbToken: string): Promise<number> {
+  const tables = await companyTables(process.env);
+  const supabase = createClient(input.url, input.anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${dbToken}` } },
+  });
   const bound = await supabase.rpc('bind_my_session', { p_company: input.companyId });
   if (bound.error) throw new Error(`Could not bind the session to the canary company: ${bound.error.message}`);
 
@@ -137,8 +175,7 @@ async function main() {
   for (const l of report.lines) console.log(l);
   for (const p of report.problems) console.log(`PROBLEM ${p}`);
   console.log(report.ok ? 'PASS' : 'FAIL');
-  await supabase.auth.signOut({ scope: 'local' });
-  process.exitCode = report.ok ? 0 : 1;
+  return report.ok ? 0 : 1;
 }
 
 if (process.argv[1] && /canary-check\.ts$/.test(process.argv[1])) {

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { controlTenants, controlSecret } = vi.hoisted(() => ({ controlTenants: vi.fn(), controlSecret: vi.fn() }));
+const { controlTenants, controlSecret, resetControlCache } = vi.hoisted(() => ({ controlTenants: vi.fn(), controlSecret: vi.fn(), resetControlCache: vi.fn() }));
 vi.mock('server-only', () => ({}));
-vi.mock('./control', () => ({ controlTenants, controlSecret }));
-import { findTenantByHost, findTenantBySlug, isSingleTenant, tenantServiceKey } from './registry';
+vi.mock('./control', () => ({ controlTenants, controlSecret, resetControlCache }));
+import { findTenantByCompanyId, findTenantByHost, findTenantBySlug, isSingleTenant, tenantServiceKey } from './registry';
 
 const a = { slug: 'a', hosts: ['a.example.com'], supabaseUrl: 'https://a.supabase.co', anonKey: 'anon', status: 'active' as const };
 
@@ -55,6 +55,17 @@ describe('control mode', () => {
     controlSecret.mockResolvedValue('vault-key');
     expect(await tenantServiceKey('a')).toBe('vault-key');
     expect(controlSecret).toHaveBeenCalledWith('a', 'service_role_key');
+  });
+  it('looks a company id up again from the control project when the cached list lacks it', async () => {
+    const added = { ...a, slug: 'new', hosts: ['new.example.com'], companyId: 'c-new' };
+    controlTenants.mockResolvedValueOnce([a]).mockResolvedValueOnce([a, added]);
+    expect(await findTenantByCompanyId('c-new')).toEqual(added);
+    expect(resetControlCache).toHaveBeenCalledTimes(1);
+  });
+  it('does not refetch for a company id the list already has', async () => {
+    controlTenants.mockResolvedValue([{ ...a, companyId: 'c-a' }]);
+    expect((await findTenantByCompanyId('c-a'))?.slug).toBe('a');
+    expect(resetControlCache).not.toHaveBeenCalled();
   });
   it('does not honour wildcard hosts in control mode', async () => {
     controlTenants.mockResolvedValue([{ ...a, slug: 'wild', hosts: ['*'] }, a]);

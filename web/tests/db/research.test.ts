@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
-import { enroll, makeCourse, makeDelegate, makePatient, pendingLogin, place, receive, setPerms } from './fixtures';
+import { enroll, makeCourse, makeDelegate, makePatient, pendingLogin, place, receive, setPerms, insertSelfAuthUser } from './fixtures';
 
 const users = inject('testUsers');
 const ALL_EDIT = { patients: 'edit', schedule: 'edit', courses: 'edit', checklists: 'edit', inventory: 'edit', delegates: 'edit' } as const;
@@ -73,10 +73,8 @@ describe('research permission', () => {
   it('a new organizer has no Research row; Research is None, View or Edit (0073)', async () => {
     await withTx(async (c) => {
       await pendingLogin(c, 'zz-research-new@example.com');
-      const { rows } = await c.query(
-        `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-research-new@example.com') returning id`,
-      );
-      const perms = await c.query(`select area from public.user_permissions where user_id = $1`, [rows[0].id]);
+      const newId = await insertSelfAuthUser(c, { email: 'zz-research-new@example.com' });
+      const perms = await c.query(`select area from public.user_permissions where user_id = $1`, [newId]);
       expect(perms.rows.map((r) => r.area)).not.toContain('research');
 
       await actAs(c, users.admin);

@@ -1,5 +1,6 @@
 import { test, expect, type BrowserContext } from '@playwright/test';
-import { adminClient, pendingLoginFor, setProfile } from '../../scripts/users';
+import { ensureTenantUser, setProfile } from '../../scripts/users';
+import { nodeAuth } from '../../scripts/self-auth-node';
 import { TEST_PASSWORD, TEST_USERS } from '../support/test-users';
 import { A, ACADEMY, B, companyB, purgeCompany, REFUSED, signIn, SKIP_REASON, withPg } from './companies';
 
@@ -7,15 +8,13 @@ import { A, ACADEMY, B, companyB, purgeCompany, REFUSED, signIn, SKIP_REASON, wi
 // TENANTS_FILE=<file> npx playwright test company-session --project=chromium
 test.skip(!companyB, SKIP_REASON);
 
-/** The sign-in session id from the auth cookie (possibly chunked; "base64-" + JSON with the access token). */
+/** The Self-Auth session id behind the host's session cookie (the id the company binding is keyed on). */
 async function sessionId(context: BrowserContext): Promise<string> {
-  const parts = (await context.cookies(A))
-    .filter((c) => /^sb-.+-auth-token(\.\d+)?$/.test(c.name))
-    .sort((x, y) => x.name.localeCompare(y.name, undefined, { numeric: true }));
-  const raw = parts.map((c) => c.value).join('');
-  const json = raw.startsWith('base64-') ? Buffer.from(raw.slice(7), 'base64url').toString('utf8') : decodeURIComponent(raw);
-  const token = (JSON.parse(json) as { access_token: string }).access_token;
-  return (JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')) as { session_id: string }).session_id;
+  const token = (await context.cookies(A)).find((c) => c.name === 'icm_session')?.value;
+  if (!token) throw new Error('no session cookie');
+  const session = await (await nodeAuth()).getSession(decodeURIComponent(token), ACADEMY);
+  if (!session) throw new Error('the session cookie is not a live academy session');
+  return session.sessionId;
 }
 
 test.describe('the session belongs to the company it signed in on', () => {
@@ -23,15 +22,12 @@ test.describe('the session belongs to the company it signed in on', () => {
   const email = `icm-company-session-${Date.now()}@example.com`;
 
   test.beforeAll(async () => {
-    await pendingLoginFor(email);
-    const { data, error } = await adminClient().auth.admin.createUser({ email, password: TEST_PASSWORD, email_confirm: true });
-    if (error) throw error;
-    userId = data.user!.id;
     await withPg(async (pg) => {
+      userId = await ensureTenantUser({ email, password: TEST_PASSWORD, pending: { pg } });
       await pg.query(`insert into public.companies (id, slug, name) values ($1, 'e2e-company-b', 'E2E Company B') on conflict (id) do nothing`, [companyB]);
       // The organizer test user is a member of academy only.
       await pg.query(
-        `delete from public.company_members where company_id = $1 and user_id = (select id from auth.users where email = $2)`,
+        `delete from public.company_members where company_id = $1 and user_id = (select user_id from public.profiles where email = $2)`,
         [companyB, TEST_USERS.organizer.email],
       );
       await setProfile(pg, userId, { full_name: 'E2E Company Session', role: 'organizer', active: true });
@@ -39,21 +35,21 @@ test.describe('the session belongs to the company it signed in on', () => {
   });
 
   test.afterAll(async () => {
-    if (userId) await adminClient().auth.admin.deleteUser(userId);
+    if (userId) await (await nodeAuth()).admin.deleteUser(ACADEMY, userId).catch(() => {});
     // Company B exists only for this spec (DB tests expect academy to be the only company).
     await purgeCompany(companyB!);
   });
 
-  test("academy's cookies on company B's host are refused, and that session ends", async ({ page, context }) => {
+  test("academy's cookie on company B's host is treated as signed out", async ({ page, context }) => {
     await signIn(page, TEST_USERS.organizer.email);
     const cookies = await context.cookies(A);
     await context.addCookies(cookies.map(({ name, value }) => ({ name, value, url: B })));
     await page.goto(`${B}/`);
-    await expect(page).toHaveURL(/\/login\?error=company$/);
-    await expect(page.getByRole('alert').filter({ hasText: REFUSED })).toBeVisible();
-    // Ended for academy too: the same cookies no longer sign anyone in there.
+    await expect(page).toHaveURL(`${B}/login`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toHaveCount(0);
+    // Company B's host only ignores the cookie: academy's own session is unaffected.
     await page.goto(`${A}/`);
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
   });
 
   test('a session that lost its binding is bound again on its next request', async ({ page, context }) => {

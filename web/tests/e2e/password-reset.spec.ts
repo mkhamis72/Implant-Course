@@ -1,30 +1,28 @@
 import { test, expect, type Page } from '@playwright/test';
 import { Client } from 'pg';
-import { createClient } from '@supabase/supabase-js';
 import { authenticator } from 'otplib';
 import { pgConfig } from '../../scripts/db';
-import { adminClient, pendingLoginFor, setProfile } from '../../scripts/users';
+import { ensureTenantUser, setProfile } from '../../scripts/users';
+import { nodeAuth, sentEmails } from '../../scripts/self-auth-node';
+import { ACADEMY_COMPANY_ID } from '../../src/lib/tenant/types';
 import { login, expectDashboard } from './helpers';
 
 const SENT = "If an account exists for that address, we've emailed a link to set a new password. It works for 24 hours.";
 
 // A throwaway organizer login with a known password; deleted afterwards.
 async function withUser(prefix: string, fn: (u: { id: string; email: string; password: string }) => Promise<void>) {
-  const admin = adminClient();
   const email = `icm-${prefix}-${Date.now()}@example.com`;
   const password = 'Old-password-123';
-  await pendingLoginFor(email);
-  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-  expect(error).toBeNull();
-  const id = data.user!.id;
   const pg = new Client(pgConfig());
   await pg.connect();
+  let id = '';
   try {
+    id = await ensureTenantUser({ email, password, pending: { pg } });
     await setProfile(pg, id, { full_name: 'Reset Tester', role: 'organizer', active: true });
     await fn({ id, email, password });
   } finally {
     await pg.end();
-    await admin.auth.admin.deleteUser(id);
+    if (id) await (await nodeAuth()).admin.deleteUser(ACADEMY_COMPANY_ID, id);
   }
 }
 
@@ -53,27 +51,51 @@ async function resetLink(email: string): Promise<string> {
     .not.toBe('');
   const html: string = (await (await fetch(`http://127.0.0.1:54324/api/v1/message/${id}`)).json()).HTML;
   const href = html.match(/href="([^"]+)"/)![1].replace(/&amp;/g, '&');
-  expect(href).toMatch(/\/auth\/confirm\?token_hash=.+&type=recovery$/);
+  expect(href).toMatch(/\/auth\/reset\?token=.+$/);
   return href;
 }
 
+/** The email names the app's host; the test browser uses its own base URL, so keep only path and query. */
+const asPath = (href: string) => new URL(href).pathname + new URL(href).search;
+
 async function setNewPassword(page: Page, password: string) {
-  await expect(page).toHaveURL(/\/account\/set-password$/);
+  await expect(page).toHaveURL(/\/auth\/reset\?token=/);
   await page.getByLabel('New password').fill(password);
   await page.getByLabel('Confirm password').fill(password);
   await page.getByRole('button', { name: 'Save password' }).click();
-  await expectDashboard(page);
+  await expect(page).toHaveURL(/\/login\?notice=password_reset$/);
+  await expect(page.getByRole('status').filter({ hasText: 'Your password is changed' })).toBeVisible();
 }
 
 test('a user resets a forgotten password by email and signs in with the new one', async ({ page }) => {
   await withUser('reset', async ({ email }) => {
     await requestReset(page, email);
-    await page.goto(await resetLink(email));
+    await page.goto(asPath(await resetLink(email)));
     await setNewPassword(page, 'New-password-456');
 
-    await page.getByRole('button', { name: 'Sign out' }).click();
     await login(page, email, 'New-password-456');
     await expectDashboard(page);
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    // The old password no longer works.
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password').fill('Old-password-123');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText('Incorrect email or password.');
+  });
+});
+
+test('a reset link works once', async ({ page }) => {
+  await withUser('reset-once', async ({ email }) => {
+    await requestReset(page, email);
+    const path = asPath(await resetLink(email));
+    await page.goto(path);
+    await setNewPassword(page, 'New-password-456');
+    await page.goto(path);
+    await page.getByLabel('New password').fill('Another-password-789');
+    await page.getByLabel('Confirm password').fill('Another-password-789');
+    await page.getByRole('button', { name: 'Save password' }).click();
+    await expect(page.getByRole('main').getByRole('alert')).toContainText('invalid or has expired');
   });
 });
 
@@ -81,25 +103,26 @@ test('an unknown address gets the same reply', async ({ page }) => {
   await requestReset(page, `icm-nobody-${Date.now()}@example.com`);
 });
 
-test('with 2FA, the reset link asks for the code before the new password', async ({ page }) => {
+test('with 2FA, signing in with the new password still asks for the code', async ({ page }) => {
   test.setTimeout(90_000);
   await withUser('reset-mfa', async ({ email, password }) => {
-    // Enrol a TOTP factor as the user, through the API.
-    const user = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    expect((await user.auth.signInWithPassword({ email, password })).error).toBeNull();
-    const { data: enrolled, error: enrollError } = await user.auth.mfa.enroll({ factorType: 'totp' });
-    expect(enrollError).toBeNull();
-    const secret = enrolled!.totp.secret;
+    // Enrol an authenticator as the user, through the package.
+    const auth = await nodeAuth();
+    const signedIn = await auth.signIn({ companyId: ACADEMY_COMPANY_ID, email, password });
+    if (!signedIn.ok) throw new Error('sign-in failed');
+    const { secret } = await auth.totp.startEnroll(signedIn.sessionToken, ACADEMY_COMPANY_ID);
     const first = authenticator.generate(secret);
-    expect((await user.auth.mfa.challengeAndVerify({ factorId: enrolled!.id, code: first })).error).toBeNull();
+    expect(await auth.totp.confirmEnroll(signedIn.sessionToken, ACADEMY_COMPANY_ID, first)).not.toBeNull();
+    await auth.signOut(signedIn.sessionToken);
 
-    const { data: link, error } = await adminClient().auth.admin.generateLink({ type: 'recovery', email });
-    expect(error).toBeNull();
-    await page.goto(`/auth/confirm?token_hash=${link.properties!.hashed_token}&type=recovery`);
+    const before = sentEmails.length;
+    await auth.requestPasswordReset({ companyId: ACADEMY_COMPANY_ID, email });
+    const token = new URL(sentEmails.slice(before).find((m) => m.to === email)!.url).searchParams.get('token')!;
+    await page.goto(`/auth/reset?token=${encodeURIComponent(token)}`);
+    await setNewPassword(page, 'New-password-789');
+
+    await login(page, email, 'New-password-789');
     await expect(page).toHaveURL(/\/login\/mfa$/);
-
     let code = authenticator.generate(secret);
     while (code === first) {
       await new Promise((r) => setTimeout(r, 1000));
@@ -107,6 +130,6 @@ test('with 2FA, the reset link asks for the code before the new password', async
     }
     await page.getByLabel('Authentication code').fill(code);
     await page.getByRole('button', { name: 'Verify' }).click();
-    await setNewPassword(page, 'New-password-789');
+    await expectDashboard(page);
   });
 });

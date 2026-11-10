@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({ from: () => ({ select: () => ({ limit: async () => ({ error: null }) }) }) }),
 }));
-import { checkTenant, nullCompanyWarning, parseRegisterArgs } from './tenants';
+import { checkTenant, nullCompanyWarning, ownProjectRefusal, parseRegisterArgs } from './tenants';
 
 describe('parseRegisterArgs', () => {
   it('slug, name and one or more hosts', () => {
@@ -63,5 +63,18 @@ describe('nullCompanyWarning', () => {
   it('is quiet with a company id, or before control 0004 added the column', () => {
     expect(nullCompanyWarning('acme', 'a7c0de00-0000-4000-8000-000000000001')).toBeNull();
     expect(nullCompanyWarning('acme', undefined)).toBeNull();
+  });
+});
+
+describe('ownProjectRefusal (Self-Auth accounts live in the shared database)', () => {
+  const pg = (rows: { supabase_url: string }[]) => ({ query: vi.fn(async () => ({ rows })) }) as unknown as import('pg').Client;
+  it('register_refuses_company_on_its_own_project', async () => {
+    const msg = await ownProjectRefusal(pg([{ supabase_url: 'https://shared.supabase.co' }]), 'acme', 'https://acme.supabase.co');
+    expect(msg).toMatch(/acme\.supabase\.co is not the shared company database \(shared\.supabase\.co\)/);
+    expect(msg).toMatch(/Self-Auth/);
+  });
+  it('allows the shared project, and the first registration (no company serves academy yet)', async () => {
+    expect(await ownProjectRefusal(pg([{ supabase_url: 'https://shared.supabase.co' }]), 'acme', 'https://shared.supabase.co')).toBeNull();
+    expect(await ownProjectRefusal(pg([]), 'academy', 'https://shared.supabase.co')).toBeNull();
   });
 });

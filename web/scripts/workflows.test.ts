@@ -40,6 +40,66 @@ describe('release.yml', () => {
     expect(run).toContain('DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt"');
     expect(run.split('\n').find((l) => l.includes('export '))).toContain('DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt"');
   });
+  it('release_backs_up_before_migrating', () => {
+    const names = deploy.steps.map((s) => s.name ?? '');
+    const at = (prefix: string) => names.findIndex((n) => n.startsWith(prefix));
+    const backup = deploy.steps.find((s) => s.name?.startsWith('Back up'));
+    const offsite = deploy.steps.find((s) => s.name?.startsWith('Copy the pre-release backup'));
+    const artifact = deploy.steps.findIndex((s) => s.uses?.startsWith('actions/upload-artifact'));
+    // Export, dump, artifact and off-site copy all come before the migration; none may be skipped or soft-failed.
+    expect(at('Install the newest PostgreSQL client')).toBeGreaterThan(-1);
+    expect(at('Export the companies')).toBeGreaterThan(at('Install the newest PostgreSQL client'));
+    expect(at('Back up')).toBeGreaterThan(at('Export the companies'));
+    expect(artifact).toBeGreaterThan(at('Back up'));
+    expect(at('Copy the pre-release backup')).toBeGreaterThan(artifact);
+    expect(at('Migrate')).toBeGreaterThan(at('Copy the pre-release backup'));
+    for (const s of deploy.steps.slice(0, at('Migrate'))) {
+      expect(s).not.toHaveProperty('continue-on-error');
+      expect(s).not.toHaveProperty('if');
+    }
+    const run = backup?.run ?? '';
+    expect(run).toContain('set -euo pipefail');
+    expect(run).toContain('BACKUP_PASSPHRASE secret is missing');
+    expect(run.indexOf('BACKUP_PASSPHRASE secret is missing')).toBeLessThan(run.indexOf('pg_dump'));
+    expect(run).toMatch(/encrypt\(\) \{ gpg [^}]*--symmetric --cipher-algo AES256/);
+    expect(run).not.toMatch(/pg_dump[^\n]*> /);
+    expect(run).toContain('No companies were exported');
+    // Schema and data (no --data-only): a restore point for the exact state before the migration.
+    expect(run).not.toContain('--data-only');
+    // Each distinct company database once, with its sign-in accounts in both systems.
+    const branch = run.indexOf('if [ -z "${dumped[$key]:-}" ]; then');
+    expect(branch).toBeGreaterThan(-1);
+    const company = run.slice(branch, run.indexOf('dumped[$key]="$slug"'));
+    for (const schema of ['public', 'app_private', 'app', 'auth', 'self_auth']) expect(company).toContain(`--schema=${schema} `);
+    // The control project: registry, console admins and both sign-in schemas (the nightly had only the registry).
+    const end = run.indexOf('out/_control-');
+    expect(end).toBeGreaterThan(-1);
+    const controlDump = run.slice(run.lastIndexOf('pg_dump', end), end);
+    for (const schema of ['public', 'auth', 'self_auth']) expect(controlDump).toContain(`--schema=${schema} `);
+    expect(controlDump).toContain('"$CONTROL_DATABASE_URL"');
+    // Nothing soft-fails inside the step: no per-company failure list, a failed dump stops the job.
+    expect(run).not.toContain('failed+=');
+    for (const n of ['PASSPHRASE', 'CONTROL_DATABASE_URL', 'CA']) expect(cleans(run, n)).toBe(true);
+    // Uploaded as an artifact and to R2 under a per-attempt prefix (locked files cannot be overwritten on a re-run).
+    expect(deploy.steps[artifact].with).toMatchObject({
+      name: 'pre-release-backups-${{ github.run_id }}-${{ github.run_attempt }}', path: 'web/out/*.dump.gpg', 'if-no-files-found': 'error',
+    });
+    const copy = offsite?.run ?? '';
+    expect(offsite?.env?.RUN_ID).toBe('${{ github.run_id }}-${{ github.run_attempt }}');
+    expect(copy).toContain('prefix="$(date -u +%F)/$RUN_ID"');
+    expect(copy).toContain("--exclude '*' --include '*.dump.gpg'");
+    expect(copy).toContain('R2 secrets are missing');
+    for (const n of ['R2_ENDPOINT', 'R2_BUCKET', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) expect(cleans(copy, n)).toBe(true);
+  });
+  it('holds Migration B unless the production variable SELF_AUTH_B_HOLD is exactly 0', () => {
+    const step = deploy.steps.find((s) => s.name?.startsWith('Migrate'));
+    expect(step?.env?.SELF_AUTH_B_HOLD).toBe('${{ vars.SELF_AUTH_B_HOLD }}');
+  });
+  it('builds every deploy without Vercel build cache (the vendored self-auth tarball has no lockfile integrity)', () => {
+    const run = runOf(deploy, 'Deploy');
+    expect(run).toContain('curl --fail --silent --show-error -X POST "$HOOK?buildCache=false"');
+    expect(run).not.toMatch(/-X POST "\$HOOK"/);
+  });
   it('deploys unconditionally after the migration step (no step-level if)', () => {
     const step = deploy.steps.find((s) => s.name?.startsWith('Deploy'));
     expect(step).toBeDefined();
@@ -151,7 +211,12 @@ describe('backup.yml', () => {
     expect(keep.indexOf('secrets are missing')).toBeLessThan(keep.indexOf('for f in'));
     expect(keep).not.toContain('exit 1');
   });
-  it('backs up only the registry from the control project', () => {
+  it('keeps the Self-Auth accounts in every company dump and the console accounts in the control dump', () => {
+    expect(dump).toContain('--schema=auth --schema=self_auth');
+    // Quoted: the step runs with nullglob, which would drop an unquoted pattern that matches no file.
+    expect(dump).toContain("--table=public.console_admins --table=auth.users --table=auth.mfa_factors '--table=self_auth.*'");
+  });
+  it('backs up the registry and the console accounts from the control project', () => {
     expect(dump).toContain('--table=public.tenants --table=public.tenant_audit');
     expect(dump).toContain('out/_control-$day.dump.gpg');
   });

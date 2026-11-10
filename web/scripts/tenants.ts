@@ -1,4 +1,5 @@
 import type { Client } from 'pg';
+import { ACADEMY_COMPANY_ID } from '../src/lib/tenant/types';
 
 export type RegisterInput = {
   slug: string; name: string; hosts: string[]; supabaseUrl: string; anonKey: string; serviceRoleKey: string; databaseUrl: string;
@@ -37,6 +38,22 @@ export async function registerTenant(c: Client, t: RegisterInput): Promise<void>
     t.slug, t.name, t.hosts, t.supabaseUrl, t.anonKey, t.serviceRoleKey, t.databaseUrl, 'script',
   ]);
   if (t.companyId) await c.query('select public.console_set_company($1, $2, $3)', [t.slug, t.companyId, 'script']);
+}
+
+/**
+ * Self-Auth keeps every company's accounts in the shared company database (the app's one DATABASE_URL), so a
+ * company on its own Supabase project could not sign in. Refuses a project other than the shared one (the project
+ * of the company that serves academy); null when allowed, including the very first registration.
+ */
+export async function ownProjectRefusal(c: Client, slug: string, supabaseUrl: string): Promise<string | null> {
+  const { rows } = await c.query<{ supabase_url: string }>(
+    'select supabase_url from public.tenants where company_id = $1 and slug <> $2 order by created_at limit 1',
+    [ACADEMY_COMPANY_ID, slug]);
+  const shared = rows[0]?.supabase_url;
+  if (!shared || new URL(shared).host === new URL(supabaseUrl).host) return null;
+  return `Not registered: ${new URL(supabaseUrl).host} is not the shared company database (${new URL(shared).host}). `
+    + 'Self-Auth accounts live in the shared database, so a company on its own project cannot sign in. '
+    + 'Add the company with the console\'s Add company (shared database) instead.';
 }
 
 /** The tenant's company id: null when none is set, undefined before control 0004 added the column. */

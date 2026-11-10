@@ -3,6 +3,7 @@ import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { currentTenant } from '@/lib/tenant/current';
+import { currentSelfAuthSession } from '@/lib/self-auth/session';
 import { ensureSessionCompany } from './company-session';
 import {
   canEdit, canView, permissionMessage, toPermissions, type Area, type Level, type Permissions, type Role,
@@ -32,11 +33,10 @@ type MemberRow = Pick<Profile, 'role' | 'active' | 'delegate_id' | 'mfa_setup_re
 
 /** The signed-in user as a member of this host's company. Ends the session when it doesn't belong here. */
 const loadAccount = cache(async (): Promise<Account> => {
+  const session = await currentSelfAuthSession();
+  if (!session) return { profile: null, companyRefused: false };
+  const user = { id: session.userId, email: session.email };
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { profile: null, companyRefused: false };
   const { companyId } = await currentTenant();
   if ((await ensureSessionCompany(supabase, companyId)) === 'refused') return { profile: null, companyRefused: true };
   const [member, perms] = await Promise.all([

@@ -2,15 +2,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 import { IdleTimer, LAST_ACTIVITY_KEY } from './idle-timer';
 
-const signOut = vi.fn();
-vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({ auth: { signOut } }) }));
+const signOut = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
 
 describe('<IdleTimer>', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    signOut.mockReset();
+    signOut.mockClear();
+    vi.stubGlobal('fetch', signOut);
   });
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 
   it('calls onIdle after the configured minutes, reset by key presses', () => {
     const onIdle = vi.fn();
@@ -39,12 +42,12 @@ describe('<IdleTimer>', () => {
     expect(window.localStorage.getItem(LAST_ACTIVITY_KEY)).not.toBeNull();
   });
 
-  it('default idle sign-out only signs out this browser, not every device', async () => {
+  it('default idle sign-out posts to the server and never talks to Supabase from the browser', async () => {
     const assign = vi.fn();
     vi.stubGlobal('location', { ...window.location, assign });
-    render(<IdleTimer timeoutMinutes={5} supabase={{ url: 'https://a.supabase.co', anonKey: 'k' }} />);
+    render(<IdleTimer timeoutMinutes={5} />);
     await vi.advanceTimersByTimeAsync(5 * 60_000);
-    expect(signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(signOut).toHaveBeenCalledWith('/auth/signout', { method: 'POST' });
     expect(assign).toHaveBeenCalledWith('/login?reason=idle');
     vi.unstubAllGlobals();
   });
@@ -53,9 +56,10 @@ describe('<IdleTimer>', () => {
     const assign = vi.fn();
     vi.stubGlobal('location', { ...window.location, assign });
     render(
-      <IdleTimer timeoutMinutes={5} loginPath="/console/login" supabase={{ url: 'https://a.supabase.co', anonKey: 'k' }} />,
+      <IdleTimer timeoutMinutes={5} loginPath="/console/login" signOutPath="/console/signout" />,
     );
     await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(signOut).toHaveBeenCalledWith('/console/signout', { method: 'POST' });
     expect(assign).toHaveBeenCalledWith('/console/login?reason=idle');
     vi.unstubAllGlobals();
   });

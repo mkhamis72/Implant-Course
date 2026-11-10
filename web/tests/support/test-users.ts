@@ -1,6 +1,8 @@
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
-import { adminClient, ensureUser, setPermissions, setProfile } from '../../scripts/users';
+import { ensureTenantUser, setPermissions, setProfile } from '../../scripts/users';
+import bcrypt from 'bcryptjs';
+import { closeNodeAuth, nodeAuth } from '../../scripts/self-auth-node';
 import { assertSafeTestTarget } from '../../scripts/test-guard';
 import { ACADEMY_COMPANY_ID } from '../../src/lib/tenant/types';
 
@@ -37,29 +39,33 @@ const ALL_EDIT = { patients: 'edit', schedule: 'edit', courses: 'edit', checklis
 const VIEWER = { patients: 'view', schedule: 'view', courses: 'view', checklists: 'view', inventory: 'edit', delegates: 'view' } as const;
 export const TEST_DELEGATE_NAME = 'Test Delegate Login';
 
-/** Idempotently creates the test users and resets their profiles, bans and 2FA factors. */
+/** Idempotently creates the test users (Self-Auth accounts of the academy, through the package) and resets their profiles, bans and 2FA factors. */
 export async function ensureTestUsers(): Promise<TestUserIds> {
   assertSafeTestTarget();
-  const admin = adminClient();
   const ids = {} as TestUserIds;
   const pg = new Client(pgConfig());
   await pg.connect();
   try {
     // Both global setups migrate first, so the schema is current: no per-migration guards.
     // A new account needs a pending login (0090).
+    // A profile left by the Supabase-Auth era keeps its id: import that account into Self-Auth, as the real
+    // switch-over does, so its membership, permissions and rows stay attached.
+    const auth = await nodeAuth();
+    const passwordHash = bcrypt.hashSync(TEST_PASSWORD, 10);
+    for (const { email } of Object.values(TEST_USERS)) {
+      const legacy = (await pg.query(
+        `select p.user_id from public.profiles p where lower(p.email) = $1
+         and not exists (select 1 from self_auth."user" u where u.id = p.user_id or u."realEmail" = $1 and u."companyId" = $2)`,
+        [email, ACADEMY_COMPANY_ID])).rows[0]?.user_id as string | undefined;
+      if (legacy) {
+        await auth.importSupabaseUser({ companyId: ACADEMY_COMPANY_ID, userId: legacy, email, passwordHash, totpSecret: null, createdAt: new Date() });
+      }
+    }
     for (const key of Object.keys(TEST_USERS) as TestUserKey[]) {
-      ids[key] = await ensureUser(admin, {
-        email: TEST_USERS[key].email,
-        password: TEST_PASSWORD,
-        emailConfirm: key !== 'unverified',
-        pending: { pg },
-      });
+      ids[key] = await ensureTenantUser({ email: TEST_USERS[key].email, password: TEST_PASSWORD, pending: { pg } });
     }
-    const { data: factors, error } = await admin.auth.admin.mfa.listFactors({ userId: ids.mfa });
-    if (error) throw error;
-    for (const factor of factors.factors) {
-      await admin.auth.admin.mfa.deleteFactor({ id: factor.id, userId: ids.mfa });
-    }
+    // No test user starts with a 2FA factor.
+    await pg.query('delete from self_auth.totp_factor where user_id = any($1)', [Object.values(ids)]);
     for (const key of Object.keys(PROFILES) as TestUserKey[]) {
       const profile = PROFILES[key];
       if (profile.role !== 'delegate') {
@@ -87,6 +93,7 @@ export async function ensureTestUsers(): Promise<TestUserIds> {
     }
   } finally {
     await pg.end();
+    await closeNodeAuth();
   }
   return ids;
 }

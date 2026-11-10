@@ -1,21 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+vi.mock('server-only', () => ({}));
 
-const jar = { reset: undefined as string | undefined };
-vi.mock('next/headers', () => ({
-  cookies: async () => ({ get: (name: string) => (name === 'icm_reset_pending' && jar.reset !== undefined ? { value: jar.reset } : undefined) }),
-}));
+const jar = { token: 'tok' as string | null };
+vi.mock('@/lib/self-auth/cookie', () => ({ readSessionCookie: async () => jar.token }));
 vi.mock('next/navigation', () => ({
   redirect: (to: string) => {
     throw new Error(`REDIRECT ${to}`);
   },
 }));
-const auth = {
-  mfa: {
-    listFactors: vi.fn(async () => ({ data: { totp: [{ id: 'f1', status: 'verified' }] }, error: null })),
-    challengeAndVerify: vi.fn(async () => ({ error: null as unknown })),
-  },
-};
-vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ auth }) }));
+vi.mock('@/lib/tenant/current', () => ({ currentTenant: async () => ({ slug: 'academy', companyId: 'company-a' }) }));
+const verify = vi.fn(async (..._a: unknown[]) => ({ aal: 'aal2' }) as unknown);
+vi.mock('@/lib/self-auth/tenant', () => ({ tenantAuth: async () => ({ totp: { verify } }) }));
 
 import { verifyMfa } from './actions';
 
@@ -27,21 +22,24 @@ const form = (code: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  jar.reset = undefined;
+  jar.token = 'tok';
+  verify.mockResolvedValue({ aal: 'aal2' });
 });
 
 describe('verifyMfa', () => {
-  it('goes home after a normal sign-in', async () => {
+  it("verifies the code for this session and host's company, then goes home", async () => {
     await expect(verifyMfa({}, form('123 456'))).rejects.toThrow('REDIRECT /');
-    expect(auth.mfa.challengeAndVerify).toHaveBeenCalledWith({ factorId: 'f1', code: '123456' });
+    expect(verify).toHaveBeenCalledWith('tok', 'company-a', '123456');
   });
-  it('continues to the new-password page after a reset link', async () => {
-    jar.reset = '1';
-    await expect(verifyMfa({}, form('123456'))).rejects.toThrow('REDIRECT /account/set-password');
+  it('a wrong code shows the existing message and stays', async () => {
+    verify.mockResolvedValue(null);
+    expect(await verifyMfa({}, form('000000'))).toEqual({
+      error: 'That code is not correct. Check your authenticator app and try again.',
+    });
   });
-  it('stays on the form when the code is wrong', async () => {
-    jar.reset = '1';
-    auth.mfa.challengeAndVerify.mockResolvedValueOnce({ error: { code: 'mfa_verification_failed', message: 'x' } });
-    expect(await verifyMfa({}, form('000000'))).toEqual({ error: 'That code is not correct. Check your authenticator app and try again.' });
+  it('without a session it goes back to sign-in', async () => {
+    jar.token = null;
+    await expect(verifyMfa({}, form('123456'))).rejects.toThrow('REDIRECT /login');
+    expect(verify).not.toHaveBeenCalled();
   });
 });

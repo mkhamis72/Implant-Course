@@ -2,7 +2,7 @@ import { describe, it, expect, inject } from 'vitest';
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
 import { withTx, actAs, asPostgres } from './helpers';
-import { makeDelegate, makePatient, makeProduct, onHand, place, receive } from './fixtures';
+import { insertSelfAuthFactor, makeDelegate, makePatient, makeProduct, onHand, place, receive } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -120,12 +120,7 @@ describe('placing an implant', () => {
   it('2FA user with aal1 cannot place', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
-      await asPostgres(c);
-      await c.query(
-        `insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret)
-         values (gen_random_uuid(), $1, 't', 'totp', 'verified', now(), now(), 'x')`,
-        [users.organizer],
-      );
+      await insertSelfAuthFactor(c, users.organizer);
       await actAs(c, users.organizer, { aal: 'aal1' });
       await expect(place(c, { ...s, tooth: 36 })).rejects.toThrow(/Not allowed/);
     });

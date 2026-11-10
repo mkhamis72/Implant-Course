@@ -1,7 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, actAsBound, asPostgres, asCompany } from './helpers';
-import { makeDelegate, makePatient, makeProduct, pendingLogin, place, receive } from './fixtures';
+import { makeDelegate, makePatient, makeProduct, pendingLogin, place, receive, insertSelfAuthUser } from './fixtures';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -70,8 +70,7 @@ describe('admin functions act on the caller\'s company (0090)', () => {
       await refused(c, () => c.query(`select public.admin_change_email($1, 'zz-company-fns-shared@example.com')`, [users.target]), SHARED);
 
       await pendingLogin(c, 'zz-company-fns-b@example.com', { company: b });
-      const only = (await c.query(
-        `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-company-fns-b@example.com') returning id`)).rows[0].id;
+      const only = await insertSelfAuthUser(c, { email: 'zz-company-fns-b@example.com', companyId: b });
       await actAsBound(c, users.admin, b);
       await c.query(`select public.admin_set_name($1, 'Zz B Only')`, [only]);
       await c.query(`select public.admin_change_email($1, 'zz-company-fns-b2@example.com')`, [only]);
@@ -96,8 +95,7 @@ describe('admin functions act on the caller\'s company (0090)', () => {
       await actAsBound(c, users.admin, b);
       await c.query(`select public.create_pending_login('zz-company-fns-new@example.com', 'Zz New', 'organizer', null)`);
       await asPostgres(c);
-      const id = (await c.query(
-        `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-company-fns-new@example.com') returning id`)).rows[0].id;
+      const id = await insertSelfAuthUser(c, { email: 'zz-company-fns-new@example.com', companyId: b });
       expect((await c.query('select company_id, role, active from public.company_members where user_id = $1', [id])).rows)
         .toEqual([{ company_id: b, role: 'organizer', active: true }]);
       // An organizer membership gets View defaults in its own company (0090: default_permissions on company_members).
@@ -111,16 +109,14 @@ describe('handle_new_user without a pending login (0090)', () => {
   it('refuses the sign-up', async () => {
     await withTx(async (c) => {
       await asPostgres(c);
-      await refused(c, () => c.query(
-        `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-company-fns-none@example.com')`), /No pending login for this address\./);
+      await refused(c, () => insertSelfAuthUser(c, { email: 'zz-company-fns-none@example.com' }), /No pending login for this address\./);
     });
   });
 
   it('creates the membership from the fixture pending row', async () => {
     await withTx(async (c) => {
       await pendingLogin(c, 'zz-company-fns-fixture@example.com', { fullName: 'Zz Fixture' });
-      const id = (await c.query(
-        `insert into auth.users (id, email) values (gen_random_uuid(), 'zz-company-fns-fixture@example.com') returning id`)).rows[0].id;
+      const id = await insertSelfAuthUser(c, { email: 'zz-company-fns-fixture@example.com' });
       expect((await c.query('select company_id, role, active from public.company_members where user_id = $1', [id])).rows)
         .toEqual([{ company_id: ACADEMY_ID, role: 'organizer', active: true }]);
     });

@@ -2,7 +2,7 @@ import './load-env';
 import { Client } from 'pg';
 import { pgConfig } from './db';
 import { migrateTarget } from './migrate-target';
-import { checkTenant, nullCompanyWarning, parseRegisterArgs, provisionCompany, registerTenant, tenantCompanyId } from './tenants';
+import { checkTenant, nullCompanyWarning, ownProjectRefusal, parseRegisterArgs, provisionCompany, registerTenant, tenantCompanyId } from './tenants';
 
 function need(name: string): string {
   const v = process.env[name];
@@ -21,12 +21,14 @@ async function main() {
   };
   const target = migrateTarget(['--control'], process.env);
   console.log(`Target project: ${target.label}; company ${args.slug} → ${new URL(company.supabaseUrl).host}`);
-  const problems = await checkTenant(company);
-  if (problems.length) throw new Error(`Not registered:\n- ${problems.join('\n- ')}`);
   const c = new Client(target.config);
   await c.connect();
   let warning: string | null = null;
   try {
+    const refusal = await ownProjectRefusal(c, args.slug, company.supabaseUrl);
+    if (refusal) throw new Error(refusal);
+    const problems = await checkTenant(company);
+    if (problems.length) throw new Error(`Not registered:\n- ${problems.join('\n- ')}`);
     await c.query('begin');
     if (provision) {
       // The company and its starting data in the shared database (0095) first: its id goes on the registry row.

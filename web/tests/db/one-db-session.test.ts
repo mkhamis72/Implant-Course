@@ -1,6 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, asPostgres } from './helpers';
+import { insertSelfAuthSession } from './fixtures';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -17,7 +18,7 @@ async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp) {
 }
 
 async function authSession(c: Client, id: string, user: string) {
-  await c.query('insert into auth.sessions (id, user_id, created_at, updated_at) values ($1, $2, now(), now())', [id, user]);
+  await insertSelfAuthSession(c, user, id);
 }
 
 async function boundRow(c: Client, session: string, company: string, user: string) {
@@ -48,7 +49,7 @@ describe('bind_my_session / my_session_company (0086)', () => {
       await asPostgres(c);
       await authSession(c, S1, users.organizer);
       await authSession(c, S3, users.organizer);
-      await boundRow(c, S0, ACADEMY_ID, users.organizer); // stale: no auth.sessions row
+      await boundRow(c, S0, ACADEMY_ID, users.organizer); // stale: no self_auth.session row
       await boundRow(c, S2, ACADEMY_ID, users.admin); // another user's stale row
       await boundRow(c, S3, ACADEMY_ID, users.organizer); // the caller's other live session
       await actAs(c, users.organizer, { session_id: S1 });
@@ -59,7 +60,7 @@ describe('bind_my_session / my_session_company (0086)', () => {
 
   it('never removes the session it has just bound', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.organizer, { session_id: S1 }); // no auth.sessions row for S1
+      await actAs(c, users.organizer, { session_id: S1 }); // no self_auth.session row for S1
       await c.query('select public.bind_my_session($1)', [ACADEMY_ID]);
       expect(await boundSessions(c)).toEqual([S1]);
     });

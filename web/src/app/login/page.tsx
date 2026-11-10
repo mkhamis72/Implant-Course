@@ -8,7 +8,7 @@ import { COMPANY_REFUSED_MESSAGE } from '@/lib/auth/company-session';
 
 export default async function LoginPage({ searchParams }: { searchParams: PageSearchParams }) {
   const branding = await getBranding();
-  const { reason, error } = await readParams(searchParams, 'reason', 'error');
+  const { reason, error, notice } = await readParams(searchParams, 'reason', 'error', 'notice');
   return (
     <main className="mx-auto mt-10 max-w-sm px-4 sm:mt-24">
       <div className="card space-y-6">
@@ -19,6 +19,8 @@ export default async function LoginPage({ searchParams }: { searchParams: PageSe
         {reason === 'idle' && (
           <p className="rounded bg-warn-soft p-3 text-sm text-warn">You were signed out after a period of inactivity.</p>
         )}
+        {notice === 'password_reset' && <p role="status" className="rounded bg-ok-soft p-3 text-sm">Your password is changed. Sign in with the new one.</p>}
+        {notice === 'invite_accepted' && <p role="status" className="rounded bg-ok-soft p-3 text-sm">Your password is set. Sign in to continue.</p>}
         {error === 'company' && <p role="alert" className="rounded bg-bad-soft p-3 text-sm text-bad">{COMPANY_REFUSED_MESSAGE}</p>}
         <LoginForm />
         {emailEnabled() && (

@@ -3,8 +3,14 @@ import { readFileSync, existsSync } from 'node:fs';
 import { parse } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { authenticator } from 'otplib';
+import { Client } from 'pg';
+import { pgConfig } from '../../scripts/db';
+import { closeNodeAuth, nodeAuth, nodeConsoleAuth } from '../../scripts/self-auth-node';
+import { TEST_USERS } from '../support/test-users';
+import { ACADEMY, signInThroughApi } from './companies';
 
-// Runs only in local console mode: npm run console:local; set -a; source .env.console; set +a; npx playwright test console
+// Runs only in local console mode: npm run console:local (writes .env.console), then run the tests with .env.console
+// loaded next to .env.local: npx playwright test console
 test.skip(!process.env.CONSOLE_HOST, 'needs CONSOLE_HOST (npm run console:local)');
 
 const C = 'http://console.localhost:3000';
@@ -33,33 +39,54 @@ async function signIn(page: Page, who = email, password = PASSWORD) {
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
-/** The first link to /auth/confirm in the newest email to `to` (local Mailpit). */
-async function emailedLink(to: string): Promise<string> {
+/** The first link to `path` (/auth/invite, /console/auth/reset) in the newest email to `to` (local Mailpit). */
+async function emailedLink(to: string, path: string): Promise<string> {
   let link = '';
   await expect.poll(async () => {
     const res = await fetch(`http://127.0.0.1:54324/api/v1/search?query=${encodeURIComponent(`to:"${to}"`)}`);
     const id = (await res.json()).messages?.[0]?.ID;
     if (!id) return '';
     const msg = await (await fetch(`http://127.0.0.1:54324/api/v1/message/${id}`)).json();
-    link = (msg.HTML as string).match(/href="([^"]*\/auth\/confirm[^"]*)"/)?.[1]?.replace(/&amp;/g, '&') ?? '';
+    link = (msg.HTML as string).match(new RegExp(`href="([^"]*${path}[^"]*)"`))?.[1]?.replace(/&amp;/g, '&') ?? '';
     return link;
   }, { timeout: 30_000 }).not.toBe('');
   return link;
 }
 
+/** Removes a company's Self-Auth account (and with it the profile and membership) by address; quiet when there is none. */
+async function removeCompanyAccount(companyId: string, address: string) {
+  const auth = await nodeAuth();
+  const found = (await auth.admin.listUsers(companyId)).find((u) => u.email.toLowerCase() === address);
+  if (found) await auth.admin.deleteUser(companyId, found.userId);
+}
+
+async function companyIdOf(slug: string): Promise<string | undefined> {
+  const pg = new Client(pgConfig());
+  await pg.connect();
+  try {
+    return (await pg.query('select id from public.companies where slug = $1', [slug])).rows[0]?.id;
+  } finally {
+    await pg.end();
+  }
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async () => {
-  const { data, error } = await control().auth.admin.createUser({ email, password: PASSWORD, email_confirm: true });
+  // A console admin is a Self-Auth account of company 'console' in the control database, plus its console_admins row.
+  const created = await (await nodeConsoleAuth()).admin.createUser({ companyId: 'console', email, password: PASSWORD });
+  userId = created.userId;
+  const { error } = await control().from('console_admins').insert({ user_id: userId, email });
   if (error) throw error;
-  userId = data.user!.id;
-  const { error: e2 } = await control().from('console_admins').insert({ user_id: userId, email });
-  if (e2) throw e2;
 });
 
 test.afterAll(async () => {
-  if (userId) await control().auth.admin.deleteUser(userId);
+  if (userId) {
+    await control().from('console_admins').delete().eq('user_id', userId);
+    await (await nodeConsoleAuth()).admin.deleteUser('console', userId);
+  }
   await control().rpc('console_set_status', { p_slug: 'dev2', p_status: 'active', p_reason: 'E2E cleanup', p_actor: 'e2e' });
+  await closeNodeAuth();
 });
 
 test('the console host serves only the console, company hosts never serve it', async ({ page }) => {
@@ -90,14 +117,16 @@ test('a console admin signs in with password and sets up 2FA, then sees healthy 
   }
 });
 
-test('a signed-in control user who is not a console admin is refused', async ({ page }) => {
+test('a console account that is not a console admin is refused', async ({ page }) => {
   const other = `icm-console-no-${Date.now()}@example.com`;
-  const { data } = await control().auth.admin.createUser({ email: other, password: PASSWORD, email_confirm: true });
+  const auth = await nodeConsoleAuth();
+  const { userId: otherId } = await auth.admin.createUser({ companyId: 'console', email: other, password: PASSWORD });
   try {
     await signIn(page, other);
     await expect(page.getByRole('alert').filter({ hasText: 'Incorrect email or password.' })).toBeVisible();
+    expect((await page.context().cookies(C)).find((c) => c.name === 'icm_console_session')).toBeUndefined();
   } finally {
-    await control().auth.admin.deleteUser(data.user!.id);
+    await auth.admin.deleteUser('console', otherId);
   }
 });
 
@@ -134,15 +163,14 @@ test('a first admin invited from the console gets an email linking to the compan
   await page.getByLabel('Full name').fill('E2E First Admin');
   await page.getByRole('button', { name: 'Send invite' }).click();
   await expect(page.getByRole('status').filter({ hasText: `Invite sent to ${adminEmail}.` })).toBeVisible();
-  // Company two is in the main stack; dev2 is only the control project.
-  const company = parse(readFileSync('.env.local'));
-  const db = createClient(company.NEXT_PUBLIC_SUPABASE_URL, company.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  // Company two is in the main stack (company console-e2e); dev2 is only the control project.
+  const companyId = await companyIdOf('console-e2e');
   try {
-    expect(await emailedLink(adminEmail)).toMatch(/^http:\/\/tenant2\.localhost:3000\/auth\/confirm\?token_hash=[^&]+&type=invite$/);
+    // The link is Self-Auth's, on the company's own host (the registry has no port for local hosts).
+    expect(await emailedLink(adminEmail, '/auth/invite')).toMatch(/^http:\/\/tenant2\.localhost(:3000)?\/auth\/invite\?token=[^&]+$/);
     await expect(page.getByRole('table')).toContainText('first_admin_invited');
   } finally {
-    const { data } = await db.from('profiles').select('user_id').eq('email', adminEmail).maybeSingle();
-    if (data) await db.auth.admin.deleteUser(data.user_id);
+    if (companyId) await removeCompanyAccount(companyId, adminEmail);
   }
 });
 
@@ -157,8 +185,12 @@ test('adding a company takes one form: name, address and first admin; the shared
     await signInWith2fa(page);
     await page.getByRole('link', { name: 'Add company' }).click();
     await expect(page.getByLabel(/key/i)).toHaveCount(0);
-    await page.getByLabel('Company name').fill('E2E Added Co');
-    await expect(page.getByLabel('Slug')).toHaveValue('e2e-added-co');
+    // The dev server may still be hydrating the form, which drops an early fill: type again until the slug follows.
+    await expect(async () => {
+      await page.getByLabel('Company name').fill('');
+      await page.getByLabel('Company name').fill('E2E Added Co');
+      await expect(page.getByLabel('Slug')).toHaveValue('e2e-added-co', { timeout: 3_000 });
+    }).toPass({ timeout: 45_000 });
     await page.getByLabel('Slug').fill(slug);
     await expect(page.getByLabel('Address (one per line)')).toHaveValue(`${slug}.localhost`);
     await page.getByLabel('Full name').fill('E2E Onboard Admin');
@@ -167,7 +199,7 @@ test('adding a company takes one form: name, address and first admin; the shared
     await expect(page.getByRole('heading', { name: 'Company added.' })).toBeVisible();
     await expect(page.getByText(`Invite sent to ${adminEmail}.`)).toBeVisible();
     await expect(page.getByText(/Vercel is not connected/)).toBeVisible();
-    expect(await emailedLink(adminEmail)).toMatch(new RegExp(`^http://${slug}\\.localhost:3000/auth/confirm\\?token_hash=`));
+    expect(await emailedLink(adminEmail, '/auth/invite')).toMatch(new RegExp(`^http://${slug}\\.localhost(:3000)?/auth/invite\\?token=`));
     await page.getByRole('link', { name: 'Open the company' }).click();
     await expect(page).toHaveURL(new RegExp(`/console/companies/${slug}$`));
     await expect(page.getByRole('heading', { name: 'Address' })).toBeVisible();
@@ -183,11 +215,6 @@ test('adding a company takes one form: name, address and first admin; the shared
     await page.goto(`${C}/console`);
     await expect(page.getByTestId(`company-${slug}`)).toContainText('OK');
   } finally {
-    {
-      const db = createClient(company.NEXT_PUBLIC_SUPABASE_URL, company.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-      const { data } = await db.from('profiles').select('user_id').eq('email', adminEmail).maybeSingle();
-      if (data) await db.auth.admin.deleteUser(data.user_id);
-    }
     const pg = await import('pg');
     const c = new pg.Client({ connectionString: dev2.DATABASE_URL });
     await c.connect();
@@ -203,6 +230,13 @@ test('adding a company takes one form: name, address and first admin; the shared
       await main.query('set local session_replication_role = replica');
       const id = (await main.query('select id from public.companies where slug = $1', [slug])).rows[0]?.id;
       if (id) {
+        // The invited first admin is the company's only admin, which Self-Auth's delete refuses (last active admin):
+        // with triggers off, remove the account rows by hand (the foreign-key cascades are off too), then the profile.
+        const ids = (await main.query<{ id: string }>('select id from self_auth."user" where "companyId" = $1', [id])).rows.map((r) => r.id);
+        for (const t of ['self_auth.account', 'self_auth.session']) await main.query(`delete from ${t} where "userId" = any($1::uuid[])`, [ids]);
+        await main.query('delete from self_auth.totp_factor where user_id = any($1::uuid[])', [ids]);
+        await main.query('delete from self_auth."user" where id = any($1::uuid[])', [ids]);
+        await main.query('delete from public.profiles where user_id = any($1::uuid[])', [ids]);
         // Every company table (provision_company writes settings, branding, products, consent_form_versions,
         // file_no_counters and their audit rows; members, logins or sessions only if the run got that far).
         const tables = (await main.query<{ t: string }>('select x::text as t from app.company_tables() x')).rows.map((r) => r.t);
@@ -220,18 +254,57 @@ test('adding a company takes one form: name, address and first admin; the shared
   }
 });
 
-test('a console admin changes their password and signs in with the new one', async ({ page }) => {
+test('console_session_not_valid_on_company_host: the two kinds of session never open each other\'s side', async ({ page, context }) => {
+  test.setTimeout(180_000);
+  await signInWith2fa(page);
+  const consoleToken = (await context.cookies(C)).find((c) => c.name === 'icm_console_session')!.value;
+  // The console cookie is host-only: the company host never receives it.
+  expect((await context.cookies('http://localhost:3000')).find((c) => c.name === 'icm_console_session')).toBeUndefined();
+  // Replayed as the company session cookie on a company host, it is signed out (and the cookie dropped).
+  await context.addCookies([{ name: 'icm_session', value: consoleToken, url: 'http://localhost:3000', httpOnly: true, sameSite: 'Lax' }]);
+  await page.goto('http://localhost:3000/');
+  await expect(page).toHaveURL('http://localhost:3000/login');
+  expect((await context.cookies('http://localhost:3000')).find((c) => c.name === 'icm_session')).toBeUndefined();
+  // And the other way round: a company session token as the console cookie opens nothing on the console host.
+  const other = await context.browser()!.newContext();
+  try {
+    await signInThroughApi(other, TEST_USERS.organizer.email, ACADEMY, 'http://localhost:3000');
+    const companyToken = (await other.cookies('http://localhost:3000')).find((c) => c.name === 'icm_session')!.value;
+    const intruder = await context.browser()!.newContext();
+    try {
+      await intruder.addCookies([{ name: 'icm_console_session', value: companyToken, url: C, httpOnly: true, sameSite: 'Lax' }]);
+      // (A browser page: Node's resolver does not know *.localhost.)
+      const intruderPage = await intruder.newPage();
+      await intruderPage.goto(`${C}/console`);
+      await expect(intruderPage).toHaveURL(`${C}/console/login`);
+      expect((await intruder.cookies(C)).find((c) => c.name === 'icm_console_session')).toBeUndefined();
+    } finally {
+      await intruder.close();
+    }
+  } finally {
+    await other.close();
+  }
+});
+
+test('a console admin changes their password through an emailed link and signs in with the new one', async ({ page }) => {
   test.setTimeout(180_000);
   await signInWith2fa(page);
   await page.getByRole('link', { name: 'Change password' }).click();
   await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible();
   const newPassword = `${PASSWORD}-new`;
-  await page.getByLabel('New password', { exact: true }).fill(newPassword);
-  await page.getByLabel('Confirm new password').fill(newPassword);
-  await page.getByRole('button', { name: 'Change password' }).click();
-  await expect(page.getByRole('status')).toHaveText('Password changed.');
+  await page.getByRole('button', { name: 'Email me a link to change my password' }).click();
+  await expect(page.getByRole('status')).toContainText('We emailed a link');
+  // The link opens the console's own page (the console host serves only /console…).
+  const link = new URL(await emailedLink(email, '/console/auth/reset'));
+  expect(link.pathname).toBe('/console/auth/reset');
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL(/\/console\/login$/);
+  await page.goto(`${C}${link.pathname}${link.search}`);
+  await page.getByLabel('New password').fill(newPassword);
+  await page.getByLabel('Confirm password').fill(newPassword);
+  await page.getByRole('button', { name: 'Save password' }).click();
+  await expect(page).toHaveURL(/\/console\/login\?notice=password_reset$/);
+  await expect(page.getByRole('status')).toContainText('Your password was changed');
   await signIn(page, email, PASSWORD);
   await expect(page.getByRole('alert').filter({ hasText: 'Incorrect email or password.' })).toBeVisible();
   await signInWith2fa(page, newPassword);

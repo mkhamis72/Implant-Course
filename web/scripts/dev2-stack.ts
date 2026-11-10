@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { config as loadDotenv, parse } from 'dotenv';
 
@@ -42,6 +42,9 @@ function writeConfig() {
   mkdirSync('.dev2/supabase/templates', { recursive: true });
   writeFileSync('.dev2/supabase/config.toml', deriveDev2Config(readFileSync('supabase/config.toml', 'utf8')));
   for (const t of ['invite.html', 'recovery.html']) copyFileSync(`supabase/templates/${t}`, `.dev2/supabase/templates/${t}`);
+  // The config points at ./signing_keys.json (Self-Auth database tokens): dev2 needs the same public key, since
+  // the console's database tokens are checked by its PostgREST.
+  if (existsSync('supabase/signing_keys.json')) copyFileSync('supabase/signing_keys.json', '.dev2/supabase/signing_keys.json');
   console.log('Wrote .dev2/supabase/config.toml');
 }
 

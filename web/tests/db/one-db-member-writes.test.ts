@@ -1,7 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, asPostgres } from './helpers';
-import { pendingLogin, setPerms } from './fixtures';
+import { pendingLogin, setPerms, insertSelfAuthSession, insertSelfAuthUser } from './fixtures';
 
 const users = inject('testUsers');
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
@@ -43,7 +43,7 @@ async function member(c: Client, company: string, user: string) {
 /** A fresh active organizer login of academy (from a pending login, 0088). */
 async function newUser(c: Client, email: string): Promise<string> {
   await pendingLogin(c, email, { fullName: 'Zz Member Writes' });
-  return (await c.query('insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id', [email])).rows[0].id;
+  return await insertSelfAuthUser(c, { email });
 }
 
 describe('set_member_role / set_member_active (0087)', () => {
@@ -114,14 +114,14 @@ describe('admin_require_mfa_setup / admin_end_sessions (0087)', () => {
     await withTx(async (c) => {
       const b = await companyB(c);
       for (const s of [S_VIEWER_A, S_VIEWER_B]) {
-        await c.query('insert into auth.sessions (id, user_id, created_at, updated_at) values ($1, $2, now(), now())', [s, users.viewer]);
+        await insertSelfAuthSession(c, users.viewer, s);
       }
       await c.query('insert into app.session_companies (session_id, company_id, user_id) values ($1, $2, $3), ($4, $5, $3)',
         [S_VIEWER_A, ACADEMY_ID, users.viewer, S_VIEWER_B, b]);
       await bound(c, users.admin, S_ADMIN);
       await c.query('select public.admin_end_sessions($1)', [users.viewer]);
       await asPostgres(c);
-      const { rows } = await c.query('select id from auth.sessions where id = any($1)', [[S_VIEWER_A, S_VIEWER_B]]);
+      const { rows } = await c.query('select id from self_auth.session where id = any($1)', [[S_VIEWER_A, S_VIEWER_B]]);
       expect(rows.map((r) => r.id)).toEqual([S_VIEWER_B]);
     });
   });
@@ -131,7 +131,7 @@ describe('unbound admin: no company, no admin access (0090)', () => {
   it('is refused by the member writes', async () => {
     await withTx(async (c) => {
       for (const s of [S_VIEWER_A, S_OTHER]) {
-        await c.query('insert into auth.sessions (id, user_id, created_at, updated_at) values ($1, $2, now(), now())', [s, users.viewer]);
+        await insertSelfAuthSession(c, users.viewer, s);
       }
       await c.query('insert into app.session_companies (session_id, company_id, user_id) values ($1, $2, $3)',
         [S_VIEWER_A, ACADEMY_ID, users.viewer]); // S_OTHER stays unbound
@@ -145,7 +145,7 @@ describe('unbound admin: no company, no admin access (0090)', () => {
       await bound(c, users.admin, S_ADMIN);
       await c.query('select public.admin_end_sessions($1)', [users.viewer]);
       await asPostgres(c);
-      const { rows } = await c.query('select id from auth.sessions where id = any($1)', [[S_VIEWER_A, S_OTHER]]);
+      const { rows } = await c.query('select id from self_auth.session where id = any($1)', [[S_VIEWER_A, S_OTHER]]);
       expect(rows.map((r) => r.id)).toEqual([S_OTHER]);
     });
   });

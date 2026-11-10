@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 import { createIdleTimer } from '@/lib/idle';
-import { createClient } from '@/lib/supabase/client';
 
 const ACTIVITY_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart'] as const;
 
@@ -12,33 +11,31 @@ const BROADCAST_EVERY_MS = 5_000;
 // Lets the server-side idle check (middleware) see activity that makes no requests, e.g. typing.
 const HEARTBEAT_EVERY_MS = 60_000;
 
-async function signOutForIdle(supabase: { url: string; anonKey: string }, loginPath: string) {
-  // 'local' ends only this browser's session; 'global' would also sign out other devices.
-  await createClient(supabase.url, supabase.anonKey).auth.signOut({ scope: 'local' });
+async function signOutForIdle(signOutPath: string, loginPath: string) {
+  // The server ends only this browser's session; the browser never talks to the database or Supabase Auth.
+  // A failed revoke is retried once; either way the user goes to sign-in (the server's idle check is the backstop).
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch(signOutPath, { method: 'POST' }).catch(() => null);
+    if (res?.ok) break;
+  }
   window.location.assign(`${loginPath}?reason=idle`);
 }
 
 export function IdleTimer({
   timeoutMinutes,
-  supabase,
   onIdle,
   loginPath = '/login',
+  signOutPath = '/auth/signout',
   heartbeatPath = '/api/activity',
 }: {
   timeoutMinutes: number;
-  supabase?: { url: string; anonKey: string };
   onIdle?: () => void;
   loginPath?: string;
+  signOutPath?: string;
   heartbeatPath?: string;
 }) {
-  const url = supabase?.url;
-  const anonKey = supabase?.anonKey;
   useEffect(() => {
-    const handleIdle =
-      onIdle ??
-      (() => {
-        if (url && anonKey) void signOutForIdle({ url, anonKey }, loginPath);
-      });
+    const handleIdle = onIdle ?? (() => void signOutForIdle(signOutPath, loginPath));
     const timer = createIdleTimer(timeoutMinutes * 60_000, handleIdle);
     let lastBroadcast = 0;
     let lastHeartbeat = 0;
@@ -70,6 +67,6 @@ export function IdleTimer({
       ACTIVITY_EVENTS.forEach((e) => window.removeEventListener(e, onLocalActivity));
       window.removeEventListener('storage', onStorage);
     };
-  }, [timeoutMinutes, onIdle, url, anonKey, loginPath, heartbeatPath]);
+  }, [timeoutMinutes, onIdle, loginPath, signOutPath, heartbeatPath]);
   return null;
 }

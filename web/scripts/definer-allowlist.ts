@@ -11,6 +11,10 @@ export const DEFINER_ALLOWLIST: ReadonlySet<string> = new Set([
   // Auth trigger on auth.users: runs before the new user has a session or a company.
   'app_private.handle_new_user',
   'app_private.default_permissions',
+  // Trigger on self_auth."user" (0101): provisions a Self-Auth user from its pending login, before any session.
+  'app_private.handle_new_self_auth_user',
+  // Triggers on auth.users and self_auth."user" (0101): stand in for the dropped foreign keys' delete actions.
+  'app_private.handle_deleted_user',
   // Audit trigger: writes audit_log for every table, whatever the caller's company.
   'app_private.audit_row',
   // Deletes from auth.sessions.

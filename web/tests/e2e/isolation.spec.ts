@@ -1,8 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { adminClient, pendingLoginFor } from '../../scripts/users';
+import { ensureTenantUser } from '../../scripts/users';
+import { nodeAuth, sentEmails } from '../../scripts/self-auth-node';
 import { TEST_PASSWORD, TEST_USERS } from '../support/test-users';
-import { A, ACADEMY, B, companyB, purgeCompany, REFUSED, signIn, signInThroughApi, SKIP_REASON, tenantsFile, withPg } from './companies';
+import { A, ACADEMY, B, companyB, purgeCompany, signIn, signInThroughApi, SKIP_REASON, tenantsFile, withPg } from './companies';
 import { uniqueName } from './patients';
 import { apiAs, placeImplant, seedDelegate, seedImplantStock } from './api';
 
@@ -16,10 +17,7 @@ const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' 
 
 /** A login of the company with the test password, never signed in. */
 async function newLogin(email: string, company: string, fullName: string, role: 'admin' | 'organizer' = 'organizer') {
-  await pendingLoginFor(email, company);
-  const { data, error } = await adminClient().auth.admin.createUser({ email, password: TEST_PASSWORD, email_confirm: true });
-  if (error) throw error;
-  const id = data.user!.id;
+  const id = await withPg((pg) => ensureTenantUser({ email, password: TEST_PASSWORD, companyId: company, pending: { pg } }));
   await withPg(async (pg) => {
     await pg.query('update public.profiles set full_name = $2 where user_id = $1', [id, fullName]);
     await pg.query('update public.company_members set role = $3 where company_id = $1 and user_id = $2', [company, id, role]);
@@ -58,9 +56,13 @@ test.describe('company isolation in one database', () => {
     });
     ids.bAdmin = await newLogin(bAdminEmail, companyB!, 'E2E Iso B Admin', 'admin');
     ids.bOrganizer = await newLogin(bOrganizerEmail, companyB!, 'E2E Iso B Organizer');
-    // Academy's throwaway target for the admin actions: 2FA set-up pending, so Reset 2FA is offered.
+    // Academy's throwaway target for the admin actions: 2FA set-up pending, so Reset 2FA is offered, and no
+    // password yet (an invite still waiting), so Resend invite is offered.
     ids.target = await newLogin(targetEmail, ACADEMY, targetName);
-    await withPg((pg) => pg.query('update public.company_members set mfa_setup_required = true where company_id = $1 and user_id = $2', [ACADEMY, ids.target]));
+    await withPg(async (pg) => {
+      await pg.query('update public.company_members set mfa_setup_required = true where company_id = $1 and user_id = $2', [ACADEMY, ids.target]);
+      await pg.query('delete from self_auth.account where "userId" = $1', [ids.target]);
+    });
 
     // Company B's data, written through the API by B's admin in a session bound to B.
     const api = await apiAs(bAdminEmail, companyB);
@@ -81,7 +83,7 @@ test.describe('company isolation in one database', () => {
 
   test.afterAll(async () => {
     await purgeCompany(companyB!);
-    for (const id of [ids.bAdmin, ids.bOrganizer, ids.target]) if (id) await adminClient().auth.admin.deleteUser(id);
+    for (const [id, company] of [[ids.bAdmin, companyB!], [ids.bOrganizer, companyB!], [ids.target, ACADEMY]]) if (id) await (await nodeAuth()).admin.deleteUser(company, id);
   });
 
   test("A's admin sees none of B's patients, users, stock, Statistics or exports", async ({ page, browser }) => {
@@ -180,16 +182,16 @@ test.describe('company isolation in one database', () => {
 
     // B's organizer and A's target are both as they were.
     const state = (user: string) => withPg(async (pg) => (await pg.query(
-      `select m.company_id, m.role, m.active, m.mfa_setup_required, p.full_name, u.email, u.banned_until
-       from public.company_members m join public.profiles p on p.user_id = m.user_id join auth.users u on u.id = m.user_id
+      `select m.company_id, m.role, m.active, m.mfa_setup_required, p.full_name, u."realEmail" as email, coalesce(u.disabled, false) as disabled
+       from public.company_members m join public.profiles p on p.user_id = m.user_id join self_auth."user" u on u.id = m.user_id
        where m.user_id = $1`, [user])).rows);
     expect(await state(ids.bOrganizer)).toEqual([{
       company_id: companyB, role: 'organizer', active: true, mfa_setup_required: false, full_name: 'E2E Iso B Organizer',
-      email: bOrganizerEmail, banned_until: null,
+      email: bOrganizerEmail, disabled: false,
     }]);
     expect(await state(ids.target)).toEqual([{
       company_id: ACADEMY, role: 'organizer', active: true, mfa_setup_required: true, full_name: targetName,
-      email: targetEmail, banned_until: null,
+      email: targetEmail, disabled: false,
     }]);
   });
 
@@ -197,8 +199,8 @@ test.describe('company isolation in one database', () => {
     await signIn(page, TEST_USERS.admin.email);
     await context.addCookies((await context.cookies(A)).map(({ name, value }) => ({ name, value, url: B })));
     await page.goto(`${B}/`);
-    await expect(page).toHaveURL(/\/login\?error=company$/);
-    await expect(page.getByRole('alert').filter({ hasText: REFUSED })).toBeVisible();
+    // Another company's cookie is no session here: signed out, and the stray cookie dropped.
+    await expect(page).toHaveURL(`${B}/login`);
 
     const bContext = await browser.newContext();
     try {
@@ -208,8 +210,7 @@ test.describe('company isolation in one database', () => {
       await expect(bPage.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
       await bContext.addCookies((await bContext.cookies(B)).map(({ name, value }) => ({ name, value, url: A })));
       await bPage.goto(`${A}/`);
-      await expect(bPage).toHaveURL(/\/login\?error=company$/);
-      await expect(bPage.getByRole('alert').filter({ hasText: REFUSED })).toBeVisible();
+      await expect(bPage).toHaveURL(`${A}/login`);
     } finally {
       await bContext.close();
     }
@@ -218,7 +219,27 @@ test.describe('company isolation in one database', () => {
     await page.getByLabel('Email').fill(TEST_USERS.organizer.email);
     await page.getByLabel('Password').fill(TEST_PASSWORD);
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('alert').filter({ hasText: REFUSED })).toBeVisible();
+    // Accounts are per company: A's user has no account on B, so B just says the sign-in is wrong.
+    await expect(page.getByRole('alert').filter({ hasText: 'Incorrect email or password.' })).toBeVisible();
+  });
+
+  test('reset_link_from_other_company_rejected: the reset link of B opened on the host of A says it is not valid here', async ({ page }) => {
+    const email = `icm-iso-b-reset-${stamp}@example.com`;
+    const id = await newLogin(email, companyB!, 'E2E Iso B Reset');
+    try {
+      const before = sentEmails.length;
+      await (await nodeAuth()).requestPasswordReset({ companyId: companyB!, email });
+      const mail = sentEmails.slice(before).find((m) => m.to === email)!;
+      const token = new URL(mail.url).searchParams.get('token')!;
+      await page.goto(`${A}/auth/reset?token=${encodeURIComponent(token)}`);
+      await page.getByLabel('New password').fill('Another-password-789');
+      await page.getByLabel('Confirm password').fill('Another-password-789');
+      await page.getByRole('button', { name: 'Save password' }).click();
+      await expect(page.getByRole('main').getByRole('alert')).toContainText('This link is not valid here');
+      await expect(page).not.toHaveURL(/\/login/);
+    } finally {
+      await (await nodeAuth()).admin.deleteUser(companyB!, id);
+    }
   });
 
   test('a browser-sent x-tenant header is ignored', async ({ page }) => {

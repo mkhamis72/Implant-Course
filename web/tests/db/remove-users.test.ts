@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, actAsBound, asPostgres, asCompany } from './helpers';
-import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, pendingLogin, place, receive, setPerms } from './fixtures';
+import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, pendingLogin, place, receive, setPerms, insertSelfAuthUser } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -16,7 +16,7 @@ async function newUser(
   c: Client, email: string, profile: { role?: 'admin' | 'organizer' | 'delegate'; delegate_id?: string } = {},
 ): Promise<string> {
   await pendingLogin(c, email, { fullName: `Zz Remove ${email}`, role: profile.role, delegateId: profile.delegate_id });
-  return (await c.query('insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id', [email])).rows[0].id;
+  return await insertSelfAuthUser(c, { email });
 }
 
 const deleteUser = (c: Client, user: string) => c.query('select public.delete_user($1)', [user]);

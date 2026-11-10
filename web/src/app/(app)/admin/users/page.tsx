@@ -5,7 +5,7 @@ import { InviteForm } from './invite-form';
 import { UserRow, type Account } from './user-row';
 import { emailEnabled } from '@/lib/flags';
 import { toPermissions } from '@/lib/auth/permissions';
-import { hasVerifiedFactor, listSignIns } from '@/lib/admin/auth-accounts';
+import { listAccounts } from '@/lib/admin/auth-accounts';
 import type { HistoryEntry } from '@/lib/admin/history';
 
 type MemberRow = Pick<Profile, 'user_id' | 'role' | 'active' | 'delegate_id' | 'mfa_setup_required'> & {
@@ -34,22 +34,21 @@ export default async function UsersPage() {
     }))
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
 
-  // Auth answers for sign-in times and factors; a failure there shows "unknown" rather than breaking the page.
-  const signIns = await listSignIns(users.map((u) => u.user_id)).catch((e: Error) => {
-    console.error(e.message);
+  // Self-Auth answers for sign-in times, authenticators and invitations; a failure there shows "unknown" rather than breaking the page.
+  const states = await listAccounts().catch((e: Error) => {
+    console.error('Could not load sign-in details:', e.name);
     return null;
   });
   const accounts = await Promise.all(
     users.map(async (user): Promise<Account> => {
       const isSelf = user.user_id === me.user_id;
-      const [factor, history] = await Promise.all([
-        isSelf ? false : hasVerifiedFactor(user.user_id),
-        supabase.rpc('admin_user_history', { p_user: user.user_id }),
-      ]);
+      const history = await supabase.rpc('admin_user_history', { p_user: user.user_id });
       if (history.error) console.error('admin_user_history failed:', history.error.message);
+      const state = states?.get(user.user_id);
       return {
-        lastSignIn: signIns ? (signIns.get(user.user_id) ?? null) : undefined,
-        hasFactor: factor === true,
+        lastSignIn: states ? (state?.lastSignIn ?? null) : undefined,
+        hasFactor: !isSelf && state?.hasFactor === true,
+        invitePending: states ? state?.hasPassword === false : false,
         history: (history.data ?? []) as HistoryEntry[],
       };
     }),

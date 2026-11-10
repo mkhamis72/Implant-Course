@@ -29,9 +29,25 @@ export async function definerOwnerOffenders(client: Client): Promise<string[]> {
   ];
 }
 
+/**
+ * Migration B of the Self-Auth switch-over (app 0103, control 0008): it removes the Supabase Auth branches and
+ * re-adds the foreign keys to self_auth."user", which ends the rollback to the old app. Held by default; the owner
+ * releases it after the rollback window with SELF_AUTH_B_HOLD=0 (GitHub production variable, docs/operations.md §E).
+ * Held files are skipped, not a stop: migrations numbered after them still apply while they are held. So no later
+ * migration (app 0104+, control 0009+) may depend on 0103 / 0008 (their dropped triggers, the self_auth keys or the
+ * Self-Auth-only helpers) until the hold is off everywhere; write it to work with and without Migration B.
+ */
+export const SELF_AUTH_B_FILES = ['0103_self_auth_b.sql', '0008_self_auth_b.sql'] as const;
+
+/** Files migrate() skips: Migration B unless SELF_AUTH_B_HOLD is exactly "0" (any other value, or none, holds it). */
+export function heldMigrations(env: Record<string, string | undefined> = process.env): Set<string> {
+  return env.SELF_AUTH_B_HOLD?.trim() === '0' ? new Set() : new Set(SELF_AUTH_B_FILES);
+}
+
 export async function migrate(
   dir = path.join(process.cwd(), 'supabase', 'migrations'),
   config: ClientConfig = pgConfig(),
+  { held = heldMigrations(), log = console.log }: { held?: Set<string>; log?: (line: string) => void } = {},
 ): Promise<string[]> {
   const client = new Client(config);
   await client.connect();
@@ -50,6 +66,11 @@ export async function migrate(
     const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
     for (const file of files) {
       if (done.has(file)) continue;
+      if (held.has(file)) {
+        // Skipped, not recorded: a later run with the hold off applies it. Files after it still apply.
+        log(`Held: ${file} (SELF_AUTH_B_HOLD is not 0)`);
+        continue;
+      }
       const sql = readFileSync(path.join(dir, file), 'utf8');
       await client.query('begin');
       try {

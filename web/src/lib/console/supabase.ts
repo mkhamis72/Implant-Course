@@ -1,25 +1,20 @@
 import 'server-only';
-import { createServerClient } from '@supabase/ssr';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { consoleDbToken } from '@/lib/self-auth/console-session';
 import { controlConfig } from './env';
 
-/** The signed-in console admin's session on the control project. */
+const options = { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false };
+
+/**
+ * The signed-in console admin's PostgREST client on the control project: this request's database token (minted
+ * from the Self-Auth console session) is the bearer, so is_console_admin() sees the admin and their aal.
+ */
 export async function createConsoleClient(): Promise<SupabaseClient> {
   const { url, anonKey } = controlConfig();
-  const cookieStore = await cookies();
-  return createServerClient(url, anonKey, {
-    cookieOptions: { secure: process.env.NODE_ENV === 'production' },
-    cookies: {
-      getAll: () => cookieStore.getAll(),
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
-        } catch {
-          // Server Component: read-only cookies; the middleware refreshes them.
-        }
-      },
-    },
+  const token = await consoleDbToken();
+  return createClient(url, anonKey, {
+    auth: options,
+    ...(token ? { global: { headers: { Authorization: `Bearer ${token}` } } } : {}),
   });
 }
 

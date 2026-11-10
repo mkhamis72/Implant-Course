@@ -1,140 +1,141 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createFirstAdmin, inviteFirstAdmin } from './first-admin';
 
 vi.mock('server-only', () => ({}));
 
+const calls: string[] = [];
+const admin = {
+  listUsers: vi.fn(),
+  createUser: vi.fn(),
+  invite: vi.fn(),
+  setPassword: vi.fn(),
+  setDisabled: vi.fn(),
+};
+const requestPasswordReset = vi.fn();
+vi.mock('@/lib/self-auth/tenant', () => ({ tenantAuth: async () => ({ admin, requestPasswordReset }) }));
+
 const COMPANY = 'b0000000-0000-4000-8000-00000000000b';
 
-function fakeCompany(opts: { existing?: string; elsewhere?: boolean; rpcError?: string; createError?: string; cancelError?: string } = {}) {
-  const calls: string[] = [];
-  const rows = (data: object[]) => ({ eq: () => ({ limit: async () => ({ data, error: null }), neq: () => ({ limit: async () => ({ data, error: null }) }) }) });
-  const client = {
-    from: (table: string) => ({
-      select: () => table === 'profiles'
-        ? rows(opts.existing ? [{ user_id: opts.existing }] : [])
-        : rows(opts.elsewhere ? [{ company_id: 'other' }] : []),
-      update: () => { throw new Error('tables must not be updated directly'); },
-    }),
+function fakeDb(opts: { rpcError?: string; cancelError?: string } = {}) {
+  return {
+    from: () => { throw new Error('tables must not be read or written directly'); },
+    auth: { admin: new Proxy({}, { get: () => { throw new Error('Supabase Auth is not used any more'); } }) },
     rpc: vi.fn(async (fn: string, args: object) => {
       calls.push(`${fn} ${JSON.stringify(args)}`);
       const message = fn === 'console_cancel_pending_login' ? opts.cancelError : opts.rpcError;
       return { data: null, error: message ? { message } : null };
     }),
-    auth: { admin: {
-      createUser: vi.fn(async () => {
-        calls.push('create');
-        return opts.createError ? { data: { user: null }, error: { message: opts.createError } } : { data: { user: { id: 'new-id' } }, error: null };
-      }),
-      updateUserById: vi.fn(async (id: string, attrs: object) => { calls.push(`update ${id} ${Object.keys(attrs).sort().join(',')}`); return { data: {}, error: null }; }),
-    } },
-  };
-  return { client: client as never, calls, auth: client.auth.admin };
+  } as never;
 }
 
 const ARGS = { companyId: COMPANY, email: 'owner@acme.com', fullName: 'Dr Owner' };
 const addCall = `console_add_first_admin {"p_company":"${COMPANY}","p_email":"owner@acme.com","p_full_name":"Dr Owner"}`;
 const cancelCall = `console_cancel_pending_login {"p_company":"${COMPANY}","p_email":"owner@acme.com"}`;
+const account = (over: object = {}) => ({ userId: 'old-id', email: 'owner@acme.com', disabled: false, hasPassword: true, hasTotp: false, createdAt: new Date(), lastSignInAt: null, ...over });
+const code = (c: string) => Object.assign(new Error('x'), { code: c });
+
+beforeEach(() => {
+  calls.length = 0;
+  vi.clearAllMocks();
+  admin.listUsers.mockResolvedValue([]);
+  admin.createUser.mockImplementation(async () => { calls.push('create'); return { userId: 'new-id' }; });
+  admin.invite.mockImplementation(async () => { calls.push('invite'); return { userId: 'new-id' }; });
+  admin.setPassword.mockImplementation(async () => { calls.push('setPassword'); });
+  admin.setDisabled.mockImplementation(async () => { calls.push('setDisabled'); });
+  requestPasswordReset.mockImplementation(async () => { calls.push('reset-email'); });
+});
 
 describe('createFirstAdmin', () => {
-  it("writes the company's pending admin login, then creates the confirmed user", async () => {
-    const { client, calls } = fakeCompany();
-    const r = await createFirstAdmin(client, { ...ARGS, email: ' Owner@Acme.com ' });
+  it("writes the company's pending admin login, then creates the account on that company", async () => {
+    const r = await createFirstAdmin(fakeDb(), { ...ARGS, email: ' Owner@Acme.com ' });
     expect(r.outcome).toBe('created');
-    expect(r.outcome === 'created' && r.password.length).toBeGreaterThanOrEqual(12);
+    expect(r.password.length).toBeGreaterThanOrEqual(12);
     expect(calls).toEqual([addCall, 'create']);
+    expect(admin.createUser).toHaveBeenCalledWith({ companyId: COMPANY, email: 'owner@acme.com', password: r.password });
   });
 
-  it("resets the password of the company's own existing login", async () => {
-    const { client, calls } = fakeCompany({ existing: 'old-id' });
-    const r = await createFirstAdmin(client, ARGS);
+  it("resets the password of the company's own existing account and lifts a deactivation", async () => {
+    admin.listUsers.mockResolvedValue([account({ disabled: true })]);
+    const r = await createFirstAdmin(fakeDb(), ARGS);
     expect(r.outcome).toBe('reset');
-    expect(calls).toEqual([addCall, 'update old-id ban_duration,password']);
+    expect(calls).toEqual([addCall, cancelCall, 'setPassword', 'setDisabled']);
+    expect(admin.setPassword).toHaveBeenCalledWith(COMPANY, 'old-id', r.password);
+    expect(admin.setDisabled).toHaveBeenCalledWith(COMPANY, 'old-id', false);
   });
 
-  it('adds an account another company uses as admin, lifts a ban, and never touches its password', async () => {
-    const { client, calls, auth } = fakeCompany({ existing: 'shared-id', elsewhere: true });
-    const r = await createFirstAdmin(client, ARGS);
-    expect(r).toEqual({ outcome: 'added' });
-    expect(calls).toEqual([addCall, 'update shared-id ban_duration']);
-    expect(auth.updateUserById).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ password: expect.anything() }));
+  it('removes a pending row the RPC wrote when the company already has the account', async () => {
+    admin.listUsers.mockResolvedValue([account()]);
+    await createFirstAdmin(fakeDb(), ARGS);
+    expect(calls).toContain(cancelCall);
+    expect(calls.indexOf(cancelCall)).toBeGreaterThan(calls.indexOf(addCall));
   });
 
-  it('creates no Auth user when the database refuses the admin', async () => {
-    const { client, calls } = fakeCompany({ rpcError: 'Unknown company.' });
-    await expect(createFirstAdmin(client, ARGS)).rejects.toThrow('The login was not finished: Unknown company.');
-    expect(calls).toEqual([addCall]);
+  it('removes the pending row again when creating the account fails', async () => {
+    admin.createUser.mockRejectedValue(code('weak_password'));
+    await expect(createFirstAdmin(fakeDb(), ARGS)).rejects.toThrow('The login could not be created');
+    expect(calls).toEqual([addCall, cancelCall]);
   });
 
-  it('removes the pending admin login again when the Auth call fails', async () => {
-    const { client, calls } = fakeCompany({ createError: 'email exists' });
-    await expect(createFirstAdmin(client, ARGS)).rejects.toThrow('The login could not be created: email exists');
-    expect(calls).toEqual([addCall, 'create', cancelCall]);
+  it('still reports the failure when the pending row cannot be removed', async () => {
+    admin.createUser.mockRejectedValue(code('boom'));
+    await expect(createFirstAdmin(fakeDb({ cancelError: 'db down' }), ARGS)).rejects.toThrow('The login could not be created');
   });
 
-  it('only warns when that removal fails too', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { client } = fakeCompany({ createError: 'email exists', cancelError: 'boom' });
-    await expect(createFirstAdmin(client, ARGS)).rejects.toThrow('The login could not be created: email exists');
-    expect(warn).toHaveBeenCalledWith('The pending admin login could not be removed:', 'boom');
-    warn.mockRestore();
+  it('creates nothing when the pending row fails', async () => {
+    await expect(createFirstAdmin(fakeDb({ rpcError: 'Unknown company.' }), ARGS)).rejects.toThrow('Unknown company.');
+    expect(admin.createUser).not.toHaveBeenCalled();
+  });
+
+  it('never puts the password in an error', async () => {
+    admin.createUser.mockRejectedValue(new Error('failed with password hunter2'));
+    const err = await createFirstAdmin(fakeDb(), ARGS).catch((e: Error) => e);
+    expect((err as Error).message).not.toContain('hunter2');
   });
 });
 
 describe('inviteFirstAdmin', () => {
-  const ORIGIN = 'https://acme.imploid.net';
-  const INVITE = { ...ARGS, companyName: 'Acme Dental', origin: ORIGIN };
-  function fakeInvite(opts: { existing?: string; elsewhere?: boolean; confirmed?: boolean; inviteError?: string } = {}) {
-    const base = fakeCompany({ existing: opts.existing, elsewhere: opts.elsewhere });
-    const client = base.client as unknown as { auth: Record<string, unknown> & { admin: Record<string, unknown> } };
-    Object.assign(client.auth.admin, {
-      inviteUserByEmail: vi.fn(async (email: string, o: object) => {
-        base.calls.push(`invite ${email} ${JSON.stringify(o)}`);
-        return { data: {}, error: opts.inviteError ? { message: opts.inviteError } : null };
-      }),
-      getUserById: vi.fn(async () => ({ data: { user: { id: opts.existing, email_confirmed_at: opts.confirmed ? '2026-11-01T00:00:00Z' : null } }, error: null })),
-    });
-    client.auth.resetPasswordForEmail = vi.fn(async (email: string, o: object) => {
-      base.calls.push(`reset ${email} ${JSON.stringify(o)}`);
-      return { data: {}, error: null };
-    });
-    const send = vi.fn(async () => 'sent' as const);
-    return { ...base, send };
-  }
-  const redirect = JSON.stringify({ redirectTo: `${ORIGIN}/auth/confirm` });
-
-  it('invites a new address to the company’s own address; no password anywhere', async () => {
-    const { client, calls, send } = fakeInvite();
-    const r = await inviteFirstAdmin(client, { ...INVITE, email: ' Owner@Acme.com ' }, send);
+  it('writes the pending admin login, then invites on the company: no link is built here', async () => {
+    const r = await inviteFirstAdmin(fakeDb(), ARGS);
     expect(r).toEqual({ outcome: 'invited' });
-    expect(calls).toEqual([addCall, `invite owner@acme.com ${redirect}`]);
-    expect(send).not.toHaveBeenCalled();
+    expect(calls).toEqual([addCall, 'invite']);
+    expect(admin.invite).toHaveBeenCalledWith({ companyId: COMPANY, email: 'owner@acme.com' });
+    expect(JSON.stringify(r)).not.toMatch(/https?:|token/i);
   });
 
-  it('cancels the pending admin login when the invite fails', async () => {
-    const { client, calls, send } = fakeInvite({ inviteError: 'SMTP down' });
-    await expect(inviteFirstAdmin(client, INVITE, send)).rejects.toThrow('The invite could not be sent: SMTP down');
-    expect(calls).toEqual([addCall, `invite owner@acme.com ${redirect}`, cancelCall]);
+  it('sends a password-reset email to the company\'s own account that already has a password', async () => {
+    admin.listUsers.mockResolvedValue([account()]);
+    expect(await inviteFirstAdmin(fakeDb(), ARGS)).toEqual({ outcome: 'reset_sent' });
+    expect(requestPasswordReset).toHaveBeenCalledWith({ companyId: COMPANY, email: 'owner@acme.com', reportSendErrors: true });
+    expect(admin.invite).not.toHaveBeenCalled();
   });
 
-  it('invites the company’s own login again while it never confirmed', async () => {
-    const { client, calls, send } = fakeInvite({ existing: 'u1' });
-    expect(await inviteFirstAdmin(client, INVITE, send)).toEqual({ outcome: 'reinvited' });
-    expect(calls).toEqual([addCall, 'update u1 ban_duration', `invite owner@acme.com ${redirect}`]);
+  it('sends the link again to an account that never set a password', async () => {
+    admin.listUsers.mockResolvedValue([account({ hasPassword: false })]);
+    expect(await inviteFirstAdmin(fakeDb(), ARGS)).toEqual({ outcome: 'reinvited' });
+    expect(requestPasswordReset).toHaveBeenCalledWith({ companyId: COMPANY, email: 'owner@acme.com', reportSendErrors: true });
   });
 
-  it('sends a password-reset email to the company’s own confirmed login', async () => {
-    const { client, calls, send } = fakeInvite({ existing: 'u1', confirmed: true });
-    expect(await inviteFirstAdmin(client, INVITE, send)).toEqual({ outcome: 'reset_sent' });
-    expect(calls).toEqual([addCall, 'update u1 ban_duration', `reset owner@acme.com ${redirect}`]);
+  it('removes a pending row the RPC wrote when the company already has the account', async () => {
+    admin.listUsers.mockResolvedValue([account()]);
+    await inviteFirstAdmin(fakeDb(), ARGS);
+    expect(calls).toContain(cancelCall);
   });
 
-  it('adds an account another company uses, keeps its password and sends a notice without a link', async () => {
-    const { client, calls, send } = fakeInvite({ existing: 'u1', elsewhere: true, confirmed: true });
-    expect(await inviteFirstAdmin(client, INVITE, send)).toEqual({ outcome: 'added', noticeSent: true });
-    expect(calls).toEqual([addCall, 'update u1 ban_duration']);
-    const [mail] = send.mock.calls[0] as unknown as [{ to: string; subject: string; html: string }];
-    expect(mail.to).toBe('owner@acme.com');
-    expect(mail.subject).toBe("You've been added to Acme Dental");
-    expect(mail.html).not.toContain('href');
+  it('lifts a deactivation on an existing account', async () => {
+    admin.listUsers.mockResolvedValue([account({ disabled: true })]);
+    await inviteFirstAdmin(fakeDb(), ARGS);
+    expect(admin.setDisabled).toHaveBeenCalledWith(COMPANY, 'old-id', false);
+  });
+
+  it('removes the pending row again when the invite fails', async () => {
+    admin.invite.mockRejectedValue(code('email_failed'));
+    await expect(inviteFirstAdmin(fakeDb(), ARGS)).rejects.toThrow('The invite could not be sent');
+    expect(calls).toEqual([addCall, cancelCall]);
+  });
+
+  it('keeps the membership of an existing account when sending fails', async () => {
+    admin.listUsers.mockResolvedValue([account()]);
+    requestPasswordReset.mockRejectedValue(code('boom'));
+    await expect(inviteFirstAdmin(fakeDb(), ARGS)).rejects.toThrow('The password-reset email could not be sent');
   });
 });

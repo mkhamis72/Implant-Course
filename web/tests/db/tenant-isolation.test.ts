@@ -1,10 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect } from 'vitest';
 import { withTx, actAs, actAsBound, asCompany, asPostgres } from './helpers';
-import {
-  addTalk, book, enroll, makeChair, makeCourse, makeDelegate, makeLecturer, makeProduct, makeSession,
-  pendingLogin, place, receive, setPerms,
-} from './fixtures';
+import { addTalk, book, enroll, makeChair, makeCourse, makeDelegate, makeLecturer, makeProduct, makeSession, pendingLogin, place, receive, setPerms, insertSelfAuthSession, insertSelfAuthUser } from './fixtures';
 
 // The isolation proof (plan 3, task 7): two companies in one database, each seeded with a row in every
 // company table, and nothing of A's reachable from B: not through the tables, not through stock_on_hand,
@@ -60,7 +57,7 @@ const quoteIdent = (s: string) => `"${s.replace(/"/g, '""')}"`;
 
 async function newUser(c: Client, company: string, email: string, role: 'admin' | 'organizer' | 'delegate', delegateId?: string) {
   await pendingLogin(c, email, { company, role, fullName: `Zz Iso ${role}`, delegateId: delegateId ?? null });
-  return (await c.query('insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id', [email])).rows[0].id as string;
+  return await insertSelfAuthUser(c, { email, companyId: company });
 }
 
 const one = async (c: Client, sql: string, params: unknown[] = []) => (await c.query(sql, params)).rows[0].id as string;
@@ -147,7 +144,7 @@ async function seedCompany(c: Client, key: 'A' | 'B'): Promise<Company> {
   await c.query('insert into public.settings default values on conflict do nothing');
   await c.query('insert into app_private.file_no_counters (last_no) values (1) on conflict do nothing');
   // A sign-in session of the organizer, so an admin function ending another company's sessions shows up.
-  await c.query('insert into auth.sessions (id, user_id) values (gen_random_uuid(), $1)', [organizer]);
+  await insertSelfAuthSession(c, organizer);
   await asPostgres(c);
   return { key, id, marker, admin, organizer, organizerEmail, viewer, delegateUser, rows: r, lectureSession };
 }
@@ -173,8 +170,8 @@ async function checksum(c: Client, tables: { name: string; pk: string[] }[], a: 
       from ${t.name} x where x.company_id = $1`;
   });
   parts.push(`select 'profiles', count(*) || ':' || md5(coalesce(string_agg(x::text, '|' order by x.user_id), '')) from public.profiles x where x.user_id = any($2)`);
-  parts.push(`select 'auth.users', count(*) || ':' || md5(coalesce(string_agg(x::text, '|' order by x.id), '')) from auth.users x where x.id = any($2)`);
-  parts.push(`select 'auth.sessions', count(*) || ':' || md5(coalesce(string_agg(x::text, '|' order by x.id), '')) from auth.sessions x where x.user_id = any($2)`);
+  parts.push(`select 'self_auth.user', count(*) || ':' || md5(coalesce(string_agg(x::text, '|' order by x.id), '')) from self_auth."user" x where x.id = any($2)`);
+  parts.push(`select 'self_auth.session', count(*) || ':' || md5(coalesce(string_agg(x::text, '|' order by x.id), '')) from self_auth.session x where x."userId" = any($2)`);
   parts.push(`select 'app.session_companies', count(*) || ':' || md5(coalesce(string_agg(x::text, '|' order by x.session_id), ''))
     from app.session_companies x where x.user_id = any($2)`);
   const { rows } = await c.query(parts.join('\nunion all\n'), [a.id, users]);

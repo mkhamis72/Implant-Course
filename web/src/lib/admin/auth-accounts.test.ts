@@ -1,138 +1,142 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-vi.mock('server-only', () => ({}));
 
-const { admin } = vi.hoisted(() => ({
-  admin: {
-    getUserById: vi.fn(),
-    updateUserById: vi.fn(),
-    listUsers: vi.fn(),
-    generateLink: vi.fn(),
-    mfa: { listFactors: vi.fn(), deleteFactor: vi.fn() },
-  },
+const COMPANY = 'company-a';
+const { admin, requestPasswordReset } = vi.hoisted(() => ({
+  admin: { listUsers: vi.fn(), deleteUser: vi.fn(), setDisabled: vi.fn(), setPassword: vi.fn(), updateEmail: vi.fn(), resetTotp: vi.fn() },
+  requestPasswordReset: vi.fn(),
 }));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn(async () => ({ auth: { admin } })) }));
-vi.mock('@/lib/tenant/current', () => ({ requestOrigin: vi.fn(async () => 'https://academy.example.com') }));
-import { changeAuthEmail, hasVerifiedFactor, inviteLink, listSignIns, resetAuthFactors } from './auth-accounts';
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/self-auth/tenant', () => ({ tenantAuth: async () => ({ admin, requestPasswordReset }) }));
+vi.mock('@/lib/tenant/current', () => ({ currentTenant: async () => ({ slug: 'academy', companyId: COMPANY }) }));
+import {
+  changeAuthEmail, deleteAuthUser, hasVerifiedFactor, listAccounts, resetAuthFactors, sendPasswordLink, setAuthDisabled, setOneTimePassword,
+} from './auth-accounts';
 
-beforeEach(() => vi.clearAllMocks());
+class CodedError extends Error {
+  constructor(public code: string) { super(`private detail ${code}`); this.name = 'SelfAuthError'; }
+}
+const row = (over: Record<string, unknown> = {}) => ({
+  userId: 'u1', email: 'a@example.com', disabled: false, hasPassword: true, hasTotp: false,
+  createdAt: new Date('2026-01-01'), lastSignInAt: null, ...over,
+});
 
-const user = (over: Record<string, unknown> = {}) => ({
-  data: { user: { id: 'u1', email: 'old@example.com', last_sign_in_at: '2026-10-01T08:00:00Z', email_confirmed_at: '2026-09-01T08:00:00Z', ...over } },
-  error: null,
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  admin.listUsers.mockResolvedValue([row()]);
+  for (const f of [admin.deleteUser, admin.setDisabled, admin.setPassword, admin.updateEmail, admin.resetTotp, requestPasswordReset]) f.mockResolvedValue(undefined);
+});
+
+describe('every call carries this host\'s company', () => {
+  it('delete, disable, email, reset 2FA', async () => {
+    expect(await deleteAuthUser('u1')).toBeNull();
+    expect(admin.deleteUser).toHaveBeenCalledWith(COMPANY, 'u1');
+    expect(await setAuthDisabled('u1', true)).toBeNull();
+    expect(admin.setDisabled).toHaveBeenCalledWith(COMPANY, 'u1', true);
+    expect(await resetAuthFactors('u1')).toBeNull();
+    expect(admin.resetTotp).toHaveBeenCalledWith(COMPANY, 'u1');
+    await changeAuthEmail('u1', 'new@example.com');
+    expect(admin.updateEmail).toHaveBeenCalledWith(COMPANY, 'u1', 'new@example.com');
+    expect(admin.listUsers).toHaveBeenCalledWith(COMPANY);
+  });
+});
+
+describe('admin_cannot_touch_other_company_user', () => {
+  it('a user of another company is "User not found." and nothing changes', async () => {
+    for (const f of [admin.deleteUser, admin.setDisabled, admin.updateEmail, admin.resetTotp]) f.mockRejectedValue(new CodedError('user_not_found'));
+    admin.listUsers.mockResolvedValue([]); // the other company's user isn't in this company's list
+    expect(await setAuthDisabled('b-user', true)).toBe('User not found.');
+    expect(await resetAuthFactors('b-user')).toBe('User not found.');
+    expect(await deleteAuthUser('b-user')).toContain('User not found.');
+    expect(await changeAuthEmail('b-user', 'x@example.com')).toEqual({ error: 'User not found.' });
+    expect(await sendPasswordLink('b-user')).toEqual({ error: 'User not found.' });
+    expect(admin.updateEmail).not.toHaveBeenCalled();
+    expect(requestPasswordReset).not.toHaveBeenCalled();
+  });
+});
+
+describe('failures', () => {
+  it('map to a message built from the code, never the error text, and log only the name', async () => {
+    admin.setDisabled.mockRejectedValue(new Error('connection string postgres://secret'));
+    expect(await setAuthDisabled('u1', true)).toBe('Something went wrong. Please try again.');
+    expect(JSON.stringify((console.error as unknown as { mock: { calls: unknown[] } }).mock.calls)).not.toContain('secret');
+  });
 });
 
 describe('changeAuthEmail', () => {
-  it('sets the new address as confirmed and returns the account as it was', async () => {
-    admin.getUserById.mockResolvedValue(user());
-    admin.updateUserById.mockResolvedValue({ data: {}, error: null });
-    expect(await changeAuthEmail('u1', 'new@example.com')).toEqual({ previous: { email: 'old@example.com', signedInBefore: true } });
-    expect(admin.updateUserById).toHaveBeenCalledWith('u1', { email: 'new@example.com', email_confirm: true });
+  it('returns the old address and whether they ever signed in', async () => {
+    admin.listUsers.mockResolvedValue([row({ lastSignInAt: new Date() })]);
+    expect(await changeAuthEmail('u1', 'new@example.com')).toEqual({ previous: { email: 'a@example.com', signedInBefore: true } });
+    admin.listUsers.mockResolvedValue([row({ hasPassword: false })]);
+    expect(await changeAuthEmail('u1', 'new@example.com')).toEqual({ previous: { email: 'a@example.com', signedInBefore: false } });
   });
-  it('reports a never-signed-in account', async () => {
-    admin.getUserById.mockResolvedValue(user({ last_sign_in_at: null }));
-    admin.updateUserById.mockResolvedValue({ data: {}, error: null });
-    expect(await changeAuthEmail('u1', 'new@example.com')).toEqual({ previous: { email: 'old@example.com', signedInBefore: false } });
+  it('email_change_notifies_old_address_after_sessions_revoked: a user with a password but no live session is established', async () => {
+    admin.listUsers.mockResolvedValue([row({ hasPassword: true, lastSignInAt: null })]);
+    expect(await changeAuthEmail('u1', 'new@example.com')).toEqual({ previous: { email: 'a@example.com', signedInBefore: true } });
   });
-  it('leaves a never-confirmed invite unconfirmed, so the invite can still be resent', async () => {
-    admin.getUserById.mockResolvedValue(user({ last_sign_in_at: null, email_confirmed_at: null }));
-    admin.updateUserById.mockResolvedValue({ data: {}, error: null });
-    expect(await changeAuthEmail('u1', 'fixed@example.com')).toEqual({ previous: { email: 'old@example.com', signedInBefore: false } });
-    expect(admin.updateUserById).toHaveBeenCalledWith('u1', { email: 'fixed@example.com' });
+  it('a pending invite (no password, no session) is not established', async () => {
+    admin.listUsers.mockResolvedValue([row({ hasPassword: false, lastSignInAt: null })]);
+    expect(await changeAuthEmail('u1', 'new@example.com')).toEqual({ previous: { email: 'a@example.com', signedInBefore: false } });
   });
-  it('refuses an address another account uses', async () => {
-    admin.getUserById.mockResolvedValue(user());
-    admin.updateUserById.mockResolvedValue({ data: null, error: { code: 'email_exists', message: 'exists', status: 422 } });
+  it('refuses the address they already have, and a taken address', async () => {
+    expect(await changeAuthEmail('u1', 'A@Example.com')).toEqual({ error: 'That is already their sign-in email.' });
+    expect(admin.updateEmail).not.toHaveBeenCalled();
+    admin.updateEmail.mockRejectedValue(new CodedError('email_taken'));
     expect(await changeAuthEmail('u1', 'taken@example.com')).toEqual({ error: 'Another account already uses that email.' });
   });
-  it('refuses the address they already have, without touching Auth', async () => {
-    admin.getUserById.mockResolvedValue(user());
-    expect(await changeAuthEmail('u1', 'old@example.com')).toEqual({ error: 'That is already their sign-in email.' });
-    expect(admin.updateUserById).not.toHaveBeenCalled();
+});
+
+describe('sendPasswordLink', () => {
+  it("asks Self-Auth to email the account's address; no link comes back", async () => {
+    expect(await sendPasswordLink('u1')).toEqual({ email: 'a@example.com' });
+    expect(requestPasswordReset).toHaveBeenCalledWith({ companyId: COMPANY, email: 'a@example.com', reportSendErrors: true });
+  });
+  it('is refused for a deactivated account', async () => {
+    admin.listUsers.mockResolvedValue([row({ disabled: true })]);
+    expect(await sendPasswordLink('u1')).toHaveProperty('error');
+    expect(requestPasswordReset).not.toHaveBeenCalled();
+  });
+  it('admin_send_failure_is_reported: a failed send is not reported as sent', async () => {
+    requestPasswordReset.mockRejectedValueOnce(new CodedError('send_failed'));
+    expect(await sendPasswordLink('u1')).toEqual({ error: "The email couldn't be sent. Try again later, or check the email settings." });
   });
 });
 
-describe('resetAuthFactors', () => {
-  it('deletes every factor, verified or not', async () => {
-    admin.mfa.listFactors.mockResolvedValue({ data: { factors: [{ id: 'f1', status: 'verified' }, { id: 'f2', status: 'unverified' }] }, error: null });
-    admin.mfa.deleteFactor.mockResolvedValue({ data: {}, error: null });
-    expect(await resetAuthFactors('u1')).toBeNull();
-    expect(admin.mfa.listFactors).toHaveBeenCalledWith({ userId: 'u1' });
-    expect(admin.mfa.deleteFactor).toHaveBeenCalledWith({ id: 'f1', userId: 'u1' });
-    expect(admin.mfa.deleteFactor).toHaveBeenCalledWith({ id: 'f2', userId: 'u1' });
-  });
-  it('deletes leftover unverified factors on a retry (the action decides whether a reset is allowed)', async () => {
-    admin.mfa.listFactors.mockResolvedValue({ data: { factors: [{ id: 'f2', status: 'unverified' }] }, error: null });
-    admin.mfa.deleteFactor.mockResolvedValue({ data: {}, error: null });
-    expect(await resetAuthFactors('u1')).toBeNull();
-    expect(admin.mfa.deleteFactor).toHaveBeenCalledWith({ id: 'f2', userId: 'u1' });
-  });
-  it('stops at a failed delete', async () => {
-    admin.mfa.listFactors.mockResolvedValue({ data: { factors: [{ id: 'f1', status: 'verified' }] }, error: null });
-    admin.mfa.deleteFactor.mockResolvedValue({ data: null, error: { message: 'boom' } });
-    expect(await resetAuthFactors('u1')).toBe('Something went wrong. Please try again.');
-  });
-});
-
-describe('hasVerifiedFactor', () => {
-  it('is true only with a verified factor', async () => {
-    admin.mfa.listFactors.mockResolvedValueOnce({ data: { factors: [{ id: 'f1', status: 'verified' }] }, error: null });
+describe('hasVerifiedFactor / listAccounts', () => {
+  it('reads hasTotp; false for an unknown user; null when Self-Auth fails', async () => {
+    admin.listUsers.mockResolvedValue([row({ hasTotp: true })]);
     expect(await hasVerifiedFactor('u1')).toBe(true);
-    admin.mfa.listFactors.mockResolvedValueOnce({ data: { factors: [{ id: 'f1', status: 'unverified' }] }, error: null });
-    expect(await hasVerifiedFactor('u1')).toBe(false);
-  });
-  it('is null when Auth cannot say', async () => {
-    admin.mfa.listFactors.mockResolvedValueOnce({ data: null, error: { message: 'down' } });
+    expect(await hasVerifiedFactor('nobody')).toBe(false);
+    admin.listUsers.mockRejectedValue(new Error('db'));
     expect(await hasVerifiedFactor('u1')).toBeNull();
   });
-});
-
-describe('listSignIns', () => {
-  it('pages through every user', async () => {
-    const page = (n: number, from: number) => ({
-      data: { users: Array.from({ length: n }, (_, i) => ({ id: `u${from + i}`, last_sign_in_at: i === 0 ? null : '2026-10-01T08:00:00Z' })) },
-      error: null,
-    });
-    admin.listUsers.mockResolvedValueOnce(page(1000, 0)).mockResolvedValueOnce(page(3, 1000));
-    const map = await listSignIns(Array.from({ length: 1003 }, (_, i) => `u${i}`));
-    expect(map.size).toBe(1003);
-    expect(map.get('u0')).toBeNull();
-    expect(map.get('u1002')).toBe('2026-10-01T08:00:00Z');
-    expect(admin.listUsers).toHaveBeenNthCalledWith(1, { page: 1, perPage: 1000 });
-    expect(admin.listUsers).toHaveBeenNthCalledWith(2, { page: 2, perPage: 1000 });
+  it('lists sign-in time, authenticator and password state by user id', async () => {
+    admin.listUsers.mockResolvedValue([row({ lastSignInAt: new Date('2026-10-01T00:00:00Z'), hasTotp: true }), row({ userId: 'u2', hasPassword: false })]);
+    expect(await listAccounts()).toEqual(new Map([
+      ['u1', { lastSignIn: '2026-10-01T00:00:00.000Z', hasFactor: true, hasPassword: true }],
+      ['u2', { lastSignIn: null, hasFactor: false, hasPassword: false }],
+    ]));
   });
-  it('throws on failure rather than show everyone as never signed in', async () => {
-    admin.listUsers.mockResolvedValue({ data: { users: [] }, error: { message: 'down' } });
-    await expect(listSignIns(['u1'])).rejects.toThrow();
-  });
-  it('returns only the ids asked for', async () => {
-    admin.listUsers.mockResolvedValue({ data: { users: [{ id: 'a', last_sign_in_at: null }, { id: 'b', last_sign_in_at: '2026-10-01T08:00:00Z' }] }, error: null });
-    const map = await listSignIns(['a']);
-    expect([...map.keys()]).toEqual(['a']);
+  it('throws when Self-Auth cannot answer', async () => {
+    admin.listUsers.mockRejectedValue(new Error('db'));
+    await expect(listAccounts()).rejects.toThrow();
   });
 });
 
-describe('inviteLink', () => {
-  it('builds the confirm link on this request’s origin', async () => {
-    admin.getUserById.mockResolvedValue(user({ last_sign_in_at: null, email_confirmed_at: null }));
-    admin.generateLink.mockResolvedValue({ data: { properties: { hashed_token: 'h a/sh' } }, error: null });
-    expect(await inviteLink('u1')).toEqual({
-      email: 'old@example.com',
-      link: 'https://academy.example.com/auth/confirm?token_hash=h%20a%2Fsh&type=invite',
-    });
-    expect(admin.generateLink).toHaveBeenCalledWith({ type: 'invite', email: 'old@example.com', options: { redirectTo: 'https://academy.example.com/auth/confirm' } });
+describe('setOneTimePassword', () => {
+  it("sets a long URL-safe password for this host's company and returns it", async () => {
+    const r = await setOneTimePassword('u1');
+    expect(r).toEqual({ password: expect.stringMatching(/^[A-Za-z0-9_-]{16,}$/) });
+    expect(admin.setPassword).toHaveBeenCalledWith(COMPANY, 'u1', (r as { password: string }).password);
   });
-  it('refuses someone who has signed in', async () => {
-    admin.getUserById.mockResolvedValue(user());
-    expect(await inviteLink('u1')).toEqual({ error: 'This user has already signed in.' });
-    expect(admin.generateLink).not.toHaveBeenCalled();
+  it('a user of another company is "User not found." and no password is returned', async () => {
+    admin.setPassword.mockRejectedValue(new CodedError('user_not_found'));
+    expect(await setOneTimePassword('b-user')).toEqual({ error: 'User not found.' });
   });
-  it("refuses a confirmed login (Auth won't invite it again)", async () => {
-    admin.getUserById.mockResolvedValue(user({ last_sign_in_at: null }));
-    expect(await inviteLink('u1')).toEqual({ error: "This login's email is already confirmed, so there is no invite to resend. Use Reset password instead." });
-  });
-  it('shows the mapped error when Auth refuses', async () => {
-    admin.getUserById.mockResolvedValue(user({ last_sign_in_at: null, email_confirmed_at: null }));
-    admin.generateLink.mockResolvedValue({ data: null, error: { code: 'over_request_rate_limit', message: 'x' } });
-    expect(await inviteLink('u1')).toEqual({ error: 'Too many attempts. Wait a minute and try again.' });
+  it('never logs the password', async () => {
+    admin.setPassword.mockRejectedValue(new Error('boom'));
+    const r = await setOneTimePassword('u1');
+    expect(r).toHaveProperty('error');
+    expect(JSON.stringify((console.error as unknown as { mock: { calls: unknown[] } }).mock.calls)).not.toMatch(/[A-Za-z0-9_-]{16,}/);
   });
 });

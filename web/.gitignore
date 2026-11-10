@@ -55,3 +55,6 @@ tenants.local.json
 
 # second local stack (npm run db:dev2:start)
 /.dev2/
+
+# local Supabase signing key (Self-Auth database tokens); never commit
+/supabase/signing_keys.json
