@@ -33,7 +33,7 @@ describe('self-auth-keys', () => {
     expect(ok.f.mock.calls[0][1].headers).toMatchObject({ apikey: 'anon', authorization: 'Bearer SECRET-TOKEN' });
     const refused = await call(401).run;
     expect(refused.ok).toBe(false);
-    expect(refused.line).toMatch(/401.*standby key/);
+    expect(refused.line).toMatch(/401.*private signing key as a standby key.*CONTROL_SELF_AUTH_KID/);
     expect(refused.line).not.toContain('SECRET-TOKEN');
     expect((await call(500).run).ok).toBe(false);
   });

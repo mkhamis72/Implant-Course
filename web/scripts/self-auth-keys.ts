@@ -99,7 +99,7 @@ export async function probe(
   });
   if (res.status === 200) return { ok: true, line: `${o.rpc}: 200, Supabase accepts Self-Auth's database tokens.` };
   if (res.status === 401) {
-    return { ok: false, line: `${o.rpc}: 401, the token was refused. Import the jwks output as a standby key (Project Settings -> JWT Keys) and check SELF_AUTH_KID.` };
+    return { ok: false, line: `${o.rpc}: 401, the token was refused. Import that project's private signing key as a standby key (Project Settings -> JWT Keys) and check its kid: SELF_AUTH_KID for the company project, CONTROL_SELF_AUTH_KID for the control project.` };
   }
   return { ok: false, line: `${o.rpc}: unexpected status ${res.status}.` };
 }

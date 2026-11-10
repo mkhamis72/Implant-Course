@@ -18,6 +18,9 @@ beforeEach(() => {
     SELF_AUTH_PRIVATE_JWK: JSON.stringify(jwk), SELF_AUTH_KID: 'k1',
   });
   delete process.env.SELF_AUTH_DATABASE_URL;
+  // The console falls back to the shared key only when it has none of its own.
+  delete process.env.CONTROL_SELF_AUTH_PRIVATE_JWK;
+  delete process.env.CONTROL_SELF_AUTH_KID;
 });
 
 describe('instances', () => {

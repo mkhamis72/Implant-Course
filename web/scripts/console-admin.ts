@@ -14,7 +14,8 @@ export function parseConsoleAdminArgs(argv: string[]): { email: string } {
 
 /**
  * Creates (or resets) a console admin: a Self-Auth account of company 'console' in the control database
- * (CONTROL_DATABASE_URL, CONTROL_SELF_AUTH_SECRET, SELF_AUTH_PRIVATE_JWK, SELF_AUTH_KID) and its console_admins row
+ * (CONTROL_DATABASE_URL, CONTROL_SELF_AUTH_SECRET, and CONTROL_SELF_AUTH_PRIVATE_JWK + CONTROL_SELF_AUTH_KID or else
+ * SELF_AUTH_PRIVATE_JWK + SELF_AUTH_KID) and its console_admins row
  * through the control project's API (CONTROL_SUPABASE_URL, CONTROL_SERVICE_ROLE_KEY).
  */
 async function main() {
