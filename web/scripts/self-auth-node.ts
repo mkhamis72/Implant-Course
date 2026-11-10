@@ -1,5 +1,6 @@
 import type { SelfAuth } from '@mkhamis72/self-auth';
 import { scopeForSecret, signingKey } from '../src/lib/self-auth/signing-key';
+import { databaseCa } from '../src/lib/self-auth/database-ca';
 
 /**
  * The tenant Self-Auth instance for scripts and tests. src/lib/self-auth/tenant.ts is the app's own, but it
@@ -20,6 +21,7 @@ async function build(url: string, secretVar: string): Promise<SelfAuth> {
   const { createSelfAuth } = await import('@mkhamis72/self-auth');
   return createSelfAuth({
     databaseUrl: url,
+    databaseCa: databaseCa(),
     secret: required(secretVar),
     appName: 'Implant Course',
     dbToken: signingKey(scopeForSecret(secretVar)),
