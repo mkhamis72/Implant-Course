@@ -388,6 +388,12 @@ describe('resendInvite', () => {
     expect(await resendInvite({}, form({ user_id: id }))).toHaveProperty('error');
     expect(sendPasswordLink).not.toHaveBeenCalled();
   });
+  it('is refused once they have signed in with Google', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    listAccounts.mockResolvedValue(new Map([[id, { lastSignIn: null, hasFactor: false, hasPassword: false, hasGoogle: true }]]));
+    expect(await resendInvite({}, form({ user_id: id }))).toHaveProperty('error');
+    expect(sendPasswordLink).not.toHaveBeenCalled();
+  });
   it('records nothing when Self-Auth refuses', async () => {
     vi.stubEnv('EMAIL_ENABLED', 'true');
     listAccounts.mockResolvedValue(new Map([[id, { lastSignIn: null, hasFactor: false, hasPassword: false }]]));

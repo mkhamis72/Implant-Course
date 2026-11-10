@@ -259,6 +259,7 @@ export async function resendInvite(_prev: ActionState, formData: FormData): Prom
   const account = accounts.get(userId);
   if (!account) return { error: USER_NOT_FOUND };
   if (account.hasPassword) return { error: 'This user has already accepted the invite. Use Reset password instead.' };
+  if (account.hasGoogle) return { error: 'This user has already accepted the invite by signing in with Google.' };
   const sent = await sendPasswordLink(userId);
   if ('error' in sent) return sent;
 

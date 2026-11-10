@@ -84,6 +84,20 @@ describe('instances', () => {
       delete process.env.GOOGLE_CLIENT_SECRET;
     }
   });
+  it('half-set google settings: the tenant instance still builds, without google', async () => {
+    Object.assign(process.env, { GOOGLE_CLIENT_ID: 'gid.apps.googleusercontent.com' });
+    delete process.env.GOOGLE_CLIENT_SECRET;
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      vi.resetModules();
+      const { tenantAuth: fresh } = await import('./tenant');
+      expect(((await fresh()) as unknown as { cfg: { google?: unknown } }).cfg.google).toBeUndefined();
+      expect(err).toHaveBeenCalledWith(expect.stringContaining('GOOGLE_CLIENT_SECRET'));
+    } finally {
+      err.mockRestore();
+      delete process.env.GOOGLE_CLIENT_ID;
+    }
+  });
   it('no google settings: the tenant instance has no google config', async () => {
     delete process.env.GOOGLE_CLIENT_ID;
     delete process.env.GOOGLE_CLIENT_SECRET;

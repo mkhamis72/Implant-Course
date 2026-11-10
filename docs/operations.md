@@ -395,7 +395,7 @@ Use it if the new sign-in fails in a way you can't fix quickly. Migration A kept
 
 ## F2. Google sign-in (owner, once, after Migration B)
 
-People whose company email is a Google account can sign in with a "Sign in with Google" button on the login page. They still need an account in the app (an invite or an existing user) with that email; Google only replaces the password. Two-factor authentication, where set, is still asked for. Set both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, or neither (only one is an error). Without them the button is hidden, and `/auth/google/start` and `/auth/google/callback` answer 404.
+People whose company email is a Google account can sign in with a "Sign in with Google" button on the login page. They still need an account in the app (an invite or an existing user) with that email; Google only replaces the password. Two-factor authentication, where set, is still asked for. Set both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, or neither. If only one is set, Google sign-in stays off (password sign-in still works) and the server log names the missing one. Without them the button is hidden, and `/auth/google/start` and `/auth/google/callback` answer 404.
 
 **When:** only after Migration B is applied (§E *After the window*, step 2). Before that the rollback window is still open and this must not go out. The release is a normal one: no maintenance, because the change only adds a way in.
 
@@ -434,7 +434,7 @@ People whose company email is a Google account can sign in with a "Sign in with 
 | `google_unverified` | Google didn't confirm this email address. | The person must use a Google account with a confirmed email. |
 | `google_failed` | Google sign-in didn't work. Try again or use your password. | Try again. If it repeats, check the two Vercel settings and the redirect URI in the Google client. |
 
-**Someone changed their Google account:** Admin → Users → the user → **Reset Google sign-in**. Their next Google sign-in is remembered instead. A deactivated user stays refused until reactivated.
+**Someone changed their Google account:** Admin → Users → the user → **Reset Google sign-in**. This also signs them out everywhere. Their next Google sign-in is remembered instead. A deactivated user stays refused until reactivated.
 
 ## G. Control project (companies)
 
@@ -484,7 +484,7 @@ Unknown hosts get 404; a suspended company gets 503. If the control project is d
 3. adds the address to the Vercel project;
 4. emails the first admin an invite on the company's own address. A login this company already has gets a password-reset email instead; someone another company already uses keeps their password and gets a notice. With `EMAIL_ENABLED=false` it shows a one-time password instead.
 
-**Then, by hand (you):** Google Cloud console → Google Auth Platform → **Clients** → the web client → **Authorized redirect URIs** → add `https://<host>/auth/google/callback` → **Save** (§F2). Until you do, Google sign-in on the new address fails with `google_failed`.
+**Then, by hand (you):** Google Cloud console → Google Auth Platform → **Clients** → the web client → **Authorized redirect URIs** → add `https://<host>/auth/google/callback` → **Save** (§F2). Until you do, Google shows its own `redirect_uri_mismatch` error page and the person never comes back to the app.
 
 The result lists each step. Once the company exists, a failed address or invite doesn't undo it: redo it from the company's page. An existing slug is refused. The new address can show "not found" for up to a minute after Vercel reports it live (registry cache).
 
