@@ -53,4 +53,18 @@ describe('instances', () => {
     const { tenantAuth: fresh } = await import('./tenant');
     expect(((await fresh()) as unknown as { cfg: Cfg }).cfg.databaseUrl).toBe('postgresql://session-pooler');
   });
+  it('both instances verify their database against SELF_AUTH_DATABASE_CA_CERT when it is set', async () => {
+    // Found at the switch-over: Supabase's pooler certificate is signed by Supabase's own CA.
+    process.env.SELF_AUTH_DATABASE_CA_CERT = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----';
+    try {
+      vi.resetModules();
+      const { tenantAuth: t } = await import('./tenant');
+      const { consoleAuth: c } = await import('./console');
+      for (const inst of [await t(), await c()]) {
+        expect((inst as unknown as { cfg: { databaseCa?: string } }).cfg.databaseCa).toMatch(/^-----BEGIN CERTIFICATE-----\nMIIB\n/);
+      }
+    } finally {
+      delete process.env.SELF_AUTH_DATABASE_CA_CERT;
+    }
+  });
 });

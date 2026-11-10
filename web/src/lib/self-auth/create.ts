@@ -3,6 +3,7 @@ import { createSelfAuth, type SelfAuth } from '@mkhamis72/self-auth';
 import { emailAdapter } from './email';
 import { inviteLink, resetLink } from './links';
 import { scopeForSecret, signingKey } from './signing-key';
+import { databaseCa } from './database-ca';
 
 function required(name: string): string {
   const v = process.env[name];
@@ -14,6 +15,7 @@ function required(name: string): string {
 export function buildSelfAuth(databaseUrl: string, secretVar: string): Promise<SelfAuth> {
   return createSelfAuth({
     databaseUrl,
+    databaseCa: databaseCa(),
     secret: required(secretVar),
     appName: 'Implant Course',
     dbToken: signingKey(scopeForSecret(secretVar)),
