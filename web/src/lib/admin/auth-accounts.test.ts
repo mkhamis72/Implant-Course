@@ -2,21 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const COMPANY = 'company-a';
 const { admin, requestPasswordReset } = vi.hoisted(() => ({
-  admin: { listUsers: vi.fn(), deleteUser: vi.fn(), setDisabled: vi.fn(), setPassword: vi.fn(), updateEmail: vi.fn(), resetTotp: vi.fn() },
+  admin: { listUsers: vi.fn(), deleteUser: vi.fn(), setDisabled: vi.fn(), setPassword: vi.fn(), updateEmail: vi.fn(), resetTotp: vi.fn(), unlinkGoogle: vi.fn() },
   requestPasswordReset: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/self-auth/tenant', () => ({ tenantAuth: async () => ({ admin, requestPasswordReset }) }));
 vi.mock('@/lib/tenant/current', () => ({ currentTenant: async () => ({ slug: 'academy', companyId: COMPANY }) }));
 import {
-  changeAuthEmail, deleteAuthUser, hasVerifiedFactor, listAccounts, resetAuthFactors, sendPasswordLink, setAuthDisabled, setOneTimePassword,
+  changeAuthEmail, deleteAuthUser, hasVerifiedFactor, listAccounts, resetAuthFactors, sendPasswordLink, setAuthDisabled, setOneTimePassword, unlinkGoogle, invitePending,
 } from './auth-accounts';
 
 class CodedError extends Error {
   constructor(public code: string) { super(`private detail ${code}`); this.name = 'SelfAuthError'; }
 }
 const row = (over: Record<string, unknown> = {}) => ({
-  userId: 'u1', email: 'a@example.com', disabled: false, hasPassword: true, hasTotp: false,
+  userId: 'u1', email: 'a@example.com', disabled: false, hasPassword: true, hasTotp: false, hasGoogle: false,
   createdAt: new Date('2026-01-01'), lastSignInAt: null, ...over,
 });
 
@@ -24,7 +24,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   admin.listUsers.mockResolvedValue([row()]);
-  for (const f of [admin.deleteUser, admin.setDisabled, admin.setPassword, admin.updateEmail, admin.resetTotp, requestPasswordReset]) f.mockResolvedValue(undefined);
+  for (const f of [admin.deleteUser, admin.setDisabled, admin.setPassword, admin.updateEmail, admin.resetTotp, admin.unlinkGoogle, requestPasswordReset]) f.mockResolvedValue(undefined);
 });
 
 describe('every call carries this host\'s company', () => {
@@ -111,15 +111,34 @@ describe('hasVerifiedFactor / listAccounts', () => {
     expect(await hasVerifiedFactor('u1')).toBeNull();
   });
   it('lists sign-in time, authenticator and password state by user id', async () => {
-    admin.listUsers.mockResolvedValue([row({ lastSignInAt: new Date('2026-10-01T00:00:00Z'), hasTotp: true }), row({ userId: 'u2', hasPassword: false })]);
+    admin.listUsers.mockResolvedValue([row({ lastSignInAt: new Date('2026-10-01T00:00:00Z'), hasTotp: true, hasGoogle: true }), row({ userId: 'u2', hasPassword: false })]);
     expect(await listAccounts()).toEqual(new Map([
-      ['u1', { lastSignIn: '2026-10-01T00:00:00.000Z', hasFactor: true, hasPassword: true }],
-      ['u2', { lastSignIn: null, hasFactor: false, hasPassword: false }],
+      ['u1', { lastSignIn: '2026-10-01T00:00:00.000Z', hasFactor: true, hasPassword: true, hasGoogle: true }],
+      ['u2', { lastSignIn: null, hasFactor: false, hasPassword: false, hasGoogle: false }],
     ]));
   });
   it('throws when Self-Auth cannot answer', async () => {
     admin.listUsers.mockRejectedValue(new Error('db'));
     await expect(listAccounts()).rejects.toThrow();
+  });
+});
+
+describe('invitePending', () => {
+  it('invite_pending_false_when_google_used', () => {
+    const base = { lastSignIn: null, hasFactor: false };
+    expect(invitePending({ ...base, hasPassword: false, hasGoogle: false })).toBe(true);
+    expect(invitePending({ ...base, hasPassword: false, hasGoogle: true })).toBe(false);
+    expect(invitePending({ ...base, hasPassword: true, hasGoogle: false })).toBe(false);
+    expect(invitePending(undefined)).toBe(false);
+  });
+});
+
+describe('unlinkGoogle', () => {
+  it("unlinks for this host's company; returns a message for another company's user", async () => {
+    expect(await unlinkGoogle('u1')).toBeNull();
+    expect(admin.unlinkGoogle).toHaveBeenCalledWith(COMPANY, 'u1');
+    admin.unlinkGoogle.mockRejectedValue(new CodedError('user_not_found'));
+    expect(await unlinkGoogle('u9')).toBe('User not found.');
   });
 });
 

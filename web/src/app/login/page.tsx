@@ -5,6 +5,10 @@ import { getBranding } from '@/lib/branding/get';
 import { LoginForm } from './login-form';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
 import { COMPANY_REFUSED_MESSAGE } from '@/lib/auth/company-session';
+import { mapAuthError } from '@/lib/auth/errors';
+import { googleConfig } from '@/lib/self-auth/google-config';
+
+const GOOGLE_ERRORS = ['google_no_account', 'google_disabled', 'google_unverified', 'google_failed'];
 
 export default async function LoginPage({ searchParams }: { searchParams: PageSearchParams }) {
   const branding = await getBranding();
@@ -22,7 +26,13 @@ export default async function LoginPage({ searchParams }: { searchParams: PageSe
         {notice === 'password_reset' && <p role="status" className="rounded bg-ok-soft p-3 text-sm">Your password is changed. Sign in with the new one.</p>}
         {notice === 'invite_accepted' && <p role="status" className="rounded bg-ok-soft p-3 text-sm">Your password is set. Sign in to continue.</p>}
         {error === 'company' && <p role="alert" className="rounded bg-bad-soft p-3 text-sm text-bad">{COMPANY_REFUSED_MESSAGE}</p>}
+        {GOOGLE_ERRORS.includes(error) && <p role="alert" className="rounded bg-bad-soft p-3 text-sm text-bad">{mapAuthError(error)}</p>}
         <LoginForm />
+        {googleConfig() && (
+          <a href="/auth/google/start" className="btn-secondary btn w-full justify-center">
+            Sign in with Google
+          </a>
+        )}
         {emailEnabled() && (
           <Link href="/login/forgot" className="block text-center text-sm hover:underline">
             Forgot password?

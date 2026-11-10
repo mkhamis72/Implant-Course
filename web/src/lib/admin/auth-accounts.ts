@@ -116,6 +116,18 @@ export async function changeAuthEmail(userId: string, email: string): Promise<{ 
   }
 }
 
+/** Forgets the account's linked Google identity: the next Google sign-in is remembered instead. Returns an error message, or null. */
+export async function unlinkGoogle(userId: string): Promise<string | null> {
+  try {
+    const { companyId, auth } = await ctx();
+    await auth.admin.unlinkGoogle(companyId, userId);
+    return null;
+  } catch (e) {
+    logFailure('unlinkGoogle', e);
+    return describe(e);
+  }
+}
+
 /** Removes the authenticator and ends the account's sessions (Reset 2FA; the action decides whether a reset is allowed). */
 export async function resetAuthFactors(userId: string): Promise<string | null> {
   try {
@@ -138,13 +150,18 @@ export async function hasVerifiedFactor(userId: string): Promise<boolean | null>
   }
 }
 
-export type AccountState = { lastSignIn: string | null; hasFactor: boolean; hasPassword: boolean };
+export type AccountState = { lastSignIn: string | null; hasFactor: boolean; hasPassword: boolean; hasGoogle: boolean };
+
+/** An invitation is still waiting: no password set and no Google sign-in used. False when the state is unknown. */
+export function invitePending(state: AccountState | undefined): boolean {
+  return state?.hasPassword === false && state.hasGoogle === false;
+}
 
 /** This company's accounts by user id (sign-in time, authenticator, password). Throws when Self-Auth can't answer: "Never" would be wrong. */
 export async function listAccounts(): Promise<Map<string, AccountState>> {
   const { companyId, auth } = await ctx();
   const rows = await auth.admin.listUsers(companyId);
   return new Map(rows.map((u) => [u.userId, {
-    lastSignIn: u.lastSignInAt ? u.lastSignInAt.toISOString() : null, hasFactor: u.hasTotp, hasPassword: u.hasPassword,
+    lastSignIn: u.lastSignInAt ? u.lastSignInAt.toISOString() : null, hasFactor: u.hasTotp, hasPassword: u.hasPassword, hasGoogle: u.hasGoogle,
   }]));
 }

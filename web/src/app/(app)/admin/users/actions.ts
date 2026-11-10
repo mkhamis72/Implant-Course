@@ -9,7 +9,7 @@ import {
 import { createLogin } from '@/lib/admin/create-login';
 import { userMessage } from '@/lib/db-errors';
 import {
-  changeAuthEmail, deleteAuthUser, hasVerifiedFactor, listAccounts, resetAuthFactors, sendPasswordLink, setAuthDisabled, setOneTimePassword,
+  changeAuthEmail, deleteAuthUser, hasVerifiedFactor, listAccounts, resetAuthFactors, sendPasswordLink, setAuthDisabled, setOneTimePassword, unlinkGoogle,
 } from '@/lib/admin/auth-accounts';
 import { memberOfMyCompany, profileRemains, USER_NOT_FOUND } from '@/lib/admin/same-company';
 import { currentTenant } from '@/lib/tenant/current';
@@ -175,6 +175,19 @@ export async function changeEmail(_prev: ActionState, formData: FormData): Promi
   }
   const warning = unsent.length ? ` The notice to ${unsent.join(' and ')} couldn't be sent.` : '';
   return sessionProblem ? { error: sessionsMessage(sessionProblem) + warning } : { ok: `Email changed to ${email}.${warning}` };
+}
+
+/** Forgets the user's linked Google identity, so their next Google sign-in is remembered instead. */
+export async function resetGoogle(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const me = await requireAdmin();
+  const userId = String(formData.get('user_id') ?? '');
+  if (!z.string().uuid().safeParse(userId).success) return { error: 'Invalid request.' };
+  if (isSelf(userId, me.user_id)) return { error: SELF_MESSAGE };
+  if (!(await memberOfMyCompany(userId))) return { error: USER_NOT_FOUND };
+  const problem = await unlinkGoogle(userId);
+  if (problem) return { error: problem };
+  revalidatePath('/admin/users');
+  return { ok: 'Google sign-in reset. Their next Google sign-in is remembered instead.' };
 }
 
 /** Requires set-up again before the user can work, then removes every factor, then signs them out everywhere. */

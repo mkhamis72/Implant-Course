@@ -7,11 +7,15 @@ import { emailEnabled } from '@/lib/flags';
 import { FinishSetup } from './finish-setup';
 import { PasswordLink } from './password-link';
 import { ChangePassword } from './change-password';
+import { googleConfig } from '@/lib/self-auth/google-config';
+import { currentTenant } from '@/lib/tenant/current';
 
 export default async function SecurityPage() {
   const profile = await requireSignedIn({ allowMfaSetup: true }); // staff and delegate logins alike; the one page open while 2FA set-up is required
   const session = await currentSelfAuthSession();
   const verified = session ? await (await tenantAuth()).totp.hasTotp(session.userId) : false;
+
+  const googleUsed = session && googleConfig() ? await (await tenantAuth()).google.linked((await currentTenant()).companyId, session.userId) : null;
 
   return (
     <div className="max-w-xl space-y-6">
@@ -40,6 +44,7 @@ export default async function SecurityPage() {
         <h2 className="font-semibold">Password</h2>
         <ChangePassword />
         {emailEnabled() && <PasswordLink />}
+        {googleUsed !== null && <p>{googleUsed ? 'Google sign-in: used' : 'Google sign-in: not used yet'}</p>}
       </section>
     </div>
   );
