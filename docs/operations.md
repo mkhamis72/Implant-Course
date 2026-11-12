@@ -402,7 +402,7 @@ People whose company email is a Google account can sign in with a "Sign in with 
 **Google Cloud setup (once):**
 1. Open console.cloud.google.com and pick or create a project (for example "Implant Course").
 2. Go to **Google Auth Platform** → **Branding**. Set the app name to `Implant Course Manager` and choose a support email.
-3. Go to **Audience**. Choose **External** and publish the app (**In production**).
+3. Go to **Audience**. Choose **External** and publish the app (**In production**). **Publish app** stays greyed out until **Branding** has a home page and a privacy policy link: set **Application home page** to `https://www.imploid.net`, **Application privacy policy link** to `https://www.imploid.net/privacy`, and add `imploid.net` under **Authorized domains**. The privacy page ships with the app (`web/src/lib/tenant/landing.ts`); keep its text true when what the app stores changes. While the app is in **Testing**, only the test users listed under **Audience** can sign in with Google.
 4. Under scopes, keep only `openid`, `email` and `profile`. These need no Google review.
 5. Go to **Clients** → **Create client** → **Web application**.
 6. Under **Authorized redirect URIs** add one URI per company:

@@ -74,6 +74,13 @@ describe('middleware landing page', () => {
     expect(updateSession).not.toHaveBeenCalled();
     expect(updateConsoleSession).not.toHaveBeenCalled();
   });
+
+  it('the bare domain shows the privacy page on /privacy and reaches no company', async () => {
+    const res = await middleware(req('www.imploid.net', '/privacy'));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('<h1>Privacy</h1>');
+    expect(updateSession).not.toHaveBeenCalled();
+  });
 });
 
 describe('middleware maintenance mode', () => {
