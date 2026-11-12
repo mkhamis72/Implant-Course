@@ -14,6 +14,11 @@ const MESSAGES: Record<string, string> = {
   user_disabled: 'This account has been deactivated. Contact an admin.',
   sign_in_locked: 'Too many failed attempts. Try again in 15 minutes.',
   link_not_valid_here: 'This link is not valid here. Open the link from your email on the address it was sent for.',
+  google_no_account: "There's no account for this email here. Ask your admin.",
+  google_disabled: 'This account is deactivated.',
+  google_unverified: "Google didn't confirm this email address.",
+  google_other_account: 'This account uses a different Google account. Ask your admin.',
+  google_failed: "Google sign-in didn't work. Try again or use your password.",
   over_request_rate_limit: 'Too many attempts. Wait a minute and try again.',
 };
 

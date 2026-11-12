@@ -10,6 +10,7 @@ import { PermissionGrid } from './permission-grid';
 import { EditName } from './edit-name';
 import { ChangeEmail } from './change-email';
 import { ResetTwoFactor } from './reset-two-factor';
+import { ResetGoogle } from './reset-google';
 import { UserHistory } from './user-history';
 import type { HistoryEntry } from '@/lib/admin/history';
 import { formatDateTime } from '@/lib/format';
@@ -22,6 +23,8 @@ export type Account = {
   lastSignIn: string | null | undefined;
   /** Has a verified 2FA factor (Reset 2FA is offered only then). */
   hasFactor: boolean;
+  /** Has signed in with Google (the Google badge and Reset Google sign-in are offered). */
+  hasGoogle: boolean;
   /** The account has no password yet: an invitation is still waiting (Resend invite is offered). */
   invitePending: boolean;
   history: HistoryEntry[];
@@ -68,6 +71,7 @@ export function UserRow({ user, isSelf, account, emailOn }: { user: Profile; isS
         <div>{user.active ? 'Active' : 'Inactive'}</div>
         <div className="text-sm text-muted">Last sign-in: {lastSignInText(account.lastSignIn)}</div>
         {user.mfa_setup_required && <span className="badge badge-warn">2FA set-up pending</span>}
+        {account.hasGoogle && <span className="badge">Google</span>}
       </td>
       <td data-label="Actions" className="py-2">
         {!isSelf && (
@@ -84,6 +88,7 @@ export function UserRow({ user, isSelf, account, emailOn }: { user: Profile; isS
             <ResetPassword userId={user.user_id} label={`Reset password for ${user.email}`} />
             {/* While set-up is still required, a reset that half-failed can be retried. */}
             <ResetTwoFactor userId={user.user_id} email={user.email} available={account.hasFactor || user.mfa_setup_required} />
+            <ResetGoogle userId={user.user_id} email={user.email} available={account.hasGoogle} />
             {account.invitePending && emailOn && (
               <form action={inviteAction}>
                 <input type="hidden" name="user_id" value={user.user_id} />

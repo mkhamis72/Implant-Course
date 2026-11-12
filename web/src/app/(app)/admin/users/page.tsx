@@ -5,7 +5,7 @@ import { InviteForm } from './invite-form';
 import { UserRow, type Account } from './user-row';
 import { emailEnabled } from '@/lib/flags';
 import { toPermissions } from '@/lib/auth/permissions';
-import { listAccounts } from '@/lib/admin/auth-accounts';
+import { invitePending, listAccounts } from '@/lib/admin/auth-accounts';
 import type { HistoryEntry } from '@/lib/admin/history';
 
 type MemberRow = Pick<Profile, 'user_id' | 'role' | 'active' | 'delegate_id' | 'mfa_setup_required'> & {
@@ -48,7 +48,8 @@ export default async function UsersPage() {
       return {
         lastSignIn: states ? (state?.lastSignIn ?? null) : undefined,
         hasFactor: !isSelf && state?.hasFactor === true,
-        invitePending: states ? state?.hasPassword === false : false,
+        invitePending: states ? invitePending(state) : false,
+        hasGoogle: state?.hasGoogle === true,
         history: (history.data ?? []) as HistoryEntry[],
       };
     }),

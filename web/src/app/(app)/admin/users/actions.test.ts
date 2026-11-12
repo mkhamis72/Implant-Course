@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { createLogin, rpc, deleteAuthUser, sendPasswordLink, setOneTimePassword, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, sendEmail, hasVerifiedFactor } = vi.hoisted(() => ({
+const { createLogin, rpc, deleteAuthUser, sendPasswordLink, setOneTimePassword, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, sendEmail, hasVerifiedFactor, unlinkGoogle } = vi.hoisted(() => ({
   createLogin: vi.fn(), rpc: vi.fn(), deleteAuthUser: vi.fn(), sendPasswordLink: vi.fn(), setOneTimePassword: vi.fn(), setAuthDisabled: vi.fn(),
-  changeAuthEmail: vi.fn(), resetAuthFactors: vi.fn(), listAccounts: vi.fn(), sendEmail: vi.fn(), hasVerifiedFactor: vi.fn(),
+  changeAuthEmail: vi.fn(), resetAuthFactors: vi.fn(), listAccounts: vi.fn(), sendEmail: vi.fn(), hasVerifiedFactor: vi.fn(), unlinkGoogle: vi.fn(),
 }));
 const { memberOfMyCompany, profileRemains } = vi.hoisted(() => ({ memberOfMyCompany: vi.fn(), profileRemains: vi.fn() }));
 vi.mock('@/lib/admin/same-company', () => ({ memberOfMyCompany, profileRemains, USER_NOT_FOUND: 'User not found.' }));
@@ -10,7 +10,7 @@ vi.mock('@/lib/tenant/current', () => ({ currentTenant: vi.fn(async () => ({ slu
 const { ME } = vi.hoisted(() => ({ ME: '9c1d6e2a-3b4f-4a5e-8d7c-1f2e3d4c5b6a' }));
 vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: ME })) }));
 vi.mock('@/lib/admin/create-login', () => ({ createLogin }));
-vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, sendPasswordLink, setOneTimePassword, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, hasVerifiedFactor }));
+vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, sendPasswordLink, setOneTimePassword, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, hasVerifiedFactor, unlinkGoogle }));
 vi.mock('@/lib/email/send', () => ({ sendEmail }));
 vi.mock('@/lib/branding/get', () => ({ getBranding: vi.fn(async () => ({ name: 'Academy' })) }));
 const { flagged } = vi.hoisted(() => ({ flagged: { value: false } }));
@@ -22,7 +22,7 @@ const memberQuery: { select: () => unknown; eq: (c: string, v: unknown) => unkno
 };
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc, from: (t: string) => (fromTable(t), memberQuery) })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-import { changeEmail, editName, inviteUser, removeUser, resendInvite, resetPassword, resetTwoFactor, savePermissions, setUserActive, setUserRole } from './actions';
+import { changeEmail, editName, inviteUser, removeUser, resendInvite, resetGoogle, resetPassword, resetTwoFactor, savePermissions, setUserActive, setUserRole } from './actions';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -330,6 +330,32 @@ describe('resetTwoFactor', () => {
   });
 });
 
+describe('resetGoogle', () => {
+  const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
+  it('reset_google_unlinks_member_of_my_company', async () => {
+    unlinkGoogle.mockResolvedValue(null);
+    expect(await resetGoogle({}, form({ user_id: id }))).toEqual({ ok: 'Google sign-in reset. Their next Google sign-in is remembered instead.' });
+    expect(unlinkGoogle).toHaveBeenCalledWith(id);
+  });
+  it('shows the failure when unlinking fails', async () => {
+    unlinkGoogle.mockResolvedValue('Something went wrong. Please try again.');
+    expect(await resetGoogle({}, form({ user_id: id }))).toEqual({ error: 'Something went wrong. Please try again.' });
+  });
+  it('refuses your own account, whatever the case of the id', async () => {
+    expect(await resetGoogle({}, form({ user_id: ME.toUpperCase() }))).toEqual({ error: SELF });
+    expect(unlinkGoogle).not.toHaveBeenCalled();
+  });
+  it('refuses a user of another company', async () => {
+    memberOfMyCompany.mockResolvedValue(false);
+    expect(await resetGoogle({}, form({ user_id: id }))).toEqual({ error: 'User not found.' });
+    expect(unlinkGoogle).not.toHaveBeenCalled();
+  });
+  it('refuses a bad id', async () => {
+    expect(await resetGoogle({}, form({ user_id: 'nope' }))).toEqual({ error: 'Invalid request.' });
+    expect(unlinkGoogle).not.toHaveBeenCalled();
+  });
+});
+
 describe('editName', () => {
   const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
   it('saves the trimmed name through admin_set_name', async () => {
@@ -359,6 +385,12 @@ describe('resendInvite', () => {
   it('is refused once they have a password', async () => {
     vi.stubEnv('EMAIL_ENABLED', 'true');
     listAccounts.mockResolvedValue(new Map([[id, { lastSignIn: null, hasFactor: false, hasPassword: true }]]));
+    expect(await resendInvite({}, form({ user_id: id }))).toHaveProperty('error');
+    expect(sendPasswordLink).not.toHaveBeenCalled();
+  });
+  it('is refused once they have signed in with Google', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    listAccounts.mockResolvedValue(new Map([[id, { lastSignIn: null, hasFactor: false, hasPassword: false, hasGoogle: true }]]));
     expect(await resendInvite({}, form({ user_id: id }))).toHaveProperty('error');
     expect(sendPasswordLink).not.toHaveBeenCalled();
   });

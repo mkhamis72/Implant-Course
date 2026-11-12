@@ -13,6 +13,10 @@ describe('classifyPath', () => {
     ['/auth/invite', 'public'],
     ['/auth/error', 'public'],
     ['/login/forgot', 'public'],
+    // google_paths_are_public
+    ['/auth/google/start', 'public'],
+    ['/auth/google/callback', 'public'],
+    ['/auth/google', 'protected'],
     ['/login/mfa', 'mfa'],
     ['/', 'protected'],
     ['/admin/users', 'protected'],

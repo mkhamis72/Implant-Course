@@ -393,6 +393,50 @@ Use it if the new sign-in fails in a way you can't fix quickly. Migration A kept
 4. Import again, dry runs first: `--db control`, `--db control --apply`, `--db app`, `--db app --apply`. The splits are redone. Accounts already in Self-Auth are skipped, not updated: a password, 2FA or invite changed in the old app since the rollback is **not** carried over. The dry run's "already in Self-Auth" count shows who is affected. Accounts made in Self-Auth during the first window (invites, new logins) are not in Supabase Auth: the final check lists them as "made in Self-Auth only", which is expected, not a failure. Tell those people to use "Forgot password" (or reset their 2FA in Admin → Users).
 5. §E steps 7 to 9: smoke test with the bypass; step 7a again (Email provider off and `delete from auth.sessions;` in both projects); then `MAINTENANCE=0` and Redeploy ("Use existing Build Cache" **off**) followed by the serving check (Current is that redeploy, and a company address shows the new sign-in page); then email the users.
 
+## F2. Google sign-in (owner, once, after Migration B)
+
+People whose company email is a Google account can sign in with a "Sign in with Google" button on the login page. They still need an account in the app (an invite or an existing user) with that email; Google only replaces the password. Two-factor authentication, where set, is still asked for. Set both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, or neither. If only one is set, Google sign-in stays off (password sign-in still works) and the server log names the missing one. Without them the button is hidden, and `/auth/google/start` and `/auth/google/callback` answer 404.
+
+**When:** only after Migration B is applied (§E *After the window*, step 2). Before that the rollback window is still open and this must not go out. The release is a normal one: no maintenance, because the change only adds a way in.
+
+**Google Cloud setup (once):**
+1. Open console.cloud.google.com and pick or create a project (for example "Implant Course").
+2. Go to **Google Auth Platform** → **Branding**. Set the app name to `Implant Course Manager` and choose a support email.
+3. Go to **Audience**. Choose **External** and publish the app (**In production**). **Publish app** stays greyed out until **Branding** has a home page and a privacy policy link: set **Application home page** to `https://www.imploid.net`, **Application privacy policy link** to `https://www.imploid.net/privacy`, and add `imploid.net` under **Authorized domains**. The privacy page ships with the app (`web/src/lib/tenant/landing.ts`); keep its text true when what the app stores changes. While the app is in **Testing**, only the test users listed under **Audience** can sign in with Google.
+4. Under scopes, keep only `openid`, `email` and `profile`. These need no Google review.
+5. Go to **Clients** → **Create client** → **Web application**.
+6. Under **Authorized redirect URIs** add one URI per company:
+   - `https://kaleidoscope.imploid.net/auth/google/callback`
+   - `https://osdic.imploid.net/auth/google/callback`
+   - `https://demo.imploid.net/auth/google/callback`
+7. Create the client. Copy the **client ID** and the **client secret** into your password manager.
+
+**Vercel settings:**
+1. Vercel → the `implant-course` project → Settings → Environment Variables.
+2. Add `GOOGLE_CLIENT_ID` ⟨secret⟩ for **Production**, with the client ID. Mark it **Sensitive**.
+3. Add `GOOGLE_CLIENT_SECRET` ⟨secret⟩ for **Production**, with the client secret. Mark it **Sensitive**.
+4. Run **Release** (Actions → Release → Run workflow on `master`) so the new deployment picks them up.
+
+**Smoke test (before telling users):**
+1. Open one company's login page. Check that the **Sign in with Google** button shows.
+2. Click it and sign in with a Google account whose email already has an account there. Enter the 2FA code if that account has 2FA. Check that you land in the app.
+3. Open **Account security**. It shows "Google sign-in: used".
+4. Sign out.
+5. Click the button again and sign in with a Google account that has **no** account there. The login page must show "There's no account for this email here. Ask your admin."
+6. Tell the users.
+
+**Login page messages** (the address ends `/login?error=<code>`):
+
+| Code | Message | What to do |
+|---|---|---|
+| `google_no_account` | There's no account for this email here. Ask your admin. | Invite the person (Admin → Users) with that Google email. |
+| `google_disabled` | This account is deactivated. | Reactivate the user in Admin → Users, if that is intended. |
+| `google_unverified` | Google didn't confirm this email address. | The person must use a Google account with a confirmed email. |
+| `google_other_account` | This account uses a different Google account. Ask your admin. | The account already uses another Google account (or the address changed hands). If the person should use this one: Admin → Users → **Reset Google sign-in**. |
+| `google_failed` | Google sign-in didn't work. Try again or use your password. | Try again. If it repeats, check the two Vercel settings and the redirect URI in the Google client. |
+
+**Someone changed their Google account:** Admin → Users → the user → **Reset Google sign-in**. This also signs them out everywhere. Their next Google sign-in is remembered instead. A deactivated user stays refused until reactivated.
+
 ## G. Control project (companies)
 
 The app serves each company from its own Supabase project. Without `CONTROL_SUPABASE_URL` it serves one company (tenant `default`) from the `NEXT_PUBLIC_SUPABASE_*` / `SUPABASE_SERVICE_ROLE_KEY` env vars, as before.
@@ -440,6 +484,8 @@ Unknown hosts get 404; a suspended company gets 503. If the control project is d
 2. creates the company with its starting data (`provision_company`: settings, branding, catalogue, consent forms);
 3. adds the address to the Vercel project;
 4. emails the first admin an invite on the company's own address. A login this company already has gets a password-reset email instead; someone another company already uses keeps their password and gets a notice. With `EMAIL_ENABLED=false` it shows a one-time password instead.
+
+**Then, by hand (you):** Google Cloud console → Google Auth Platform → **Clients** → the web client → **Authorized redirect URIs** → add `https://<host>/auth/google/callback` → **Save** (§F2). Until you do, Google shows its own `redirect_uri_mismatch` error page and the person never comes back to the app.
 
 The result lists each step. Once the company exists, a failed address or invite doesn't undo it: redo it from the company's page. An existing slug is refused. The new address can show "not found" for up to a minute after Vercel reports it live (registry cache).
 

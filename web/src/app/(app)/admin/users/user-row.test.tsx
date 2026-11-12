@@ -5,14 +5,14 @@ import type { Profile } from '@/lib/auth/session';
 
 vi.mock('./actions', () => ({
   removeUser: vi.fn(), resendInvite: vi.fn(), setUserActive: vi.fn(), setUserRole: vi.fn(), resetPassword: vi.fn(),
-  changeEmail: vi.fn(), resetTwoFactor: vi.fn(), editName: vi.fn(), savePermissions: vi.fn(),
+  changeEmail: vi.fn(), resetTwoFactor: vi.fn(), resetGoogle: vi.fn(), editName: vi.fn(), savePermissions: vi.fn(),
 }));
 
 const user: Profile = {
   user_id: '1b4e28ba-2fa1-41d2-883f-0016d3cca427', full_name: 'Dr Org', email: 'org@example.com', role: 'organizer',
   active: true, delegate_id: null, mfa_setup_required: false, permissions: {},
 };
-const account = (over: Partial<Account> = {}): Account => ({ lastSignIn: '2026-10-23T08:05:00Z', hasFactor: true, invitePending: false, history: [], ...over });
+const account = (over: Partial<Account> = {}): Account => ({ lastSignIn: '2026-10-23T08:05:00Z', hasFactor: true, hasGoogle: false, invitePending: false, history: [], ...over });
 
 function renderRow(props: { isSelf?: boolean; account?: Account; emailOn?: boolean } = {}) {
   return render(
@@ -21,6 +21,19 @@ function renderRow(props: { isSelf?: boolean; account?: Account; emailOn?: boole
     </tbody></table>,
   );
 }
+
+describe('UserRow, Google', () => {
+  it('user_row_shows_google_badge', () => {
+    renderRow({ account: account({ hasGoogle: true }) });
+    expect(screen.getByText('Google')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reset Google sign-in for org@example.com' })).toBeInTheDocument();
+  });
+  it('shows no badge or reset when Google is not used', () => {
+    renderRow();
+    expect(screen.queryByText('Google')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Reset Google/ })).not.toBeInTheDocument();
+  });
+});
 
 describe('UserRow', () => {
   it('offers Edit name, Change email and Reset 2FA on another user with a factor', () => {
