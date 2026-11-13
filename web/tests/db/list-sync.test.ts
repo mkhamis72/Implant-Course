@@ -112,6 +112,29 @@ describe('list:copy / list:compare', () => {
     });
   });
 
+  it('frees the addresses of a production company that control no longer lists', async () => {
+    await withTx(async (c) => {
+      const a = await provision(c, 'zz-a', 'Zz A');
+      const b = await provision(c, 'zz-b', 'Zz B');
+      await applyList(c, { companies: withRow(await mirror(c), 'zz-a', { hosts: ['zz-shared.imploid.net'] }), audit: [] });
+      const withoutA = withRow((await mirror(c)).filter((r) => r.slug !== 'zz-a'), 'zz-b', { hosts: ['zz-shared.imploid.net'] });
+      await applyList(c, { companies: withoutA, audit: [] });
+      expect(await hostsOf(c, a)).toEqual([]);
+      expect(await hostsOf(c, b)).toEqual(['zz-shared.imploid.net']);
+    });
+  });
+
+  it('swaps two addresses between companies in one copy', async () => {
+    await withTx(async (c) => {
+      const a = await provision(c, 'zz-a', 'Zz A');
+      const b = await provision(c, 'zz-b', 'Zz B');
+      await applyList(c, { companies: withRow(withRow(await mirror(c), 'zz-a', { hosts: ['zz-1.imploid.net'] }), 'zz-b', { hosts: ['zz-2.imploid.net'] }), audit: [] });
+      await applyList(c, { companies: withRow(withRow(await mirror(c), 'zz-a', { hosts: ['zz-2.imploid.net'] }), 'zz-b', { hosts: ['zz-1.imploid.net'] }), audit: [] });
+      expect(await hostsOf(c, a)).toEqual(['zz-2.imploid.net']);
+      expect(await hostsOf(c, b)).toEqual(['zz-1.imploid.net']);
+    });
+  });
+
   it('writes no change-log entries of its own', async () => {
     await withTx(async (c) => {
       await provision(c, 'zz-a', 'Zz A');

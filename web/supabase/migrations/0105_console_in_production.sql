@@ -65,6 +65,10 @@ $$;
 create function public.console_update_company(p_slug text, p_name text, p_hosts text[], p_actor text) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
+  -- Control's tenants.name limit (control 0001); companies.name has none of its own.
+  if length(trim(coalesce(p_name, ''))) not between 2 and 120 then
+    raise exception 'Give a name (2–120 characters).';
+  end if;
   perform set_config('app.actor', coalesce(p_actor, ''), true);
   update public.companies set name = trim(p_name), hosts = p_hosts where slug = p_slug;
   if not found then

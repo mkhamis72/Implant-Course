@@ -47,10 +47,11 @@ export async function applyList(prod: Client, s: Snapshot): Promise<{ updated: n
     else want.set(r.company_id, { hosts: cleanHosts(r.hosts), status: r.status });
   }
 
-  // First take away the addresses a company should no longer hold, so one can move to another company.
-  for (const [id, w] of want) {
-    const current = byId.get(id)!.hosts;
-    const kept = current.filter((h) => w.hosts.includes(h));
+  // First take away the addresses a company should no longer hold, so one can move to another company. A
+  // production company that control does not list (diffList reports it) holds none.
+  for (const [id, p] of byId) {
+    const current = p.hosts;
+    const kept = current.filter((h) => want.get(id)?.hosts.includes(h));
     if (kept.length !== current.length) await prod.query('update public.companies set hosts = $2 where id = $1', [id, kept]);
   }
   let updated = 0;

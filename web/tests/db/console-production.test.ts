@@ -108,6 +108,16 @@ describe('console in production (0105)', () => {
     });
   });
 
+  it('console_update_company keeps control\'s name limit (2–120 characters)', async () => {
+    await withTx(async (c) => {
+      await provision(c, 'zz-a', 'Zz A');
+      await asServiceRole(c);
+      for (const name of [' x ', 'x'.repeat(121), null]) {
+        await refused(c, `select public.console_update_company('zz-a', $1, array[]::text[], 'o')`, [name], /Give a name \(2–120 characters\)\./);
+      }
+    });
+  });
+
   it('console_set_company_status needs a reason and a known status, and logs the reason', async () => {
     await withTx(async (c) => {
       await provision(c, 'zz-a', 'Zz A');
