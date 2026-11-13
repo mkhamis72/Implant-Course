@@ -304,7 +304,9 @@ describe('permissions: guard rails', () => {
         'companies',
         // One database (0085, spec §4): memberships, select of the user's own row (admins all), no API
         // writes; the company policies arrive with the company-aware release.
-        'company_members']);
+        'company_members',
+        // Company list change log (0104): no company-user grants; the service role and the list triggers only.
+        'company_log']);
       expect(rows.map((r) => r.relname).filter((n) => !shared.has(n)).sort()).toEqual([]);
     });
   });
