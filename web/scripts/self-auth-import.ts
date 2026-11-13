@@ -80,6 +80,8 @@ export function maskEmail(email: string | null | undefined): string {
 export const USER_COLUMNS: Record<string, 'repoint' | 'copy' | 'history'> = {
   'public.profiles.user_id': 'copy',
   'public.audit_log.user_id': 'history',
+  // Console accounts (0105) are Self-Auth users of the company 'console', never company users: left as they are.
+  'public.console_users.user_id': 'history',
   'public.company_members.user_id': 'repoint',
   'public.user_permissions.user_id': 'repoint',
   'public.admin_events.user_id': 'repoint',
