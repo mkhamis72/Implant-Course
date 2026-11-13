@@ -4,7 +4,7 @@ import { requirePermission } from '@/lib/auth/session';
 import { canEdit, canView } from '@/lib/auth/permissions';
 import { addDays, isRealDate, todayIso } from '@/lib/dates';
 import { formatDate, formatTime } from '@/lib/format';
-import { gridPlacement, minutesOfDay, timeLabels } from '@/lib/schedule/time';
+import { gridPlacement, gridRange, minutesOfDay, timeLabels } from '@/lib/schedule/time';
 import { assignLanes, dayColumns } from '@/lib/schedule/grid';
 import type { Chair, SlotRow } from '@/lib/schedule/types';
 import { SLOT_SELECT } from '@/lib/schedule/queries';
@@ -77,10 +77,11 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
   const cancelled = bookings.filter((b) => b.status === 'cancelled');
   // Inactive chairs stay visible while they still have bookings that day.
   const chairList = dayColumns((chairs ?? []) as Chair[], live.map((b) => b.chair_id));
-  const lanes = assignLanes(
-    live.map((b) => ({ id: b.id, chair_id: b.chair_id, start: minutesOfDay(formatTime(b.starts_at)), end: minutesOfDay(formatTime(b.ends_at)) })),
-  );
-  const labels = timeLabels();
+  const spans = live.map((b) => ({ id: b.id, chair_id: b.chair_id, start: minutesOfDay(formatTime(b.starts_at)), end: minutesOfDay(formatTime(b.ends_at)) }));
+  const lanes = assignLanes(spans);
+  // 07:00–20:00, longer on a day with an earlier or later booking.
+  const range = gridRange(spans);
+  const labels = timeLabels(range);
 
   return (
     <div className="space-y-4">
@@ -127,7 +128,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
               if (col < 0) return null;
               const start = formatTime(b.starts_at);
               const end = formatTime(b.ends_at);
-              const { row, span } = gridPlacement(start, end);
+              const { row, span } = gridPlacement(start, end, range);
               const { lane, lanes: laneCount } = lanes[b.id];
               const placing = b.delegates.filter((d) => d.role === 'placing').map((d) => d.delegate?.full_name).join(', ');
               const assisting = b.delegates.filter((d) => d.role === 'assisting').map((d) => d.delegate?.full_name).join(', ');
