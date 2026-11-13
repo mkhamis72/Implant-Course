@@ -278,6 +278,9 @@ describe('permissions: guard rails', () => {
         'console_add_first_admin', 'console_cancel_pending_login',
         // One database (0095): a new company and its starting data; service role only, no company session.
         'provision_company',
+        // Console in production (0105): is_console_user reads only the caller's own console_users row; the
+        // console_* list writers are service role only, with no company session.
+        'is_console_user', 'console_update_company', 'console_set_company_status', 'console_log_company',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
@@ -304,7 +307,11 @@ describe('permissions: guard rails', () => {
         'companies',
         // One database (0085, spec §4): memberships, select of the user's own row (admins all), no API
         // writes; the company policies arrive with the company-aware release.
-        'company_members']);
+        'company_members',
+        // Company list change log (0104): no company-user grants; the service role and the list triggers only.
+        'company_log',
+        // Console users (0105): no company-user grants; read through is_console_user, written by the service role.
+        'console_users']);
       expect(rows.map((r) => r.relname).filter((n) => !shared.has(n)).sort()).toEqual([]);
     });
   });

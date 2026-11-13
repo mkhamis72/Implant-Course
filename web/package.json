@@ -18,6 +18,8 @@
     "db:status": "supabase status",
     "db:dev2:start": "tsx scripts/dev2-stack.ts config && supabase start --workdir .dev2 && tsx scripts/dev2-stack.ts env",
     "db:dev2:stop": "supabase stop --workdir .dev2",
+    "list:copy": "tsx scripts/list-sync-cli.ts copy",
+    "list:compare": "tsx scripts/list-sync-cli.ts compare",
     "tenant:register": "tsx scripts/tenant-register.ts",
     "tenant:check": "tsx scripts/tenant-check.ts",
     "backup:pre-one-db": "tsx scripts/pre-one-db-backup.ts",

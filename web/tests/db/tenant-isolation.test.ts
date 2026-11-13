@@ -22,6 +22,8 @@ const NOT_EDIT = new Set([
   'bind_my_session', 'branding_for', 'branding_logo', 'branding_logo_for', 'branding_public', 'can',
   'is_active_user', 'is_admin', 'is_delegate_user', 'mfa_setup_done', 'my_delegate_id', 'my_session_company',
   'my_report', 'my_restorations', 'my_schedule', 'next_file_no',
+  // The console's guard (0105): says whether the caller is an active console user; reads only their own row.
+  'is_console_user',
 ]);
 const FILE_READERS = new Set(['consent_file', 'study_letter']);
 

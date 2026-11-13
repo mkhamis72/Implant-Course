@@ -32,5 +32,14 @@ export const DEFINER_ALLOWLIST: ReadonlySet<string> = new Set([
   'public.console_cancel_pending_login',
   // Console and tenant:register --provision, service role only (0095): a new company and its starting data.
   'public.provision_company',
+  // Company list triggers (0104): check addresses across every company and write company_log, whoever writes the row.
+  'app_private.companies_list_normalise',
+  'app_private.companies_list_audit',
+  // Console in production (0105): reads console_users for the signed-in console account; and the console's
+  // service-role-only writes to the company list, for any company, with no session.
+  'public.is_console_user',
+  'public.console_update_company',
+  'public.console_set_company_status',
+  'public.console_log_company',
   // The console / service-role functions that later plan-3 tasks add join this list there.
 ]);
