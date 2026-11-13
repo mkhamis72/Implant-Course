@@ -1,5 +1,6 @@
 import 'server-only';
 import { createSelfAuth, type SelfAuth } from '@mkhamis72/self-auth';
+import { attachDatabasePool } from '@vercel/functions';
 import { emailAdapter } from './email';
 import { inviteLink, resetLink } from './links';
 import { scopeForSecret, signingKey } from './signing-key';
@@ -19,6 +20,10 @@ export function buildSelfAuth(databaseUrl: string, secretVar: string): Promise<S
   return createSelfAuth({
     databaseUrl,
     databaseCa: databaseCa(),
+    // Supabase's session pooler takes 15 clients per project. Paused Fluid functions used to keep idle connections
+    // open and fill it (EMAXCONNSESSION, 2026-11-13): keep each instance's pool small and let Vercel release idle
+    // clients before a function pauses.
+    pool: { max: 3, idleTimeoutMillis: 5000, onCreate: attachDatabasePool },
     secret: required(secretVar),
     appName: 'Implant Course',
     dbToken: signingKey(scopeForSecret(secretVar)),
