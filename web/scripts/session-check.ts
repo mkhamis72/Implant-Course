@@ -1,7 +1,7 @@
 import './load-env';
 import { Client } from 'pg';
 import { pgConfig } from './db';
-import { applyTenantArg } from './tenant-env';
+import { refuseRemovedOptions } from './one-database';
 
 /** Bound sessions of one company: all of them, and those whose user has no membership in that company. */
 export type SessionCount = { company: string; rows: number; strays: number };
@@ -18,7 +18,7 @@ export function evaluateSessions(counts: SessionCount[]): { ok: boolean; problem
 }
 
 async function main() {
-  await applyTenantArg(process.argv.slice(2), process.env);
+  refuseRemovedOptions(process.argv.slice(2));
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is not set');
   console.log(`Target project: ${new URL(url).hostname}`);

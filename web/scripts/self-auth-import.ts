@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { Client } from 'pg';
 import type { SelfAuth } from '@mkhamis72/self-auth';
 import { migrateTarget } from './migrate-target';
-import { closeNodeAuth, nodeAuth, nodeConsoleAuth } from './self-auth-node';
+import { closeNodeAuth, nodeAuth } from './self-auth-node';
 
 /**
  * Switch-over import: Supabase Auth users → Self-Auth, keeping ids, bcrypt hashes and verified TOTP secrets.
@@ -25,7 +25,7 @@ import { closeNodeAuth, nodeAuth, nodeConsoleAuth } from './self-auth-node';
  * split company's references back to the original id; the Self-Auth accounts stay.
  */
 
-export type ImportDb = 'app' | 'control';
+export type ImportDb = 'app';
 export type ImportArgs = { db: ImportDb; apply: boolean; undoSplits: boolean };
 export type SplitState = { userId: string; companyId: string; newId: string; done: boolean };
 export type ImportSummary = {
@@ -33,8 +33,7 @@ export type ImportSummary = {
   splits: SplitState[];
 };
 
-const USAGE = 'Usage: npm run self-auth:import -- --db app|control [--apply] [--undo-splits] (--undo-splits: app only)';
-const CONSOLE_COMPANY = 'console';
+const USAGE = 'Usage: npm run self-auth:import -- --db app [--apply] [--undo-splits]';
 
 export function parseImportArgs(argv: string[]): ImportArgs {
   let db: string | undefined;
@@ -46,7 +45,7 @@ export function parseImportArgs(argv: string[]): ImportArgs {
     else if (argv[i] === '--undo-splits') undoSplits = true;
     else throw new Error(USAGE);
   }
-  if (db !== 'app' && db !== 'control') throw new Error(USAGE);
+  if (db !== 'app') throw new Error(USAGE);
   if (undoSplits && db !== 'app') throw new Error(USAGE);
   return { db, apply, undoSplits };
 }
@@ -251,22 +250,6 @@ async function planApp(pg: Client, onlyUserIds: string[] | undefined, log: (l: s
   return { accounts, repointColumns, problems };
 }
 
-/** Console admins: an inactive console_admins row, or a Supabase ban still running, imports a disabled account. */
-async function planControl(pg: Client, onlyUserIds: string[] | undefined, log: (l: string) => void): Promise<Plan> {
-  const problems: string[] = [];
-  const { live, totp } = await readUsers(pg, onlyUserIds, log, problems);
-  const inactive = new Set((await pg.query<{ user_id: string }>(
-    'select user_id from public.console_admins where not active')).rows.map((r) => r.user_id));
-  const banned = new Set((await pg.query<{ id: string }>(
-    'select id from auth.users where banned_until > now()')).rows.map((r) => r.id));
-  const accounts = live.map((u) => {
-    const why = [inactive.has(u.id) && 'inactive console admin', banned.has(u.id) && 'banned in Supabase Auth'].filter(Boolean);
-    if (why.length) log(`  disabled: ${maskEmail(u.email)} ${u.id} (${why.join(', ')})`);
-    return account(u, totp, CONSOLE_COMPANY, u.id, false, why.length > 0);
-  });
-  return { accounts, repointColumns: [], problems };
-}
-
 /** One transaction: the profile copied for `to`, then every handled column of the company's rows moved from `from`. */
 async function repoint(pg: Client, companyId: string, from: string, to: string, columns: string[]): Promise<number> {
   let moved = 0;
@@ -355,7 +338,7 @@ export async function runImport(o: {
   const log = o.log ?? ((l: string) => console.log(l));
   const mode = !o.apply ? 'dry run' : o.undoSplits ? 'APPLY, undo splits' : 'APPLY';
   log(`Self-Auth import, ${o.db} database: ${mode}.`);
-  const plan = o.db === 'app' ? await planApp(o.pg, o.onlyUserIds, log) : await planControl(o.pg, o.onlyUserIds, log);
+  const plan = await planApp(o.pg, o.onlyUserIds, log);
   if (plan.problems.length) throw new Error(`Stopped before any change:\n  ${plan.problems.join('\n  ')}`);
   const { accounts } = plan;
 
@@ -367,9 +350,7 @@ export async function runImport(o: {
     throw new Error(`Stopped before any change: Self-Auth already has these ids in another company: ${conflicts.map((a) => a.accountId).join(', ')}`);
   }
 
-  const slugs = o.db === 'app'
-    ? new Map((await o.pg.query<{ id: string; slug: string }>('select id, slug from public.companies')).rows.map((r) => [r.id, r.slug]))
-    : new Map<string, string>();
+  const slugs = new Map((await o.pg.query<{ id: string; slug: string }>('select id, slug from public.companies')).rows.map((r) => [r.id, r.slug]));
   const name = (companyId: string) => slugs.get(companyId) ?? companyId;
   const splits = accounts.filter((a) => a.accountId !== a.userId);
   const summary: ImportSummary = {
@@ -463,12 +444,12 @@ async function main() {
   // The app import writes through nodeAuth() (SELF_AUTH_DATABASE_URL || DATABASE_URL); the console's through
   // CONTROL_DATABASE_URL, the same URL it reads, so only the app import can split across two databases.
   if (args.db === 'app') assertSelfAuthTarget(process.env);
-  const target = migrateTarget(args.db === 'control' ? ['--control'] : [], process.env);
+  const target = migrateTarget([], process.env);
   console.log(`Target: ${target.label}`);
   const pg = new Client(target.config);
   await pg.connect();
   try {
-    const auth = args.db === 'control' ? await nodeConsoleAuth() : await nodeAuth();
+    const auth = await nodeAuth();
     await runImport({ ...args, pg, auth });
   } finally {
     await pg.end();

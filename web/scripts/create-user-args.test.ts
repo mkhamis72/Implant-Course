@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseCreateUserArgs, targetLabel } from './create-user-args';
-import { takeTenantArg } from './tenant-env';
+import { refuseRemovedOptions } from './one-database';
 
 describe('parseCreateUserArgs', () => {
   it('defaults to organizer and joins the name', () => {
@@ -25,9 +25,8 @@ describe('parseCreateUserArgs', () => {
     expect(parseCreateUserArgs(['a@x.com'])).toHaveProperty('error');
     expect(parseCreateUserArgs(['not-an-email', 'Dr A'])).toHaveProperty('error');
   });
-  it('parses the arguments left after --tenant is taken out', () => {
-    const { rest } = takeTenantArg(['--tenant', 'academy', 'a@b.com', 'Some Name', '--role', 'admin']);
-    expect(parseCreateUserArgs(rest)).toMatchObject({ email: 'a@b.com', fullName: 'Some Name', role: 'admin' });
+  it('--tenant is gone: create-user adds a login to the academy in the one database', () => {
+    expect(() => refuseRemovedOptions(['--tenant', 'academy', 'a@b.com', 'Some Name'])).toThrow('--tenant is gone');
   });
 });
 

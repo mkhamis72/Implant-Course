@@ -4,9 +4,8 @@ import { assertSelfAuthTarget, failureReason, maskEmail, parseImportArgs, splitI
 describe('self-auth-import helpers', () => {
   it('parses --db and --apply; dry run by default', () => {
     expect(parseImportArgs(['--db', 'app'])).toEqual({ db: 'app', apply: false, undoSplits: false });
-    expect(parseImportArgs(['--db', 'control', '--apply'])).toEqual({ db: 'control', apply: true, undoSplits: false });
     expect(parseImportArgs(['--db', 'app', '--undo-splits', '--apply'])).toEqual({ db: 'app', apply: true, undoSplits: true });
-    for (const bad of [[], ['--db'], ['--db', 'prod'], ['--db', 'app', '--force'], ['--db', 'control', '--undo-splits']]) {
+    for (const bad of [[], ['--db'], ['--db', 'prod'], ['--db', 'app', '--force'], ['--db', 'control'], ['--db', 'control', '--apply']]) {
       expect(() => parseImportArgs(bad)).toThrow(/Usage/);
     }
   });

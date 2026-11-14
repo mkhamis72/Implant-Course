@@ -19,20 +19,7 @@ describe('migrateTarget', () => {
     expect(t.label).toBe('app.supabase.co');
     expect(pgConfig).toHaveBeenCalledWith(env);
   });
-  it('--control targets the control project and its migrations', () => {
-    const t = migrateTarget(['--control'], env);
-    expect(t.dir).toBe(pathModule.join(process.cwd(), 'supabase', 'control', 'migrations'));
-    expect(t.config.connectionString).toBe('postgres://control');
-    expect(t.label).toBe('control ctl.supabase.co');
-    expect(pgConfig).toHaveBeenCalledWith({ DATABASE_URL: 'postgres://control', DATABASE_CA_CERT: 'ca.crt' });
-  });
-  it('--control with CONTROL_DATABASE_CA_CERT falls back correctly', () => {
-    const envWithCtlCert = { ...env, CONTROL_DATABASE_CA_CERT: 'ctl.crt' };
-    const t = migrateTarget(['--control'], envWithCtlCert);
-    expect(t.label).toBe('control ctl.supabase.co');
-    expect(pgConfig).toHaveBeenCalledWith({ DATABASE_URL: 'postgres://control', DATABASE_CA_CERT: 'ctl.crt' });
-  });
-  it('--control needs CONTROL_DATABASE_URL', () => {
-    expect(() => migrateTarget(['--control'], { ...env, CONTROL_DATABASE_URL: undefined })).toThrow(/CONTROL_DATABASE_URL/);
+  it('--control is gone: there is one database', () => {
+    expect(() => migrateTarget(['--control'], env)).toThrow('--all-tenants / --control are gone');
   });
 });

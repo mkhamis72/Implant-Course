@@ -11,11 +11,9 @@ import { runImport, splitId } from '../../scripts/self-auth-import';
 import { asCompany, withTx } from './helpers';
 import { makePatient } from './fixtures';
 
-// Migration B (0103 / control 0008) is held by default (migrate.ts), so the local stack never has it. Each case
+// Migration B (0103) is held by default (migrate.ts), so the local stack never has it. Each case
 // applies it inside a transaction that is rolled back, after a real import of Supabase-era users made here.
 const B_APP = readFileSync(path.join(process.cwd(), 'supabase', 'migrations', '0103_self_auth_b.sql'), 'utf8');
-const B_CONTROL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0008_self_auth_b.sql'), 'utf8');
-const A_CONTROL = readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0007_self_auth_a.sql'), 'utf8');
 const PASSWORD = 'Import-old-pass-1';
 const HASH = bcrypt.hashSync(PASSWORD, 10).replace(/^\$2b\$/, '$2a$');
 const CREATED_BY_TABLES = ['patients', 'delegates', 'products', 'courses', 'enrollments', 'sessions', 'talks'];
@@ -232,63 +230,5 @@ describe('Migration B (0103): bind_session', () => {
       expect((await c.query('select company_id from app.session_companies where session_id = $1', [live])).rows)
         .toEqual([{ company_id: m.company_id }]);
     });
-  });
-});
-
-describe('Migration B for the control database (0008)', () => {
-  const DB = 'zz_self_auth_b_control';
-  let url = '';
-
-  beforeAll(async () => {
-    await withPg(async (pg) => {
-      await pg.query(`drop database if exists ${DB} with (force)`);
-      await pg.query(`create database ${DB}`);
-    });
-    const u = new URL(process.env.DATABASE_URL!);
-    u.pathname = `/${DB}`;
-    url = u.toString();
-    await withPg(async (pg) => {
-      await pg.query(`create schema auth;
-        create table auth.users (id uuid primary key, email text);
-        create table public.console_admins (user_id uuid primary key constraint console_admins_user_id_fkey references auth.users(id),
-          email text not null, active boolean not null default true);`);
-      await pg.query(A_CONTROL);
-    }, url);
-  });
-
-  afterAll(async () => {
-    await withPg(async (pg) => { await pg.query(`drop database if exists ${DB} with (force)`); });
-  });
-
-  async function admin(pg: Client, imported: boolean): Promise<string> {
-    const id = randomUUID();
-    if (imported) {
-      await pg.query(`insert into self_auth."user" (id, name, email, "emailVerified", "companyId", "realEmail")
-        values ($1, '', $2, true, 'console', $2)`, [id, `zz-${id}@example.com`]);
-    }
-    await pg.query('insert into public.console_admins (user_id, email) values ($1, $2)', [id, `zz-${id}@example.com`]);
-    return id;
-  }
-
-  it('points console_admins at self_auth."user" (cascade) once every admin is imported', async () => {
-    await withPg(async (pg) => {
-      await pg.query('begin');
-      const id = await admin(pg, true);
-      await pg.query(B_CONTROL);
-      expect((await pg.query(`select pg_get_constraintdef(oid) d from pg_constraint where conname = 'console_admins_user_id_fkey'`)).rows)
-        .toEqual([{ d: 'FOREIGN KEY (user_id) REFERENCES self_auth."user"(id) ON DELETE CASCADE' }]);
-      await pg.query('delete from self_auth."user" where id = $1', [id]);
-      expect((await pg.query('select count(*)::int n from public.console_admins')).rows[0].n).toBe(0);
-      await pg.query('rollback');
-    }, url);
-  });
-
-  it('stops when a console admin has no Self-Auth account', async () => {
-    await withPg(async (pg) => {
-      await pg.query('begin');
-      await admin(pg, false);
-      await expect(pg.query(B_CONTROL)).rejects.toThrow(/no Self-Auth account[^]*console_admins: 1/);
-      await pg.query('rollback');
-    }, url);
   });
 });

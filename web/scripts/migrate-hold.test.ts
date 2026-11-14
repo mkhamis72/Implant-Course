@@ -15,10 +15,8 @@ describe('Migration B hold list', () => {
     expect(heldMigrations({ SELF_AUTH_B_HOLD: ' 0\r\n' }).size).toBe(0);
   });
 
-  it('names the real Migration B files, one per database', () => {
-    expect(SELF_AUTH_B_FILES).toEqual(['0103_self_auth_b.sql', '0008_self_auth_b.sql']);
-    const root = path.join(__dirname, '..', 'supabase');
-    expect(existsSync(path.join(root, 'migrations', SELF_AUTH_B_FILES[0]))).toBe(true);
-    expect(existsSync(path.join(root, 'control', 'migrations', SELF_AUTH_B_FILES[1]))).toBe(true);
+  it('names the real Migration B file of the one database', () => {
+    expect(SELF_AUTH_B_FILES).toEqual(['0103_self_auth_b.sql']);
+    expect(existsSync(path.join(__dirname, '..', 'supabase', 'migrations', SELF_AUTH_B_FILES[0]))).toBe(true);
   });
 });

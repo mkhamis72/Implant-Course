@@ -1,13 +1,10 @@
 import bcrypt from 'bcryptjs';
 import { authenticator } from 'otplib';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
-import type { SelfAuth } from '@mkhamis72/self-auth';
 import { pgConfig } from '../../scripts/db';
-import { closeNodeAuth, nodeAuth, nodeAuthFor, sentEmails } from '../../scripts/self-auth-node';
+import { closeNodeAuth, nodeAuth, sentEmails } from '../../scripts/self-auth-node';
 import { runImport, splitId } from '../../scripts/self-auth-import';
 import { actAsBound, asCompany, withTx } from './helpers';
 import { makeCourse, makePatient, makeProduct, makeSession, receive } from './fixtures';
@@ -302,102 +299,5 @@ describe('self-auth-import (app database)', () => {
     const token = new URL(link!.url).searchParams.get('token')!;
     expect(await auth.resetPassword({ token, newPassword: 'Invited-new-pass-1' })).toEqual({ userId: id, companyId: A });
     expect((await auth.signIn({ companyId: A, email, password: 'Invited-new-pass-1' })).ok).toBe(true);
-  });
-});
-
-describe('self-auth-import (control database)', () => {
-  // A scratch database on the local cluster stands in for the control project: Supabase's auth tables (only the
-  // columns the import reads), console_admins with its old key to auth.users, then control 0007 as written.
-  const DB = 'zz_self_auth_import_control';
-  let url = '';
-  let consoleAuth: SelfAuth | null = null;
-
-  beforeAll(async () => {
-    await withPg(async (pg) => {
-      await pg.query(`drop database if exists ${DB} with (force)`);
-      await pg.query(`create database ${DB}`);
-    });
-    const u = new URL(process.env.DATABASE_URL!);
-    u.pathname = `/${DB}`;
-    url = u.toString();
-    await withPg(async (pg) => {
-      await pg.query(`create schema auth;
-        create table auth.users (id uuid primary key, email text, encrypted_password text, created_at timestamptz not null, deleted_at timestamptz,
-          banned_until timestamptz);
-        create table auth.mfa_factors (id uuid primary key, user_id uuid not null references auth.users(id), factor_type text not null,
-          status text not null, secret text, created_at timestamptz not null);
-        create table public.console_admins (user_id uuid primary key constraint console_admins_user_id_fkey references auth.users(id),
-          email text not null, active boolean not null default true);`);
-      await pg.query(readFileSync(path.join(process.cwd(), 'supabase', 'control', 'migrations', '0007_self_auth_a.sql'), 'utf8'));
-    }, url);
-    consoleAuth = await nodeAuthFor(url, 'SELF_AUTH_SECRET');
-  });
-
-  afterAll(async () => {
-    await consoleAuth?.close();
-    await withPg(async (pg) => { await pg.query(`drop database if exists ${DB} with (force)`); });
-  });
-
-  it('console_admin_keeps_totp', async () => {
-    const email = `zz-console-${Date.now()}@example.com`;
-    const secret = authenticator.generateSecret();
-    const id = randomUUID();
-    const gone = randomUUID();
-    await withPg(async (pg) => {
-      await pg.query("insert into auth.users (id, email, encrypted_password, created_at) values ($1, $2, $3, now() - interval '9 days')", [id, email, HASH]);
-      await pg.query("insert into auth.users (id, email, encrypted_password, created_at, deleted_at) values ($1, 'zz-gone@example.com', $2, now(), now())", [gone, HASH]);
-      await pg.query("insert into auth.mfa_factors (id, user_id, factor_type, status, secret, created_at) values (gen_random_uuid(), $1, 'totp', 'verified', $2, now())", [id, secret]);
-      await pg.query('insert into public.console_admins (user_id, email) values ($1, $2)', [id, email]);
-    }, url);
-
-    const summary = await withPg(async (pg) => runImport({ db: 'control', apply: true, pg, auth: consoleAuth!, log: () => undefined }), url);
-
-    expect(summary).toMatchObject({ accounts: 1, imported: 1, withTotp: 1 });
-    const r = await consoleAuth!.signIn({ companyId: 'console', email, password: PASSWORD });
-    if (!r.ok) throw new Error(`sign-in failed: ${r.reason}`);
-    expect(r.session.userId).toBe(id);
-    expect(r.needsTotp).toBe(true);
-    const s = await consoleAuth!.totp.verify(r.sessionToken, 'console', authenticator.generate(secret));
-    expect(s?.aal).toBe('aal2');
-    expect(await consoleAuth!.signIn({ companyId: 'console', email: 'zz-gone@example.com', password: PASSWORD })).toMatchObject({ ok: false });
-  });
-
-  it('console_inactive_or_banned_admin_imports_disabled', async () => {
-    const stamp = Date.now();
-    const admins = {
-      inactive: { id: randomUUID(), email: `zz-console-inactive-${stamp}@example.com`, active: false, banned: null as string | null },
-      banned: { id: randomUUID(), email: `zz-console-banned-${stamp}@example.com`, active: true, banned: '2999-01-01' },
-      banEnded: { id: randomUUID(), email: `zz-console-banended-${stamp}@example.com`, active: true, banned: '2020-01-01' },
-    };
-    await withPg(async (pg) => {
-      for (const a of Object.values(admins)) {
-        await pg.query('insert into auth.users (id, email, encrypted_password, created_at, banned_until) values ($1, $2, $3, now(), $4)',
-          [a.id, a.email, HASH, a.banned]);
-        await pg.query('insert into public.console_admins (user_id, email, active) values ($1, $2, $3)', [a.id, a.email, a.active]);
-      }
-    }, url);
-
-    const dry: string[] = [];
-    const planned = await withPg(async (pg) => runImport({ db: 'control', apply: false, pg, auth: consoleAuth!, log: (l) => dry.push(l) }), url);
-    expect(planned.disabled).toBe(2);
-    expect(dry.some((l) => l.includes(admins.inactive.id) && l.includes('inactive console admin'))).toBe(true);
-    expect(dry.some((l) => l.includes(admins.banned.id) && l.includes('banned in Supabase Auth'))).toBe(true);
-    expect(dry.some((l) => l.includes(admins.banEnded.id))).toBe(false);
-
-    await withPg(async (pg) => runImport({ db: 'control', apply: true, pg, auth: consoleAuth!, log: () => undefined }), url);
-    const signIn = (email: string) => consoleAuth!.signIn({ companyId: 'console', email, password: PASSWORD });
-    expect(await signIn(admins.inactive.email)).toMatchObject({ ok: false, reason: 'disabled' });
-    expect(await signIn(admins.banned.email)).toMatchObject({ ok: false, reason: 'disabled' });
-    expect((await signIn(admins.banEnded.email)).ok).toBe(true);
-  });
-
-  it('post_check_counts_only_planned_accounts', async () => {
-    // An account made in Self-Auth during the first window (before a rollback), not in Supabase Auth: going
-    // forward again, the full re-import must still complete.
-    await consoleAuth!.admin.createUser({ companyId: 'console', email: `zz-console-new-${Date.now()}@example.com`, password: 'Window-pass-123' });
-    const log: string[] = [];
-    await withPg(async (pg) => runImport({ db: 'control', apply: true, pg, auth: consoleAuth!, log: (l) => log.push(l) }), url);
-    expect(log.at(-1)).toBe('Import complete.');
-    expect(log.some((l) => /1 made in Self-Auth only/.test(l))).toBe(true);
   });
 });

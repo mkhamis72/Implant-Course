@@ -5,11 +5,11 @@ import { pgConfig } from './db';
 import { toCsv } from '../src/lib/csv';
 import { CATALOG_HEADERS, catalogRow, type CatalogProduct } from './catalog-csv';
 import { targetLabel } from './create-user-args';
-import { applyTenantArg } from './tenant-env';
+import { refuseRemovedOptions } from './one-database';
 
 async function main() {
-  const { label } = await applyTenantArg(process.argv.slice(2), process.env);
-  console.log(`Target project: ${label ?? targetLabel(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
+  refuseRemovedOptions(process.argv.slice(2));
+  console.log(`Target project: ${targetLabel(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
   const pg = new Client(pgConfig());
   await pg.connect();
   try {
