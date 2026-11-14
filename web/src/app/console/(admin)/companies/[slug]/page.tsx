@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation';
 import { requireConsoleAdmin } from '@/lib/console/session';
-import { createConsoleServiceClient } from '@/lib/console/supabase';
-import { companyAudit, getCompany } from '@/lib/console/companies';
+import { consoleStore } from '@/lib/console/store';
 import { formatDateTime } from '@/lib/format';
 import { emailEnabled } from '@/lib/flags';
 import { DetailsForm, FirstAdminForm, ReplaceKeysForm, StatusForm } from './forms';
@@ -10,10 +9,10 @@ import { AddressPanel } from './address-panel';
 export default async function CompanyPage({ params }: { params: Promise<{ slug: string }> }) {
   await requireConsoleAdmin();
   const { slug } = await params;
-  const control = createConsoleServiceClient();
-  const company = await getCompany(control, slug);
+  const store = consoleStore();
+  const company = await store.get(slug);
   if (!company) notFound();
-  const history = await companyAudit(control, slug);
+  const history = await store.history(slug);
   return (
     <div className="max-w-3xl space-y-6">
       <div className="page-header">
@@ -26,7 +25,8 @@ export default async function CompanyPage({ params }: { params: Promise<{ slug: 
       <AddressPanel slug={company.slug} hosts={company.hosts} />
       <FirstAdminForm slug={company.slug} byEmail={emailEnabled()} />
       <StatusForm slug={company.slug} status={company.status} />
-      <ReplaceKeysForm slug={company.slug} />
+      {/* One shared database (merge release 2): no per-company keys to replace. */}
+      {store.source === 'control' && <ReplaceKeysForm slug={company.slug} />}
       <section className="card">
         <h2 className="mb-3 text-lg font-semibold">History</h2>
         {history.length === 0 ? (

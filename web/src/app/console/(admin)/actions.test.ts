@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
@@ -275,5 +275,41 @@ describe('firstAdmin', () => {
     const r = await firstAdmin({}, form(admin));
     expect(r.ok).toBe('Password reset for the existing login.');
     expect(r.password).toBe('Temp-Pass-456');
+  });
+});
+
+describe('production mode (COMPANY_LIST=production)', () => {
+  beforeEach(() => {
+    for (const [k, v] of Object.entries({ COMPANY_LIST: 'production', NEXT_PUBLIC_SUPABASE_URL: 'https://prod.supabase.co', NEXT_PUBLIC_SUPABASE_ANON_KEY: 'p-anon', SUPABASE_SERVICE_ROLE_KEY: 'p-svc', DATABASE_URL: 'postgres://prod' })) vi.stubEnv(k, v);
+    rpc.mockImplementation(async (name: string) => (name === 'provision_company' ? { data: NEW_COMPANY, error: null } : { data: null, error: null }));
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('adds a company in production: no keys copied, addresses through console_update_company, log in company_log', async () => {
+    flags.email = true;
+    const r = await onboardCompany({}, form(onboardData));
+    expect(r.ok).toBe('Company added.');
+    const names = rpc.mock.calls.map(([fn]) => fn);
+    expect(names).not.toContain('console_register_tenant');
+    expect(vi.mocked(sharedProject)).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith('provision_company', { p_slug: 'acme', p_name: 'Acme' });
+    expect(rpc).toHaveBeenCalledWith('console_update_company', { p_slug: 'acme', p_name: 'Acme', p_hosts: ['acme.imploid.net'], p_actor: 'owner@example.com' });
+    expect(rpc).toHaveBeenCalledWith('console_log_company', { p_slug: 'acme', p_action: 'domain_added', p_detail: 'acme.imploid.net', p_actor: 'owner@example.com' });
+    expect(rpc).toHaveBeenCalledWith('console_log_company', { p_slug: 'acme', p_action: 'first_admin_invited', p_detail: 'ann@acme.com', p_actor: 'owner@example.com' });
+    expect(vi.mocked(createClient)).toHaveBeenCalledWith('https://prod.supabase.co', 'p-svc', expect.anything());
+  });
+
+  it('suspends through console_set_company_status', async () => {
+    const r = await setCompanyStatus({}, form({ slug: 'acme', status: 'suspended', reason: 'unpaid invoice', confirm: 'acme' }));
+    expect(r.ok).toContain('Suspended');
+    expect(rpc).toHaveBeenCalledWith('console_set_company_status', { p_slug: 'acme', p_status: 'suspended', p_reason: 'unpaid invoice', p_actor: 'owner@example.com' });
+  });
+
+  it('refuses to replace keys', async () => {
+    existing = row;
+    const r = await replaceCompanyKeys({}, form(keysData));
+    expect(r.error).toBe('Keys are no longer kept per company.');
+    expect(rpc).not.toHaveBeenCalled();
+    noSecrets(r.values);
   });
 });

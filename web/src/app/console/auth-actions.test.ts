@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   token: 'tok' as string | null,
   host: { ok: true },
   listed: true,
+  tables: [] as string[],
 }));
 vi.mock('next/headers', () => ({ cookies: async () => ({ set: h.cookieSet, delete: h.cookieDelete }) }));
 vi.mock('next/navigation', () => ({
@@ -31,7 +32,7 @@ vi.mock('@/lib/self-auth/cookie', () => ({
 vi.mock('qrcode', () => ({ default: { toDataURL: async () => 'data:image/png;base64,QR' } }));
 vi.mock('@/lib/console/supabase', () => ({
   createConsoleServiceClient: () => ({
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: h.listed ? { active: true } : null }) }) }) }),
+    from: (t: string) => (h.tables.push(t), { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: h.listed ? { active: true } : null }) }) }) }),
   }),
 }));
 
@@ -51,6 +52,7 @@ beforeEach(() => {
   h.token = 'tok';
   h.host.ok = true;
   h.listed = true;
+  h.tables = [];
   auth.signIn.mockResolvedValue({ ok: true, sessionToken: 'new-tok', session, needsTotp: false });
   auth.totp.startEnroll.mockResolvedValue({ secret: 'SECRET', otpauthUrl: 'otpauth://totp/x' });
   auth.totp.confirmEnroll.mockResolvedValue({ ...session, aal: 'aal2' });
@@ -143,5 +145,21 @@ describe('signOutConsole', () => {
     expect(auth.signOut).toHaveBeenCalledWith('tok');
     expect(h.clearSessionCookie).toHaveBeenCalledWith('console');
     expect(h.cookieDelete).toHaveBeenCalledWith('icm_console_last_seen');
+  });
+});
+
+describe('signInConsole checks the list of the active source', () => {
+  it('control: console_admins; production: console_users', async () => {
+    const f = new FormData();
+    f.set('email', 'owner@example.com');
+    f.set('password', 'pw-123456');
+    await signInConsole({}, f).catch(() => undefined);
+    vi.stubEnv('COMPANY_LIST', 'production');
+    try {
+      await signInConsole({}, f).catch(() => undefined);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(h.tables).toEqual(['console_admins', 'console_users']);
   });
 });
