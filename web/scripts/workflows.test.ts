@@ -180,8 +180,11 @@ describe('backup.yml', () => {
     expect(verify).toContain('! info=$(node -e "$CHECK_EXPORT" "$RUNNER_TEMP/check.dump")');
     expect(verify).not.toContain('grep -q \'"format":"company-export-v1"\'');
   });
-  it('backs up every listed company, refusing an empty list', () => {
+  it('backs up every listed company; an empty list fails the run but the whole dump is still uploaded (review)', () => {
     expect(dump).toContain('No companies were listed');
+    expect(dump).toContain('failed+=("company list")');
+    const empty = dump.slice(dump.indexOf('No companies were listed') - 120, dump.indexOf('No companies were listed') + 80);
+    expect(empty).not.toContain('exit 1');
     expect(jobs.backup.steps.some((s) => s.name?.startsWith('Export'))).toBe(false);
   });
   it('keeps going past a failed company but fails the run at the end, naming it', () => {
@@ -228,6 +231,7 @@ describe('backup.yml', () => {
     const verify = runOf(jobs.verify, 'Decrypt');
     expect(verify).toContain('TABLE DATA public patients');
     expect(verify).toContain('TABLE DATA auth users');
+    expect(verify).toContain('TABLE DATA self_auth user');
     expect(verify).toContain('TABLE DATA public companies');
     expect(verify).not.toContain('_control-');
     expect(verify).toContain('whole-database file missing');
@@ -235,6 +239,14 @@ describe('backup.yml', () => {
     expect(verify).toContain('for f in "$dir"/*.dump.gpg');
     expect(runOf(jobs.verify, 'Download the latest backup')).toContain('startswith("backups-")');
     expect(verify).toContain('Backup problem');
+  });
+  it('verify names every company of the whole dump whose own export is missing (review)', () => {
+    const verify = runOf(jobs.verify, 'Decrypt');
+    // The companies come from the whole dump itself (verify has no database): its public.companies rows.
+    expect(verify).toContain('pg_restore" --data-only --table=companies -f -');
+    expect(verify).toContain('company export missing');
+    expect(verify).toMatch(/for slug in \$slugs; do/);
+    expect(verify).toContain('$slug-*.company.dump.gpg');
   });
 
   it('backs up nightly and verifies on its own on the 1st of each month, never both from one schedule', () => {
@@ -275,6 +287,8 @@ describe('backup.yml', () => {
     it('verify checks the newest off-site set as well as the artifact', () => {
       const download = runOf(jobs.verify, 'Download the latest off-site');
       expect(download).toContain('aws s3 cp "s3://$R2_BUCKET/$prefix/" offsite/ --recursive');
+      // Only a nightly set (<date>/<run id>/), never a pre-release one (<date>/<run id>-<attempt>/), which has no exports.
+      expect(download).toContain("grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}/[0-9]+/'");
       expect(runOf(jobs.verify, 'Decrypt')).toContain('for dir in in offsite');
     });
   });

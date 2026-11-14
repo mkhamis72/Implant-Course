@@ -75,7 +75,10 @@ jobs:
           # Each company's own rows as JSON (company-export), restorable on its own (docs/operations.md section D).
           # The list comes from the database itself; only slug-shaped lines are kept.
           slugs=$(DATABASE_URL="$PROD_DATABASE_URL" DATABASE_CA_CERT="$RUNNER_TEMP/ca.crt" npm run --silent companies:list | grep -E '^[a-z0-9][a-z0-9-]*$' || true)
-          [ -n "$slugs" ] || { echo "No companies were listed"; exit 1; }
+          if [ -z "$slugs" ]; then
+            echo "No companies were listed"
+            failed+=("company list")
+          fi
           for slug in $slugs; do
             rc=0
             ( set -euo pipefail
@@ -198,9 +201,11 @@ jobs:
             || { echo "R2 secrets are missing"; exit 1; }
           export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION=auto
           export AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
-          # Files are stored as <date>/<run id>/<file>; the newest file names the newest set.
+          # Nightly sets are stored as <date>/<run id>/<file>; pre-release ones (Release) as <date>/<run id>-<attempt>/
+          # and hold no company exports. The newest nightly file names the newest nightly set.
           newest=$(aws s3api list-objects-v2 --bucket "$R2_BUCKET" --endpoint-url "$R2_ENDPOINT" \
-            --query 'sort_by(Contents, &LastModified)[-1].Key' --output text)
+            --query 'sort_by(Contents, &LastModified)[].Key' --output text \
+            | tr '\t' '\n' | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}/[0-9]+/' | tail -1 || true)
           test -n "$newest" && test "$newest" != "None" || { echo "No off-site backup found"; exit 1; }
           prefix=$(dirname "$newest")
           echo "Verifying off-site $prefix"
@@ -220,6 +225,16 @@ jobs:
               && t && Array.isArray(t["public.patients"]) && Array.isArray(t["auth.users"]);
             if (!ok) process.exit(1);
             console.log(Object.keys(t).length + " tables, exported_at " + d.exported_at);'
+          # The slugs of the whole dump's public.companies rows (COPY text: the slug column of each row).
+          SLUGS_FROM_COPY='const lines = require("fs").readFileSync(0, "utf8").split("\n");
+            const h = lines.findIndex((l) => l.startsWith("COPY public.companies ("));
+            if (h < 0) process.exit(1);
+            const cols = lines[h].slice(lines[h].indexOf("(") + 1, lines[h].indexOf(")")).split(",").map((c) => c.trim().replace(/"/g, ""));
+            const i = cols.indexOf("slug");
+            if (i < 0) process.exit(1);
+            const out = [];
+            for (const l of lines.slice(h + 1)) { if (l === "\\.") break; out.push(l.split("\t")[i]); }
+            console.log(out.filter((x) => /^[a-z0-9][a-z0-9-]*$/.test(x)).join("\n"));'
           # in = the GitHub artifact, offsite = the R2 copy; each must be complete on its own.
           for dir in in offsite; do
             whole_files=0; company_files=0
@@ -246,7 +261,16 @@ jobs:
               # The whole database (prod-*; sets from before the merge also held a registry file, not checked here).
               grep -q "TABLE DATA public patients" "$RUNNER_TEMP/list.txt" || bad+=("$name: patients missing")
               grep -q "TABLE DATA auth users" "$RUNNER_TEMP/list.txt" || bad+=("$name: sign-in accounts missing")
+              grep -q "TABLE DATA self_auth user" "$RUNNER_TEMP/list.txt" || bad+=("$name: Self-Auth accounts missing")
               grep -q "TABLE DATA public companies" "$RUNNER_TEMP/list.txt" || bad+=("$name: companies missing")
+              # Every company in the dump has its own export in the same set (compgen: nullglob would hide a miss).
+              if slugs=$("$PG_BIN/pg_restore" --data-only --table=companies -f - "$RUNNER_TEMP/check.dump" | node -e "$SLUGS_FROM_COPY"); then
+                for slug in $slugs; do
+                  compgen -G "$dir/$slug-*.company.dump.gpg" > /dev/null || bad+=("$dir: $slug company export missing")
+                done
+              else
+                bad+=("$name: company list unreadable")
+              fi
             done
             [ "$whole_files" -gt 0 ] || bad+=("$dir: whole-database file missing")
             [ "$company_files" -gt 0 ] || bad+=("$dir: no company exports")
