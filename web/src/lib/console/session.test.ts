@@ -40,8 +40,6 @@ beforeEach(() => {
   state.rpc = true;
   state.host = 'console.example.com:3000';
   state.calls = { rpc: [], from: [] };
-  vi.stubEnv('COMPANY_LIST', '');
-  vi.stubEnv('CONTROL_SUPABASE_URL', 'https://control.supabase.co');
   vi.stubEnv('CONSOLE_HOST', 'console.example.com');
 });
 
@@ -98,24 +96,15 @@ describe('requireConsoleUser', () => {
   });
 });
 
-describe('the list the console admin is checked against', () => {
-  it('control mode: console_admins and is_console_admin', async () => {
-    state.session = me('aal2');
-    state.hasTotp = true;
-    await requireConsoleAdmin();
-    expect(state.calls.from).toEqual(['console_admins']);
-    expect(state.calls.rpc).toEqual(['is_console_admin']);
-  });
-  it('production mode: console_users and is_console_user', async () => {
-    vi.stubEnv('COMPANY_LIST', 'production');
+describe('the list the console admin is checked against (production database)', () => {
+  it('console_users and is_console_user, with no setting', async () => {
     state.session = me('aal2');
     state.hasTotp = true;
     await requireConsoleAdmin();
     expect(state.calls.from).toEqual(['console_users']);
     expect(state.calls.rpc).toEqual(['is_console_user']);
   });
-  it('production mode: refused when the database says no', async () => {
-    vi.stubEnv('COMPANY_LIST', 'production');
+  it('refused when the database says no', async () => {
     state.session = me('aal2');
     state.hasTotp = true;
     state.rpc = false;

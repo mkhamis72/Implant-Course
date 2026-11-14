@@ -13,9 +13,9 @@ beforeEach(() => {
   h.minted = 0;
   h.create.mockReset();
   h.create.mockReturnValue({});
-  vi.stubEnv('CONTROL_SUPABASE_URL', 'https://control.example');
-  vi.stubEnv('NEXT_PUBLIC_CONTROL_ANON_KEY', 'anon');
-  vi.stubEnv('CONTROL_SERVICE_ROLE_KEY', 'service');
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://prod.example');
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon');
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service');
 });
 
 const headers = (i: number) => (h.create.mock.calls[i][2] as { global?: { headers: Record<string, string> } }).global?.headers;
@@ -24,7 +24,7 @@ describe('createConsoleClient', () => {
   it('sends the console session database token as the bearer, minted per call', async () => {
     await createConsoleClient();
     await createConsoleClient();
-    expect(h.create.mock.calls[0][0]).toBe('https://control.example');
+    expect(h.create.mock.calls[0][0]).toBe('https://prod.example');
     expect(h.create.mock.calls[0][1]).toBe('anon');
     expect(headers(0)?.Authorization).toBe('Bearer db-token-1');
     expect(headers(1)?.Authorization).toBe('Bearer db-token-2');

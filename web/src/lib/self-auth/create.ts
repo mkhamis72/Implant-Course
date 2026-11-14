@@ -3,7 +3,7 @@ import { createSelfAuth, type SelfAuth } from '@mkhamis72/self-auth';
 import { attachDatabasePool } from '@vercel/functions';
 import { emailAdapter } from './email';
 import { inviteLink, resetLink } from './links';
-import { scopeForSecret, signingKey } from './signing-key';
+import { signingKey } from './signing-key';
 import { databaseCa } from './database-ca';
 import { googleConfig } from './google-config';
 
@@ -13,10 +13,10 @@ function required(name: string): string {
   return v;
 }
 
-/** One Self-Auth instance. The console signs database tokens with its own key pair when one is set (signing-key.ts). */
+/** The Self-Auth instance of the one database: every company and the console (company 'console') sign in through it. */
 export function buildSelfAuth(databaseUrl: string, secretVar: string): Promise<SelfAuth> {
-  // Only the company instance signs in with Google; the console never does. The client secret stays in the app.
-  const google = scopeForSecret(secretVar) === 'tenant' ? googleConfig() : null;
+  // Google sign-in takes its company from the request's host, never 'console'; the client secret stays in the app.
+  const google = googleConfig();
   return createSelfAuth({
     databaseUrl,
     databaseCa: databaseCa(),
@@ -26,7 +26,7 @@ export function buildSelfAuth(databaseUrl: string, secretVar: string): Promise<S
     pool: { max: 3, idleTimeoutMillis: 5000, onCreate: attachDatabasePool },
     secret: required(secretVar),
     appName: 'Implant Course',
-    dbToken: signingKey(scopeForSecret(secretVar)),
+    dbToken: signingKey(),
     ...(google ? { google: { clientId: google.clientId } } : {}),
     email: emailAdapter,
     links: { resetPassword: resetLink, acceptInvite: inviteLink },

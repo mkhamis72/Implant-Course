@@ -10,9 +10,10 @@ vi.mock('@/lib/supabase/middleware', () => ({ lastSeenCookieOptions: { httpOnly:
 import { updateConsoleSession, CONSOLE_LAST_SEEN_COOKIE } from './middleware';
 
 const ENV = {
+  NEXT_PUBLIC_SUPABASE_URL: 'https://prod-ref.supabase.co',
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon',
+  SUPABASE_SERVICE_ROLE_KEY: 'service',
   CONTROL_SUPABASE_URL: 'https://control-ref.supabase.co',
-  NEXT_PUBLIC_CONTROL_ANON_KEY: 'anon',
-  CONTROL_SERVICE_ROLE_KEY: 'service',
 };
 
 const SESSION = 'icm_console_session=tok';
@@ -39,22 +40,12 @@ describe('updateConsoleSession', () => {
     expect(res.headers.get('x-middleware-request-x-tenant')).toBeNull();
   });
 
-  it('allows only the control project in the CSP', async () => {
-    const res = await updateConsoleSession(request('/console', SESSION, fresh));
-    const csp = res.headers.get('content-security-policy') ?? '';
-    expect(csp).toContain('https://control-ref.supabase.co');
-    expect(csp).not.toContain('academy');
-  });
-
-  it('production mode: the CSP names the company project, not control', async () => {
-    vi.stubEnv('COMPANY_LIST', 'production');
-    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://prod-ref.supabase.co');
-    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'p-anon');
-    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'p-svc');
+  it('allows only the company project in the CSP, never control', async () => {
     const res = await updateConsoleSession(request('/console', SESSION, fresh));
     const csp = res.headers.get('content-security-policy') ?? '';
     expect(csp).toContain('https://prod-ref.supabase.co');
     expect(csp).not.toContain('control-ref');
+    expect(csp).not.toContain('academy');
   });
 
   it('resolves the session as company console', async () => {
@@ -149,8 +140,8 @@ describe('updateConsoleSession', () => {
     expect(res.status).toBe(200);
   });
 
-  it('is unavailable (503) when the control project is not configured', async () => {
-    vi.stubEnv('CONTROL_SUPABASE_URL', '');
+  it('is unavailable (503) when the project is not configured', async () => {
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
     const res = await updateConsoleSession(request('/console', SESSION));
     expect(res.status).toBe(503);
     expect(h.getSession).not.toHaveBeenCalled();

@@ -15,49 +15,30 @@ beforeEach(() => {
   createSelfAuth.mockReset();
   createSelfAuth.mockImplementation(async (c) => ({ cfg: c }));
   Object.assign(process.env, {
-    DATABASE_URL: 'postgresql://t', CONTROL_DATABASE_URL: 'postgresql://c',
-    SELF_AUTH_SECRET: 's'.repeat(32), CONTROL_SELF_AUTH_SECRET: 'c'.repeat(32),
+    DATABASE_URL: 'postgresql://t',
+    SELF_AUTH_SECRET: 's'.repeat(32),
     SELF_AUTH_PRIVATE_JWK: JSON.stringify(jwk), SELF_AUTH_KID: 'k1',
   });
   delete process.env.SELF_AUTH_DATABASE_URL;
-  // The console falls back to the shared key only when it has none of its own.
-  delete process.env.CONTROL_SELF_AUTH_PRIVATE_JWK;
-  delete process.env.CONTROL_SELF_AUTH_KID;
+  delete process.env.CONTROL_DATABASE_URL;
 });
 
 describe('instances', () => {
-  it('tenant and console use their own database and secret, the same key, and are cached', async () => {
+  it('the console signs in through the company instance (release 3): one database, secret and key, cached', async () => {
     const t = (await tenantAuth()) as unknown as { cfg: Cfg };
-    const c = (await consoleAuth()) as unknown as { cfg: Cfg };
+    expect(await consoleAuth()).toBe(t);
     expect(await tenantAuth()).toBe(t);
-    expect(await consoleAuth()).toBe(c);
-    expect(createSelfAuth).toHaveBeenCalledTimes(2);
+    expect(createSelfAuth).toHaveBeenCalledTimes(1);
     expect(t.cfg.databaseUrl).toBe('postgresql://t');
-    expect(c.cfg.databaseUrl).toBe('postgresql://c');
-    expect(t.cfg.secret).not.toBe(c.cfg.secret);
     expect(t.cfg.dbToken.kid).toBe('k1');
-    expect(c.cfg.dbToken.privateJwk).toEqual(t.cfg.dbToken.privateJwk);
     expect(CONSOLE_COMPANY).toBe('console');
   });
-  it('both instances keep a small pool and hand it to Vercel to release idle connections', async () => {
+  it('the instance keeps a small pool and hands it to Vercel to release idle connections', async () => {
     // Found 2026-11-13: paused Fluid functions held idle connections and filled Supabase's session pooler
     // (15 clients), so sign-ins failed with EMAXCONNSESSION.
     type WithPool = { cfg: { pool?: { max?: number; idleTimeoutMillis?: number; onCreate?: unknown } } };
     for (const inst of [(await tenantAuth()) as unknown as WithPool, (await consoleAuth()) as unknown as WithPool]) {
       expect(inst.cfg.pool).toEqual({ max: 3, idleTimeoutMillis: 5000, onCreate: attachDatabasePool });
-    }
-  });
-  it('production mode: the console signs in through the company instance, without CONTROL_DATABASE_URL', async () => {
-    process.env.COMPANY_LIST = 'production';
-    delete process.env.CONTROL_DATABASE_URL;
-    try {
-      vi.resetModules();
-      const { tenantAuth: t } = await import('./tenant');
-      const { consoleAuth: c } = await import('./console');
-      expect(await c()).toBe(await t());
-      expect(createSelfAuth).toHaveBeenCalledTimes(1);
-    } finally {
-      delete process.env.COMPANY_LIST;
     }
   });
   it('malformed_jwk_error_has_no_key_material', async () => {
@@ -90,7 +71,7 @@ describe('instances', () => {
       delete process.env.SELF_AUTH_DATABASE_CA_CERT;
     }
   });
-  it('tenant_instance_gets_google_client_id_console_does_not', async () => {
+  it('the one instance gets the Google client id, never the secret (the console host serves no Google route)', async () => {
     Object.assign(process.env, { GOOGLE_CLIENT_ID: 'gid.apps.googleusercontent.com', GOOGLE_CLIENT_SECRET: 'gsecret' });
     try {
       vi.resetModules();
@@ -101,7 +82,7 @@ describe('instances', () => {
       const con = (await c()) as unknown as G;
       expect(tenant.cfg.google).toEqual({ clientId: 'gid.apps.googleusercontent.com' });
       expect(JSON.stringify(tenant.cfg)).not.toContain('gsecret');
-      expect(con.cfg.google).toBeUndefined();
+      expect(con).toBe(tenant);
     } finally {
       delete process.env.GOOGLE_CLIENT_ID;
       delete process.env.GOOGLE_CLIENT_SECRET;

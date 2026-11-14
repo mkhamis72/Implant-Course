@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { IdleTimer } from '@/components/idle-timer';
 import { CONSOLE_IDLE_MINUTES } from '@/lib/console/middleware';
 import { requireConsoleAdmin } from '@/lib/console/session';
-import { consoleSource } from '@/lib/console/env';
 import { signOutConsole } from '../auth-actions';
 
 export default async function ConsoleAdminLayout({ children }: { children: React.ReactNode }) {
@@ -10,9 +9,7 @@ export default async function ConsoleAdminLayout({ children }: { children: React
   return (
     <>
       <header className="flex items-center justify-between border-b border-line bg-surface px-4 py-3">
-        <span className="font-semibold">
-          Console <span className="ml-2 text-sm font-normal text-muted">Company list: {consoleSource()}</span>
-        </span>
+        <span className="font-semibold">Console</span>
         <div className="flex items-center gap-3 text-sm">
           <span className="text-muted">{admin.email}</span>
           <Link href="/console/account" className="text-accent hover:underline">Change password</Link>

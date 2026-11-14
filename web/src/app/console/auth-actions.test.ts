@@ -148,18 +148,12 @@ describe('signOutConsole', () => {
   });
 });
 
-describe('signInConsole checks the list of the active source', () => {
-  it('control: console_admins; production: console_users', async () => {
+describe('signInConsole checks console_users', () => {
+  it('reads the console admins list of the production database', async () => {
     const f = new FormData();
     f.set('email', 'owner@example.com');
     f.set('password', 'pw-123456');
     await signInConsole({}, f).catch(() => undefined);
-    vi.stubEnv('COMPANY_LIST', 'production');
-    try {
-      await signInConsole({}, f).catch(() => undefined);
-    } finally {
-      vi.unstubAllEnvs();
-    }
-    expect(h.tables).toEqual(['console_admins', 'console_users']);
+    expect(h.tables).toEqual(['console_users']);
   });
 });

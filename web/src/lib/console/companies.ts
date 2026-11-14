@@ -1,54 +1,10 @@
 import 'server-only';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { checkTenant } from '@/lib/tenant/check';
-import { ACADEMY_COMPANY_ID } from '@/lib/tenant/types';
 
 export type CompanyRow = { slug: string; name: string; hosts: string[]; status: 'active' | 'suspended'; supabase_url: string; anon_key: string; company_id: string | null };
-export type CompanyHealth = { problems: string[]; users: number | null; patients: number | null };
-
-const COLUMNS = 'slug, name, hosts, status, supabase_url, anon_key, company_id';
-
-export async function listCompanies(control: SupabaseClient): Promise<CompanyRow[]> {
-  const { data, error } = await control.from('tenants').select(COLUMNS).order('slug');
-  if (error) throw new Error('Could not load the companies.');
-  return (data ?? []) as CompanyRow[];
-}
-
-export async function getCompany(control: SupabaseClient, slug: string): Promise<CompanyRow | null> {
-  const { data } = await control.from('tenants').select(COLUMNS).eq('slug', slug).maybeSingle();
-  return (data as CompanyRow | null) ?? null;
-}
-
-/** Change history; secrets never live in tenants rows, so `changed` is safe to show. */
-export async function companyAudit(control: SupabaseClient, slug: string) {
-  const { data } = await control.from('tenant_audit').select('at, action, actor, reason, before, after').eq('slug', slug).order('at', { ascending: false }).limit(50);
-  return ((data ?? []) as { at: string; action: string; actor: string; reason: string | null; before: Record<string, unknown> | null; after: Record<string, unknown> | null }[]).map((r) => ({
-    at: r.at, action: r.action, actor: r.actor, reason: r.reason,
-    changed: Object.keys(r.after ?? {}).filter((k) => k !== 'updated_at' && JSON.stringify(r.before?.[k]) !== JSON.stringify(r.after?.[k])),
-  }));
-}
-
-export async function serviceKeyOf(control: SupabaseClient, slug: string): Promise<string | null> {
-  const { data } = await control.rpc('tenant_secret', { p_slug: slug, p_name: 'service_role_key' });
-  return (data as string | null) ?? null;
-}
-
 export type SharedProject = { supabaseUrl: string; anonKey: string; serviceRoleKey: string; databaseUrl: string };
-
-/** Every company lives in one shared database (one-database plan): a new company gets the project and keys of
- *  the registry row that serves academy, so the console never asks for them. */
-export async function sharedProject(control: SupabaseClient): Promise<SharedProject> {
-  const { data, error } = await control.from('tenants').select('slug, supabase_url, anon_key')
-    .eq('company_id', ACADEMY_COMPANY_ID).order('created_at').limit(1);
-  const host = (data as { slug: string; supabase_url: string; anon_key: string }[] | null)?.[0];
-  if (error || !host) throw new Error('No registered company serves academy, so the shared database is unknown.');
-  const [svc, db] = await Promise.all([
-    control.rpc('tenant_secret', { p_slug: host.slug, p_name: 'service_role_key' }),
-    control.rpc('tenant_secret', { p_slug: host.slug, p_name: 'database_url' }),
-  ]);
-  if (!svc.data || !db.data) throw new Error(`The keys of ${host.slug} could not be read from the vault.`);
-  return { supabaseUrl: host.supabase_url, anonKey: host.anon_key, serviceRoleKey: svc.data as string, databaseUrl: db.data as string };
-}
+export type CompanyHealth = { problems: string[]; users: number | null; patients: number | null };
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timed out')), ms))]);
@@ -68,7 +24,7 @@ export async function companyHealth(
   const company = await lookup.get(slug);
   if (!company) return { problems: [`Unknown company ${slug}`], users: null, patients: null };
   const serviceRoleKey = await lookup.serviceKey(slug);
-  if (!serviceRoleKey) return { problems: ['No service key in Vault'], users: null, patients: null };
+  if (!serviceRoleKey) return { problems: ['No service key'], users: null, patients: null };
   const companyId = company.company_id;
   if (!companyId) return { problems: ['No company in the database yet'], users: null, patients: null };
   try {

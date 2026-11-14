@@ -1,5 +1,5 @@
 import type { SelfAuth } from '@mkhamis72/self-auth';
-import { scopeForSecret, signingKey } from '../src/lib/self-auth/signing-key';
+import { signingKey } from '../src/lib/self-auth/signing-key';
 import { databaseCa } from '../src/lib/self-auth/database-ca';
 
 /**
@@ -24,7 +24,7 @@ async function build(url: string, secretVar: string): Promise<SelfAuth> {
     databaseCa: databaseCa(),
     secret: required(secretVar),
     appName: 'Implant Course',
-    dbToken: signingKey(scopeForSecret(secretVar)),
+    dbToken: signingKey(),
     email: { send: async (m) => { sentEmails.push({ to: m.to, kind: m.kind, companyId: m.companyId, url: m.url }); } },
     links: {
       resetPassword: (companyId, token) => `http://${companyId}.localhost:3000/auth/reset?token=${token}`,
@@ -33,13 +33,7 @@ async function build(url: string, secretVar: string): Promise<SelfAuth> {
   });
 }
 
-/** A separate instance on any database (the caller closes it): tests point one at a scratch control database. */
-export function nodeAuthFor(url: string, secretVar: string): Promise<SelfAuth> {
-  return build(url, secretVar);
-}
-
 let instance: Promise<SelfAuth> | null = null;
-let consoleInstance: Promise<SelfAuth> | null = null;
 
 /** One instance per process, on SELF_AUTH_DATABASE_URL || DATABASE_URL. Call closeNodeAuth() when the process should end. */
 export function nodeAuth(): Promise<SelfAuth> {
@@ -51,20 +45,8 @@ export function nodeAuth(): Promise<SelfAuth> {
   return instance;
 }
 
-/** The console's instance (company 'console'), on CONTROL_DATABASE_URL, signing with CONTROL_SELF_AUTH_SECRET. */
-export function nodeConsoleAuth(): Promise<SelfAuth> {
-  consoleInstance ??= (async () => {
-    const url = process.env.CONTROL_DATABASE_URL;
-    if (!url) throw new Error('CONTROL_DATABASE_URL is not set (see .env.example)');
-    return build(url, 'CONTROL_SELF_AUTH_SECRET');
-  })().catch((e) => { consoleInstance = null; throw e; });
-  return consoleInstance;
-}
-
 export async function closeNodeAuth(): Promise<void> {
-  for (const which of ['tenant', 'console'] as const) {
-    const p = which === 'tenant' ? instance : consoleInstance;
-    if (which === 'tenant') instance = null; else consoleInstance = null;
-    if (p) await (await p).close();
-  }
+  const p = instance;
+  instance = null;
+  if (p) await (await p).close();
 }

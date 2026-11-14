@@ -3,37 +3,37 @@ import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import type { SelfAuth } from '@mkhamis72/self-auth';
 import { pgConfig } from './db';
-import { applyTenantArg } from './tenant-env';
-import { closeNodeAuth, nodeAuth, nodeConsoleAuth } from './self-auth-node';
+import { refuseRemovedOptions, takeCompanyArg } from './one-database';
+import { closeNodeAuth, nodeAuth } from './self-auth-node';
 
 /**
  * Switch-over helpers (docs/operations.md §E).
- *   jwks [--control]          prints the PUBLIC key (Self-Auth's jwks()) of the company (or console) signing key, to
- *                             compare its kid with the standby key in Supabase. Supabase imports only the private key.
- *   check [--tenant <slug>]   (step 3, before Migration A) mints a database token and calls the read-only branding_for
- *                             on the company project: 200 means Supabase accepts Self-Auth's tokens, 401 means the key
- *                             isn't imported. Touches no self_auth table.
- *   check --control           the same on the control project, with is_console_admin (authenticated only).
- *   reach [--tenant <slug>]   (after the release that applies Migration A) looks up a made-up session through
+ *   jwks                      prints the PUBLIC key (Self-Auth's jwks()) of the signing key, to compare its kid with the
+ *                             standby key in Supabase. Supabase imports only the private key.
+ *   check [--company <slug>]  (step 3, before Migration A) mints a database token and calls the read-only branding_for
+ *                             on the project: 200 means Supabase accepts Self-Auth's tokens, 401 means the key isn't
+ *                             imported. Touches no self_auth table.
+ *   reach [--company <slug>]  (after the release that applies Migration A) looks up a made-up session through
  *                             Self-Auth's own connection (SELF_AUTH_DATABASE_URL, else DATABASE_URL): proves it reaches
  *                             self_auth, e.g. through the session pooler. Before Migration A: "not migrated yet".
  * Prints statuses only, never a token, a key's private part or a database URL.
  */
-const USAGE = 'Usage: npm run self-auth:keys -- jwks [--control] | check [--tenant <slug>] | check --control | reach [--tenant <slug>]';
+const USAGE = 'Usage: npm run self-auth:keys -- jwks | check [--company <slug>] | reach [--company <slug>]';
 
-export type KeysArgs = { cmd: 'jwks'; control: boolean } | { cmd: 'check'; control: boolean; rest: string[] } | { cmd: 'reach'; rest: string[] };
-
-const tenantRest = (rest: string[]) => rest.length === 0 || (rest.length === 2 && rest[0] === '--tenant' && !!rest[1]);
+export type KeysArgs = { cmd: 'jwks' } | { cmd: 'check' | 'reach'; slug: string };
 
 export function parseKeysArgs(argv: string[]): KeysArgs {
-  const [cmd, ...rest] = argv;
-  if (cmd === 'jwks' && rest.length === 0) return { cmd, control: false };
-  if (cmd === 'jwks' && rest.length === 1 && rest[0] === '--control') return { cmd, control: true };
-  if (cmd === 'check') {
-    if (rest.length === 1 && rest[0] === '--control') return { cmd, control: true, rest: [] };
-    if (tenantRest(rest)) return { cmd, control: false, rest };
+  const [cmd, ...rest] = refuseRemovedOptions(argv);
+  if (cmd === 'jwks' && rest.length === 0) return { cmd };
+  if (cmd === 'check' || cmd === 'reach') {
+    let picked: { slug: string | null; rest: string[] };
+    try {
+      picked = takeCompanyArg(rest);
+    } catch {
+      throw new Error(USAGE);
+    }
+    if (picked.rest.length === 0) return { cmd, slug: picked.slug ?? 'academy' };
   }
-  if (cmd === 'reach' && tenantRest(rest)) return { cmd, rest };
   throw new Error(USAGE);
 }
 
@@ -63,11 +63,9 @@ export async function reachCheck(
   }
 }
 
-/** --tenant overlays that company's env from the control project; the company id comes from its database. */
-async function companyIdFor(rest: string[]): Promise<string> {
-  const { label } = await applyTenantArg(rest, process.env);
-  console.log(`Target project: ${label ?? process.env.NEXT_PUBLIC_SUPABASE_URL}`);
-  const slug = rest[1] ?? 'academy';
+/** The company's id in the one database ENV_FILE points at. */
+async function companyIdFor(slug: string): Promise<string> {
+  console.log(`Target project: ${process.env.NEXT_PUBLIC_SUPABASE_URL}`);
   const pg = new Client(pgConfig(process.env));
   await pg.connect();
   try {
@@ -99,7 +97,7 @@ export async function probe(
   });
   if (res.status === 200) return { ok: true, line: `${o.rpc}: 200, Supabase accepts Self-Auth's database tokens.` };
   if (res.status === 401) {
-    return { ok: false, line: `${o.rpc}: 401, the token was refused. Import that project's private signing key as a standby key (Project Settings -> JWT Keys) and check its kid: SELF_AUTH_KID for the company project, CONTROL_SELF_AUTH_KID for the control project.` };
+    return { ok: false, line: `${o.rpc}: 401, the token was refused. Import that project's private signing key as a standby key (Project Settings -> JWT Keys) and check its kid (SELF_AUTH_KID).` };
   }
   return { ok: false, line: `${o.rpc}: unexpected status ${res.status}.` };
 }
@@ -113,24 +111,16 @@ function required(env: Record<string, string | undefined>, name: string): string
 async function main() {
   const args = parseKeysArgs(process.argv.slice(2));
   if (args.cmd === 'jwks') {
-    // The console's key is its own when CONTROL_SELF_AUTH_PRIVATE_JWK is set (signing-key.ts).
-    console.log(JSON.stringify((await (args.control ? nodeConsoleAuth() : nodeAuth())).jwks(), null, 2));
+    console.log(JSON.stringify((await nodeAuth()).jwks(), null, 2));
     return;
   }
   let result: { ok: boolean; line: string };
   if (args.cmd === 'reach') {
-    const companyId = await companyIdFor(args.rest);
+    const companyId = await companyIdFor(args.slug);
     result = await reachCheck(await nodeAuth(), companyId, process.env.SELF_AUTH_DATABASE_URL ? 'SELF_AUTH_DATABASE_URL' : 'DATABASE_URL');
-  } else if (args.control) {
-    const token = await probeToken(await nodeConsoleAuth(), 'console');
-    result = await probe({
-      supabaseUrl: required(process.env, 'CONTROL_SUPABASE_URL'),
-      anonKey: process.env.CONTROL_ANON_KEY?.trim() || required(process.env, 'NEXT_PUBLIC_CONTROL_ANON_KEY'),
-      rpc: 'is_console_admin', body: {}, token,
-    });
   } else {
     // Before Migration A: only a signed token, no self_auth table is touched.
-    const companyId = await companyIdFor(args.rest);
+    const companyId = await companyIdFor(args.slug);
     const token = await probeToken(await nodeAuth(), companyId);
     result = await probe({
       supabaseUrl: required(process.env, 'NEXT_PUBLIC_SUPABASE_URL'), anonKey: required(process.env, 'NEXT_PUBLIC_SUPABASE_ANON_KEY'),

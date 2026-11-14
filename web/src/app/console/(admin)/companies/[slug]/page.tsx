@@ -3,7 +3,7 @@ import { requireConsoleAdmin } from '@/lib/console/session';
 import { consoleStore } from '@/lib/console/store';
 import { formatDateTime } from '@/lib/format';
 import { emailEnabled } from '@/lib/flags';
-import { DetailsForm, FirstAdminForm, ReplaceKeysForm, StatusForm } from './forms';
+import { DetailsForm, FirstAdminForm, StatusForm } from './forms';
 import { AddressPanel } from './address-panel';
 
 export default async function CompanyPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -25,8 +25,6 @@ export default async function CompanyPage({ params }: { params: Promise<{ slug: 
       <AddressPanel slug={company.slug} hosts={company.hosts} />
       <FirstAdminForm slug={company.slug} byEmail={emailEnabled()} />
       <StatusForm slug={company.slug} status={company.status} />
-      {/* One shared database (merge release 2): no per-company keys to replace. */}
-      {store.source === 'control' && <ReplaceKeysForm slug={company.slug} />}
       <section className="card">
         <h2 className="mb-3 text-lg font-semibold">History</h2>
         {history.length === 0 ? (
