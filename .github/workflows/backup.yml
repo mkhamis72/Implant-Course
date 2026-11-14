@@ -19,8 +19,8 @@ permissions:
 # The backup is data only: the schema comes from the migrations in this repo, and the restore in
 # docs/operations.md loads this data onto a freshly migrated project. Sign-in accounts (auth schema)
 # are included so restored profiles and records keep matching user ids: Supabase Auth (auth) and, since the
-# Self-Auth switch-over, Self-Auth (self_auth; skipped by pg_dump where it doesn't exist yet). The control file
-# also holds the console admins and their accounts in both systems.
+# Self-Auth switch-over, Self-Auth (self_auth). One database holds every company and the console (merge of control
+# into production, release 3): one whole-database file, plus each company's own rows as JSON.
 
 jobs:
   backup:
@@ -41,84 +41,51 @@ jobs:
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
           echo "PG_BIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)" >> "$GITHUB_ENV"
-      - name: Export the companies from the control project (secrets masked)
-        id: export
-        env:
-          CONTROL_DATABASE_URL: ${{ secrets.CONTROL_DATABASE_URL }}
-          CONTROL_SUPABASE_URL: ${{ secrets.CONTROL_SUPABASE_URL }}
-          CA: ${{ secrets.PROD_DATABASE_CA_CERT }}
-        run: |
-          set -euo pipefail
-          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
-          CONTROL_DATABASE_URL="$(clean "$CONTROL_DATABASE_URL")"
-          CONTROL_SUPABASE_URL="$(clean "$CONTROL_SUPABASE_URL")"
-          CA="$(clean "$CA")"
-          test -n "$CONTROL_DATABASE_URL" && test -n "$CA" || { echo "Control database secrets are missing"; exit 1; }
-          printf '%s\n' "$CA" > "$RUNNER_TEMP/ca.crt"
-          CONTROL_DATABASE_URL="$CONTROL_DATABASE_URL" CONTROL_SUPABASE_URL="$CONTROL_SUPABASE_URL" \
-            DATABASE_CA_CERT="$RUNNER_TEMP/ca.crt" npm run tenants:export -- --dir "$RUNNER_TEMP/tenants"
-      - name: Dump and encrypt each company and the control registry (the plain dump never touches disk)
+      - name: Dump and encrypt the database and each company (the plain dump never touches disk)
         id: dump
         env:
-          CONTROL_DATABASE_URL: ${{ secrets.CONTROL_DATABASE_URL }}
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
           CA: ${{ secrets.PROD_DATABASE_CA_CERT }}
           PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           set -euo pipefail
           clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
           PASSPHRASE="$(clean "$PASSPHRASE")"
-          CONTROL_DATABASE_URL="$(clean "$CONTROL_DATABASE_URL")"
+          PROD_DATABASE_URL="$(clean "$PROD_DATABASE_URL")"
           CA="$(clean "$CA")"
           test -n "$PASSPHRASE" || { echo "BACKUP_PASSPHRASE secret is missing: refusing to back up unencrypted"; exit 1; }
-          test -n "$CONTROL_DATABASE_URL" && test -n "$CA" || { echo "Database secrets are missing"; exit 1; }
+          test -n "$PROD_DATABASE_URL" || { echo "PROD_DATABASE_URL secret is missing"; exit 1; }
+          test -n "$CA" || { echo "PROD_DATABASE_CA_CERT secret is missing"; exit 1; }
           printf '%s\n' "$CA" > "$RUNNER_TEMP/ca.crt"
           export PGSSLMODE=verify-full PGSSLROOTCERT="$RUNNER_TEMP/ca.crt"
           encrypt() { gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 --passphrase-fd 3 3<<<"$PASSPHRASE" --output "$1"; }
-          shopt -s nullglob
-          files=("$RUNNER_TEMP"/tenants/*.env)
-          [ ${#files[@]} -gt 0 ] || { echo "No companies were exported"; exit 1; }
           mkdir -p out
           day=$(date -u +%F)
           failed=()
-          declare -A dumped=()
-          for f in "${files[@]}"; do
-            slug=$(basename "$f" .env)
-            key=$(set -euo pipefail; source "$f"; printf '%s' "$DB_KEY") || key=""
-            [ -n "$key" ] || { echo "No DB_KEY for $slug"; failed+=("$slug"); continue; }
-            # Companies in one database (same DB_KEY) share one whole-database dump, taken for the first of them;
-            # if it fails, the next company on that database retries it. A failed company is recorded and the
-            # others are still backed up; the run fails at the end.
-            if [ -z "${dumped[$key]:-}" ]; then
-              if ( set -euo pipefail; source "$f"
-                   "$PG_BIN/pg_dump" --data-only --format=custom --no-owner \
-                     --schema=public --schema=app_private --schema=auth --schema=self_auth \
-                     --exclude-table=app_private.schema_migrations --exclude-table=auth.schema_migrations \
-                     "$DATABASE_URL" \
-                     | encrypt "out/$SLUG-$day.dump.gpg" ); then
-                dumped[$key]="$slug"
-              else
-                rm -f "out/$slug-$day.dump.gpg"
-                failed+=("$slug")
-              fi
-            fi
-            # Each company's own rows as JSON (company-export), restorable on its own (docs/operations.md section D).
-            # company:export exits 3 for a tenant without a company id (register it with --company or --provision).
+          # The whole database once: every company, the console and both sign-in schemas. A failure is recorded and
+          # the company exports still run; the run fails at the end.
+          if ! "$PG_BIN/pg_dump" --data-only --format=custom --no-owner \
+                 --schema=public --schema=app_private --schema=auth --schema=self_auth \
+                 --exclude-table=app_private.schema_migrations --exclude-table=auth.schema_migrations \
+                 "$PROD_DATABASE_URL" \
+                 | encrypt "out/prod-$day.dump.gpg"; then
+            rm -f "out/prod-$day.dump.gpg"
+            failed+=("whole database")
+          fi
+          # Each company's own rows as JSON (company-export), restorable on its own (docs/operations.md section D).
+          # The list comes from the database itself; only slug-shaped lines are kept.
+          slugs=$(DATABASE_URL="$PROD_DATABASE_URL" DATABASE_CA_CERT="$RUNNER_TEMP/ca.crt" npm run --silent companies:list | grep -E '^[a-z0-9][a-z0-9-]*$' || true)
+          [ -n "$slugs" ] || { echo "No companies were listed"; exit 1; }
+          for slug in $slugs; do
             rc=0
             ( set -euo pipefail
-                   DATABASE_CA_CERT="$RUNNER_TEMP/ca.crt" npm run --silent company:export -- --tenant "$slug" --out - \
+                   DATABASE_URL="$PROD_DATABASE_URL" DATABASE_CA_CERT="$RUNNER_TEMP/ca.crt" npm run --silent company:export -- --company "$slug" --out - \
                      | encrypt "out/$slug-$day.company.dump.gpg" ) || rc=$?
             if [ "$rc" -ne 0 ]; then
               rm -f "out/$slug-$day.company.dump.gpg"
-              if [ "$rc" -eq 3 ]; then failed+=("$slug (no company id in the control project)"); else failed+=("$slug (company export)"); fi
+              failed+=("$slug (company export)")
             fi
           done
-          if ! "$PG_BIN/pg_dump" --data-only --format=custom --no-owner --table=public.tenants --table=public.tenant_audit \
-                 --table=public.console_admins --table=auth.users --table=auth.mfa_factors '--table=self_auth.*' \
-                 "$CONTROL_DATABASE_URL" \
-                 | encrypt "out/_control-$day.dump.gpg"; then
-            rm -f "out/_control-$day.dump.gpg"
-            failed+=(control)
-          fi
           ls -l out
           printf '%s\n' "${failed[@]}" > "$RUNNER_TEMP/failed.txt"
       - uses: actions/upload-artifact@v7
@@ -153,41 +120,31 @@ jobs:
           prefix="$(date -u +%F)/$RUN_ID"
           aws s3 cp out/ "s3://$R2_BUCKET/$prefix/" --recursive --exclude '*' --include '*.dump.gpg' \
             --endpoint-url "$R2_ENDPOINT" --no-progress
-      - name: Keep every company and the control project awake (auth health check)
+      - name: Keep the production project awake (auth health check)
         env:
-          CONTROL_SUPABASE_URL: ${{ secrets.CONTROL_SUPABASE_URL }}
-          CONTROL_ANON_KEY: ${{ secrets.CONTROL_ANON_KEY }}
+          PROD_SUPABASE_URL: ${{ secrets.PROD_SUPABASE_URL }}
+          PROD_ANON_KEY: ${{ secrets.PROD_ANON_KEY }}
         run: |
           set -euo pipefail
           clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
-          CONTROL_SUPABASE_URL="$(clean "$CONTROL_SUPABASE_URL")"
-          CONTROL_ANON_KEY="$(clean "$CONTROL_ANON_KEY")"
+          PROD_SUPABASE_URL="$(clean "$PROD_SUPABASE_URL")"
+          PROD_ANON_KEY="$(clean "$PROD_ANON_KEY")"
           woke_failed=()
-          # Missing secrets are recorded, not fatal here: the company pings still run and the file is always written.
-          control_ok=1
-          if [ -z "$CONTROL_SUPABASE_URL" ] || [ -z "$CONTROL_ANON_KEY" ]; then
-            echo "CONTROL_SUPABASE_URL / CONTROL_ANON_KEY secrets are missing"
-            woke_failed+=("control (secrets missing)")
-            control_ok=0
-          fi
-          shopt -s nullglob
-          for f in "$RUNNER_TEMP"/tenants/*.env; do
-            ( source "$f"; curl --fail --silent --show-error "$SUPABASE_URL/auth/v1/health" -H "apikey: $ANON_KEY" -o /dev/null ) \
-              || woke_failed+=("$(basename "$f" .env)")
-          done
-          if [ "$control_ok" = 1 ]; then
-            curl --fail --silent --show-error "$CONTROL_SUPABASE_URL/auth/v1/health" -H "apikey: $CONTROL_ANON_KEY" -o /dev/null \
-              || woke_failed+=(control)
+          # Missing secrets are recorded, not fatal here: the file is always written and the last step reports it.
+          if [ -z "$PROD_SUPABASE_URL" ] || [ -z "$PROD_ANON_KEY" ]; then
+            echo "PROD_SUPABASE_URL / PROD_ANON_KEY secrets are missing"
+            woke_failed+=("production (secrets missing)")
+          else
+            curl --fail --silent --show-error "$PROD_SUPABASE_URL/auth/v1/health" -H "apikey: $PROD_ANON_KEY" -o /dev/null \
+              || woke_failed+=(production)
           fi
           printf '%s\n' "${woke_failed[@]}" > "$RUNNER_TEMP/keepawake-failed.txt"
       - name: Fail if any backup or keep-awake check failed
         if: ${{ !cancelled() }}
         env:
-          EXPORT_OUTCOME: ${{ steps.export.outcome }}
           DUMP_OUTCOME: ${{ steps.dump.outcome }}
           OFFSITE_OUTCOME: ${{ steps.offsite.outcome }}
         run: |
-          if [ "$EXPORT_OUTCOME" != "success" ]; then echo "Backup did not run: the export step failed."; exit 1; fi
           if [ "$DUMP_OUTCOME" != "success" ]; then echo "Backup did not run: the dump step failed."; exit 1; fi
           failed=""; woke_failed=""; offsite_failed=""
           [ -f "$RUNNER_TEMP/failed.txt" ] && failed=$(grep -v '^$' "$RUNNER_TEMP/failed.txt" || true)
@@ -197,7 +154,7 @@ jobs:
           [ -z "$woke_failed" ] || echo "Keep-awake failed for: $(echo $woke_failed)"
           [ -z "$offsite_failed" ] || echo "Off-site copy failed or did not run ($OFFSITE_OUTCOME): see the 'Copy the encrypted files off-site' step."
           if [ -n "$failed$woke_failed$offsite_failed" ]; then exit 1; fi
-          echo "Every company and the control registry were backed up."
+          echo "The database and every company were backed up."
 
   verify:
     if: github.event.schedule == '0 6 1 * *' || inputs.mode == 'verify'
@@ -265,7 +222,7 @@ jobs:
             console.log(Object.keys(t).length + " tables, exported_at " + d.exported_at);'
           # in = the GitHub artifact, offsite = the R2 copy; each must be complete on its own.
           for dir in in offsite; do
-            control_files=0; company_files=0
+            whole_files=0; company_files=0
             for f in "$dir"/*.dump.gpg; do
               name="$dir/$(basename "$f" .dump.gpg)"
               # A company's own JSON export (company-export): parsed as a whole (a truncated file fails), with its format,
@@ -276,23 +233,23 @@ jobs:
                   bad+=("$name: company export unreadable or incomplete")
                 else
                   echo "$name: $info"
+                  company_files=$((company_files + 1))
                 fi
                 continue ;;
               esac
-              case "$(basename "$f")" in _control-*) control_files=$((control_files + 1)) ;; *) company_files=$((company_files + 1)) ;; esac
+              whole_files=$((whole_files + 1))
               if ! gpg --batch --pinentry-mode loopback --decrypt --passphrase-fd 3 3<<<"$PASSPHRASE" "$f" > "$RUNNER_TEMP/check.dump" \
                  || ! "$PG_BIN/pg_restore" --list "$RUNNER_TEMP/check.dump" > "$RUNNER_TEMP/list.txt"; then
                 bad+=("$name: unreadable"); continue
               fi
               echo "$name: $(grep -c 'TABLE DATA' "$RUNNER_TEMP/list.txt") tables with data"
-              case "$(basename "$f")" in
-                _control-*) grep -q "TABLE DATA public tenants" "$RUNNER_TEMP/list.txt" || bad+=("$name: companies missing") ;;
-                *) grep -q "TABLE DATA public patients" "$RUNNER_TEMP/list.txt" || bad+=("$name: patients missing")
-                   grep -q "TABLE DATA auth users" "$RUNNER_TEMP/list.txt" || bad+=("$name: sign-in accounts missing") ;;
-              esac
+              # The whole database (prod-*; sets from before the merge also held a registry file, not checked here).
+              grep -q "TABLE DATA public patients" "$RUNNER_TEMP/list.txt" || bad+=("$name: patients missing")
+              grep -q "TABLE DATA auth users" "$RUNNER_TEMP/list.txt" || bad+=("$name: sign-in accounts missing")
+              grep -q "TABLE DATA public companies" "$RUNNER_TEMP/list.txt" || bad+=("$name: companies missing")
             done
-            [ "$control_files" -gt 0 ] || bad+=("$dir: registry file missing")
-            [ "$company_files" -gt 0 ] || bad+=("$dir: no company files")
+            [ "$whole_files" -gt 0 ] || bad+=("$dir: whole-database file missing")
+            [ "$company_files" -gt 0 ] || bad+=("$dir: no company exports")
           done
           rm -f "$RUNNER_TEMP/check.dump"
           if [ ${#bad[@]} -gt 0 ]; then printf 'Backup problem: %s\n' "${bad[@]}"; exit 1; fi

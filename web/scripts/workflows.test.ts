@@ -28,17 +28,20 @@ describe('release.yml', () => {
     const names = deploy.steps.map((s) => s.name ?? '');
     expect(names.findIndex((n) => n.startsWith('Migrate'))).toBeLessThan(names.findIndex((n) => n.startsWith('Deploy')));
   });
-  it('migrates the control project, then every company, then deploys', () => {
+  it('migrates the one production database (PROD_DATABASE_URL), then deploys (release 3 of the merge)', () => {
     const run = runOf(deploy, 'Migrate');
-    const control = run.indexOf('npm run db:migrate -- --control');
-    const all = run.indexOf('npm run db:migrate -- --all-tenants');
-    expect(control).toBeGreaterThan(-1);
-    expect(all).toBeGreaterThan(control);
-    expect(run).not.toContain('PROD_DATABASE_URL');
-    expect(run.indexOf('CONTROL_DATABASE_URL secret is missing')).toBeLessThan(control);
+    const migrate = run.indexOf('npm run db:migrate');
+    expect(migrate).toBeGreaterThan(-1);
+    expect(run).not.toMatch(/--control|--all-tenants|--tenant/);
+    expect(run.indexOf('PROD_DATABASE_URL secret is missing')).toBeLessThan(migrate);
     expect(run).toContain('set -euo pipefail');
-    expect(run).toContain('DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt"');
-    expect(run.split('\n').find((l) => l.includes('export '))).toContain('DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt"');
+    expect(run.split('\n').find((l) => l.includes('export '))).toContain('DATABASE_URL="$PROD_DATABASE_URL" DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt"');
+  });
+  it('nothing in either workflow reads the control project any more', () => {
+    for (const file of ['release.yml', 'backup.yml']) {
+      const text = readFileSync(path.join(__dirname, '..', '..', '.github', 'workflows', file), 'utf8');
+      expect(text).not.toMatch(/CONTROL_|tenants:export|_control-|--tenant/);
+    }
   });
   // Merge of control into production, release 2: once COMPANY_LIST=production is set the console writes to
   // production, and a copy from control would overwrite those changes with control's stale list.
@@ -54,8 +57,8 @@ describe('release.yml', () => {
     const artifact = deploy.steps.findIndex((s) => s.uses?.startsWith('actions/upload-artifact'));
     // Export, dump, artifact and off-site copy all come before the migration; none may be skipped or soft-failed.
     expect(at('Install the newest PostgreSQL client')).toBeGreaterThan(-1);
-    expect(at('Export the companies')).toBeGreaterThan(at('Install the newest PostgreSQL client'));
-    expect(at('Back up')).toBeGreaterThan(at('Export the companies'));
+    expect(at('Export the companies')).toBe(-1);
+    expect(at('Back up')).toBeGreaterThan(at('Install the newest PostgreSQL client'));
     expect(artifact).toBeGreaterThan(at('Back up'));
     expect(at('Copy the pre-release backup')).toBeGreaterThan(artifact);
     expect(at('Migrate')).toBeGreaterThan(at('Copy the pre-release backup'));
@@ -69,23 +72,18 @@ describe('release.yml', () => {
     expect(run.indexOf('BACKUP_PASSPHRASE secret is missing')).toBeLessThan(run.indexOf('pg_dump'));
     expect(run).toMatch(/encrypt\(\) \{ gpg [^}]*--symmetric --cipher-algo AES256/);
     expect(run).not.toMatch(/pg_dump[^\n]*> /);
-    expect(run).toContain('No companies were exported');
+    expect(run.indexOf('PROD_DATABASE_URL secret is missing')).toBeLessThan(run.indexOf('pg_dump'));
     // Schema and data (no --data-only): a restore point for the exact state before the migration.
     expect(run).not.toContain('--data-only');
-    // Each distinct company database once, with its sign-in accounts in both systems.
-    const branch = run.indexOf('if [ -z "${dumped[$key]:-}" ]; then');
-    expect(branch).toBeGreaterThan(-1);
-    const company = run.slice(branch, run.indexOf('dumped[$key]="$slug"'));
-    for (const schema of ['public', 'app_private', 'app', 'auth', 'self_auth']) expect(company).toContain(`--schema=${schema} `);
-    // The control project: registry, console admins and both sign-in schemas (the nightly had only the registry).
-    const end = run.indexOf('out/_control-');
-    expect(end).toBeGreaterThan(-1);
-    const controlDump = run.slice(run.lastIndexOf('pg_dump', end), end);
-    for (const schema of ['public', 'auth', 'self_auth']) expect(controlDump).toContain(`--schema=${schema} `);
-    expect(controlDump).toContain('"$CONTROL_DATABASE_URL"');
+    // The one database, whole: every company, the console and both sign-in schemas.
+    const whole = run.slice(run.indexOf('pg_dump'), run.indexOf('out/prod-$day.dump.gpg'));
+    expect(whole).not.toBe('');
+    for (const schema of ['public', 'app_private', 'app', 'auth', 'self_auth']) expect(whole).toContain(`--schema=${schema} `);
+    expect(whole).toContain('"$PROD_DATABASE_URL"');
+    expect(run.match(/pg_dump/g)?.length).toBe(1);
     // Nothing soft-fails inside the step: no per-company failure list, a failed dump stops the job.
     expect(run).not.toContain('failed+=');
-    for (const n of ['PASSPHRASE', 'CONTROL_DATABASE_URL', 'CA']) expect(cleans(run, n)).toBe(true);
+    for (const n of ['PASSPHRASE', 'PROD_DATABASE_URL', 'CA']) expect(cleans(run, n)).toBe(true);
     // Uploaded as an artifact and to R2 under a per-attempt prefix (locked files cannot be overwritten on a re-run).
     expect(deploy.steps[artifact].with).toMatchObject({
       name: 'pre-release-backups-${{ github.run_id }}-${{ github.run_attempt }}', path: 'web/out/*.dump.gpg', 'if-no-files-found': 'error',
@@ -121,16 +119,15 @@ const cleans = (run: string, name: string) => run.includes(CLEAN) && run.include
 describe('secrets are cleaned of stray line endings before use', () => {
   const release = load('release.yml').jobs['migrate-and-deploy'];
   const backup = load('backup.yml').jobs;
-  it('release: control database URL, CA certificate and deploy hook', () => {
-    expect(cleans(runOf(release, 'Migrate'), 'CONTROL_DATABASE_URL')).toBe(true);
+  it('release: production database URL, CA certificate and deploy hook', () => {
+    expect(cleans(runOf(release, 'Migrate'), 'PROD_DATABASE_URL')).toBe(true);
     expect(cleans(runOf(release, 'Migrate'), 'PROD_DATABASE_CA_CERT')).toBe(true);
     expect(cleans(runOf(release, 'Deploy'), 'HOOK')).toBe(true);
   });
-  it('backup and verify: passphrase, control database URL, CA certificate and control keep-awake keys', () => {
+  it('backup and verify: passphrase, production database URL, CA certificate and keep-awake keys', () => {
     const dump = runOf(backup.backup, 'Dump');
-    for (const n of ['PASSPHRASE', 'CONTROL_DATABASE_URL', 'CA']) expect(cleans(dump, n)).toBe(true);
-    for (const n of ['CONTROL_DATABASE_URL', 'CA']) expect(cleans(runOf(backup.backup, 'Export'), n)).toBe(true);
-    for (const n of ['CONTROL_SUPABASE_URL', 'CONTROL_ANON_KEY']) expect(cleans(runOf(backup.backup, 'Keep'), n)).toBe(true);
+    for (const n of ['PASSPHRASE', 'PROD_DATABASE_URL', 'CA']) expect(cleans(dump, n)).toBe(true);
+    for (const n of ['PROD_SUPABASE_URL', 'PROD_ANON_KEY']) expect(cleans(runOf(backup.backup, 'Keep'), n)).toBe(true);
     expect(cleans(runOf(backup.verify, 'Decrypt'), 'PASSPHRASE')).toBe(true);
   });
   it('backup and verify: the off-site (R2) endpoint, bucket and keys', () => {
@@ -143,32 +140,30 @@ describe('backup.yml', () => {
   const { jobs } = load('backup.yml');
   const dump = runOf(jobs.backup, 'Dump');
 
-  it('refuses to run without the passphrase, before dumping anything', () => {
-    expect(dump.indexOf('BACKUP_PASSPHRASE secret is missing')).toBeGreaterThan(-1);
-    expect(dump.indexOf('BACKUP_PASSPHRASE secret is missing')).toBeLessThan(dump.indexOf('pg_dump'));
+  it('refuses to run without the passphrase or the database, before dumping anything', () => {
+    for (const m of ['BACKUP_PASSPHRASE secret is missing', 'PROD_DATABASE_URL secret is missing', 'PROD_DATABASE_CA_CERT secret is missing']) {
+      expect(dump.indexOf(m)).toBeGreaterThan(-1);
+      expect(dump.indexOf(m)).toBeLessThan(dump.indexOf('pg_dump'));
+    }
   });
   it('dumps the data a restore needs for each company: app tables and sign-in accounts, without migration bookkeeping', () => {
     expect(dump).toContain('--data-only');
     expect(dump).toContain('--schema=auth');
     expect(dump).toContain('--exclude-table=app_private.schema_migrations');
     expect(dump).toContain('--exclude-table=auth.schema_migrations');
-    expect(dump).toContain('out/$SLUG-$day.dump.gpg');
+    expect(dump).toContain('out/prod-$day.dump.gpg');
   });
   it('encrypts every dump on the way out (the plain dump never touches disk)', () => {
     expect(dump).toMatch(/encrypt\(\) \{ gpg [^}]*--symmetric --cipher-algo AES256/);
-    expect(dump.match(/\| encrypt /g)?.length).toBe(3); // whole database, company export, control registry
+    expect(dump.match(/\| encrypt /g)?.length).toBe(2); // whole database, company export
     expect(dump).not.toMatch(/pg_dump[^\n]*> /);
   });
-  it('dumps the whole database once per distinct database, then exports each company on its own', () => {
-    expect(dump).toContain('declare -A dumped=()');
-    expect(dump).toContain("printf '%s' \"$DB_KEY\"");
-    expect(dump).toContain('if [ -z "${dumped[$key]:-}" ]; then');
-    expect(dump).toContain('dumped[$key]="$slug"');
-    // the whole-database dump sits inside the "not yet dumped" branch; the company export is outside it
-    expect(dump.indexOf('if [ -z "${dumped[$key]:-}" ]; then')).toBeLessThan(dump.indexOf('pg_dump" --data-only'));
-    expect(dump.indexOf('pg_dump" --data-only')).toBeLessThan(dump.indexOf('dumped[$key]="$slug"'));
-    expect(dump.indexOf('dumped[$key]="$slug"')).toBeLessThan(dump.indexOf('company:export'));
-    expect(dump).toContain('npm run --silent company:export -- --tenant "$slug" --out -');
+  it('dumps the one database once, then exports each company listed in it on its own', () => {
+    expect(dump.match(/pg_dump/g)?.length).toBe(1);
+    expect(dump).toContain('"$PROD_DATABASE_URL"');
+    expect(dump).toContain('npm run --silent companies:list');
+    expect(dump.indexOf('pg_dump')).toBeLessThan(dump.indexOf('companies:list'));
+    expect(dump).toContain('npm run --silent company:export -- --company "$slug" --out -');
     expect(dump).toContain('out/$slug-$day.company.dump.gpg');
     expect(dump).toContain('failed+=("$slug (company export)")');
   });
@@ -185,9 +180,9 @@ describe('backup.yml', () => {
     expect(verify).toContain('! info=$(node -e "$CHECK_EXPORT" "$RUNNER_TEMP/check.dump")');
     expect(verify).not.toContain('grep -q \'"format":"company-export-v1"\'');
   });
-  it('backs up every exported company, refusing an empty export', () => {
-    expect(runOf(jobs.backup, 'Export')).toContain('npm run tenants:export -- --dir "$RUNNER_TEMP/tenants"');
-    expect(dump).toContain('No companies were exported');
+  it('backs up every listed company, refusing an empty list', () => {
+    expect(dump).toContain('No companies were listed');
+    expect(jobs.backup.steps.some((s) => s.name?.startsWith('Export'))).toBe(false);
   });
   it('keeps going past a failed company but fails the run at the end, naming it', () => {
     expect(dump).toContain('failed+=');
@@ -201,30 +196,21 @@ describe('backup.yml', () => {
     expect(fail?.run).toContain('keepawake-failed.txt');
     expect(fail?.run).toContain('Keep-awake failed for');
   });
-  it('the final step fails the run when the export or dump step did not succeed, before reporting success', () => {
-    const ids = jobs.backup.steps.map((s) => s.id);
-    expect(ids).toContain('export');
-    expect(ids).toContain('dump');
+  it('the final step fails the run when the dump step did not succeed, before reporting success', () => {
+    expect(jobs.backup.steps.map((s) => s.id)).toContain('dump');
     const fail = jobs.backup.steps.find((s) => s.name?.startsWith('Fail'));
-    expect(fail?.env?.EXPORT_OUTCOME).toContain('steps.export.outcome');
     expect(fail?.env?.DUMP_OUTCOME).toContain('steps.dump.outcome');
     expect(fail?.run).toContain('Backup did not run');
     expect(fail!.run!.indexOf('Backup did not run')).toBeLessThan(fail!.run!.indexOf('were backed up'));
   });
-  it('keep-awake checks the control secrets before the loop and records, not exits, when they are missing', () => {
+  it('keep-awake checks its secrets and records, not exits, when they are missing', () => {
     const keep = runOf(jobs.backup, 'Keep');
-    expect(keep).toContain('control (secrets missing)');
-    expect(keep.indexOf('secrets are missing')).toBeLessThan(keep.indexOf('for f in'));
+    expect(keep).toContain('production (secrets missing)');
+    expect(keep.indexOf('secrets are missing')).toBeLessThan(keep.indexOf('curl'));
     expect(keep).not.toContain('exit 1');
   });
-  it('keeps the Self-Auth accounts in every company dump and the console accounts in the control dump', () => {
+  it('keeps the sign-in accounts of both systems in the whole-database dump', () => {
     expect(dump).toContain('--schema=auth --schema=self_auth');
-    // Quoted: the step runs with nullglob, which would drop an unquoted pattern that matches no file.
-    expect(dump).toContain("--table=public.console_admins --table=auth.users --table=auth.mfa_factors '--table=self_auth.*'");
-  });
-  it('backs up the registry and the console accounts from the control project', () => {
-    expect(dump).toContain('--table=public.tenants --table=public.tenant_audit');
-    expect(dump).toContain('out/_control-$day.dump.gpg');
   });
   it('uploads one artifact per night', () => {
     const upload = jobs.backup.steps.find((s) => s.uses?.startsWith('actions/upload-artifact'));
@@ -233,22 +219,22 @@ describe('backup.yml', () => {
   it('uses the newest PostgreSQL client, never a pinned older one', () => {
     for (const job of Object.values(jobs)) expect(JSON.stringify(job)).not.toContain('postgresql/17');
   });
-  it('keeps every company and the control project awake with an endpoint the anon key may call', () => {
+  it('keeps the production project awake with an endpoint the anon key may call', () => {
     const keep = runOf(jobs.backup, 'Keep');
-    expect(keep).toContain('/auth/v1/health');
-    expect(keep).toContain('"$RUNNER_TEMP"/tenants/*.env');
-    expect(keep).toContain('CONTROL_SUPABASE_URL');
+    expect(keep).toContain('"$PROD_SUPABASE_URL/auth/v1/health"');
+    expect(keep).toContain('apikey: $PROD_ANON_KEY');
   });
-  it('verify mode checks every file: companies have patients and sign-in accounts, control has tenants', () => {
+  it('verify mode checks every file: the whole dump has patients, sign-in accounts and companies; each company has its export', () => {
     const verify = runOf(jobs.verify, 'Decrypt');
     expect(verify).toContain('TABLE DATA public patients');
     expect(verify).toContain('TABLE DATA auth users');
-    expect(verify).toContain('TABLE DATA public tenants');
+    expect(verify).toContain('TABLE DATA public companies');
+    expect(verify).not.toContain('_control-');
+    expect(verify).toContain('whole-database file missing');
+    expect(verify).toContain('no company exports');
     expect(verify).toContain('for f in "$dir"/*.dump.gpg');
     expect(runOf(jobs.verify, 'Download the latest backup')).toContain('startswith("backups-")');
     expect(verify).toContain('Backup problem');
-    expect(verify).toContain('registry file missing');
-    expect(verify).toContain('no company files');
   });
 
   it('backs up nightly and verifies on its own on the 1st of each month, never both from one schedule', () => {
