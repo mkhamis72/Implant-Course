@@ -30,7 +30,7 @@ let existing: object | null = null;
 vi.mock('@/lib/console/supabase', () => ({
   createConsoleServiceClient: () => ({
     rpc,
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: existing, error: null }) }) }) }),
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: existing, error: null }) }), order: async () => ({ data: [], error: null }) }) }),
   }),
 }));
 
@@ -100,6 +100,11 @@ describe('onboardCompany', () => {
     expect(r.steps?.map((s) => [s.label, s.ok])).toEqual([['Company', true], ['Address', true], ['First admin', true]]);
     expect(r.steps?.[2].detail).toBe('Invite sent to ann@acme.com.');
     expect(r.password).toBeUndefined();
+  });
+
+  it('reads the shared project once, inside the guarded step (review #5)', async () => {
+    await onboardCompany({}, form(onboardData));
+    expect(vi.mocked(sharedProject)).toHaveBeenCalledTimes(1);
   });
 
   it('with email off, creates the login and returns its temporary password once', async () => {

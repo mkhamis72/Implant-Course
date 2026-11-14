@@ -73,8 +73,7 @@ export async function onboardCompany(_prev: OnboardState, formData: FormData): P
   }
   const added = await store.addCompany({ slug: c.slug, name: c.name, hosts: c.hosts }, admin.email);
   if ('error' in added) return failed(added.error, formData);
-  const { companyId } = added;
-  const shared = await store.shared();
+  const { companyId, shared } = added;
   const db = sharedDb(shared.supabaseUrl, shared.serviceRoleKey);
   revalidatePath('/console');
   const steps: Step[] = [{ label: 'Company', ok: true, detail: `${c.name} created with its starting data.` }];

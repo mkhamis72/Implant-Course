@@ -94,12 +94,18 @@ describe('production store', () => {
   });
   it('adds a company: provision_company, then its name and addresses with the actor, then a fresh list', async () => {
     h.rpc.mockImplementation(async (name: string) => (name === 'provision_company' ? { data: 'c-new', error: null } : { data: null, error: null }));
-    expect(await consoleStore().addCompany({ slug: 'new', name: 'New Co', hosts: ['new.imploid.net'] }, 'owner@x.com')).toEqual({ companyId: 'c-new' });
+    expect(await consoleStore().addCompany({ slug: 'new', name: 'New Co', hosts: ['new.imploid.net'] }, 'owner@x.com')).toMatchObject({ companyId: 'c-new', shared: { supabaseUrl: 'https://prod.supabase.co' } });
     expect(h.rpc.mock.calls).toEqual([
       ['provision_company', { p_slug: 'new', p_name: 'New Co' }],
       ['console_update_company', { p_slug: 'new', p_name: 'New Co', p_hosts: ['new.imploid.net'], p_actor: 'owner@x.com' }],
     ]);
     expect(h.resetProductionCache).toHaveBeenCalledTimes(1);
+  });
+  it('refuses an address another company uses before creating anything (review #1)', async () => {
+    h.results.set('companies', { data: [osdic], error: null });
+    expect(await consoleStore().addCompany({ slug: 'new', name: 'New Co', hosts: ['x.imploid.net', 'osdic.imploid.net'] }, 'me'))
+      .toEqual({ error: 'A host of new is already used by osdic' });
+    expect(h.rpc).not.toHaveBeenCalled();
   });
   it('a failed provision is reported and nothing else runs', async () => {
     h.rpc.mockResolvedValue({ data: null, error: { message: 'slug taken' } });
@@ -155,7 +161,7 @@ describe('control store (today\'s behaviour)', () => {
   it('adds a company: register with the shared keys, provision, then save the company id', async () => {
     h.sharedProject.mockResolvedValue({ supabaseUrl: 'https://s.supabase.co', anonKey: 'an', serviceRoleKey: 'sv', databaseUrl: 'pg' });
     h.rpc.mockImplementation(async (name: string) => (name === 'provision_company' ? { data: 'c-1', error: null } : { data: null, error: null }));
-    expect(await consoleStore().addCompany({ slug: 'acme', name: 'Acme', hosts: ['acme.example'] }, 'me')).toEqual({ companyId: 'c-1' });
+    expect(await consoleStore().addCompany({ slug: 'acme', name: 'Acme', hosts: ['acme.example'] }, 'me')).toMatchObject({ companyId: 'c-1', shared: { supabaseUrl: 'https://s.supabase.co' } });
     expect(h.rpc.mock.calls.map((c) => c[0])).toEqual(['console_register_tenant', 'provision_company', 'console_set_company']);
     expect(h.resetControlCache).toHaveBeenCalledTimes(1);
   });
