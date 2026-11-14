@@ -8,7 +8,7 @@ Development and tests run on a **local Supabase stack** (Docker); only productio
 2. `npm install`, then `npm run db:start` — starts the stack from `supabase/config.toml`
    (auth, MFA and email templates as on prod; emails land in Mailpit at http://127.0.0.1:54324).
 3. `cp .env.example .env.local` and fill it in from `npm run db:status` (API URL, anon and service keys).
-4. `npm run db:migrate` — the stack's own migration runner is off; this script owns `supabase/migrations`, as on prod.
+4. `npm run db:migrate` — the stack's own migration runner is off; this script owns `supabase/migrations`, as on prod. On the local stack it also adds the local companies and their addresses (`localhost` = academy; `npm run dev:companies` does only that).
 5. `npm run create-user -- you@example.com "Your Name" --role admin` — prints a temporary password (re-run to reset it).
 6. `npm run dev` → http://localhost:3000
 

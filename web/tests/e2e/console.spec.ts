@@ -1,5 +1,4 @@
 import { test, expect, type Page } from '@playwright/test';
-import { parse } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { authenticator } from 'otplib';
 import { Client } from 'pg';

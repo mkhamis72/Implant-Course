@@ -441,9 +441,8 @@ export async function runImport(o: {
 
 async function main() {
   const args = parseImportArgs(process.argv.slice(2));
-  // The app import writes through nodeAuth() (SELF_AUTH_DATABASE_URL || DATABASE_URL); the console's through
-  // CONTROL_DATABASE_URL, the same URL it reads, so only the app import can split across two databases.
-  if (args.db === 'app') assertSelfAuthTarget(process.env);
+  // The import writes through nodeAuth() (SELF_AUTH_DATABASE_URL || DATABASE_URL) and reads DATABASE_URL: both must be the same database.
+  assertSelfAuthTarget(process.env);
   const target = migrateTarget([], process.env);
   console.log(`Target: ${target.label}`);
   const pg = new Client(target.config);

@@ -15,6 +15,7 @@ export async function findTenantBySlug(slug: string): Promise<Tenant | null> {
 }
 
 /** One database, one service key for every company. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- callers still name the company; there is one key
 export async function tenantServiceKey(_slug: string): Promise<string> {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set');

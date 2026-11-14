@@ -1,5 +1,4 @@
 import 'server-only';
-import { createClient } from '@supabase/supabase-js';
 import { resetProductionCache } from '@/lib/tenant/production';
 import type { CompanyRow, SharedProject } from './companies';
 import { consoleAdminActive } from './admin-active';
