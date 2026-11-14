@@ -161,23 +161,6 @@ jobs:
           npm run db:migrate -- --control
           # Stops at the first company that fails; the deploy below then never runs.
           npm run db:migrate -- --all-tenants
-      # Merge of control into production, release 1: refresh production's copy of the company list (0104) and stop
-      # before deploying if it still differs from the control project (docs/operations.md §G).
-      - name: Copy the company list into production, then compare
-        env:
-          CONTROL_DATABASE_URL: ${{ secrets.CONTROL_DATABASE_URL }}
-          PROD_DATABASE_CA_CERT: ${{ secrets.PROD_DATABASE_CA_CERT }}
-        run: |
-          set -euo pipefail
-          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
-          CONTROL_DATABASE_URL="$(clean "$CONTROL_DATABASE_URL")"
-          PROD_DATABASE_CA_CERT="$(clean "$PROD_DATABASE_CA_CERT")"
-          test -n "$CONTROL_DATABASE_URL" || { echo "CONTROL_DATABASE_URL secret is missing"; exit 1; }
-          test -n "$PROD_DATABASE_CA_CERT" || { echo "PROD_DATABASE_CA_CERT secret is missing"; exit 1; }
-          printf '%s\n' "$PROD_DATABASE_CA_CERT" > "$RUNNER_TEMP/prod-ca.crt"
-          export CONTROL_DATABASE_URL DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt"
-          npm run list:copy
-          npm run list:compare
       - name: Deploy on Vercel (only after a successful migration)
         env:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}

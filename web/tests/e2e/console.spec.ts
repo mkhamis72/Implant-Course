@@ -15,6 +15,16 @@ test.skip(!process.env.CONSOLE_HOST, 'needs CONSOLE_HOST (npm run console:local)
 
 const C = 'http://console.localhost:3000';
 const control = () => createClient(process.env.CONTROL_SUPABASE_URL!, process.env.CONTROL_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
+// COMPANY_LIST=production (merge release 2): the console lives in the main stack, which names the two companies by
+// their own slugs; otherwise the control project (dev2 stack) with its registry slugs.
+const PRODUCTION = (process.env.COMPANY_LIST ?? '').trim().toLowerCase() === 'production';
+const SLUG = PRODUCTION ? { one: 'academy', two: 'console-e2e' } : { one: 'dev', two: 'dev2' };
+const main = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
+const consoleAccounts = () => (PRODUCTION ? nodeAuth() : nodeConsoleAuth());
+const adminList = () => (PRODUCTION ? main().from('console_users') : control().from('console_admins'));
+const reactivate = (slug: string) => (PRODUCTION
+  ? main().rpc('console_set_company_status', { p_slug: slug, p_status: 'active', p_reason: 'E2E cleanup', p_actor: 'e2e' })
+  : control().rpc('console_set_status', { p_slug: slug, p_status: 'active', p_reason: 'E2E cleanup', p_actor: 'e2e' }));
 const PASSWORD = `Console-${Date.now()}-pw`;
 const email = `icm-console-${Date.now()}@example.com`;
 let userId = '';
@@ -73,19 +83,21 @@ async function companyIdOf(slug: string): Promise<string | undefined> {
 test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async () => {
-  // A console admin is a Self-Auth account of company 'console' in the control database, plus its console_admins row.
-  const created = await (await nodeConsoleAuth()).admin.createUser({ companyId: 'console', email, password: PASSWORD });
+  // A console admin is a Self-Auth account of company 'console' plus its row in the console admins list (control:
+  // console_admins; production: console_users).
+  const created = await (await consoleAccounts()).admin.createUser({ companyId: 'console', email, password: PASSWORD });
   userId = created.userId;
-  const { error } = await control().from('console_admins').insert({ user_id: userId, email });
+  const { error } = await adminList().insert({ user_id: userId, email });
   if (error) throw error;
 });
 
 test.afterAll(async () => {
   if (userId) {
-    await control().from('console_admins').delete().eq('user_id', userId);
-    await (await nodeConsoleAuth()).admin.deleteUser('console', userId);
+    if (!PRODUCTION) await adminList().delete().eq('user_id', userId);
+    // (console_users rows go with the account: on delete cascade.)
+    await (await consoleAccounts()).admin.deleteUser('console', userId);
   }
-  await control().rpc('console_set_status', { p_slug: 'dev2', p_status: 'active', p_reason: 'E2E cleanup', p_actor: 'e2e' });
+  await reactivate(SLUG.two);
   await closeNodeAuth();
 });
 
@@ -109,7 +121,7 @@ test('a console admin signs in with password and sets up 2FA, then sees healthy 
   await page.getByRole('button', { name: 'Activate' }).click();
   // Activating the factor raises the session to aal2, so the guard goes straight to the companies page.
   await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
-  for (const slug of ['dev', 'dev2']) {
+  for (const slug of [SLUG.one, SLUG.two]) {
     const row = page.getByTestId(`company-${slug}`);
     await expect(row).toContainText('OK');
     await expect(row.locator('td[data-label="Users"]')).toHaveText(/^\d+$/);
@@ -119,7 +131,7 @@ test('a console admin signs in with password and sets up 2FA, then sees healthy 
 
 test('a console account that is not a console admin is refused', async ({ page }) => {
   const other = `icm-console-no-${Date.now()}@example.com`;
-  const auth = await nodeConsoleAuth();
+  const auth = await consoleAccounts();
   const { userId: otherId } = await auth.admin.createUser({ companyId: 'console', email: other, password: PASSWORD });
   try {
     await signIn(page, other);
@@ -141,14 +153,14 @@ async function signInWith2fa(page: Page, password = PASSWORD) {
 test('suspending a company takes its site offline; reactivating brings it back', async ({ page }) => {
   test.setTimeout(240_000);
   await signInWith2fa(page);
-  await page.goto(`${C}/console/companies/dev2`);
+  await page.goto(`${C}/console/companies/${SLUG.two}`);
   await page.getByLabel('Reason').fill('E2E suspension');
-  await page.getByLabel('Type the slug to confirm').fill('dev2');
+  await page.getByLabel('Type the slug to confirm').fill(SLUG.two);
   await page.getByRole('button', { name: 'Suspend company' }).click();
   await expect(page.getByRole('status')).toContainText('Suspended');
   await expect.poll(async () => (await page.request.get('http://127.0.0.1:3000/login', { headers: { host: 'tenant2.localhost:3000' } })).status(), { timeout: 90_000 }).toBe(503);
   await page.getByLabel('Reason').fill('E2E done');
-  await page.getByLabel('Type the slug to confirm').fill('dev2');
+  await page.getByLabel('Type the slug to confirm').fill(SLUG.two);
   await page.getByRole('button', { name: 'Reactivate company' }).click();
   await expect.poll(async () => (await page.request.get('http://127.0.0.1:3000/login', { headers: { host: 'tenant2.localhost:3000' } })).status(), { timeout: 90_000 }).toBe(200);
   await expect(page.getByRole('table')).toContainText('E2E suspension');
@@ -157,13 +169,13 @@ test('suspending a company takes its site offline; reactivating brings it back',
 test('a first admin invited from the console gets an email linking to the company’s own address', async ({ page }) => {
   test.setTimeout(120_000);
   await signInWith2fa(page);
-  await page.goto(`${C}/console/companies/dev2`);
+  await page.goto(`${C}/console/companies/${SLUG.two}`);
   const adminEmail = `icm-first-admin-${Date.now()}@example.com`;
   await page.getByLabel('Email').fill(adminEmail);
   await page.getByLabel('Full name').fill('E2E First Admin');
   await page.getByRole('button', { name: 'Send invite' }).click();
   await expect(page.getByRole('status').filter({ hasText: `Invite sent to ${adminEmail}.` })).toBeVisible();
-  // Company two is in the main stack (company console-e2e); dev2 is only the control project.
+  // Company two is in the main stack (company console-e2e); in control mode dev2 is its registry slug.
   const companyId = await companyIdOf('console-e2e');
   try {
     // The link is Self-Auth's, on the company's own host (the registry has no port for local hosts).
