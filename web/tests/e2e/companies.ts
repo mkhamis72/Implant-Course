@@ -1,27 +1,66 @@
 import { expect, type BrowserContext, type Page } from '@playwright/test';
-import { readFileSync, existsSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
 import { createClient } from '@supabase/supabase-js';
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
 import { nodeAuth } from '../../scripts/self-auth-node';
 import { TEST_PASSWORD } from '../support/test-users';
 
-// Two companies on the one local stack, from TENANTS_FILE: a.localhost = academy, b.localhost = company B
-// (its entry names the company id). The specs that need them skip without such a file.
+// Two companies on the one local stack (merge release 3: the app routes by public.companies). a.localhost = academy
+// (npm run dev:companies, run by db:migrate); company B exists only while a spec needs it, on b.localhost
+// (createCompanyB). paused.localhost is the suspended local company.
 
 export const A = 'http://a.localhost:3000';
 export const B = 'http://b.localhost:3000';
 export const ACADEMY = 'a7c0de00-0000-4000-8000-000000000001';
 export const REFUSED = 'You do not have access to this company.';
 
-type Entry = { slug: string; hosts: string[]; companyId?: string; status?: string };
-export const tenantsFile = process.env.TENANTS_FILE;
-const tenants: Entry[] = tenantsFile && existsSync(tenantsFile) ? JSON.parse(readFileSync(tenantsFile, 'utf8')) : [];
-/** Company B's id, when TENANTS_FILE has a.localhost and b.localhost. */
-export const companyB = tenants.some((t) => t.hosts.includes('a.localhost'))
-  ? tenants.find((t) => t.hosts.includes('b.localhost'))?.companyId
-  : undefined;
-export const SKIP_REASON = 'needs TENANTS_FILE with a.localhost and b.localhost on one stack';
+export const COMPANY_B = 'b0000000-0000-4000-8000-0000000000b2';
+/** Kept for the specs: company B's id. */
+export const companyB: string = COMPANY_B;
+
+/** Status of GET /login on the dev server with this Host (Node can't resolve *.localhost; Host is set by hand). */
+export function statusOn(host: string, path = '/login'): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({ host: '127.0.0.1', port: 3000, path, headers: { host: `${host}:3000` } }, (res) => {
+      res.resume();
+      resolve(res.statusCode ?? 0);
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+/** Waits until the dev server answers this Host with the status (its company list is cached up to 60 s). */
+export async function waitForStatus(host: string, status: number, timeoutMs = 90_000): Promise<void> {
+  const until = Date.now() + timeoutMs;
+  let last = 0;
+  while (Date.now() < until) {
+    last = await statusOn(host);
+    if (last === status) return;
+    await new Promise((r) => setTimeout(r, 2_000));
+  }
+  throw new Error(`${host} still answers ${last}, not ${status}, after ${timeoutMs / 1000} s`);
+}
+
+/** Company B on b.localhost, with a settings row (the signed-in pages need one); routable once this returns. */
+export async function createCompanyB(): Promise<void> {
+  await withPg(async (pg) => {
+    await pg.query(
+      `insert into public.companies (id, slug, name, hosts) values ($1, 'e2e-company-b', 'E2E Company B', '{b.localhost}')
+       on conflict (id) do update set hosts = excluded.hosts, status = 'active'`,
+      [COMPANY_B],
+    );
+    await pg.query('insert into public.settings (company_id) values ($1) on conflict do nothing', [COMPANY_B]);
+  });
+  await waitForStatus('b.localhost', 200);
+}
+
+/** Sets company B's status in the database and waits until the dev server routes by it. */
+export async function setCompanyBStatus(status: 'active' | 'suspended'): Promise<void> {
+  await withPg((pg) => pg.query('update public.companies set status = $2 where id = $1', [COMPANY_B, status]));
+  await waitForStatus('b.localhost', status === 'active' ? 200 : 503);
+}
 
 export async function withPg<T>(fn: (pg: Client) => Promise<T>): Promise<T> {
   const pg = new Client(pgConfig());

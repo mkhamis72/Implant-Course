@@ -3,7 +3,7 @@ import { authenticator } from 'otplib';
 import { TEST_USERS } from '../support/test-users';
 import { nodeAuth } from '../../scripts/self-auth-node';
 import { login } from './helpers';
-import { A, B, ACADEMY, SKIP_REASON, companyB, signInThroughApi, withPg } from './companies';
+import { A, B, ACADEMY, companyB, createCompanyB, purgeCompany, signInThroughApi, withPg } from './companies';
 
 // The server session layer: the Self-Auth cookie, the middleware and the per-request database token. These
 // sign in through the API (not the login form), so they don't wait for the login action.
@@ -51,7 +51,9 @@ test('an idle session is ended by the server', async ({ page, context }) => {
 });
 
 test('session_cookie_is_company_bound: company A\'s cookie on company B\'s host is signed out', async ({ page, context }) => {
-  test.skip(!companyB, SKIP_REASON);
+  test.setTimeout(150_000);
+  await createCompanyB();
+  try {
   await signInThroughApi(context, TEST_USERS.organizer.email, ACADEMY, A);
   const cookie = (await context.cookies(A)).find((c) => c.name === 'icm_session')!;
   await context.addCookies([{ name: 'icm_session', value: cookie.value, url: B, httpOnly: true, sameSite: 'Lax' }]);
@@ -61,6 +63,10 @@ test('session_cookie_is_company_bound: company A\'s cookie on company B\'s host 
   // A's own session is untouched.
   await page.goto(`${A}/`);
   await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
+  } finally {
+    // Company B exists only while a spec needs it.
+    await purgeCompany(companyB);
+  }
 });
 
 test('aal1_with_factor_goes_to_mfa: password-only sign-in of a 2FA user lands on /login/mfa', async ({ page }) => {

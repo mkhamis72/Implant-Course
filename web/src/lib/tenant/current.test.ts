@@ -33,15 +33,13 @@ describe('currentTenant', () => {
     headerMap.set('host', '127.0.0.1:3000');
     await expect(currentTenant()).rejects.toThrow('No company for this request');
   });
-  it('the any-host default accepts any host, even unparseable', async () => {
+  it('a "*" address is no wildcard: only the listed hosts match', async () => {
     headerMap.set('x-tenant', 'default');
     findTenantBySlug.mockResolvedValue({ ...t, slug: 'default', hosts: ['*'] });
     for (const host of ['whatever.example.com', '127.0.0.1:3000', '']) {
       headerMap.set('host', host);
-      expect((await currentTenant()).slug).toBe('default');
+      await expect(currentTenant()).rejects.toThrow('No company for this request');
     }
-    headerMap.delete('host');
-    expect((await currentTenant()).slug).toBe('default');
   });
   it('throws without a routed company', async () => {
     await expect(currentTenant()).rejects.toThrow('No company for this request');

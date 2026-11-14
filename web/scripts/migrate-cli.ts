@@ -3,6 +3,7 @@ import { migrate } from './migrate';
 import { migrateTarget } from './migrate-target';
 import { migrateAllTenants, checkAllTenantsArgs, checkTargetArgs } from './migrate-all';
 import { applyTenantArg, loadCompanies } from './tenant-env';
+import { addLocalCompaniesAfterMigrate } from './dev-companies';
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -19,6 +20,8 @@ async function main() {
   console.log(`Target project: ${label ?? target.label}`);
   const applied = await migrate(target.dir, target.config);
   console.log(applied.length ? `Applied: ${applied.join(', ')}` : 'Database is up to date.');
+  // A local stack also gets its companies' addresses (the app routes by public.companies).
+  if (!rest.includes('--control')) await addLocalCompaniesAfterMigrate(target.config, console.log);
 }
 
 main().catch((error) => {

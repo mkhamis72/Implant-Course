@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "db:migrate": "tsx scripts/migrate-cli.ts",
+    "dev:companies": "tsx scripts/dev-companies.ts",
     "console:admin": "tsx scripts/console-admin.ts",
     "console:local": "tsx scripts/console-local.ts",
     "self-auth:import": "tsx scripts/self-auth-import.ts",
