@@ -4,6 +4,8 @@ const { createSelfAuth } = vi.hoisted(() => ({ createSelfAuth: vi.fn() }));
 vi.mock('server-only', () => ({}));
 vi.mock('@mkhamis72/self-auth', () => ({ createSelfAuth }));
 vi.mock('./email', () => ({ emailAdapter: { send: vi.fn() } }));
+const { attachDatabasePool } = vi.hoisted(() => ({ attachDatabasePool: vi.fn() }));
+vi.mock('@vercel/functions', () => ({ attachDatabasePool }));
 import { tenantAuth } from './tenant';
 import { consoleAuth, CONSOLE_COMPANY } from './console';
 
@@ -36,6 +38,14 @@ describe('instances', () => {
     expect(t.cfg.dbToken.kid).toBe('k1');
     expect(c.cfg.dbToken.privateJwk).toEqual(t.cfg.dbToken.privateJwk);
     expect(CONSOLE_COMPANY).toBe('console');
+  });
+  it('both instances keep a small pool and hand it to Vercel to release idle connections', async () => {
+    // Found 2026-11-13: paused Fluid functions held idle connections and filled Supabase's session pooler
+    // (15 clients), so sign-ins failed with EMAXCONNSESSION.
+    type WithPool = { cfg: { pool?: { max?: number; idleTimeoutMillis?: number; onCreate?: unknown } } };
+    for (const inst of [(await tenantAuth()) as unknown as WithPool, (await consoleAuth()) as unknown as WithPool]) {
+      expect(inst.cfg.pool).toEqual({ max: 3, idleTimeoutMillis: 5000, onCreate: attachDatabasePool });
+    }
   });
   it('malformed_jwk_error_has_no_key_material', async () => {
     process.env.SELF_AUTH_PRIVATE_JWK = '{"d":"SECRETKEYMATERIAL" oops';
