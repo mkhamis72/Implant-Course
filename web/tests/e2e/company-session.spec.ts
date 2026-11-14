@@ -20,6 +20,8 @@ test.describe('the session belongs to the company it signed in on', () => {
   const email = `icm-company-session-${Date.now()}@example.com`;
 
   test.beforeAll(async () => {
+    // createCompanyB waits for the dev server to route b.localhost (its company list is cached up to 60 s).
+    test.setTimeout(180_000);
     await createCompanyB();
     await withPg(async (pg) => {
       userId = await ensureTenantUser({ email, password: TEST_PASSWORD, pending: { pg } });

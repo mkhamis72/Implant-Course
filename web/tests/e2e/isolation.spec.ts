@@ -46,6 +46,8 @@ test.describe('company isolation in one database', () => {
   const ids = { bAdmin: '', bOrganizer: '', target: '', bPatient: '', bLot: '' };
 
   test.beforeAll(async () => {
+    // createCompanyB waits for the dev server to route b.localhost (its company list is cached up to 60 s).
+    test.setTimeout(180_000);
     await createCompanyB();
     ids.bAdmin = await newLogin(bAdminEmail, companyB!, 'E2E Iso B Admin', 'admin');
     ids.bOrganizer = await newLogin(bOrganizerEmail, companyB!, 'E2E Iso B Organizer');
