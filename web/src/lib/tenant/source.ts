@@ -1,5 +1,3 @@
-import 'server-only';
-
 export type ListSource = 'production' | 'control' | 'static';
 
 const warned = new Set<string>();

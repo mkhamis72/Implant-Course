@@ -1,7 +1,8 @@
 import './load-env';
 import { createClient } from '@supabase/supabase-js';
 import { targetLabel } from './create-user-args';
-import { closeNodeAuth, nodeConsoleAuth } from './self-auth-node';
+import { closeNodeAuth, nodeAuth, nodeConsoleAuth } from './self-auth-node';
+import { listSource } from '../src/lib/tenant/source';
 import { temporaryPassword } from '../src/lib/admin/passwords';
 
 const CONSOLE_COMPANY = 'console';
@@ -12,20 +13,36 @@ export function parseConsoleAdminArgs(argv: string[]): { email: string } {
   return { email };
 }
 
+export type ConsoleAdminTarget = { source: 'control' | 'production'; url: string; key: string; table: 'console_admins' | 'console_users' };
+
+/** Where the console admin list lives: production (COMPANY_LIST=production) or the control project. */
+export function consoleAdminTarget(env: Record<string, string | undefined> = process.env): ConsoleAdminTarget {
+  if (listSource(env) === 'production') {
+    const url = env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) throw new Error('NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing: add the service key to the env file for this command, then remove it.');
+    return { source: 'production', url, key, table: 'console_users' };
+  }
+  const url = env.CONTROL_SUPABASE_URL;
+  const key = env.CONTROL_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('CONTROL_SUPABASE_URL / CONTROL_SERVICE_ROLE_KEY missing: add the service key to the env file for this command, then remove it.');
+  return { source: 'control', url, key, table: 'console_admins' };
+}
+
 /**
  * Creates (or resets) a console admin: a Self-Auth account of company 'console' in the control database
  * (CONTROL_DATABASE_URL, CONTROL_SELF_AUTH_SECRET, and CONTROL_SELF_AUTH_PRIVATE_JWK + CONTROL_SELF_AUTH_KID or else
  * SELF_AUTH_PRIVATE_JWK + SELF_AUTH_KID) and its console_admins row
  * through the control project's API (CONTROL_SUPABASE_URL, CONTROL_SERVICE_ROLE_KEY).
+ * With COMPANY_LIST=production: the company Self-Auth (DATABASE_URL, SELF_AUTH_SECRET, SELF_AUTH_PRIVATE_JWK,
+ * SELF_AUTH_KID) and console_users through the company project (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).
  */
 async function main() {
   const { email } = parseConsoleAdminArgs(process.argv.slice(2));
-  console.log(`Target project: control ${process.env.CONTROL_SUPABASE_URL ? targetLabel(process.env.CONTROL_SUPABASE_URL) : '(CONTROL_SUPABASE_URL not set)'}`);
-  const url = process.env.CONTROL_SUPABASE_URL;
-  const key = process.env.CONTROL_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('CONTROL_SUPABASE_URL / CONTROL_SERVICE_ROLE_KEY missing: add the service key to the env file for this command, then remove it.');
-  const control = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-  const auth = await nodeConsoleAuth();
+  const target = consoleAdminTarget();
+  console.log(`Target project: ${targetLabel(target.url)} (${target.source})`);
+  const db = createClient(target.url, target.key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const auth = await (target.source === 'production' ? nodeAuth() : nodeConsoleAuth());
   const password = temporaryPassword();
   const existing = (await auth.admin.listUsers(CONSOLE_COMPANY)).find((u) => u.email.toLowerCase() === email);
   let userId: string;
@@ -37,7 +54,7 @@ async function main() {
   } else {
     userId = (await auth.admin.createUser({ companyId: CONSOLE_COMPANY, email, password })).userId;
   }
-  const { error } = await control.from('console_admins').upsert({ user_id: userId, email, active: true });
+  const { error } = await db.from(target.table).upsert({ user_id: userId, email, active: true });
   if (error) throw new Error(`Could not list ${email} as a console admin: ${error.message}`);
   console.log(`Console admin ready: ${email}`);
   console.log(`Temporary password: ${password}`);
