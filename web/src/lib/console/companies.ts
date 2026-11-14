@@ -58,14 +58,16 @@ const connectDefault = (url: string, key: string) => createClient(url, key, { au
 
 /** Is the company's project answering with its keys, and how many active logins / patients of this company
  *  (counts only; the service role sees every company, so both counts filter by its id). */
+export type CompanyLookup = { get(slug: string): Promise<CompanyRow | null>; serviceKey(slug: string): Promise<string | null> };
+
 export async function companyHealth(
-  control: SupabaseClient,
+  lookup: CompanyLookup,
   slug: string,
   opts: { timeoutMs?: number; connect?: (url: string, key: string) => SupabaseClient; fetchImpl?: typeof fetch } = {},
 ): Promise<CompanyHealth> {
-  const company = await getCompany(control, slug);
+  const company = await lookup.get(slug);
   if (!company) return { problems: [`Unknown company ${slug}`], users: null, patients: null };
-  const serviceRoleKey = await serviceKeyOf(control, slug);
+  const serviceRoleKey = await lookup.serviceKey(slug);
   if (!serviceRoleKey) return { problems: ['No service key in Vault'], users: null, patients: null };
   const companyId = company.company_id;
   if (!companyId) return { problems: ['No company in the database yet'], users: null, patients: null };

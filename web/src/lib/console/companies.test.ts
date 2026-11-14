@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { companyHealth, sharedProject } from './companies';
+import { companyHealth as healthOf, getCompany, serviceKeyOf, sharedProject } from './companies';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+/** The control store's lookups, on the given control client. */
+const companyHealth = (c: SupabaseClient, slug: string, opts?: Parameters<typeof healthOf>[2]) =>
+  healthOf({ get: (s) => getCompany(c, s), serviceKey: (s) => serviceKeyOf(c, s) }, slug, opts);
 
 vi.mock('server-only', () => ({}));
 

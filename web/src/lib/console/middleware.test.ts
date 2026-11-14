@@ -46,6 +46,17 @@ describe('updateConsoleSession', () => {
     expect(csp).not.toContain('academy');
   });
 
+  it('production mode: the CSP names the company project, not control', async () => {
+    vi.stubEnv('COMPANY_LIST', 'production');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://prod-ref.supabase.co');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'p-anon');
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'p-svc');
+    const res = await updateConsoleSession(request('/console', SESSION, fresh));
+    const csp = res.headers.get('content-security-policy') ?? '';
+    expect(csp).toContain('https://prod-ref.supabase.co');
+    expect(csp).not.toContain('control-ref');
+  });
+
   it('resolves the session as company console', async () => {
     await updateConsoleSession(request('/console', SESSION, fresh));
     expect(h.getSession).toHaveBeenCalledWith('tok', 'console');

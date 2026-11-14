@@ -1,12 +1,11 @@
 import Link from 'next/link';
 import { requireConsoleAdmin } from '@/lib/console/session';
-import { createConsoleServiceClient } from '@/lib/console/supabase';
-import { listCompanies } from '@/lib/console/companies';
+import { consoleStore } from '@/lib/console/store';
 import { CompaniesTable } from './companies-table';
 
 export default async function ConsoleCompaniesPage() {
   await requireConsoleAdmin();
-  const rows = await listCompanies(createConsoleServiceClient());
+  const rows = await consoleStore().list();
   return (
     <div>
       <div className="page-header">

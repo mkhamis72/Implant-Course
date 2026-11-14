@@ -47,6 +47,19 @@ describe('instances', () => {
       expect(inst.cfg.pool).toEqual({ max: 3, idleTimeoutMillis: 5000, onCreate: attachDatabasePool });
     }
   });
+  it('production mode: the console signs in through the company instance, without CONTROL_DATABASE_URL', async () => {
+    process.env.COMPANY_LIST = 'production';
+    delete process.env.CONTROL_DATABASE_URL;
+    try {
+      vi.resetModules();
+      const { tenantAuth: t } = await import('./tenant');
+      const { consoleAuth: c } = await import('./console');
+      expect(await c()).toBe(await t());
+      expect(createSelfAuth).toHaveBeenCalledTimes(1);
+    } finally {
+      delete process.env.COMPANY_LIST;
+    }
+  });
   it('malformed_jwk_error_has_no_key_material', async () => {
     process.env.SELF_AUTH_PRIVATE_JWK = '{"d":"SECRETKEYMATERIAL" oops';
     vi.resetModules();

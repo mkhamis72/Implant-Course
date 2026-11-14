@@ -40,27 +40,11 @@ describe('release.yml', () => {
     expect(run).toContain('DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt"');
     expect(run.split('\n').find((l) => l.includes('export '))).toContain('DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt"');
   });
-  // Merge of control into production, release 1: production's copy of the company list is refreshed and
-  // checked on every release, so release 2 can switch to it.
-  it('copies the company list after migrating and before deploying', () => {
-    const names = deploy.steps.map((s) => s.name ?? '');
-    const copy = names.findIndex((n) => n.startsWith('Copy the company list'));
-    expect(copy).toBeGreaterThan(names.findIndex((n) => n.startsWith('Migrate')));
-    expect(copy).toBeLessThan(names.findIndex((n) => n.startsWith('Deploy')));
-    const run = runOf(deploy, 'Copy the company list');
-    expect(run.indexOf('npm run list:copy')).toBeGreaterThan(-1);
-    expect(run.indexOf('npm run list:compare')).toBeGreaterThan(run.indexOf('npm run list:copy'));
-    expect(cleans(run, 'CONTROL_DATABASE_URL')).toBe(true);
-    expect(cleans(run, 'PROD_DATABASE_CA_CERT')).toBe(true);
-    expect(run).toContain('DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt"');
-  });
-  it('stops before deploying when the two lists differ', () => {
-    const step = deploy.steps.find((s) => s.name?.startsWith('Copy the company list'));
-    expect(step).toBeDefined();
-    expect((step as Step & { 'continue-on-error'?: unknown })['continue-on-error']).toBeUndefined();
-    expect(step!.if).toBeUndefined();
-    expect(step!.run).toContain('set -euo pipefail');
-    expect(step!.run).not.toMatch(/list:(copy|compare)[^\n]*\|\|/);
+  // Merge of control into production, release 2: once COMPANY_LIST=production is set the console writes to
+  // production, and a copy from control would overwrite those changes with control's stale list.
+  it('Release no longer copies the company list (release 2 of the merge)', () => {
+    expect(deploy.steps.some((s) => (s.name ?? '').startsWith('Copy the company list'))).toBe(false);
+    expect(deploy.steps.some((s) => /list:(copy|compare)/.test(s.run ?? ''))).toBe(false);
   });
   it('release_backs_up_before_migrating', () => {
     const names = deploy.steps.map((s) => s.name ?? '');

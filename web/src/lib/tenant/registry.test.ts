@@ -3,13 +3,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const { controlTenants, controlSecret, resetControlCache } = vi.hoisted(() => ({ controlTenants: vi.fn(), controlSecret: vi.fn(), resetControlCache: vi.fn() }));
 vi.mock('server-only', () => ({}));
 vi.mock('./control', () => ({ controlTenants, controlSecret, resetControlCache }));
+const { productionTenants, resetProductionCache } = vi.hoisted(() => ({ productionTenants: vi.fn(), resetProductionCache: vi.fn() }));
+vi.mock('./production', () => ({ productionTenants, resetProductionCache }));
 import { findTenantByCompanyId, findTenantByHost, findTenantBySlug, isSingleTenant, tenantServiceKey } from './registry';
 
 const a = { slug: 'a', hosts: ['a.example.com'], supabaseUrl: 'https://a.supabase.co', anonKey: 'anon', status: 'active' as const };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  for (const k of ['CONTROL_SUPABASE_URL', 'TENANTS_FILE']) delete process.env[k];
+  for (const k of ['CONTROL_SUPABASE_URL', 'TENANTS_FILE', 'COMPANY_LIST']) delete process.env[k];
   process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://dev.supabase.co';
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc';
@@ -71,5 +73,39 @@ describe('control mode', () => {
     controlTenants.mockResolvedValue([{ ...a, slug: 'wild', hosts: ['*'] }, a]);
     expect(await findTenantByHost('b.example.com')).toBeNull();
     expect(await findTenantByHost('a.example.com')).toEqual(a);
+  });
+});
+
+describe('production mode (COMPANY_LIST=production)', () => {
+  const osdic = { ...a, slug: 'osdic', hosts: ['osdic.imploid.net'], companyId: 'c-osdic' };
+  beforeEach(() => {
+    process.env.COMPANY_LIST = 'production';
+    process.env.CONTROL_SUPABASE_URL = 'https://control.supabase.co';
+    productionTenants.mockResolvedValue([osdic]);
+  });
+  it('routes from the production list and never reads control', async () => {
+    expect(await findTenantByHost('osdic.imploid.net')).toEqual(osdic);
+    expect(await findTenantByHost('nope.imploid.net')).toBeNull();
+    expect(await findTenantBySlug('osdic')).toEqual(osdic);
+    expect(controlTenants).not.toHaveBeenCalled();
+  });
+  it('every company uses the project service key', async () => {
+    expect(await tenantServiceKey('osdic')).toBe('svc');
+    expect(controlSecret).not.toHaveBeenCalled();
+  });
+  it('a missing service key names the setting', async () => {
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    await expect(tenantServiceKey('osdic')).rejects.toThrow('SUPABASE_SERVICE_ROLE_KEY is not set');
+  });
+  it('an unknown company id resets the production list once and looks again', async () => {
+    const added = { ...a, slug: 'new', companyId: 'c-new' };
+    productionTenants.mockResolvedValueOnce([osdic]).mockResolvedValueOnce([osdic, added]);
+    expect(await findTenantByCompanyId('c-new')).toEqual(added);
+    expect(resetProductionCache).toHaveBeenCalledTimes(1);
+    expect(resetControlCache).not.toHaveBeenCalled();
+  });
+  it('is not single-tenant', () => {
+    delete process.env.CONTROL_SUPABASE_URL;
+    expect(isSingleTenant()).toBe(false);
   });
 });

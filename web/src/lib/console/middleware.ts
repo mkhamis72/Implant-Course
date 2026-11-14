@@ -6,21 +6,21 @@ import { lastSeenCookieOptions } from '@/lib/supabase/middleware';
 import { blockedResponse } from '@/lib/tenant/responses';
 import { SESSION_COOKIE_NAME, sessionCookieOptions } from '@/lib/self-auth/cookie-options';
 import { CONSOLE_COMPANY, consoleAuth } from '@/lib/self-auth/console';
-import { controlConfig } from './env';
+import { consoleConfig } from './env';
 
 export const CONSOLE_LAST_SEEN_COOKIE = 'icm_console_last_seen';
 export const CONSOLE_IDLE_MINUTES = 15;
 export const CONSOLE_PUBLIC_PATHS = ['/console/login', '/console/auth/reset'];
 
-/** Console requests (Node runtime): resolve the Self-Auth console session, enforce the 15-minute idle limit, control-only CSP. */
+/** Console requests (Node runtime): resolve the Self-Auth console session, enforce the 15-minute idle limit, a CSP naming only the console project. */
 export async function updateConsoleSession(request: NextRequest): Promise<Response> {
-  let control: ReturnType<typeof controlConfig>;
+  let project: ReturnType<typeof consoleConfig>;
   try {
-    control = controlConfig();
+    project = consoleConfig();
   } catch {
     return blockedResponse('unavailable');
   }
-  const csp = contentSecurityPolicy(control.url, process.env.NODE_ENV !== 'production');
+  const csp = contentSecurityPolicy(project.url, process.env.NODE_ENV !== 'production');
   // Never a company request: drop any browser-sent company header.
   const headers = new Headers(request.headers);
   headers.delete(TENANT_HEADER);

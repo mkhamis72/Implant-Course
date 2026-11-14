@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import QRCode from 'qrcode';
 import { GENERIC_AUTH_ERROR, mapAuthError } from '@/lib/auth/errors';
 import { lastSeenCookieOptions } from '@/lib/supabase/middleware';
-import { createConsoleServiceClient } from '@/lib/console/supabase';
+import { consoleAdminActive } from '@/lib/console/admin-active';
 import { requireConsoleHost, requireConsoleUser } from '@/lib/console/session';
 import { CONSOLE_LAST_SEEN_COOKIE } from '@/lib/console/middleware';
 import { clearSessionCookie, readSessionCookie, setSessionCookie } from '@/lib/self-auth/cookie';
@@ -26,8 +26,7 @@ export async function signInConsole(_prev: ConsoleAuthState, formData: FormData)
   const result = await auth.signIn({ companyId: CONSOLE_COMPANY, email, password });
   if (!result.ok) return { error: mapAuthError(REASON_CODES[result.reason] ?? 'invalid_credentials'), email };
   // Not listed: same answer as a wrong password, so valid credentials are not revealed.
-  const { data: row } = await createConsoleServiceClient().from('console_admins').select('active').eq('user_id', result.session.userId).maybeSingle();
-  if (!row?.active) {
+  if (!(await consoleAdminActive(result.session.userId))) {
     await auth.signOut(result.sessionToken);
     return { error: mapAuthError('invalid_credentials'), email };
   }
