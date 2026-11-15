@@ -146,7 +146,7 @@ describe('middleware maintenance mode', () => {
     expect(updateSession).not.toHaveBeenCalled();
   });
 
-  it('maintenance_bypass_token_needs_32_chars (as docs/operations.md §E says)', async () => {
+  it('maintenance_bypass_token_needs_32_chars (as docs/history/self-auth-switch-over.md §E says)', async () => {
     vi.stubEnv('MAINTENANCE', '1');
     const t31 = 'a'.repeat(31);
     vi.stubEnv('MAINTENANCE_BYPASS_TOKEN', t31);
