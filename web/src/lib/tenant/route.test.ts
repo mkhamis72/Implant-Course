@@ -1,15 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RegistryUnavailableError } from './types';
 
-const { findTenantByHost, isSingleTenant } = vi.hoisted(() => ({ findTenantByHost: vi.fn(), isSingleTenant: vi.fn() }));
-vi.mock('./registry', () => ({ findTenantByHost, isSingleTenant }));
+const { findTenantByHost } = vi.hoisted(() => ({ findTenantByHost: vi.fn() }));
+vi.mock('./registry', () => ({ findTenantByHost }));
 import { routeHost } from './route';
 
 const active = { slug: 'a', hosts: ['a.example.com'], supabaseUrl: 'https://a.supabase.co', anonKey: 'k', status: 'active' as const };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  isSingleTenant.mockReturnValue(false);
 });
 
 describe('routeHost', () => {
@@ -26,11 +25,9 @@ describe('routeHost', () => {
     expect(await routeHost(host)).toEqual({ kind: 'not-found' });
     expect(findTenantByHost).not.toHaveBeenCalled();
   });
-  it.each([null, '', '203.0.113.5', '127.0.0.1:3000', 'evil.com/x'])('single-tenant mode serves the default for any host (%s)', async (host) => {
-    isSingleTenant.mockReturnValue(true);
-    findTenantByHost.mockResolvedValue({ ...active, slug: 'default', hosts: ['*'] });
-    expect(await routeHost(host)).toMatchObject({ kind: 'tenant' });
-    expect(findTenantByHost).toHaveBeenCalledWith('*');
+  it.each(['127.0.0.1:3000', '[::1]:3000'])('an IP address is not found, never a default company (%s)', async (host) => {
+    expect(await routeHost(host)).toEqual({ kind: 'not-found' });
+    expect(findTenantByHost).not.toHaveBeenCalled();
   });
   it('a suspended company is suspended', async () => {
     findTenantByHost.mockResolvedValue({ ...active, status: 'suspended' });

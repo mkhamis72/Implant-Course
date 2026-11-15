@@ -3,34 +3,15 @@
 import { revalidatePath } from 'next/cache';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { requireConsoleAdmin } from '@/lib/console/session';
-import { consoleStore, KEYS_NOT_PER_COMPANY, type CompanyRow, type ConsoleStore } from '@/lib/console/store';
+import { consoleStore, type CompanyRow, type ConsoleStore } from '@/lib/console/store';
 import { createFirstAdmin, inviteFirstAdmin, type InviteResult } from '@/lib/console/first-admin';
 import { addProjectDomain, vercelConfigured } from '@/lib/console/vercel';
-import { firstAdminSchema, onboardSchema, secretsSchema, statusSchema, updateSchema } from '@/lib/console/schemas';
-import { checkTenant } from '@/lib/tenant/check';
+import { firstAdminSchema, onboardSchema, statusSchema, updateSchema } from '@/lib/console/schemas';
 import { emailEnabled } from '@/lib/flags';
 import { failed, type FormState } from '@/lib/patients/form-state';
 
-const SECRET_FIELDS = ['anonKey', 'serviceRoleKey', 'databaseUrl'];
-/** Keeps what was typed after an error, except keys: they are never sent back to the browser. */
-function failedWithoutSecrets(message: string, formData: FormData): FormState {
-  const state = failed(message, formData);
-  for (const k of SECRET_FIELDS) delete state.values?.[k];
-  return state;
-}
 const fields = (formData: FormData) => Object.fromEntries(formData);
 const sharedDb = (url: string, key: string) => createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-
-type Tenant = { supabaseUrl: string; anonKey: string; serviceRoleKey: string };
-/** A message when the project fails the check or cannot be reached at all; null when it passes. */
-async function checkProblem(t: Tenant): Promise<string | null> {
-  try {
-    const problems = await checkTenant(t);
-    return problems.length ? `Not saved — the project didn't pass the check: ${problems.join('; ')}` : null;
-  } catch (e) {
-    return `Not saved — couldn't reach the project: ${(e as Error).message}`;
-  }
-}
 
 /** Adds each host to the Vercel project and records it; the hosts Vercel refused, with why. Nothing without the
  *  Vercel settings (the company page then shows the manual steps). */
@@ -57,8 +38,7 @@ export type Step = { label: string; ok: boolean; detail: string };
 export type OnboardState = FormState & { slug?: string; steps?: Step[]; password?: string; email?: string };
 
 /**
- * Adds a company (multi-tenant part 5): the company with its starting data (in control mode also the registry
- * row with the shared database's keys), its address on Vercel, and the first admin by email. Once the company exists, later steps
+ * Adds a company (multi-tenant part 5): the company with its starting data and its addresses, its address on Vercel, and the first admin by email. Once the company exists, later steps
  * report a problem instead of failing: the company page can redo them.
  */
 export async function onboardCompany(_prev: OnboardState, formData: FormData): Promise<OnboardState> {
@@ -142,23 +122,6 @@ export async function setCompanyStatus(_prev: FormState, formData: FormData): Pr
   revalidatePath(`/console/companies/${s.slug}`);
   revalidatePath('/console');
   return { ok: s.status === 'suspended' ? 'Suspended. Its users see “temporarily unavailable” within about a minute.' : 'Reactivated.' };
-}
-
-export async function replaceCompanyKeys(_prev: FormState, formData: FormData): Promise<FormState> {
-  const admin = await requireConsoleAdmin();
-  const parsed = secretsSchema.safeParse(fields(formData));
-  if (!parsed.success) return failedWithoutSecrets(parsed.error.issues[0].message, formData);
-  const k = parsed.data;
-  const store = consoleStore();
-  // One shared database (merge release 2): there are no per-company keys to replace.
-  if (store.source === 'production') return failedWithoutSecrets(KEYS_NOT_PER_COMPANY, formData);
-  if (!(await store.get(k.slug))) return failedWithoutSecrets(`Unknown company ${k.slug}`, formData);
-  const problem = await checkProblem({ supabaseUrl: k.supabaseUrl, anonKey: k.anonKey, serviceRoleKey: k.serviceRoleKey });
-  if (problem) return failedWithoutSecrets(problem, formData);
-  const error = await store.replaceKeys(k, admin.email);
-  if (error) return failedWithoutSecrets(error, formData);
-  revalidatePath(`/console/companies/${k.slug}`);
-  return { ok: 'Keys replaced.' };
 }
 
 export type FirstAdminState = FormState & { password?: string; email?: string; seq?: number };

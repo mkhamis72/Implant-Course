@@ -2,7 +2,8 @@ import './load-env';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Client } from 'pg';
 import { pgConfig } from './db';
-import { applyTenantArg, takeTenantArg } from './tenant-env';
+import { takeCompanyArg } from './one-database';
+import { targetLabel } from './create-user-args';
 import {
   ACCOUNT_KEY, ACCOUNT_TABLES, companyIdOf, companyTableOrder, insertableColumns, parseExport, quoteIdent, quoteTable, takeFileArg,
   type CompanyExport, type Row,
@@ -132,18 +133,17 @@ export async function emptyExport(c: Client, companyId: string): Promise<Company
 }
 
 async function main() {
-  const usage = 'Usage: npm run company:restore -- --tenant <slug> (--in <file> | --delete)';
+  const usage = 'Usage: npm run company:restore -- --company <slug> (--in <file> | --delete)';
   const erase = process.argv.includes('--delete');
   if (erase && process.argv.includes('--in')) throw new Error('Use --delete or --in, not both.');
   const { file, rest } = erase ? { file: `company-erase-${new Date().toISOString().slice(0, 10)}`, rest: process.argv.slice(2).filter((a) => a !== '--delete') } : takeFileArg(process.argv.slice(2), '--in');
-  const { slug } = takeTenantArg(rest);
+  const { slug } = takeCompanyArg(rest);
   if (!slug) throw new Error(usage);
-  const companyId = await companyIdOf(slug);
-  const { label } = await applyTenantArg(rest, process.env);
-  console.log(`Target project: ${label}`);
+  console.log(`Target project: ${targetLabel(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
   const c = new Client(pgConfig());
   await c.connect();
   try {
+    const companyId = await companyIdOf(c, slug);
     const data = erase ? await emptyExport(c, companyId) : parseExport(readFileSync(file, 'utf8'));
     checkCompanyFile(data, companyId);
     const logFile = `${file}.restore.log`;

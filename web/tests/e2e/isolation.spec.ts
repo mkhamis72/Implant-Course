@@ -1,16 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
-import { readFileSync, writeFileSync } from 'node:fs';
 import { ensureTenantUser } from '../../scripts/users';
 import { nodeAuth, sentEmails } from '../../scripts/self-auth-node';
 import { TEST_PASSWORD, TEST_USERS } from '../support/test-users';
-import { A, ACADEMY, B, companyB, purgeCompany, signIn, signInThroughApi, SKIP_REASON, tenantsFile, withPg } from './companies';
+import { A, ACADEMY, B, companyB, createCompanyB, purgeCompany, setCompanyBStatus, signIn, signInThroughApi, withPg } from './companies';
 import { uniqueName } from './patients';
 import { apiAs, placeImplant, seedDelegate, seedImplantStock } from './api';
 
-// One database, two companies: academy on a.localhost, company B on b.localhost, from TENANTS_FILE (see
-// companies.ts; add a paused.localhost entry with "status": "suspended" for the 503 test):
-// TENANTS_FILE=<file> npx playwright test isolation --project=chromium
-test.skip(!companyB, SKIP_REASON);
+// One database, two companies: academy on a.localhost, company B on b.localhost (created here, see companies.ts);
+// paused.localhost is the suspended local company (npm run dev:companies).
 
 const USER_NOT_FOUND = 'User not found.';
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date());
@@ -49,11 +46,9 @@ test.describe('company isolation in one database', () => {
   const ids = { bAdmin: '', bOrganizer: '', target: '', bPatient: '', bLot: '' };
 
   test.beforeAll(async () => {
-    await withPg(async (pg) => {
-      await pg.query(`insert into public.companies (id, slug, name) values ($1, 'e2e-company-b', 'E2E Company B') on conflict (id) do nothing`, [companyB]);
-      // A company's settings row (onboarding will create it): the signed-in pages need one.
-      await pg.query('insert into public.settings (company_id) values ($1) on conflict do nothing', [companyB]);
-    });
+    // createCompanyB waits for the dev server to route b.localhost (its company list is cached up to 60 s).
+    test.setTimeout(180_000);
+    await createCompanyB();
     ids.bAdmin = await newLogin(bAdminEmail, companyB!, 'E2E Iso B Admin', 'admin');
     ids.bOrganizer = await newLogin(bOrganizerEmail, companyB!, 'E2E Iso B Organizer');
     // Academy's throwaway target for the admin actions: 2FA set-up pending, so Reset 2FA is offered, and no
@@ -223,7 +218,7 @@ test.describe('company isolation in one database', () => {
     await expect(page.getByRole('alert').filter({ hasText: 'Incorrect email or password.' })).toBeVisible();
   });
 
-  test('reset_link_from_other_company_rejected: the reset link of B opened on the host of A says it is not valid here', async ({ page }) => {
+  test('reset_link_from_other_company_rejected: the reset link of B opened on the host of A signs nobody in and points to the right address', async ({ page }) => {
     const email = `icm-iso-b-reset-${stamp}@example.com`;
     const id = await newLogin(email, companyB!, 'E2E Iso B Reset');
     try {
@@ -235,7 +230,8 @@ test.describe('company isolation in one database', () => {
       await page.getByLabel('New password').fill('Another-password-789');
       await page.getByLabel('Confirm password').fill('Another-password-789');
       await page.getByRole('button', { name: 'Save password' }).click();
-      await expect(page.getByRole('main').getByRole('alert')).toContainText('This link is not valid here');
+      // The token is spent and the password changed, but nobody is signed in here: the page points to the right address.
+      await expect(page.getByRole('main').getByRole('alert')).toContainText("Your password was changed — sign in at your company's address.");
       await expect(page).not.toHaveURL(/\/login/);
     } finally {
       await (await nodeAuth()).admin.deleteUser(companyB!, id);
@@ -268,15 +264,14 @@ test.describe('company isolation in one database', () => {
     expect(api.status()).toBe(503);
   });
 
-  test('a company suspended while users are signed in gets 503 on the very next request; the other carries on', async ({ page, context, request }) => {
+  test('a company suspended while users are signed in gets 503 once the list refreshes (≤ 60 s), on every kind of request; the other carries on', async ({ page, context, request }) => {
+    test.setTimeout(240_000);
     await signInThroughApi(context, bAdminEmail, companyB!);
     await page.goto(`${B}/patients`);
     await expect(page.getByRole('heading', { level: 1, name: 'Patients' })).toBeVisible();
     const cookie = (await context.cookies(B)).map((c) => `${c.name}=${c.value}`).join('; ');
 
-    const original = readFileSync(tenantsFile!, 'utf8');
-    const suspended = (JSON.parse(original) as { hosts: string[] }[]).map((t) => (t.hosts.includes('b.localhost') ? { ...t, status: 'suspended' } : t));
-    writeFileSync(tenantsFile!, JSON.stringify(suspended, null, 2));
+    await setCompanyBStatus('suspended');
     try {
       const headers = { host: 'b.localhost:3000', cookie };
       const next = await page.goto(`${B}/patients`);
@@ -289,7 +284,7 @@ test.describe('company isolation in one database', () => {
       // Academy, on the same database, carries on.
       expect((await page.goto(`${A}/login`))!.status()).toBe(200);
     } finally {
-      writeFileSync(tenantsFile!, original);
+      await setCompanyBStatus('active');
     }
   });
 });

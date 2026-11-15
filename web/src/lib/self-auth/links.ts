@@ -12,15 +12,12 @@ export async function companyBaseUrl(companyId: string): Promise<string> {
     return `${isLocal(host.replace(/:[0-9]+$/, '')) ? 'http' : 'https'}://${host}`;
   }
   const tenant = await findTenantByCompanyId(companyId);
-  if (tenant?.status === 'active' && tenant.hosts.includes('*')) {
-    // The single-company default answers on every host (local development): use the configured site address.
-    const site = process.env.SITE_URL?.trim().replace(/\/+$/, '');
-    if (site) return site;
-  }
-  const host = tenant && tenant.status === 'active' ? tenant.hosts.find((h) => h !== '*') : undefined;
+  const host = tenant && tenant.status === 'active' ? tenant.hosts[0] : undefined;
   if (!host) throw new Error('No host for this company');
   const bare = host.replace(/:\d+$/, '');
-  return `${isLocal(bare) ? 'http' : 'https'}://${host}`;
+  // Local companies (npm run dev:companies) are listed without a port: links go to the dev server's.
+  if (isLocal(bare)) return `http://${host === bare ? `${bare}:${process.env.PORT || '3000'}` : host}`;
+  return `https://${host}`;
 }
 
 // Self-Auth's link builders are synchronous, so they return a path; the email adapter adds the company's origin.

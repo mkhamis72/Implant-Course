@@ -135,6 +135,8 @@ test('removes an implant entered on the wrong tooth; the stock returns and Histo
   await page.getByLabel('Reason for removing the implant').fill('Placed on 46, not 36');
   await page.getByRole('button', { name: 'Remove implant' }).click();
   await page.getByRole('button', { name: 'Yes, remove the implant on tooth 36' }).click();
+  // Wait for the removal itself: navigating away at once can abort the server action before it is sent.
+  await expect(page.getByText('Entered by mistake?')).toHaveCount(0);
   await page.goto(`/inventory/lots/${s.wrongLot}`);
   await expect(page.getByTestId('on-hand')).toHaveText('2');
   await expect(page.getByTestId('usage-row')).toHaveCount(0);

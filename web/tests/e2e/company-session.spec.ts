@@ -2,11 +2,9 @@ import { test, expect, type BrowserContext } from '@playwright/test';
 import { ensureTenantUser, setProfile } from '../../scripts/users';
 import { nodeAuth } from '../../scripts/self-auth-node';
 import { TEST_PASSWORD, TEST_USERS } from '../support/test-users';
-import { A, ACADEMY, B, companyB, purgeCompany, REFUSED, signIn, SKIP_REASON, withPg } from './companies';
+import { A, ACADEMY, B, companyB, createCompanyB, purgeCompany, REFUSED, signIn, withPg } from './companies';
 
-// Runs only with a registry of two companies on the same local stack (a.localhost = academy, b.localhost = company B):
-// TENANTS_FILE=<file> npx playwright test company-session --project=chromium
-test.skip(!companyB, SKIP_REASON);
+// Two companies on the one local stack: a.localhost = academy, b.localhost = company B (created here, see companies.ts).
 
 /** The Self-Auth session id behind the host's session cookie (the id the company binding is keyed on). */
 async function sessionId(context: BrowserContext): Promise<string> {
@@ -22,9 +20,11 @@ test.describe('the session belongs to the company it signed in on', () => {
   const email = `icm-company-session-${Date.now()}@example.com`;
 
   test.beforeAll(async () => {
+    // createCompanyB waits for the dev server to route b.localhost (its company list is cached up to 60 s).
+    test.setTimeout(180_000);
+    await createCompanyB();
     await withPg(async (pg) => {
       userId = await ensureTenantUser({ email, password: TEST_PASSWORD, pending: { pg } });
-      await pg.query(`insert into public.companies (id, slug, name) values ($1, 'e2e-company-b', 'E2E Company B') on conflict (id) do nothing`, [companyB]);
       // The organizer test user is a member of academy only.
       await pg.query(
         `delete from public.company_members where company_id = $1 and user_id = (select user_id from public.profiles where email = $2)`,

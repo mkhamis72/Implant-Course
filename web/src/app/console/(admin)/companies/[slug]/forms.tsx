@@ -3,7 +3,7 @@
 import { useActionState } from 'react';
 import { valueOf, type FormState } from '@/lib/patients/form-state';
 import { TemporaryPassword } from '@/components/temporary-password';
-import { addDomain, firstAdmin, replaceCompanyKeys, setCompanyStatus, updateCompany, type FirstAdminState } from '../../actions';
+import { addDomain, firstAdmin, setCompanyStatus, updateCompany, type FirstAdminState } from '../../actions';
 
 /** useActionState plus a sequence number carried in each result, so the form remounts (React 19 resets uncontrolled inputs). */
 function useRemountingAction(action: (prev: FirstAdminState, formData: FormData) => Promise<FirstAdminState>) {
@@ -68,37 +68,6 @@ export function StatusForm({ slug, status }: { slug: string; status: 'active' | 
         <button className={suspending ? 'btn btn-danger' : 'btn'} disabled={pending}>
           {suspending ? 'Suspend company' : 'Reactivate company'}
         </button>
-      </form>
-      <Messages state={state} />
-    </section>
-  );
-}
-
-export function ReplaceKeysForm({ slug }: { slug: string }) {
-  const { state, formAction, pending, attempt } = useRemountingAction(replaceCompanyKeys);
-  return (
-    <section className="card">
-      <h2 className="mb-3 text-lg font-semibold">Replace keys</h2>
-      <p className="mb-3 text-sm text-muted">Keys are checked before they are saved, and never shown again.</p>
-      <form key={attempt} action={formAction} className="space-y-3">
-        <input type="hidden" name="slug" value={slug} />
-        <div>
-          <label className="label" htmlFor="keys-url">Supabase URL</label>
-          <input id="keys-url" name="supabaseUrl" className="input" required defaultValue={valueOf(state, 'supabaseUrl', '')} />
-        </div>
-        <div>
-          <label className="label" htmlFor="keys-anon">Anon key</label>
-          <input id="keys-anon" name="anonKey" type="password" autoComplete="off" className="input" required />
-        </div>
-        <div>
-          <label className="label" htmlFor="keys-service">Service role key</label>
-          <input id="keys-service" name="serviceRoleKey" type="password" autoComplete="off" className="input" required />
-        </div>
-        <div>
-          <label className="label" htmlFor="keys-db">Database URL (session pooler)</label>
-          <input id="keys-db" name="databaseUrl" type="password" autoComplete="off" className="input" required />
-        </div>
-        <button className="btn" disabled={pending}>Check and replace keys</button>
       </form>
       <Messages state={state} />
     </section>

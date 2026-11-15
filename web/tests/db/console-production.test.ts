@@ -81,6 +81,18 @@ describe('console in production (0105)', () => {
     });
   });
 
+  it('is_console_user_requires_a_console_account (0106): a company account listed by mistake is refused', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      await c.query('insert into public.console_users (user_id, email) values ($1, $2)', [users.admin, 'zz-listed-by-mistake@example.com']);
+      await actAs(c, users.admin, { aal: 'aal2' });
+      expect((await c.query('select public.is_console_user() as ok')).rows[0].ok).toBe(false);
+      const id = await consoleUser(c);
+      await actAs(c, id, { aal: 'aal2' });
+      expect((await c.query('select public.is_console_user() as ok')).rows[0].ok).toBe(true);
+    });
+  });
+
   it('company users cannot run the console functions or read console_users', async () => {
     await withTx(async (c) => {
       await provision(c, 'zz-a', 'Zz A');

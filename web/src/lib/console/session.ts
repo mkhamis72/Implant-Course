@@ -6,7 +6,7 @@ import { normaliseHost } from '@/lib/tenant/host';
 import { consoleAuth } from '@/lib/self-auth/console';
 import { currentConsoleSession } from '@/lib/self-auth/console-session';
 import { createConsoleClient } from './supabase';
-import { consoleHost, consoleSource } from './env';
+import { consoleHost } from './env';
 import { CONSOLE_GUARD_RPC, consoleAdminActive } from './admin-active';
 import { consoleMfaStep } from './mfa-step';
 
@@ -34,14 +34,14 @@ export const requireConsoleUser = cache(async (): Promise<ConsoleAdmin> => {
   return { userId: session.userId, email: session.email };
 });
 
-/** Every console page and action: listed, confirmed TOTP, aal2, and the database agrees (is_console_admin in control, is_console_user in production). */
+/** Every console page and action: listed, confirmed TOTP, aal2, and the database agrees (is_console_user). */
 export const requireConsoleAdmin = cache(async (): Promise<ConsoleAdmin> => {
   const session = await signedInListed();
   const hasTotp = await (await consoleAuth()).totp.hasTotp(session.userId);
   const step = consoleMfaStep(hasTotp, session.aal);
   if (step === 'setup') redirect('/console/mfa/setup');
   if (step === 'verify') redirect('/console/login/mfa');
-  const { data: ok } = await (await createConsoleClient()).rpc(CONSOLE_GUARD_RPC[consoleSource()]);
+  const { data: ok } = await (await createConsoleClient()).rpc(CONSOLE_GUARD_RPC);
   if (!ok) {
     redirect('/console/signout?reason=not-admin');
   }

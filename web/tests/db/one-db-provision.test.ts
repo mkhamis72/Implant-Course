@@ -1,7 +1,6 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, asPostgres, actAsBound } from './helpers';
-import { provisionCompany } from '../../scripts/tenants';
 
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
 const users = inject('testUsers');
@@ -84,7 +83,7 @@ describe('provision_company (0095)', () => {
 
   it("tenant:register --provision's helper creates it over the owner's connection", async () => {
     await withTx(async (c) => {
-      const id = await provisionCompany(c, 'canary', 'Canary');
+      const id = (await c.query<{ id: string }>('select public.provision_company($1, $2) as id', ['canary', 'Canary'])).rows[0].id;
       expect((await c.query(`select id from public.companies where slug = 'canary'`)).rows).toEqual([{ id }]);
     });
   });

@@ -2,7 +2,6 @@ import 'server-only';
 import { headers } from 'next/headers';
 import { normaliseHost } from './host';
 import { findTenantBySlug } from './registry';
-import { ANY_HOST } from './static';
 import { TENANT_HEADER, type Tenant } from './types';
 
 /**
@@ -15,7 +14,7 @@ export async function currentTenant(): Promise<Tenant> {
   const tenant = slug ? await findTenantBySlug(slug) : null;
   if (!tenant || tenant.status !== 'active') throw new Error('No company for this request');
   const host = normaliseHost(h.get('host'));
-  if (!tenant.hosts.includes(ANY_HOST) && !(host && tenant.hosts.includes(host))) throw new Error('No company for this request');
+  if (!(host && tenant.hosts.includes(host))) throw new Error('No company for this request');
   return tenant;
 }
 

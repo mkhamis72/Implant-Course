@@ -39,4 +39,20 @@ describe('createListCache', () => {
     await c.get(1);
     expect(fetch).toHaveBeenCalledTimes(2);
   });
+  it('a reset during a fetch: the older fetch never overwrites the newer list', async () => {
+    const older: Tenant = { ...t, slug: 'old' };
+    const newer: Tenant = { ...t, slug: 'new' };
+    let releaseOld!: (v: Tenant[]) => void;
+    const fetch = vi.fn()
+      .mockImplementationOnce(() => new Promise<Tenant[]>((r) => { releaseOld = r; }))
+      .mockResolvedValueOnce([newer]);
+    const c = createListCache(fetch);
+    const first = c.get(0);
+    c.reset();
+    expect(await c.get(1)).toEqual([newer]);
+    releaseOld([older]);
+    await first;
+    expect(await c.get(2)).toEqual([newer]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
 });

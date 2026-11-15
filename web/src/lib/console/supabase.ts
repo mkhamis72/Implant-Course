@@ -6,8 +6,8 @@ import { consoleConfig } from './env';
 const options = { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false };
 
 /**
- * The signed-in console admin's PostgREST client on the console project (control, or production with COMPANY_LIST=production): this request's database token (minted
- * from the Self-Auth console session) is the bearer, so is_console_admin() / is_console_user() sees the admin and their aal.
+ * The signed-in console admin's PostgREST client on the company project: this request's database token (minted
+ * from the Self-Auth console session) is the bearer, so is_console_user() sees the admin and their aal.
  */
 export async function createConsoleClient(): Promise<SupabaseClient> {
   const { url, anonKey } = consoleConfig();
@@ -18,7 +18,7 @@ export async function createConsoleClient(): Promise<SupabaseClient> {
   });
 }
 
-/** Service access to the console project: only after requireConsoleAdmin(). */
+/** Service access to the company project: only after requireConsoleAdmin(). */
 export function createConsoleServiceClient(): SupabaseClient {
   const { url, serviceKey } = consoleConfig();
   return createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });

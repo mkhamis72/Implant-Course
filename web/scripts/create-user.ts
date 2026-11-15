@@ -4,17 +4,16 @@ import { pgConfig } from './db';
 import { ensureTenantUser, setProfile } from './users';
 import { temporaryPassword } from '../src/lib/admin/passwords';
 import { parseCreateUserArgs, targetLabel } from './create-user-args';
-import { applyTenantArg } from './tenant-env';
+import { refuseRemovedOptions } from './one-database';
 import { closeNodeAuth } from './self-auth-node';
 
 async function main() {
-  const { argv, label } = await applyTenantArg(process.argv.slice(2), process.env);
-  const args = parseCreateUserArgs(argv);
+  const args = parseCreateUserArgs(refuseRemovedOptions(process.argv.slice(2)));
   if ('error' in args) {
     console.error(args.error);
     process.exit(1);
   }
-  console.log(`Target project: ${label ?? targetLabel(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
+  console.log(`Target project: ${targetLabel(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
   const password = temporaryPassword();
   const pg = new Client(pgConfig());
   await pg.connect();

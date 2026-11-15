@@ -2,16 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { parseKeysArgs, probe, probeToken, reachCheck } from './self-auth-keys';
 
 describe('self-auth-keys', () => {
-  it('parses jwks and check, refusing anything else', () => {
-    expect(parseKeysArgs(['jwks'])).toEqual({ cmd: 'jwks', control: false });
-    expect(parseKeysArgs(['jwks', '--control'])).toEqual({ cmd: 'jwks', control: true });
-    expect(parseKeysArgs(['check'])).toEqual({ cmd: 'check', control: false, rest: [] });
-    expect(parseKeysArgs(['check', '--tenant', 'academy'])).toEqual({ cmd: 'check', control: false, rest: ['--tenant', 'academy'] });
-    expect(parseKeysArgs(['check', '--control'])).toEqual({ cmd: 'check', control: true, rest: [] });
-    expect(parseKeysArgs(['reach'])).toEqual({ cmd: 'reach', rest: [] });
-    expect(parseKeysArgs(['reach', '--tenant', 'academy'])).toEqual({ cmd: 'reach', rest: ['--tenant', 'academy'] });
-    expect(() => parseKeysArgs(['reach', '--control'])).toThrow(/Usage/);
-    for (const bad of [[], ['jwks', 'x'], ['check', '--tenant'], ['check', '--control', '--tenant', 'a'], ['mint']]) {
+  it('parses jwks, check and reach (one database: --company picks the company), refusing anything else', () => {
+    expect(parseKeysArgs(['jwks'])).toEqual({ cmd: 'jwks' });
+    expect(parseKeysArgs(['check'])).toEqual({ cmd: 'check', slug: 'academy' });
+    expect(parseKeysArgs(['check', '--company', 'osdic'])).toEqual({ cmd: 'check', slug: 'osdic' });
+    expect(parseKeysArgs(['reach'])).toEqual({ cmd: 'reach', slug: 'academy' });
+    expect(parseKeysArgs(['reach', '--company', 'osdic'])).toEqual({ cmd: 'reach', slug: 'osdic' });
+    expect(() => parseKeysArgs(['check', '--control'])).toThrow(/there is one database/);
+    expect(() => parseKeysArgs(['check', '--tenant', 'academy'])).toThrow(/--tenant is gone/);
+    for (const bad of [[], ['jwks', 'x'], ['check', '--company'], ['mint']]) {
       expect(() => parseKeysArgs(bad)).toThrow(/Usage/);
     }
   });
@@ -33,7 +32,8 @@ describe('self-auth-keys', () => {
     expect(ok.f.mock.calls[0][1].headers).toMatchObject({ apikey: 'anon', authorization: 'Bearer SECRET-TOKEN' });
     const refused = await call(401).run;
     expect(refused.ok).toBe(false);
-    expect(refused.line).toMatch(/401.*private signing key as a standby key.*CONTROL_SELF_AUTH_KID/);
+    expect(refused.line).toMatch(/401.*private signing key as a standby key.*SELF_AUTH_KID/);
+    expect(refused.line).not.toContain("CONTROL_");
     expect(refused.line).not.toContain('SECRET-TOKEN');
     expect((await call(500).run).ok).toBe(false);
   });

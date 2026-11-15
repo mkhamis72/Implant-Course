@@ -8,8 +8,6 @@ const h = vi.hoisted(() => ({
   rpc: vi.fn(),
   results: new Map<string, unknown>(),
   resetProductionCache: vi.fn(),
-  resetControlCache: vi.fn(),
-  sharedProject: vi.fn(),
 }));
 
 /** A PostgREST-like client: records every chained call; awaiting a query gives the result set for its table. */
@@ -35,16 +33,13 @@ function fakeClient() {
 vi.mock('./supabase', () => ({ createConsoleServiceClient: () => fakeClient() }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => fakeClient() }));
 vi.mock('@/lib/tenant/production', () => ({ resetProductionCache: h.resetProductionCache }));
-vi.mock('@/lib/tenant/control', () => ({ resetControlCache: h.resetControlCache }));
-vi.mock('./companies', async (orig) => ({ ...(await orig<object>()), sharedProject: h.sharedProject }));
 
-import { consoleStore, KEYS_NOT_PER_COMPANY } from './store';
+import { consoleStore } from './store';
 
 const PROD = {
-  COMPANY_LIST: 'production', NEXT_PUBLIC_SUPABASE_URL: 'https://prod.supabase.co', NEXT_PUBLIC_SUPABASE_ANON_KEY: 'p-anon',
+  NEXT_PUBLIC_SUPABASE_URL: 'https://prod.supabase.co', NEXT_PUBLIC_SUPABASE_ANON_KEY: 'p-anon',
   SUPABASE_SERVICE_ROLE_KEY: 'p-svc', DATABASE_URL: 'postgres://prod',
 };
-const CONTROL = { COMPANY_LIST: '', CONTROL_SUPABASE_URL: 'https://control.supabase.co', NEXT_PUBLIC_CONTROL_ANON_KEY: 'c-anon', CONTROL_SERVICE_ROLE_KEY: 'c-svc' };
 const stub = (env: Record<string, string>) => { for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v); };
 
 beforeEach(() => {
@@ -53,19 +48,16 @@ beforeEach(() => {
   h.rpc.mockReset();
   h.rpc.mockResolvedValue({ data: null, error: null });
   h.resetProductionCache.mockReset();
-  h.resetControlCache.mockReset();
-  h.sharedProject.mockReset();
 });
 afterEach(() => vi.unstubAllEnvs());
 
-describe('production store', () => {
+describe('console store (production database)', () => {
   beforeEach(() => stub(PROD));
   const osdic = { id: 'c-osdic', slug: 'osdic', name: 'OSDIC', hosts: ['osdic.imploid.net'], status: 'active' };
 
   it('lists companies with the project keys from the env and the company id from the row', async () => {
     h.results.set('companies', { data: [osdic], error: null });
     const s = consoleStore();
-    expect(s.source).toBe('production');
     expect(await s.list()).toEqual([{
       slug: 'osdic', name: 'OSDIC', hosts: ['osdic.imploid.net'], status: 'active',
       supabase_url: 'https://prod.supabase.co', anon_key: 'p-anon', company_id: 'c-osdic',
@@ -127,46 +119,5 @@ describe('production store', () => {
   it('returns the database message on a refused write', async () => {
     h.rpc.mockResolvedValue({ data: null, error: { message: 'Give a name (2–120 characters).' } });
     expect(await consoleStore().update('osdic', 'x', [], 'me')).toBe('Give a name (2–120 characters).');
-  });
-  it('refuses to replace keys', async () => {
-    expect(await consoleStore().replaceKeys({ slug: 'osdic', supabaseUrl: 'u', anonKey: 'a', serviceRoleKey: 's', databaseUrl: 'd' }, 'me')).toBe(KEYS_NOT_PER_COMPANY);
-    expect(KEYS_NOT_PER_COMPANY).toBe('Keys are no longer kept per company.');
-    expect(h.rpc).not.toHaveBeenCalled();
-  });
-});
-
-describe('control store (today\'s behaviour)', () => {
-  beforeEach(() => stub(CONTROL));
-
-  it('reads tenants and tenant_audit', async () => {
-    h.results.set('tenants', { data: [], error: null });
-    const s = consoleStore();
-    expect(s.source).toBe('control');
-    await s.list();
-    await s.history('acme');
-    expect(h.calls.map((c) => c.table)).toEqual(['tenants', 'tenant_audit']);
-  });
-  it('writes through the control RPCs', async () => {
-    const s = consoleStore();
-    await s.update('acme', 'Acme', ['a.example'], 'me');
-    await s.setStatus('acme', 'active', 'paid up', 'me');
-    await s.log('acme', 'first_admin_invited', 'ann@acme.com', 'me');
-    expect(h.rpc.mock.calls.map((c) => c[0])).toEqual(['console_update_tenant', 'console_set_status', 'console_log']);
-  });
-  it('the service key comes from the vault', async () => {
-    h.rpc.mockResolvedValue({ data: 'vault-key', error: null });
-    expect(await consoleStore().serviceKey('acme')).toBe('vault-key');
-    expect(h.rpc).toHaveBeenCalledWith('tenant_secret', { p_slug: 'acme', p_name: 'service_role_key' });
-  });
-  it('adds a company: register with the shared keys, provision, then save the company id', async () => {
-    h.sharedProject.mockResolvedValue({ supabaseUrl: 'https://s.supabase.co', anonKey: 'an', serviceRoleKey: 'sv', databaseUrl: 'pg' });
-    h.rpc.mockImplementation(async (name: string) => (name === 'provision_company' ? { data: 'c-1', error: null } : { data: null, error: null }));
-    expect(await consoleStore().addCompany({ slug: 'acme', name: 'Acme', hosts: ['acme.example'] }, 'me')).toMatchObject({ companyId: 'c-1', shared: { supabaseUrl: 'https://s.supabase.co' } });
-    expect(h.rpc.mock.calls.map((c) => c[0])).toEqual(['console_register_tenant', 'provision_company', 'console_set_company']);
-    expect(h.resetControlCache).toHaveBeenCalledTimes(1);
-  });
-  it('replaces keys through the vault', async () => {
-    expect(await consoleStore().replaceKeys({ slug: 'acme', supabaseUrl: 'u', anonKey: 'a', serviceRoleKey: 's', databaseUrl: 'd' }, 'me')).toBeNull();
-    expect(h.rpc.mock.calls[0][0]).toBe('console_replace_secrets');
   });
 });

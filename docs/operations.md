@@ -39,15 +39,14 @@ Always end with `Remove-Item Env:ENV_FILE`: a leftover `ENV_FILE` would point ev
 4. **GitHub** → repo → Settings → Environments → New environment **`production`**:
    - **Deployment branches and tags:** choose *Selected branches*, and add `master`. Only master's workflows can then read the production secrets.
    - Add these secrets:
-     - `CONTROL_DATABASE_URL`: the control project's session pooler URI (§G). Release and Backup read every company from it.
+     - `PROD_DATABASE_URL`: the production project's **Session pooler** URI ⟨secret⟩. Release migrates and backs up through it; Backup dumps and exports from it.
      - `PROD_DATABASE_CA_CERT`: open `prod-ca.crt` in a text editor and paste the whole text, including the BEGIN/END lines.
      - `VERCEL_DEPLOY_HOOK_URL`.
      - `BACKUP_PASSPHRASE`: a long random passphrase. **Also store it in your password manager: without it, backups cannot be read.**
-     - `CONTROL_SUPABASE_URL` and `CONTROL_ANON_KEY`.
+     - `PROD_SUPABASE_URL` and `PROD_ANON_KEY` (Project Settings → API Keys → anon/public): the nightly keep-awake ping.
      - `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`: the off-site backup bucket (§D → Off-site copy). Without them, every Backup run turns red.
-     - The three `CONTROL_*` secrets exist only once the control project does (step 5): add them to GitHub after creating it. `CONTROL_ANON_KEY` is the control project's anon/public key (Project Settings → API Keys).
-5. **Control project and first company:** a release migrates only the control project and registered companies, so do §G first (it creates the `CONTROL_*` values that step 4 needs, so finish the three `CONTROL_*` secrets in step 4 after this one): create the control project, migrate it, and register the first company. Migrate that company directly before registering (`tenant:register` checks its schema): `ENV_FILE=.env.prod npm run db:migrate`.
-6. **First release:** Actions → **Release** → Run workflow (branch `master`). It builds, migrates the control project and every company (already up to date), then deploys.
+5. **First company:** migrate the project directly (`ENV_FILE=.env.prod npm run db:migrate`): the migrations create the academy company. Give it its address in the Supabase SQL editor: `update public.companies set hosts = '{<host>}' where slug = 'academy';`.
+6. **First release:** Actions → **Release** → Run workflow (branch `master`). It builds, backs up and migrates the production database (already up to date), then deploys.
 7. **First admin:** `npm run create-user -- you@example.com "Your Name" --role admin`, run with `ENV_FILE=.env.prod` as shown at the top. The first line must name the **production** project host.
 8. **Smoke check** (section F), then the **first backup**: Actions → **Backup** → Run workflow, first with mode `backup`, then with mode `verify`.
 9. **Restore rehearsal** (once, before go-live): follow section D into a scratch Supabase project, then delete that project.
@@ -110,25 +109,25 @@ One sender serves every company; the email names the company. Locally the emails
 
 - Merging to `master` runs **Release**:
   1. typecheck, lint, unit tests and a production build;
-  2. back up every company database and the control project (schema and data, sign-in accounts included; artifact `pre-release-backups-*` and R2), and stop if that fails;
+  2. back up the production database (schema and data, every company, the console and sign-in accounts; artifact `pre-release-backups-*` and R2), and stop if that fails;
   3. migrate production (Migration B of Self-Auth stays held until the production variable `SELF_AUTH_B_HOLD` is `0`, §E);
   4. deploy through the hook.
   A red run deploys nothing. Fix it and merge again, or re-run.
-- A release migrates the control project (`db:migrate -- --control`), then every registered company in slug order (`db:migrate -- --all-tenants`, suspended ones too), and deploys only if all succeeded. A failure stops the run before the deploy and names the company; fix it and re-run Release (companies already migrated are skipped as up to date).
+- A release migrates the one production database (`npm run db:migrate` with `PROD_DATABASE_URL`) and deploys only if it succeeded. A failure stops the run before the deploy; fix it and re-run Release (applied migrations are skipped).
 - If `master` moved on while a run was waiting, that run migrates but leaves the deploy to the newer run, so code never goes live before its own migration.
 - Migrations must work with the previous app version for the few minutes until the new build is live. Add things; don't rename or drop in the same release.
 
 ## D. Backups and restore
 
-**What a backup holds:** the data (not the schema) of the app tables plus the sign-in accounts (Supabase Auth's `auth` schema and, since the Self-Auth switch-over, `self_auth`), encrypted. The control file also holds the console admins and their accounts. The schema comes from the migrations in this repo. Since the one-database release a database can hold several companies, so a backup has two kinds of file: a **whole-database dump** (every company in that database; taken once per distinct database, named after the first company on it) and, for every company, its **own export** (`company-export`: that company's rows and its members' accounts as JSON, restorable alone).
+**What a backup holds:** the data (not the schema) of the app tables plus the sign-in accounts (Supabase Auth's `auth` schema and, since the Self-Auth switch-over, `self_auth`), encrypted. The schema comes from the migrations in this repo. One database holds every company and the console, so a backup has two kinds of file: the **whole-database dump** (`prod-<date>.dump.gpg`) and, for every company, its **own export** (`company-export`: that company's rows and its members' accounts as JSON, restorable alone). Sets from before the merge of control (2026-11-14) instead have one whole-database file named after the first company (`<slug>-<date>.dump.gpg`) and a `_control-<date>.dump.gpg` registry file.
 
-- **Backup** runs nightly and writes, per distinct database, `<slug>-<date>.dump.gpg` (the whole database, named after the first company on it), per company `<slug>-<date>.company.dump.gpg` (the company's own JSON export; the `.dump` in the name only keeps it inside the artifact and off-site globs), plus `_control-<date>.dump.gpg` (the company registry only), in the artifact `backups-*`, kept 14 days, and copies the same encrypted files to the Cloudflare R2 bucket under `<date>/<run id>/`, kept and locked for a year (see Off-site copy below). A failure for one company doesn't stop the others; the run turns red and ends with "Backup failed for: …". The run also pings every company and the control project to keep them awake; a failed ping doesn't stop the others and is named in "Keep-awake failed for: …". A failed off-site copy also turns the run red ("Off-site copy failed or did not run").
+- **Backup** runs nightly and writes `prod-<date>.dump.gpg` (the whole database) and, for each company in `public.companies`, `<slug>-<date>.company.dump.gpg` (the company's own JSON export; the `.dump` in the name only keeps it inside the artifact and off-site globs), in the artifact `backups-*`, kept 14 days, and copies the same encrypted files to the Cloudflare R2 bucket under `<date>/<run id>/`, kept and locked for a year (see Off-site copy below). A failure for one company doesn't stop the others; the run turns red and ends with "Backup failed for: …". The run also pings the project to keep it awake ("Keep-awake failed for: production" if not). A failed off-site copy also turns the run red ("Off-site copy failed or did not run").
 - **Monthly verify** runs on its own at 06:00 UTC on the 1st, after that night's backup; GitHub emails you if it fails (scheduled runs notify whoever last changed the workflow's schedule). Run it by hand any time: Actions → Backup → Run workflow → mode `verify`. It checks the newest artifact **and** the newest off-site set, and must finish green with "Every backup is readable and complete, in GitHub and off-site." It also accepts the older `prod-backup-*` artifacts for their remaining days. Verify decrypts with the GitHub secret, so it proves GitHub can read the backups, not that **you** can: keep `BACKUP_PASSPHRASE` in your password manager (it was lost once and replaced on 2026-10-08; backups made before that can't be read).
-- **Restore rehearsal** (before go-live, then twice a year). There are no free Supabase slots for a scratch project, so use the local dev2 stack and wipe it afterwards. It holds patient data while you work, so never leave it.
-  1. `npx supabase stop --workdir .dev2 --no-backup`, then `npm run db:dev2:start` and `ENV_FILE=.env.dev2 npm run db:migrate`.
-  2. Download and decrypt the newest backup outside the repo (steps 1, 5 and 6 below). Run them with `docker exec supabase_db_implant-course-dev2 psql -U postgres -d postgres …` after `docker cp`-ing `data.sql` in. If your local `pg_restore` is older than the backup's, run it through `docker run --rm -v <dir>:/work postgres:18 pg_restore …`.
-  3. Compare the row count of every `COPY` block in `data.sql` with `select count(*)` of that table in dev2.
-  4. `npx supabase stop --workdir .dev2 --no-backup`, delete the downloaded and decrypted files, then rebuild dev2 for the console tests: `npm run db:dev2:start`, `npm run console:local` (control project only: do not `db:migrate` the rebuilt dev2; the company schema's sign-up trigger would refuse the console admins).
+- **Restore rehearsal** (before go-live, then twice a year). There are no free Supabase slots for a scratch project, so use the local stack and wipe it afterwards (your local test data goes with it). It holds patient data while you work, so never leave it.
+  1. `npx supabase stop --no-backup`, then `npm run db:start` and `npm run db:migrate`.
+  2. Download and decrypt the newest backup outside the repo (steps 1, 5 and 6 below). Run them with `docker exec supabase_db_implant-course psql -U postgres -d postgres …` after `docker cp`-ing `data.sql` in. If your local `pg_restore` is older than the backup's, run it through `docker run --rm -v <dir>:/work postgres:18 pg_restore …`.
+  3. Compare the row count of every `COPY` block in `data.sql` with `select count(*)` of that table on the local stack.
+  4. `npx supabase stop --no-backup`, delete the downloaded and decrypted files, then rebuild the local stack: `npm run db:start`, `npm run db:migrate` (it adds the local companies), and the test users with the next E2E run.
 
   Last rehearsal: 2026-10-08, backup run 37782802942. All 57 tables matched, all 5 accounts kept their passwords, and new writes continued the ID sequences.
 
@@ -141,9 +140,8 @@ One sender serves every company; the email names the company. Locally the emails
 6. GitHub → Environments → `production` → add the secrets `R2_ENDPOINT` (that endpoint), `R2_BUCKET` (`implant-course-backups`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`. Keep the Cloudflare login in your password manager: it is the way in if GitHub is lost.
 7. Run Backup by hand, then Backup with mode `verify`: both copies must pass. In the bucket, try to delete one file: R2 must refuse it.
 
-**Before this release every tenant must have its company id** in the control project (register with `--company <uuid>` or `--provision`). The nightly company export fails for one without, naming it ("no company id in the control project") and turning the run red.
 
-**Restore a whole database**, if a company's project (or the control project) is lost or damaged. For one company inside a healthy shared database use **Restore one company's data** below instead.
+**Restore a whole database**, if the production project is lost or damaged. For one company inside a healthy database use **Restore one company's data** below instead.
 
 You need:
 - **GnuPG:** included in Git for Windows (Git Bash), or install Gpg4win;
@@ -153,15 +151,15 @@ You need:
 
 *Which set.* There are two kinds; pick the newest set taken **before** the damage:
 - **Nightly** (Backup): artifact `backups-<run id>`, R2 folder `<date>/<run id>/`. **Data only**, and it has the per-company `*.company.dump.gpg` exports.
-- **Pre-release** (Release, since the Self-Auth switch-over): artifact `pre-release-backups-<run id>-<attempt>`, R2 folder `<date>/<run id>-<attempt>/` (the `-<attempt>` suffix tells them apart). **Schema and data** of `public`, `app_private`, `app`, `auth`, `self_auth` (control: `public`, `auth`, `self_auth`), taken just before that release's migrations. It has no company exports. Use it to get back to the moment before a release.
+- **Pre-release** (Release, since the Self-Auth switch-over): artifact `pre-release-backups-<run id>-<attempt>`, R2 folder `<date>/<run id>-<attempt>/` (the `-<attempt>` suffix tells them apart). **Schema and data** of `public`, `app_private`, `app`, `auth`, `self_auth`, taken just before that release's migrations. It has no company exports. Use it to get back to the moment before a release.
 
 The newest R2 folder can be either kind (the monthly verify checks whichever is newest). The steps below are the same for both: step 5's `pg_restore --data-only` takes only the data, also from a schema-and-data file, and step 4 builds the schema from the migrations. For a pre-release set, check out the commit **before** that release in step 4 (`git log --first-parent master`: the commit before the release's merge), because its schema is from before the release's migrations. If the set was taken after Migration B ran (after *After the window* in §E), run step 4 with `SELF_AUTH_B_HOLD=0`, or `db:migrate` skips 0103 and the schema won't match.
 
-1. Download the newest suitable artifact (`backups-*`, or `pre-release-backups-*` as above) and unzip it. If it has expired (14 days) or GitHub is unavailable, download the file from the R2 bucket instead: Cloudflare dashboard → R2 → `implant-course-backups` → the date and run folder → the company's file → Download. Then decrypt the company's file: `gpg --decrypt <slug>-<date>.dump.gpg > <slug>.dump`. It asks for the passphrase.
+1. Download the newest suitable artifact (`backups-*`, or `pre-release-backups-*` as above) and unzip it. If it has expired (14 days) or GitHub is unavailable, download the file from the R2 bucket instead: Cloudflare dashboard → R2 → `implant-course-backups` → the date and run folder → the company's file → Download. Then decrypt the whole-database file: `gpg --decrypt prod-<date>.dump.gpg > prod.dump` (older sets: `<slug>-<date>.dump.gpg`). It asks for the passphrase.
 2. Create a new Supabase project (Frankfurt), with the same auth settings as §A.1.
-3. Make an env file `.env.restore` with the new project's `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (session pooler) and `DATABASE_CA_CERT`, plus the `CONTROL_SUPABASE_URL` and `CONTROL_DATABASE_URL` lines copied from `.env.prod` (`tenant:register` reads the company from the first group and the control project from the second).
+3. Make an env file `.env.restore` with the new project's `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (session pooler) and `DATABASE_CA_CERT`.
 4. Apply the schema to the new project directly: `ENV_FILE=.env.restore npm run db:migrate`. If the backup is older than the newest migrations, check out the commit the backup belongs to first: the newest migration it has is the newest migration file at that date. Then `git checkout master` again before the next steps.
-5. Turn the dump into SQL: `pg_restore --data-only --no-owner -f data.sql <slug>.dump`.
+5. Turn the dump into SQL: `pg_restore --data-only --no-owner -f data.sql prod.dump`.
 6. **Fresh project only.** The TRUNCATE below (with `companies … CASCADE`) is for a brand-new project and wipes every company in it, which is what a whole-database restore wants; never run it on a database that is in use. Load it in one transaction, with triggers off so nothing is created twice. This is Supabase's documented restore method. The migrations seeded `settings`, `branding`, the sample `products`, the consent form `consent_form_versions` (0072), the company list `companies` (0083) and the academy memberships `company_members` (0085) and academy's file number counter `app_private.file_no_counters` (0091), and auditing those seeds wrote `audit_log` rows, so empty those eight first. Without `audit_log`, the load stops with `duplicate key value violates unique constraint "audit_log_pkey"`:
 
    ```bash
@@ -171,21 +169,21 @@ The newest R2 folder can be either kind (the monthly verify checks whichever is 
      -f data.sql
    ```
 
-7. Repoint the company: `ENV_FILE=.env.restore npm run tenant:register -- <slug> "<Name>" <hosts…>`, with the same slug and hosts as before. This points the company at the new project and replaces its Vault secrets. The app picks up the re-registered project within its 10-minute routing cache (or right after the next deploy).
-8. Check it: `ENV_FILE=.env.prod npm run tenant:check -- <slug>`. Sign-in accounts come back with the data: everyone keeps their password and 2FA.
+7. Point the app at the new project: in Vercel (Production) set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` and `SELF_AUTH_DATABASE_URL` to the new project's values and redeploy; in GitHub `production` update `PROD_DATABASE_URL`, `PROD_SUPABASE_URL` and `PROD_ANON_KEY`; replace the values in `web/.env.prod`. Import the Self-Auth signing key into the new project as a standby key (Project Settings → JWT Keys, §E).
+8. Check it: open every company address and the console. The companies, their addresses and the console admins come back with the data (`public.companies`, `public.console_users`); sign-in accounts too: everyone keeps their password and 2FA.
 
-`.env.restore` can be deleted afterwards: the control project now holds the new keys. If the restored company is the academy, update the academy values in `.env.prod` only if you still use them. Also update Vercel's `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` to the new project: otherwise the documented rollback (removing the `CONTROL_*` variables, §G) would point at the dead project.
+`.env.restore` can be deleted afterwards.
 
 **Restore one company's data** (a mistake or damage in one company; the other companies in the database are untouched). Needs the company's own export `<slug>-<date>.company.dump.gpg` from the artifact or R2.
 1. Decrypt it outside the repo: `gpg --decrypt <slug>-<date>.company.dump.gpg > <slug>.json`. The file holds password hashes and patient data: treat it like a database dump and delete it afterwards.
 2. **Suspend the company** in the console (Companies, the company, Suspend; type the slug), wait up to 60 seconds for the host cache and confirm its site shows 503. The restore deletes the company's rows and loads the file's rows back: anything the company's users write meanwhile would be interleaved with that and lost. Other companies keep working.
-3. Take a fresh export of the company, so the restore can itself be undone: `ENV_FILE=.env.prod npm run company:export -- --tenant <slug> --out before-<slug>.json`.
-4. `ENV_FILE=.env.prod npm run company:restore -- --tenant <slug> --in <slug>.json`. It refuses a file whose company id is not the company's, or with a row that carries another company's id, or a table list that differs from the database's. In one transaction it deletes that company's rows (company tables in reverse foreign-key order, including its `company_members`) and loads the file's rows back; `profiles` and `auth.users` are only inserted when missing and never deleted, because a person can belong to another company. Triggers are off during the load (`session_replication_role = replica`; if the database role may not set it, the restore stops before changing anything), so audit rows and the stock ledger come back exactly as exported. The foreign keys of the restored rows are then checked and any failure rolls everything back. A log is written next to the file (`<file>.restore.log`).
+3. Take a fresh export of the company, so the restore can itself be undone: `ENV_FILE=.env.prod npm run company:export -- --company <slug> --out before-<slug>.json`.
+4. `ENV_FILE=.env.prod npm run company:restore -- --company <slug> --in <slug>.json`. It refuses a file whose company id is not the company's, or with a row that carries another company's id, or a table list that differs from the database's. In one transaction it deletes that company's rows (company tables in reverse foreign-key order, including its `company_members`) and loads the file's rows back; `profiles` and `auth.users` are only inserted when missing and never deleted, because a person can belong to another company. Triggers are off during the load (`session_replication_role = replica`; if the database role may not set it, the restore stops before changing anything), so audit rows and the stock ledger come back exactly as exported. The foreign keys of the restored rows are then checked and any failure rolls everything back. A log is written next to the file (`<file>.restore.log`).
 5. **Lift the suspension** in the console (Reactivate), wait up to 60 seconds, then check the company in the app (patients, stock on hand). If it is wrong, suspend again and restore `before-<slug>.json` the same way. Delete the downloaded and decrypted files.
 
 **Delete one company's data** (a data-protection request, or after a company leaves). Irreversible: export first and keep that file encrypted until the request is settled.
-1. `ENV_FILE=.env.prod npm run company:export -- --tenant <slug> --out erase-<slug>.json`; the list of people is in its `public.company_members` table.
-2. `ENV_FILE=.env.prod npm run company:restore -- --tenant <slug> --delete` removes every company-table row of the company (the same transaction, triggers and checks as a restore, with nothing reloaded). The company row itself, `companies`, stays. To remove it too, end the company's sign-in sessions first: their bindings in `app.session_companies` reference the company (`session_companies_company_id_fkey`), so a plain delete of the company fails while any exist; and the company's own audit trigger would log its deletion under the deleted company, which fails too (`audit_log_company_id_fkey`), so it is off for that one statement (foreign keys stay checked). As postgres, in one transaction (tried in a rolled-back transaction on the local stack, 2026-11-06):
+1. `ENV_FILE=.env.prod npm run company:export -- --company <slug> --out erase-<slug>.json`; the list of people is in its `public.company_members` table.
+2. `ENV_FILE=.env.prod npm run company:restore -- --company <slug> --delete` removes every company-table row of the company (the same transaction, triggers and checks as a restore, with nothing reloaded). The company row itself, `companies`, stays. To remove it too, end the company's sign-in sessions first: their bindings in `app.session_companies` reference the company (`session_companies_company_id_fkey`), so a plain delete of the company fails while any exist; and the company's own audit trigger would log its deletion under the deleted company, which fails too (`audit_log_company_id_fkey`), so it is off for that one statement (foreign keys stay checked). As postgres, in one transaction (tried in a rolled-back transaction on the local stack, 2026-11-06):
 
    ```sql
    begin;
@@ -197,13 +195,14 @@ The newest R2 folder can be either kind (the monthly verify checks whichever is 
    commit;
    ```
 3. Remove the people only if they have no other membership (they may belong to another company): as postgres, `delete from auth.users u where u.id in (<user ids from step 1>) and not exists (select 1 from public.company_members m where m.user_id = u.id)`. Their `profiles` rows go with them. A user who is still a member somewhere stays.
-4. Deregister the company from the control project in the console (hosts and Vault secrets), and delete `erase-<slug>.json` once the request is closed. Nightly backups still hold the company's data until the 14-day artifacts expire and the year-long R2 copies are deleted by their lifecycle rule; say so in the reply to the data subject.
+4. Remove its addresses in the console (Details), and delete `erase-<slug>.json` once the request is closed. Nightly backups still hold the company's data until the 14-day artifacts expire and the year-long R2 copies are deleted by their lifecycle rule; say so in the reply to the data subject.
 
-**Restore the control project:** create a fresh project; run `ENV_FILE=.env.prod npm run db:migrate -- --control` (with `CONTROL_*` pointing at it); load `_control-<date>.dump` the same way (no TRUNCATE needed). Read each company's slug, name and hosts with `select slug, name, hosts from public.tenants`. Re-run `tenant:register` for every company (Vault secrets aren't in the backup; use an env file with that company's keys, as in step 3 above), then `tenant:check -- <slug>` for each. Update `CONTROL_SUPABASE_URL` and `CONTROL_SERVICE_ROLE_KEY` in Vercel and `CONTROL_DATABASE_URL`, `CONTROL_SUPABASE_URL` and `CONTROL_ANON_KEY` in GitHub; re-run Release.
 
 **Free plan pause:** if the Supabase dashboard shows the project as paused, open it and choose **Restore project**. The nightly backup's requests normally prevent this.
 
 ### Self-Auth rehearsal (before the switch-over)
+
+> Historical (switch-over done 2026-11). It mentions the dev2 stack and the control project, both gone since the merge of control into production (release 3, §G).
 
 A full run of the switch-over on copies of last night's prod and control data, on the local dev2 stack, ending with a simulated rollback. Nothing here touches a live database except the one read-only dump in step B1. The copies hold patient data and password hashes: never leave them, and wipe everything at the end (step D).
 
@@ -437,121 +436,52 @@ People whose company email is a Google account can sign in with a "Sign in with 
 
 **Someone changed their Google account:** Admin → Users → the user → **Reset Google sign-in**. This also signs them out everywhere. Their next Google sign-in is remembered instead. A deactivated user stays refused until reactivated.
 
-## G. Control project (companies)
+## G. Companies and the console
 
-The app serves each company from its own Supabase project. Without `CONTROL_SUPABASE_URL` it serves one company (tenant `default`) from the `NEXT_PUBLIC_SUPABASE_*` / `SUPABASE_SERVICE_ROLE_KEY` env vars, as before.
+Every company and the console live in the one production database (merge of control into production, releases 1–3, 2026-11-14; design `docs/superpowers/specs/2026-11-14-merge-control-into-production-design.md`). The app routes each request by its host through `public.companies` (`hosts`, `status`), read with the project's own keys and cached 60 s; if the database can't be reached it keeps routing from its last list for 10 minutes, then shows "Service unavailable". An unknown host gets 404, a suspended company 503. A status or address change reaches every server within about a minute.
 
-**Company list in production (merge of control into production).** Since release 1 (0104/0105) production holds a copy of the company list: each company's addresses and status on `public.companies`, the change history in `public.company_log`, and the console's tables and functions (`console_users`, `is_console_user`, `console_update_company`, `console_set_company_status`, `console_log_company`). Since release 2 the app reads either list; the Vercel setting **`COMPANY_LIST=production`** chooses production for the company sites *and* the console together. Without it (or with any other value, which is logged and ignored) the app reads the control project as before. Release no longer copies the list: after the switch a copy would overwrite console changes with control's old list. `npm run list:copy` / `list:compare` stay for the switch-over below. The console header shows `Company list: production` or `control`.
+**Release 3 checklist (owner, in this order):**
+1. *Before merging:* GitHub → the repo → Settings → Environments → `production` → add secrets `PROD_DATABASE_URL` ⟨secret⟩ (prod project → Connect → **Session pooler** URI), `PROD_SUPABASE_URL` (`https://kshsgwvwqvufqdxcyvat.supabase.co`) and `PROD_ANON_KEY` (Project Settings → API Keys → anon/public). Release and Backup stop with the missing name otherwise, before touching anything.
+2. Merge and Release as usual (repo public, `./scripts/ship.sh ship`, repo private again). Check the Vercel deployment is Ready.
+3. Open each company address and the console (sign in, every company listed with its history).
+4. Actions → **Backup** → Run (mode `backup`), then again with mode `verify`: the set holds `prod-<date>.dump.gpg` and one `<slug>-<date>.company.dump.gpg` per company.
+5. Vercel → Environment Variables (Production): delete `CONTROL_SUPABASE_URL`, `CONTROL_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_CONTROL_ANON_KEY`, `CONTROL_DATABASE_URL`, `CONTROL_SELF_AUTH_SECRET`, `CONTROL_SELF_AUTH_PRIVATE_JWK`, `CONTROL_SELF_AUTH_KID` and `COMPANY_LIST`; redeploy. GitHub `production`: delete `CONTROL_DATABASE_URL`, `CONTROL_SUPABASE_URL`, `CONTROL_ANON_KEY`. `web/.env.prod`: delete the `CONTROL_*` lines.
+6. Last copy of the control project, kept with the backups (Git Bash, from `web/`, a PostgreSQL client at least as new as the server; the control Session pooler URI pasted only into the prompt): `read -rs CTL; PGSSLMODE=verify-full PGSSLROOTCERT=prod-ca.crt pg_dump --format=custom --no-owner --schema=public --schema=auth --schema=self_auth --schema=vault "$CTL" > control-final.dump; unset CTL`, then check it: `pg_restore --list control-final.dump | grep -c "TABLE DATA"` must print a number above 0. Encrypt it with the backup passphrase (`gpg --symmetric --cipher-algo AES256 --output control-final-$(date -u +%F).dump.gpg control-final.dump`), delete `control-final.dump`, and store the `.gpg` file with the R2 backups or offline.
+7. Supabase → the `implant-course-control` project → **Pause**. Delete it after a month without problems; that frees the second Free project slot.
 
-**Switch to the production list (release 2), owner, in this order:**
-1. From now on make no changes in the console until step 5 is done.
-2. Bring production up to date and check it: `cd web && ENV_FILE=.env.prod npm run list:copy`, then `ENV_FILE=.env.prod npm run list:compare`. It must end with `0 differences`; otherwise fix the lines as described for release 1 below and repeat.
-3. Create your console login in production. `web/.env.prod` must hold the company project's `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` ⟨secret⟩, `DATABASE_URL` ⟨secret⟩ (Session pooler), `SELF_AUTH_SECRET` ⟨secret⟩, `SELF_AUTH_PRIVATE_JWK` ⟨secret⟩ (the JSON on one line, in single quotes) and `SELF_AUTH_KID` (the same values as Vercel Production). Then `cd web && COMPANY_LIST=production ENV_FILE=.env.prod npm run console:admin -- <your email>` (from `web/`: the CA path in `.env.prod` is relative). Afterwards remove `SUPABASE_SERVICE_ROLE_KEY`, `SELF_AUTH_SECRET` and `SELF_AUTH_PRIVATE_JWK` from `.env.prod` again (keep them in your password manager). The first line must read `Target project: <prod ref>.supabase.co (production)`; it prints a temporary password once.
-4. Vercel → the `implant-course` project → Settings → Environment Variables → Production: add `COMPANY_LIST` = `production`, then redeploy (Deployments → the current one → Redeploy).
-5. Open the console address and sign in with the temporary password. Set up a new authenticator (the old one belonged to the control project). The header must read `Company list: production`, and every company is listed with its history. Change your password from the header link.
-6. Open each company address: it signs in as before. An address no company has answers 404.
+*Undo while control still exists* (before you delete it): unpause the control project if it is paused; put back the GitHub `production` secrets `CONTROL_DATABASE_URL`, `CONTROL_SUPABASE_URL`, `CONTROL_ANON_KEY` **before** running Release (the release-2 workflow reads them); register in control any company added since the switch (`ENV_FILE=.env.prod npm run tenant:register -- <slug> "<Name>" <hosts…> --company <id>` from a release-2 checkout); then revert the release-3 PR and run Release, and put the Vercel `CONTROL_*` settings and `COMPANY_LIST=production` back and redeploy. Console changes made since stay in production (release 2 reads the console from production too).
 
-**Undo:** remove `COMPANY_LIST` in Vercel and redeploy. The control project was never changed, so the console and the sites read it again; console changes made since the switch exist only in production. **Before switching again, don't run step 2's `list:copy`** unless you first redo those console changes in control (or accept losing them): the copy writes control's addresses and status over production's, and a company that exists only in production loses its addresses (its site answers 404). Run only `list:compare` and fix what it reports.
+**Console.** The super-admin console manages the companies from a browser, at its own address (`CONSOLE_HOST`, `console.imploid.net`): a console account (Self-Auth company `console`, listed in `public.console_users`) with password and an authenticator app; `is_console_user()` (0105, 0106) requires the second factor, an active row and a console account. Idle sessions are signed out after 15 minutes. Company addresses never serve it (404 for `/console`).
 
-**Until release 3 (control retired):** `db:migrate -- --all-tenants` (Release), the nightly backup and `company:export --tenant` still find companies through the control project. So don't add companies in the console; if one must be added, also register it in control with its production id: `ENV_FILE=.env.prod npm run tenant:register -- <slug> "<Name>" <hosts…> --company <id>` (the id from `select id, slug from public.companies`). Address and status changes made in the console after the switch are not copied back to control, which is fine: nothing routes by control any more.
+*Create or reset a console admin:* in `web/.env.prod` the company project's `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` and the Self-Auth `SELF_AUTH_SECRET`, `SELF_AUTH_PRIVATE_JWK` (one line, single quotes), `SELF_AUTH_KID`; then `cd web && ENV_FILE=.env.prod npm run console:admin -- you@example.com`. The first line must read `Target project: kshsgwvwqvufqdxcyvat.supabase.co (production)`; it prints a temporary password once. Remove the secrets from `.env.prod` afterwards. Running it again for an existing admin sets a new temporary password and keeps their authenticator. **Sign in straight away**, set up 2FA, then **Change password** (top bar).
 
-**Release 1 (kept for the switch-over):** `npm run list:copy` copies the list and history from control into production (it prints `Target project` for both projects, then the counts; safe to repeat); `npm run list:compare` exits 1 if the two differ (a company in one but not the other, a different slug, addresses or status, or history not copied). A production company that control does not list loses its addresses in the copy. To fix what `list:compare` reports:
-- `history: N control rows missing`, or a console change made between the copy and the compare: run the copy again.
-- `<slug>: not in control` or `<slug>: no company id in control`: register it with its production id, `ENV_FILE=.env.prod npm run tenant:register -- <slug> "<Name>" <hosts…> --company <id>` (the id from `select id, slug from public.companies` in the Supabase SQL editor).
-- `<slug>: slug differs (production: <other>)`: make production use control's slug, in the SQL editor: `update public.companies set slug = '<control slug>' where slug = '<other>';` (rows refer to a company by id, so only a lookup by the old slug changes).
-- `<slug>: not in production`: the control entry points at a company id production doesn't have; correct it with `tenant:register … --company <id>` or remove the entry.
+*Lost authenticator:* Supabase SQL editor: `delete from self_auth.totp_factor where user_id = (select user_id from public.console_users where email = 'you@example.com');`, then run `console:admin` again for that email and set up 2FA at once.
 
-Release 3 removes the control project, its settings and these scripts (design: `docs/superpowers/specs/2026-11-14-merge-control-into-production-design.md`).
+*Using it:* the Companies page shows each company's health and counts. A company's page lets you suspend it (reason, and type the slug to confirm) and reactivate it, edit its name and addresses, invite its first admin, and shows whether each address is live on Vercel (**Add to Vercel** retries one that isn't). Every change, including an invited, created or reset first admin (the email, never a password) and each address added to Vercel, is recorded in the company's History (`public.company_log`) with the admin's email.
 
-**Set up (once, owner):**
-1. Create the project `implant-course-control` (Frankfurt). Create it in your existing Supabase organisation (the second Free slot; Free allows 2 active projects per account).
-2. In `web/.env.prod` add `CONTROL_SUPABASE_URL` and `CONTROL_DATABASE_URL` ⟨secret⟩ (Session pooler). `CONTROL_SERVICE_ROLE_KEY` goes only in Vercel (no script reads it). The Supabase CA certificate is shared, so `DATABASE_CA_CERT` covers it; otherwise set `CONTROL_DATABASE_CA_CERT`.
-3. Apply the control schema: `ENV_FILE=.env.prod npm run db:migrate -- --control`. The first line must read `Target project: control <ref>.supabase.co`. The control project's `tenant_audit` table is read-only even for the service-role key.
+**Add a company.** Console → **Add company**: company name, slug and address (suggested `<slug>.imploid.net`), and the first admin's name and email. One click then:
+1. checks no other company uses the address, then creates the company with its starting data (`provision_company`: settings, branding, catalogue, consent forms) and its address;
+2. adds the address to the Vercel project;
+3. emails the first admin an invite on the company's own address. A login this company already has gets a password-reset email instead; someone another company already uses keeps their password and gets a notice. With `EMAIL_ENABLED=false` it shows a one-time password instead.
 
-**Register a company** (its project's keys come from the loaded env file; for the academy that's `.env.prod`):
+**Then, by hand (you):** Google Cloud console → Google Auth Platform → **Clients** → the web client → **Authorized redirect URIs** → add `https://<host>/auth/google/callback` → **Save** (§F2). Until you do, Google shows its own `redirect_uri_mismatch` page.
 
-```bash
-ENV_FILE=.env.prod npm run tenant:register -- academy "Implant Course Academy" kaleidoscope.imploid.net implant-course.vercel.app
-ENV_FILE=.env.prod npm run tenant:check -- academy        # → Target project: control <host>; company academy (active): OK
-```
-
-**GitHub secrets** (production environment): `CONTROL_DATABASE_URL` ⟨secret⟩ (session pooler URI of the control project), `CONTROL_SUPABASE_URL`, `CONTROL_ANON_KEY` (control project → Project Settings → API Keys → anon/public). Release and Backup read every company from the control project with them. The old `PROD_DATABASE_URL`, `PROD_SUPABASE_URL` and `PROD_SUPABASE_ANON_KEY` were deleted on 2026-10-08, after the restore rehearsal. `PROD_DATABASE_CA_CERT`, `BACKUP_PASSPHRASE` and `VERCEL_DEPLOY_HOOK_URL` stay.
-
-**Switching to per-company releases (once):**
-1. Add `CONTROL_DATABASE_URL` ⟨secret⟩ (the control project's Session pooler URI), `CONTROL_SUPABASE_URL` and `CONTROL_ANON_KEY` (control project → Project Settings → API Keys → anon/public) to the GitHub `production` environment.
-2. Rehearse locally: `ENV_FILE=.env.prod npm run db:migrate -- --all-tenants` must print `Target project: academy <ref>.supabase.co` and then `Database is up to date.`. This is exactly what the release will do. If it fails, fix it before merging (for example, the Vault `database_url` must be the Session pooler URI).
-3. Merge.
-4. Run **Backup**, then **Backup** with mode `verify`, by hand, and check the artifact holds `academy-…` and `_control-…` files.
-
-**Scripts take `--tenant <slug>`:** `ENV_FILE=.env.prod npm run create-user -- --tenant academy you@example.com "Name"`, `npm run catalog-export -- --tenant academy`, `npm run db:migrate -- --tenant academy`. `.env.prod` then only needs `CONTROL_SUPABASE_URL`, `CONTROL_DATABASE_URL` and `DATABASE_CA_CERT`. Write it as `--tenant <slug>` (not `--tenant=<slug>`, not repeated); `--all-tenants` must be used on its own.
-
-**Switch production to the control project:** in Vercel (Production) add `CONTROL_SUPABASE_URL` and `CONTROL_SERVICE_ROLE_KEY` ⟨secret⟩, then run Release. To roll back, remove both and run Release again. Right after a deploy the first request has no cache; if the control project takes over 3 s it gets a 503, so reload.
-
-Unknown hosts get 404; a suspended company gets 503. If the control project is down, the app keeps routing from its last list for 10 minutes, then shows "Service unavailable".
-
-**Console.** The super-admin console manages the companies from a browser, at its own address (`CONSOLE_HOST`): sign in with a console admin account (email and password) and an authenticator app. Idle sessions are signed out after 15 minutes. Company addresses never serve it (they return 404 for `/console`).
-
-*Setting it up (once, after merging part 4):*
-1. Control project → Authentication → Sign In / Providers: disable new sign-ups. Multi-Factor: enable TOTP. Authentication → Rate Limits: keep the MFA verification limits at their defaults or stricter. Do this **before** the next step, which exposes the console.
-2. Vercel → Domains: add the console address to the project. Environment Variables (Production): `CONSOLE_HOST` = the host name only, `console.imploid.net` since 2026-10-17 (no `https://`, no path; before that `implant-console.vercel.app`, which now gets 404), `NEXT_PUBLIC_CONTROL_ANON_KEY` = the control project's anon key. Re-run Release.
-3. Add `CONTROL_SUPABASE_URL` (already there) and `CONTROL_SERVICE_ROLE_KEY` to `.env.prod` just for this step, run `ENV_FILE=.env.prod npm run console:admin -- you@example.com` (it prints a temporary password), then remove the service key line again. Running it again for an existing admin sets a new temporary password and keeps their authenticators.
-4. **Sign in straight away and set up 2FA.** Until you do, anyone who has the temporary password could enrol their own authenticator first. Then replace the temporary password under **Change password** (top bar) and check that the academy row shows OK.
-
-*Lost authenticator:* control project → Authentication → Users → the user → delete the factor, run `console:admin` again for that email (new temporary password), sign in and set up 2FA at once.
-
-*Using it:* the Companies page shows each company's health (a live check of its project) and counts. A company's page lets you suspend it (reason, and type the slug to confirm) and reactivate it, edit its name and addresses, replace its keys (checked before saving), invite its first admin (see below), and shows whether each address is live on Vercel (**Add to Vercel** retries one that isn't). Every change, including an invited, created or reset first admin (the target email, never a password) and each address added to Vercel, is recorded in the company's History table with the admin's email. `tenant:register` / `tenant:check` still work and are recorded as `script`.
-
-**Add a company (shared database, multi-tenant part 5).** Console → **Add company**: company name, slug and address (suggested from the name: `<slug>.imploid.net`), and the first admin's name and email. One click then:
-1. registers the company with the shared database's keys, copied from the company that serves academy (no keys to paste);
-2. creates the company with its starting data (`provision_company`: settings, branding, catalogue, consent forms);
-3. adds the address to the Vercel project;
-4. emails the first admin an invite on the company's own address. A login this company already has gets a password-reset email instead; someone another company already uses keeps their password and gets a notice. With `EMAIL_ENABLED=false` it shows a one-time password instead.
-
-**Then, by hand (you):** Google Cloud console → Google Auth Platform → **Clients** → the web client → **Authorized redirect URIs** → add `https://<host>/auth/google/callback` → **Save** (§F2). Until you do, Google shows its own `redirect_uri_mismatch` error page and the person never comes back to the app.
-
-The result lists each step. Once the company exists, a failed address or invite doesn't undo it: redo it from the company's page. An existing slug is refused. The new address can show "not found" for up to a minute after Vercel reports it live (registry cache).
+The result lists each step. Once the company exists, a failed address or invite doesn't undo it: redo it from the company's page. An existing slug is refused.
 
 *One-time setup for automatic addresses:*
 - GoDaddy (imploid.net → DNS): a CNAME with name `*` and value `cname.vercel-dns.com`. Names that have their own record (kaleidoscope, osdic, console, www, Resend's) keep it.
-- Vercel → Account Settings → Tokens: a token scoped to the team that owns `implant-course`. In the project's Environment Variables (Production): `VERCEL_API_TOKEN` ⟨secret⟩, `VERCEL_PROJECT_ID` (Settings → General → Project ID), and `VERCEL_TEAM_ID` if the project belongs to a team. Redeploy (Release) to pick them up.
+- Vercel → Account Settings → Tokens: a token scoped to the team that owns `implant-course`. In the project's Environment Variables (Production): `VERCEL_API_TOKEN` ⟨secret⟩, `VERCEL_PROJECT_ID`, and `VERCEL_TEAM_ID` if the project belongs to a team. Redeploy to pick them up.
 - Without these the console still adds the company and shows the manual address steps on its page (Vercel **Add Existing**, plus a GoDaddy CNAME if there's no wildcard).
 
-**Add a company on another Supabase account.**
+**A company on its own Supabase project** is not supported: every company's accounts and data are in the one database.
 
-> **Not supported with Self-Auth.** Self-Auth keeps every company's accounts in the shared company database (the app's one `DATABASE_URL` / `SELF_AUTH_DATABASE_URL`), so a company on its own project could not sign in. `tenant:register` refuses a project other than the shared one ("… is not the shared company database …") before changing anything. Add companies with the console's **Add company** until Self-Auth supports one database per project. The steps below are kept for that day.
+**Scripts** reach the one database through `ENV_FILE` (e.g. `ENV_FILE=.env.prod`). Per-company scripts take `--company <slug>`: `npm run company:export -- --company <slug> --out <file>`, `npm run company:restore -- --company <slug> --in <file>` (§D). `--tenant`, `--all-tenants` and `--control` are refused with the replacement. `npm run companies:list` prints the slugs (Backup uses it).
 
-The app doesn't care which Supabase account a company's project lives in. The control registry stores each company's project URL, and its keys in Vault. Release, Backup, keep-awake and the console all work from there.
-
-Who should own the account:
-- **The company's own account (recommended for a paying company):** they own their data and pay their own Supabase bill. They invite you as a project member so you can set it up and support it.
-- **A second account of your own, only to get two more free projects:** check Supabase's terms first, because several accounts used to get around the free-plan limit may break their fair-use rules. A Free project isn't meant for real patient data anyway: put a real company on Pro.
-
-Steps (Git Bash, from `web/`):
-1. **Project:** in that account, create the project, region **Central EU (Frankfurt)**. Then:
-   - Apply the Authentication settings from §A.1 (sign-ups off, confirm email on, TOTP, minimum password length 10).
-   - URL Configuration: Site URL and Redirect URLs use **the company's address** (`https://<host>`, `https://<host>/**`).
-   - Email templates: invite and recovery must link to `/auth/confirm` (§B → Turning on email verification).
-   - SMTP: Resend on `imploid.net` (settings in §B → Turning on email verification), or the company's own sender.
-2. **Env file** for this company, `web/.env.<slug>`. It is git-ignored like every `.env*` file; never name it `.env.production…`. It holds:
-   - its `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` ⟨secret⟩, and `DATABASE_URL` ⟨secret⟩ (Connect → **Session pooler**);
-   - `DATABASE_CA_CERT=prod-ca.crt` (the Supabase CA certificate is the same for every project, on any account);
-   - `ALLOW_TEST_FIXTURES=0`;
-   - the `CONTROL_SUPABASE_URL` and `CONTROL_DATABASE_URL` lines copied from `.env.prod`.
-3. **Schema:** `ENV_FILE=.env.<slug> npm run db:migrate`. The first line must name the **new** project's host.
-4. **Register:** `ENV_FILE=.env.<slug> npm run tenant:register -- <slug> "<Company name>" <host>`. (The console's **Add company** only adds companies to the shared database.)
-5. **Check:** `ENV_FILE=.env.prod npm run tenant:check -- <slug>` must end with `OK`. A certificate error here means the project uses a different CA. Then paste both certificates, one after the other, into `web/prod-ca.crt` and into the GitHub secret `PROD_DATABASE_CA_CERT`, which Release and Backup use for every company.
-6. **Address:** normally `<name>.imploid.net`. Vercel → Domains → **Add Existing** `<host>` on the `implant-course` project (Production). At GoDaddy (imploid.net → DNS) add a CNAME, name `<name>`, value as Vercel shows (`….vercel-dns-017.com`), and save. Wait for **Valid Configuration**. A host that isn't in the company's registered addresses gets 404.
-7. **First admin:** console → the company → **First admin** (an invite email on the company's address). Or `ENV_FILE=.env.prod npm run create-user -- --tenant <slug> admin@company.com "Name" --role admin`.
-8. **Clean up:** delete `web/.env.<slug>`, because Vault now holds its keys. If the company owns the account, they can also rotate the service key later: replace it from the console (**Replace keys**).
-
-From then on, every Release migrates the company, every Backup run saves it (`<slug>-<date>.dump.gpg`, also copied to R2), and its health shows on the console's Companies page. App emails (checklist notices) still go through the one `SMTP_*` sender set in Vercel.
-
-*Locally:* `npm run db:dev2:start`, `npm run console:local` (dev2 is the control project only, do not migrate it; both companies are in the main stack; refuses non-local stacks; writes `.env.console`), then `set -a; source .env.console; set +a; npm run dev` and open `http://console.localhost:3000/console`. The console E2E (`npx playwright test console --project=chromium`, with the same env loaded and nothing on :3000) skips without `CONSOLE_HOST`; `npm run console:admin` is for real projects.
+*Locally:* `npm run db:migrate` adds the local companies to the local stack (`localhost` / `a.localhost` = academy, `tenant2.localhost` = company-b, `paused.localhost` = suspended; `npm run dev:companies` does only that). For the console add `CONSOLE_HOST=console.localhost:3000` to `.env.local`, run `npm run dev`, create a console admin with `npm run console:admin -- you@example.com` and open `http://console.localhost:3000/console`. The console E2E (`npx playwright test console --project=chromium`) skips without `CONSOLE_HOST`.
 
 ## H. Keys and secrets
 
-- To rotate a company's service role key or database password: change it in Supabase, then re-run `tenant:register` for that company (the control project's Vault holds them), then `tenant:check`. For a company other than the academy, `tenant:register` reads that company's values from an env file like `.env.restore` in §D step 3 (with the new key or password), not from `.env.prod`.
-- To rotate the control project's keys or password: change it in Supabase, then update `web/.env.prod`, Vercel (`CONTROL_*`) and the GitHub secrets (`CONTROL_*`), then re-run Release.
+- To rotate the service role key or the database password: change it in Supabase, then update Vercel (Production: `SUPABASE_SERVICE_ROLE_KEY`, or `DATABASE_URL` and `SELF_AUTH_DATABASE_URL`), GitHub `production` (`PROD_DATABASE_URL`) and `web/.env.prod`, then redeploy. Every company and the console use the same keys.
 - If a key was exposed, rotate it immediately, then check Supabase's auth logs.
 
 ## I. Smoke check after a release

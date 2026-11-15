@@ -13,9 +13,12 @@ export function createListCache(fetchList: () => Promise<Tenant[]>): ListCache {
   let cache: { tenants: Tenant[]; fetchedAt: number } | null = null;
   let inflight: Promise<Tenant[]> | null = null;
   let lastFailureAt: number | null = null;
+  // Bumped by reset(): a fetch started before it never writes the cache (it would put back the older list).
+  let generation = 0;
 
   return {
     reset() {
+      generation += 1;
       cache = null;
       inflight = null;
       lastFailureAt = null;
@@ -26,14 +29,18 @@ export function createListCache(fetchList: () => Promise<Tenant[]>): ListCache {
         return Promise.resolve(cache.tenants);
       }
       if (inflight) return inflight;
+      const mine = generation;
       const p: Promise<Tenant[]> = Promise.resolve()
         .then(fetchList)
         .then((tenants) => {
-          cache = { tenants, fetchedAt: now };
-          lastFailureAt = null;
+          if (mine === generation) {
+            cache = { tenants, fetchedAt: now };
+            lastFailureAt = null;
+          }
           return tenants;
         })
         .catch((error) => {
+          if (mine !== generation) throw new RegistryUnavailableError(error);
           lastFailureAt = now;
           if (cache && now - cache.fetchedAt < STALE_MS) {
             console.error('Tenant registry refresh failed; serving the cached registry', error);

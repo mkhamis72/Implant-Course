@@ -4,10 +4,10 @@ Real courses and real patients start only when every line is ticked, dated and i
 
 ## Plans and hosting
 - [ ] Vercel plan upgraded to **Pro** (Hobby is for non-commercial use only). Date: ____
-- [ ] Supabase plan upgraded to **Pro** for **both** projects: `implant-course-prod` (the academy's data) and `implant-course-control` (the company registry and console sign-in). Daily backups on; point-in-time recovery decision recorded: ____
+- [ ] Supabase plan upgraded to **Pro** for the production project `implant-course-prod` (every company and the console; the control project was retired in the merge of control into production, 2026-11). Daily backups on; point-in-time recovery decision recorded: ____
 - [x] Domain chosen or bought: `imploid.net` (GoDaddy). Date: 2026-10-17
 - [x] Custom domain added on Vercel, with the Supabase Site URL and Redirect URLs updated to match: the academy at `kaleidoscope.imploid.net`, the console at `console.imploid.net` (`CONSOLE_HOST`), both CNAMEs at GoDaddy. The bare `imploid.net` is unused. `implant-course.vercel.app` still serves the academy until it is removed from Vercel, the registry and the Redirect URLs. Date: 2026-10-17
-  - The app sends HSTS with `includeSubDomains`, so it lives on subdomains. A new host must also be added to the company's addresses in the control registry (console → the company → addresses), or it gets 404.
+  - The app sends HSTS with `includeSubDomains`, so it lives on subdomains. A new host must also be added to the company's addresses (console → the company → addresses), or it gets 404.
 
 ## Email (moves from the pilot Gmail account to Resend on the domain)
 - [x] Resend: domain `imploid.net` verified (DKIM `resend._domainkey`, `send` CNAME for bounces and SPF). Date: 2026-10-17
@@ -28,7 +28,7 @@ Real courses and real patients start only when every line is ticked, dated and i
 - [ ] `BACKUP_PASSPHRASE` is in the owner's password manager, and a second copy is kept offline.
 - [x] Off-site backup copy on: R2 bucket with a 365-day lock, GitHub `R2_*` secrets set, a locked file refused deletion (docs/operations.md §D → Off-site copy). Date: 2026-10-15.
 - [ ] Monthly Backup `verify` run green in the month of go-live.
-- [ ] Console admin password changed from the temporary one (**Change password** in the console), and the console authenticator's recovery is known: who can delete the factor in the control project.
+- [ ] Console admin password changed from the temporary one (**Change password** in the console), and the console authenticator's recovery is known: §G → Lost authenticator (delete the factor in `self_auth.totp_factor`, then `console:admin`).
 
 ## Switch on
 - [ ] `NEXT_PUBLIC_PILOT` removed in Vercel, and Release re-run.

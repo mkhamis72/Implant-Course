@@ -1,30 +1,23 @@
 import { test, expect, type Page } from '@playwright/test';
-import { readFileSync, existsSync } from 'node:fs';
-import { parse } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { authenticator } from 'otplib';
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
-import { closeNodeAuth, nodeAuth, nodeConsoleAuth } from '../../scripts/self-auth-node';
+import { closeNodeAuth, nodeAuth } from '../../scripts/self-auth-node';
 import { TEST_USERS } from '../support/test-users';
 import { ACADEMY, signInThroughApi } from './companies';
 
-// Runs only in local console mode: npm run console:local (writes .env.console), then run the tests with .env.console
-// loaded next to .env.local: npx playwright test console
-test.skip(!process.env.CONSOLE_HOST, 'needs CONSOLE_HOST (npm run console:local)');
+// Runs when the dev server and the tests have CONSOLE_HOST=console.localhost:3000 (in .env.local):
+// npx playwright test console --project=chromium. The console lives in the one local stack (merge of control).
+test.skip(!process.env.CONSOLE_HOST, 'needs CONSOLE_HOST=console.localhost:3000 in .env.local');
 
 const C = 'http://console.localhost:3000';
-const control = () => createClient(process.env.CONTROL_SUPABASE_URL!, process.env.CONTROL_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
-// COMPANY_LIST=production (merge release 2): the console lives in the main stack, which names the two companies by
-// their own slugs; otherwise the control project (dev2 stack) with its registry slugs.
-const PRODUCTION = (process.env.COMPANY_LIST ?? '').trim().toLowerCase() === 'production';
-const SLUG = PRODUCTION ? { one: 'academy', two: 'console-e2e' } : { one: 'dev', two: 'dev2' };
+// The local companies (npm run dev:companies): academy, and company-b on tenant2.localhost.
+const SLUG = { one: 'academy', two: 'company-b' };
 const main = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
-const consoleAccounts = () => (PRODUCTION ? nodeAuth() : nodeConsoleAuth());
-const adminList = () => (PRODUCTION ? main().from('console_users') : control().from('console_admins'));
-const reactivate = (slug: string) => (PRODUCTION
-  ? main().rpc('console_set_company_status', { p_slug: slug, p_status: 'active', p_reason: 'E2E cleanup', p_actor: 'e2e' })
-  : control().rpc('console_set_status', { p_slug: slug, p_status: 'active', p_reason: 'E2E cleanup', p_actor: 'e2e' }));
+const consoleAccounts = () => nodeAuth();
+const reactivate = (slug: string) =>
+  main().rpc('console_set_company_status', { p_slug: slug, p_status: 'active', p_reason: 'E2E cleanup', p_actor: 'e2e' });
 const PASSWORD = `Console-${Date.now()}-pw`;
 const email = `icm-console-${Date.now()}@example.com`;
 let userId = '';
@@ -67,7 +60,31 @@ async function emailedLink(to: string, path: string): Promise<string> {
 async function removeCompanyAccount(companyId: string, address: string) {
   const auth = await nodeAuth();
   const found = (await auth.admin.listUsers(companyId)).find((u) => u.email.toLowerCase() === address);
-  if (found) await auth.admin.deleteUser(companyId, found.userId);
+  if (!found) return;
+  try {
+    await auth.admin.deleteUser(companyId, found.userId);
+  } catch (e) {
+    // A fresh local company (npm run dev:companies) has no other admin, so Self-Auth refuses to delete its last one:
+    // remove the account's rows directly, triggers off (the audit log refuses deletes), as the add-company test does.
+    if (!/last active admin/.test((e as Error).message)) throw e;
+    const pg = new Client(pgConfig());
+    await pg.connect();
+    try {
+      await pg.query('begin');
+      await pg.query('set local session_replication_role = replica');
+      for (const t of ['self_auth.account', 'self_auth.session']) await pg.query(`delete from ${t} where "userId" = $1`, [found.userId]);
+      await pg.query('delete from self_auth.totp_factor where user_id = $1', [found.userId]);
+      await pg.query('delete from public.company_members where user_id = $1', [found.userId]);
+      await pg.query('delete from public.profiles where user_id = $1', [found.userId]);
+      await pg.query('delete from self_auth."user" where id = $1', [found.userId]);
+      await pg.query('commit');
+    } catch (err) {
+      await pg.query('rollback').catch(() => {});
+      throw err;
+    } finally {
+      await pg.end();
+    }
+  }
 }
 
 async function companyIdOf(slug: string): Promise<string | undefined> {
@@ -83,17 +100,15 @@ async function companyIdOf(slug: string): Promise<string | undefined> {
 test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async () => {
-  // A console admin is a Self-Auth account of company 'console' plus its row in the console admins list (control:
-  // console_admins; production: console_users).
+  // A console admin is a Self-Auth account of company 'console' plus its console_users row.
   const created = await (await consoleAccounts()).admin.createUser({ companyId: 'console', email, password: PASSWORD });
   userId = created.userId;
-  const { error } = await adminList().insert({ user_id: userId, email });
+  const { error } = await main().from('console_users').insert({ user_id: userId, email });
   if (error) throw error;
 });
 
 test.afterAll(async () => {
   if (userId) {
-    if (!PRODUCTION) await adminList().delete().eq('user_id', userId);
     // (console_users rows go with the account: on delete cascade.)
     await (await consoleAccounts()).admin.deleteUser('console', userId);
   }
@@ -175,8 +190,8 @@ test('a first admin invited from the console gets an email linking to the compan
   await page.getByLabel('Full name').fill('E2E First Admin');
   await page.getByRole('button', { name: 'Send invite' }).click();
   await expect(page.getByRole('status').filter({ hasText: `Invite sent to ${adminEmail}.` })).toBeVisible();
-  // Company two is in the main stack (company console-e2e); in control mode dev2 is its registry slug.
-  const companyId = await companyIdOf('console-e2e');
+  // Company two is the local company-b (tenant2.localhost).
+  const companyId = await companyIdOf(SLUG.two);
   try {
     // The link is Self-Auth's, on the company's own host (the registry has no port for local hosts).
     expect(await emailedLink(adminEmail, '/auth/invite')).toMatch(/^http:\/\/tenant2\.localhost(:3000)?\/auth\/invite\?token=[^&]+$/);
@@ -186,11 +201,8 @@ test('a first admin invited from the console gets an email linking to the compan
   }
 });
 
-test('adding a company takes one form: name, address and first admin; the shared keys are copied', async ({ page }) => {
+test('adding a company takes one form: name, address and first admin', async ({ page }) => {
   test.setTimeout(120_000);
-  test.skip(!existsSync('.env.dev2') || !existsSync('.env.local'), 'needs the dev2 (control) and main stacks');
-  const dev2 = parse(readFileSync('.env.dev2'));
-  const company = parse(readFileSync('.env.local'));
   const slug = `zz-e2e-${Date.now().toString(36)}`;
   const adminEmail = `icm-onboard-${Date.now()}@example.com`;
   try {
@@ -228,40 +240,35 @@ test('adding a company takes one form: name, address and first admin; the shared
     await expect(page.getByTestId(`company-${slug}`)).toContainText('OK');
   } finally {
     const pg = await import('pg');
-    const c = new pg.Client({ connectionString: dev2.DATABASE_URL });
-    await c.connect();
-    await c.query('delete from public.tenants where slug = $1', [slug]);
-    await c.query("delete from vault.secrets where name like 'tenant/' || $1 || '/%'", [slug]);
-    await c.end();
-    // The check also provisioned the company in the main stack (provision_company): remove it and its rows, so
+    // Add company provisioned the company in the main stack (provision_company): remove it and its rows, so
     // the DB tests that count rows per company don't see it. audit_log is append-only, so triggers are off.
-    const main = new pg.Client({ connectionString: company.DATABASE_URL });
-    await main.connect();
+    const db = new pg.Client(pgConfig());
+    await db.connect();
     try {
-      await main.query('begin');
-      await main.query('set local session_replication_role = replica');
-      const id = (await main.query('select id from public.companies where slug = $1', [slug])).rows[0]?.id;
+      await db.query('begin');
+      await db.query('set local session_replication_role = replica');
+      const id = (await db.query('select id from public.companies where slug = $1', [slug])).rows[0]?.id;
       if (id) {
         // The invited first admin is the company's only admin, which Self-Auth's delete refuses (last active admin):
         // with triggers off, remove the account rows by hand (the foreign-key cascades are off too), then the profile.
-        const ids = (await main.query<{ id: string }>('select id from self_auth."user" where "companyId" = $1', [id])).rows.map((r) => r.id);
-        for (const t of ['self_auth.account', 'self_auth.session']) await main.query(`delete from ${t} where "userId" = any($1::uuid[])`, [ids]);
-        await main.query('delete from self_auth.totp_factor where user_id = any($1::uuid[])', [ids]);
-        await main.query('delete from self_auth."user" where id = any($1::uuid[])', [ids]);
-        await main.query('delete from public.profiles where user_id = any($1::uuid[])', [ids]);
+        const ids = (await db.query<{ id: string }>('select id from self_auth."user" where "companyId" = $1', [id])).rows.map((r) => r.id);
+        for (const t of ['self_auth.account', 'self_auth.session']) await db.query(`delete from ${t} where "userId" = any($1::uuid[])`, [ids]);
+        await db.query('delete from self_auth.totp_factor where user_id = any($1::uuid[])', [ids]);
+        await db.query('delete from self_auth."user" where id = any($1::uuid[])', [ids]);
+        await db.query('delete from public.profiles where user_id = any($1::uuid[])', [ids]);
         // Every company table (provision_company writes settings, branding, products, consent_form_versions,
         // file_no_counters and their audit rows; members, logins or sessions only if the run got that far).
-        const tables = (await main.query<{ t: string }>('select x::text as t from app.company_tables() x')).rows.map((r) => r.t);
-        for (const t of [...tables, 'app.session_companies']) await main.query(`delete from ${t} where company_id = $1`, [id]);
-        await main.query('delete from public.companies where id = $1', [id]);
+        const tables = (await db.query<{ t: string }>('select x::text as t from app.company_tables() x')).rows.map((r) => r.t);
+        for (const t of [...tables, 'app.session_companies']) await db.query(`delete from ${t} where company_id = $1`, [id]);
+        await db.query('delete from public.companies where id = $1', [id]);
       }
-      await main.query('commit');
+      await db.query('commit');
     } catch (error) {
       // Leftovers make the per-company DB tests fail later: say so here instead of hiding it.
       console.warn(`console.spec teardown: company ${slug} was not removed from the main stack: ${(error as Error).message}`);
-      await main.query('rollback').catch(() => {});
+      await db.query('rollback').catch(() => {});
     } finally {
-      await main.end();
+      await db.end();
     }
   }
 });

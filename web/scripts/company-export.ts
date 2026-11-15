@@ -2,8 +2,8 @@ import './load-env';
 import { writeFileSync } from 'node:fs';
 import { Client } from 'pg';
 import { pgConfig } from './db';
-import { applyTenantArg, takeTenantArg, withControl } from './tenant-env';
-import { tenantCompanyId } from './tenants';
+import { companyIdBySlug, takeCompanyArg, UnknownCompanyError } from './one-database';
+import { targetLabel } from './create-user-args';
 
 /*
  * Limits (company-export and company-restore): for one company in a healthy shared database, not a disaster
@@ -116,27 +116,22 @@ export function takeFileArg(argv: string[], flag: string): { file: string; rest:
   return { file, rest: [...argv.slice(0, i), ...argv.slice(i + 2)] };
 }
 
-/** The company id the control registry holds for the slug. */
-export class NoCompanyIdError extends Error {}
-
-export async function companyIdOf(slug: string, env: NodeJS.ProcessEnv = process.env): Promise<string> {
-  const id = await withControl(env, (c) => tenantCompanyId(c, slug));
-  if (!id) throw new NoCompanyIdError(`Company ${slug} has no company id in the control project; register it with --company or --provision.`);
-  return id;
+/** The company's id in the one database (exits 3 when the slug is unknown). */
+export async function companyIdOf(c: Client, slug: string): Promise<string> {
+  return companyIdBySlug(c, slug);
 }
 
 async function main() {
-  const usage = 'Usage: npm run company:export -- --tenant <slug> --out <file | ->';
+  const usage = 'Usage: npm run company:export -- --company <slug> --out <file | ->';
   const { file, rest } = takeFileArg(process.argv.slice(2), '--out');
-  const { slug } = takeTenantArg(rest);
+  const { slug } = takeCompanyArg(rest);
   if (!slug) throw new Error(usage);
-  const companyId = await companyIdOf(slug);
-  const { label } = await applyTenantArg(rest, process.env, (line) => console.error(line));
   // To stdout the data would mix with the log: `--out -` streams the JSON and logs to stderr.
-  console.error(`Target project: ${label}`);
+  console.error(`Target project: ${targetLabel(process.env.NEXT_PUBLIC_SUPABASE_URL)}`);
   const c = new Client(pgConfig());
   await c.connect();
   try {
+    const companyId = await companyIdOf(c, slug);
     await c.query('begin isolation level repeatable read read only');
     const data = await exportCompany(c, companyId);
     await c.query('commit');
@@ -153,6 +148,6 @@ async function main() {
 if (process.argv[1]?.endsWith('company-export.ts')) {
   main().catch((e) => {
     console.error(e.message);
-    process.exit(e instanceof NoCompanyIdError ? 3 : 1);
+    process.exit(e instanceof UnknownCompanyError ? 3 : 1);
   });
 }
