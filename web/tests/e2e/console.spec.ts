@@ -165,6 +165,24 @@ async function signInWith2fa(page: Page, password = PASSWORD) {
   await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
 }
 
+test('the Errors page lists the recorded server errors, grouped', async ({ page }) => {
+  const message = `E2E error ${Date.now()}`;
+  const c = new Client(pgConfig());
+  await c.connect();
+  try {
+    await c.query('insert into public.error_log (message) values ($1), ($1)', [message]);
+    await signInWith2fa(page);
+    await page.getByRole('link', { name: 'Errors' }).click();
+    await expect(page.getByRole('heading', { name: 'Errors' })).toBeVisible();
+    const row = page.getByRole('row').filter({ hasText: message });
+    await expect(row).toBeVisible();
+    await expect(row.getByRole('cell').nth(1)).toHaveText('2');
+  } finally {
+    await c.query('delete from public.error_log where message = $1', [message]);
+    await c.end();
+  }
+});
+
 test('suspending a company takes its site offline; reactivating brings it back', async ({ page }) => {
   test.setTimeout(240_000);
   await signInWith2fa(page);

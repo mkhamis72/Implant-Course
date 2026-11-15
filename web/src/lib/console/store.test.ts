@@ -79,6 +79,16 @@ describe('console store (production database)', () => {
       ['order', ['at', { ascending: false }]], ['order', ['id', { ascending: false }]], ['limit', [50]],
     ]);
   });
+  it('reads the recorded errors from error_log, newest first, 1000 at most', async () => {
+    h.results.set('error_log', { data: [{ at: 't', message: 'boom', path: null }], error: null });
+    expect(await consoleStore().errors()).toEqual([{ at: 't', message: 'boom', path: null }]);
+    expect(h.calls[0].table).toBe('error_log');
+    expect(h.calls[0].ops).toEqual([['select', ['at, message, path']], ['order', ['at', { ascending: false }]], ['limit', [1000]]]);
+  });
+  it('errors() throws when error_log cannot be read', async () => {
+    h.results.set('error_log', { data: null, error: { message: 'permission denied' } });
+    await expect(consoleStore().errors()).rejects.toThrow('Could not load the errors.');
+  });
   it('one service key and one shared project, from the env', async () => {
     const s = consoleStore();
     expect(await s.serviceKey('osdic')).toBe('p-svc');
