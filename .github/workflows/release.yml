@@ -111,7 +111,7 @@ jobs:
           echo "Off-site: $prefix"
       - name: Migrate the production database (verified TLS)
         env:
-          # Migration B (Self-Auth) stays held unless the production variable SELF_AUTH_B_HOLD is 0 (§E).
+          # Migration B (Self-Auth) stays held unless the production variable SELF_AUTH_B_HOLD is 0 (docs/history/self-auth-switch-over.md §E; applied 2026-11).
           SELF_AUTH_B_HOLD: ${{ vars.SELF_AUTH_B_HOLD }}
           PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
           PROD_DATABASE_CA_CERT: ${{ secrets.PROD_DATABASE_CA_CERT }}

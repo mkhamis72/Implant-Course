@@ -4,7 +4,7 @@ import { sendEmail } from '@/lib/email/send';
 import { CONSOLE_COMPANY } from './constants';
 import { companyBaseUrl } from './links';
 
-// Ported from supabase/templates/{invite,recovery}.html.
+// Ported from the Supabase Auth invite and recovery templates of before Self-Auth.
 const TEMPLATES = {
   invite: { subject: 'You have been invited', heading: 'You have been invited', label: 'Accept the invitation and set your password' },
   reset: { subject: 'Reset your password', heading: 'Reset your password', label: 'Set a new password' },

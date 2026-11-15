@@ -7,7 +7,7 @@ import { refuseRemovedOptions, takeCompanyArg } from './one-database';
 import { closeNodeAuth, nodeAuth } from './self-auth-node';
 
 /**
- * Switch-over helpers (docs/operations.md §E).
+ * Switch-over helpers (docs/history/self-auth-switch-over.md §E).
  *   jwks                      prints the PUBLIC key (Self-Auth's jwks()) of the signing key, to compare its kid with the
  *                             standby key in Supabase. Supabase imports only the private key.
  *   check [--company <slug>]  (step 3, before Migration A) mints a database token and calls the read-only branding_for

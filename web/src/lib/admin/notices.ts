@@ -15,7 +15,7 @@ export function addedToCompanyNotice(a: { company: string }): NoticeEmail {
   return { subject: `You've been added to ${a.company}`, text, html: `<p>${escapeHtml(text)}</p>` };
 }
 
-/** A resent invitation, worded like the Supabase invite template (supabase/templates/invite.html). */
+/** A resent invitation, worded like the invite email (src/lib/self-auth/email.ts). */
 export function inviteEmail(a: { company: string; link: string }): NoticeEmail {
   return {
     subject: `You're invited to ${a.company}`,

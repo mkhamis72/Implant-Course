@@ -1,14 +1,14 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 
 /**
- * Maintenance mode for the Self-Auth switch-over (docs/operations.md §E): with MAINTENANCE=1 every host (companies,
+ * Maintenance mode for the Self-Auth switch-over (docs/history/self-auth-switch-over.md §E): with MAINTENANCE=1 every host (companies,
  * console, landing) answers a static "back soon" page, except /brand/* (the logo) and static assets (the
  * middleware matcher skips those). The owner gets through for the smoke test with MAINTENANCE_BYPASS_TOKEN, sent as
  * the cookie icm_maintenance_bypass or the header x-maintenance-bypass. The token is never logged or echoed.
  */
 export const MAINTENANCE_BYPASS_COOKIE = 'icm_maintenance_bypass';
 export const MAINTENANCE_BYPASS_HEADER = 'x-maintenance-bypass';
-const MIN_TOKEN_LENGTH = 32; // docs/operations.md §E: "another 32+ character random value"
+const MIN_TOKEN_LENGTH = 32; // docs/history/self-auth-switch-over.md §E: "another 32+ character random value"
 
 type Env = Record<string, string | undefined>;
 type Req = { nextUrl: { pathname: string }; headers: Headers; cookies: { get(name: string): { value: string } | undefined } };

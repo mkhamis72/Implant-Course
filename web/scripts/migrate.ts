@@ -32,7 +32,7 @@ export async function definerOwnerOffenders(client: Client): Promise<string[]> {
 /**
  * Migration B of the Self-Auth switch-over (0103; the retired control project had 0008): it removes the Supabase Auth branches and
  * re-adds the foreign keys to self_auth."user", which ends the rollback to the old app. Held by default; the owner
- * releases it after the rollback window with SELF_AUTH_B_HOLD=0 (GitHub production variable, docs/operations.md §E).
+ * releases it after the rollback window with SELF_AUTH_B_HOLD=0 (GitHub production variable, docs/history/self-auth-switch-over.md §E).
  * Held files are skipped, not a stop: migrations numbered after them still apply while they are held. So no later
  * migration (0104+) may depend on 0103 (its dropped triggers, the self_auth keys or the
  * Self-Auth-only helpers) until the hold is off everywhere; write it to work with and without Migration B.
