@@ -13,6 +13,7 @@ import { userMessage } from '@/lib/db-errors';
 import { readSessionCookie } from '@/lib/self-auth/cookie';
 import { tenantAuth } from '@/lib/self-auth/tenant';
 import { currentTenant } from '@/lib/tenant/current';
+import { getBranding } from '@/lib/branding/get';
 
 // factorId is a placeholder: Self-Auth keeps one authenticator per account, and the shared enrolment form
 // (also used by the console) passes it back.
@@ -30,7 +31,9 @@ export async function startEnroll(): Promise<Enrollment | { error: string }> {
   const { token, companyId, auth } = await sessionContext();
   try {
     // Replaces an unconfirmed secret; a confirmed authenticator must be removed first.
-    const { secret, otpauthUrl } = await auth.totp.startEnroll(token, companyId);
+    // The entry in the authenticator app carries the company's own name (its branding, else the app's default).
+    const { name } = await getBranding();
+    const { secret, otpauthUrl } = await auth.totp.startEnroll(token, companyId, { issuer: name });
     const qrCode = await QRCode.toDataURL(otpauthUrl, { width: 180, margin: 1 });
     return { factorId: 'totp', qrCode, secret };
   } catch (e) {

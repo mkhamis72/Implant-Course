@@ -7,6 +7,7 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/flags', () => ({ emailEnabled: () => true }));
 vi.mock('@/lib/self-auth/cookie', () => ({ readSessionCookie: async () => 'tok' }));
 vi.mock('@/lib/tenant/current', () => ({ currentTenant: async () => ({ slug: 'academy', companyId: 'company-a' }) }));
+vi.mock('@/lib/branding/get', () => ({ getBranding: async () => ({ name: 'Kaleidoscope Academy', brandColor: null, navColor: null, logoUrl: null }) }));
 const rpc = vi.fn(async (_n: string) => ({ error: null as unknown }));
 const forSession = vi.fn();
 vi.mock('@/lib/supabase/server', () => ({
@@ -38,7 +39,8 @@ beforeEach(() => {
 describe('startEnroll', () => {
   it('returns the secret and a QR code image made from the otpauth URL, for this session and company', async () => {
     const result = await startEnroll();
-    expect(totp.startEnroll).toHaveBeenCalledWith('tok', 'company-a');
+    // The authenticator entry carries the company's own name (its branding), so companies and the console differ.
+    expect(totp.startEnroll).toHaveBeenCalledWith('tok', 'company-a', { issuer: 'Kaleidoscope Academy' });
     expect(result).toMatchObject({ secret: 'ABCDEF' });
     expect((result as { qrCode: string }).qrCode).toMatch(/^data:image\/png;base64,/);
     expect(requireSignedIn).toHaveBeenCalledWith({ allowMfaSetup: true });
