@@ -24,20 +24,45 @@ export async function createPatientViaUi(
 }
 
 /**
- * E2E rows live in the dev project. Patients with stock movements stay (the ledger is immutable);
- * E2E catalog items and delegates are deactivated (they are referenced by the ledger).
+ * Every E2E patient goes, with its implants, components and their stock movements, the way
+ * `delete_patient` (0099) removes a mistaken patient (the stock returns); left behind they slow the
+ * Statistics readers on the local stack. E2E catalog items and delegates are deactivated (stock receipts
+ * still reference them).
  */
 export async function deleteE2ePatients(): Promise<void> {
   const pg = new Client(pgConfig());
   await pg.connect();
   try {
+    await pg.query('begin');
     await pg.query(
-      `delete from public.patients p where p.full_name like $1
-       and not exists (select 1 from public.stock_movements m where m.patient_id = p.id)
-       and not exists (select 1 from public.implant_sites s
-                       join public.stock_movements m on m.implant_site_id = s.id where s.patient_id = p.id)`,
+      `create temp table e2e_patients on commit drop as
+       select id from public.patients where full_name like $1`,
       [`${E2E_PREFIX}%`],
     );
+    await pg.query(`select set_config('app.ledger_purge', 'on', true)`);
+    await pg.query(
+      `delete from public.stock_movements m
+       where m.patient_id in (select id from e2e_patients)
+          or m.implant_site_id in (select s.id from public.implant_sites s where s.patient_id in (select id from e2e_patients))
+          or m.site_component_id in (
+            select sc.id from public.site_components sc
+            join public.implant_sites s on s.id = sc.site_id where s.patient_id in (select id from e2e_patients))`,
+    );
+    await pg.query(`select set_config('app.ledger_purge', 'off', true)`);
+    await pg.query(
+      `delete from app_private.research_codes
+       where (entity = 'patient' and entity_id in (select id from e2e_patients))
+          or (entity = 'implant' and entity_id in (
+                select s.id from public.implant_sites s where s.patient_id in (select id from e2e_patients)))
+          or (entity = 'restoration' and entity_id in (
+                select r.id from public.restorations r where r.patient_id in (select id from e2e_patients)))`,
+    );
+    await pg.query('delete from public.surgery_slots where patient_id in (select id from e2e_patients)');
+    await pg.query('delete from public.patients where id in (select id from e2e_patients)');
+    await pg.query('commit');
+  } catch (e) {
+    await pg.query('rollback').catch(() => {});
+    throw e;
   } finally {
     await pg.end();
   }
