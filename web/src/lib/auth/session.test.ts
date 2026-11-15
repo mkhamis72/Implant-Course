@@ -48,10 +48,6 @@ vi.mock('@/lib/supabase/server', () => ({
     };
     const rpc = async (name: string) =>
       name === 'my_session_company' ? { data: session.bound, error: null } : { data: null, error: session.bindError };
-    const signOut = async () => {
-      calls.signOut++;
-      return { error: null };
-    };
     return { rpc, from };
   },
 }));

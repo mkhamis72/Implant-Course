@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs } from './helpers';
 import { insertSelfAuthFactor, makeDelegate, makePatient, makeProduct, onHand, place, receive } from './fixtures';
 
 const users = inject('testUsers');
