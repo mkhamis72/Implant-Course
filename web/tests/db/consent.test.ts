@@ -266,6 +266,29 @@ describe('consent readers', () => {
     });
   });
 
+  it('a consent record deleted outside a company session (a script) takes its scan with it', async () => {
+    await withTx(async (c) => {
+      const { early, patient } = await setup(c);
+      const id = await record(c, { patient, version: early });
+      const file = (await history(c, patient))[0].file_id as string;
+      await asPostgres(c);
+      await c.query(`select set_config('request.jwt.claims', '', true)`); // no session: as a script connects
+      await c.query('delete from public.patient_consents where id = $1', [id]);
+      expect((await c.query('select count(*)::int n from public.stored_files where id = $1', [file])).rows[0].n).toBe(0);
+    });
+  });
+
+  it('a patient deleted in the app takes the scans of their consent records with them', async () => {
+    await withTx(async (c) => {
+      const { early, patient } = await setup(c);
+      await record(c, { patient, version: early });
+      const file = (await history(c, patient))[0].file_id as string;
+      await c.query('select public.delete_patient($1)', [patient]);
+      await asPostgres(c);
+      expect((await c.query('select count(*)::int n from public.stored_files where id = $1', [file])).rows[0].n).toBe(0);
+    });
+  });
+
   it('consent_file returns nothing to a delegate login or an inactive user', async () => {
     await withTx(async (c) => {
       const { early, patient } = await setup(c);
