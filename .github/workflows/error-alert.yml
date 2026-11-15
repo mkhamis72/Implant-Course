@@ -1,0 +1,36 @@
+name: Error alert
+on:
+  schedule:
+    - cron: '17 * * * *' # every hour (minute 17: the top of the hour is GitHub's busiest, and often delayed)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# The app records its server errors in public.error_log (0107). This check lists the ones since the last run and
+# tries every company address and the console; anything wrong fails the run, and GitHub emails the owner about
+# the failed run (the run's log names the errors). Each error is reported once. docs/operations.md → Error alerts.
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    defaults: { run: { working-directory: web } }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json }
+      - run: npm ci
+      - name: Check for new errors and sites that do not answer
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          PROD_DATABASE_CA_CERT: ${{ secrets.PROD_DATABASE_CA_CERT }}
+        run: |
+          set -euo pipefail
+          clean() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+          PROD_DATABASE_URL="$(clean "$PROD_DATABASE_URL")"
+          PROD_DATABASE_CA_CERT="$(clean "$PROD_DATABASE_CA_CERT")"
+          test -n "$PROD_DATABASE_URL" || { echo "PROD_DATABASE_URL secret is missing"; exit 1; }
+          test -n "$PROD_DATABASE_CA_CERT" || { echo "PROD_DATABASE_CA_CERT secret is missing"; exit 1; }
+          printf '%s\n' "$PROD_DATABASE_CA_CERT" > "$RUNNER_TEMP/prod-ca.crt"
+          DATABASE_URL="$PROD_DATABASE_URL" DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt" CONSOLE_HOST=console.imploid.net npx tsx scripts/error-alert.ts

@@ -311,7 +311,9 @@ describe('permissions: guard rails', () => {
         // Company list change log (0104): no company-user grants; the service role and the list triggers only.
         'company_log',
         // Console users (0105): no company-user grants; read through is_console_user, written by the service role.
-        'console_users']);
+        'console_users',
+        // Error alerts (0107): no company-user grants; the app writes and the hourly check reads with the service role.
+        'error_log', 'error_alert_state']);
       expect(rows.map((r) => r.relname).filter((n) => !shared.has(n)).sort()).toEqual([]);
     });
   });

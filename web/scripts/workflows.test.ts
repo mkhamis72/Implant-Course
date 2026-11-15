@@ -293,3 +293,27 @@ describe('backup.yml', () => {
     });
   });
 });
+
+describe('error-alert.yml', () => {
+  const file = path.join(__dirname, '..', '..', '.github', 'workflows', 'error-alert.yml');
+  const wf = parse(readFileSync(file, 'utf8')) as { on: { schedule: { cron: string }[]; workflow_dispatch?: unknown }; jobs: Record<string, Job & { environment?: string }> };
+  const job = wf.jobs.check;
+  const run = runOf(job, 'Check');
+
+  it('runs every hour, and by hand, in the production environment', () => {
+    expect(wf.on.schedule.map((s) => s.cron)).toEqual(['17 * * * *']);
+    expect(wf.on).toHaveProperty('workflow_dispatch');
+    expect(job.environment).toBe('production');
+  });
+  it('cleans its secrets and stops, naming them, before connecting', () => {
+    for (const n of ['PROD_DATABASE_URL', 'PROD_DATABASE_CA_CERT']) expect(cleans(run, n)).toBe(true);
+    expect(run.indexOf('PROD_DATABASE_URL secret is missing')).toBeLessThan(run.indexOf('error-alert.ts'));
+    expect(run).toContain('set -euo pipefail');
+  });
+  it('runs the check against production with verified TLS; its failure is the alert (no soft-fail)', () => {
+    expect(run).toContain('DATABASE_URL="$PROD_DATABASE_URL" DATABASE_CA_CERT="$RUNNER_TEMP/prod-ca.crt" CONSOLE_HOST=console.imploid.net npx tsx scripts/error-alert.ts');
+    const step = job.steps.find((s) => s.name?.startsWith('Check'));
+    expect(step).not.toHaveProperty('continue-on-error');
+    expect(step?.if).toBeUndefined();
+  });
+});

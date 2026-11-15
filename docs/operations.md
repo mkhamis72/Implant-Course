@@ -479,6 +479,14 @@ The result lists each step. Once the company exists, a failed address or invite 
 
 *Locally:* `npm run db:migrate` adds the local companies to the local stack (`localhost` / `a.localhost` = academy, `tenant2.localhost` = company-b, `paused.localhost` = suspended; `npm run dev:companies` does only that). For the console add `CONSOLE_HOST=console.localhost:3000` to `.env.local`, run `npm run dev`, create a console admin with `npm run console:admin -- you@example.com` and open `http://console.localhost:3000/console`. The console E2E (`npx playwright test console --project=chromium`) skips without `CONSOLE_HOST`.
 
+## G2. Error alerts
+
+**What it does.** In production every server-side `console.error` (a failed email, a database error, a failed sign-in) is also written to `public.error_log` (0107), masked (email addresses, tokens and database passwords) and cut to 1000 characters, at most 20 a minute per server instance (`src/lib/errors/report.ts`, switched on in `src/instrumentation.ts`). Every hour (minute 17) the **Error alert** workflow lists the errors since its last run, then opens every active company's first address and the console. If there is any new error, or a site doesn't answer 200, the run fails and GitHub emails you ("Run failed: Error alert"). Open the run; its log lists each kind of error, how often and when it last happened. Each error is reported once; a site that stays down fails every hour. Entries older than 30 days are deleted by the check.
+
+**What you do with an alert.** Read the run's log. For details look at the Vercel logs within the hour (they keep only one hour on Hobby), or in the Supabase SQL editor: `select at, message from public.error_log order by at desc limit 50;`. Run the check again by hand: Actions → Error alert → Run workflow.
+
+**Setup (once):** nothing beyond the GitHub `production` secrets `PROD_DATABASE_URL` and `PROD_DATABASE_CA_CERT` (§A). GitHub emails the failure to whoever last changed the workflow's schedule (you, when you merge it); check GitHub → Settings → Notifications → Actions → "Send notifications for failed workflows only" is on, with email. GitHub turns scheduled workflows off after 60 days without a commit to the repository; it emails before that, and Actions → Error alert → Enable workflow turns it back on. Each run costs about a minute of the private repository's 2,000 free Actions minutes a month (about 730 a month).
+
 ## H. Keys and secrets
 
 - To rotate the service role key or the database password: change it in Supabase, then update Vercel (Production: `SUPABASE_SERVICE_ROLE_KEY`, or `DATABASE_URL` and `SELF_AUTH_DATABASE_URL`), GitHub `production` (`PROD_DATABASE_URL`) and `web/.env.prod`, then redeploy. Every company and the console use the same keys.
