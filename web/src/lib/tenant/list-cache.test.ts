@@ -55,4 +55,17 @@ describe('createListCache', () => {
     expect(await c.get(2)).toEqual([newer]);
     expect(fetch).toHaveBeenCalledTimes(2);
   });
+  it('a fetch from before a reset that fails: its caller gets the list from a fresh fetch, not "unavailable"', async () => {
+    let failOld!: (e: Error) => void;
+    const fetch = vi.fn()
+      .mockImplementationOnce(() => new Promise<Tenant[]>((_, reject) => { failOld = reject; }))
+      .mockResolvedValue([t]);
+    const c = createListCache(fetch);
+    const first = c.get(0);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    c.reset();
+    failOld(new Error('connection reset'));
+    expect(await first).toEqual([t]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
 });

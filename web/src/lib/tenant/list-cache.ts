@@ -16,7 +16,7 @@ export function createListCache(fetchList: () => Promise<Tenant[]>): ListCache {
   // Bumped by reset(): a fetch started before it never writes the cache (it would put back the older list).
   let generation = 0;
 
-  return {
+  const self: ListCache = {
     reset() {
       generation += 1;
       cache = null;
@@ -40,7 +40,8 @@ export function createListCache(fetchList: () => Promise<Tenant[]>): ListCache {
           return tenants;
         })
         .catch((error) => {
-          if (mine !== generation) throw new RegistryUnavailableError(error);
+          // Started before a reset: its failure says nothing about the list now, so ask again (a fresh fetch).
+          if (mine !== generation) return self.get(now);
           lastFailureAt = now;
           if (cache && now - cache.fetchedAt < STALE_MS) {
             console.error('Tenant registry refresh failed; serving the cached registry', error);
@@ -55,4 +56,5 @@ export function createListCache(fetchList: () => Promise<Tenant[]>): ListCache {
       return p;
     },
   };
+  return self;
 }

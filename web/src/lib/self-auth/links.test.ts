@@ -31,8 +31,9 @@ describe('links', () => {
     expect(await companyBaseUrl('console')).toBe('https://console.imploid.net');
     process.env.CONSOLE_HOST = 'localhost:3000';
     expect(await companyBaseUrl('console')).toBe('http://localhost:3000');
+    // Routing never serves the console on an IP address (normaliseHost), so a link to one would lead nowhere.
     process.env.CONSOLE_HOST = '127.0.0.1:3000';
-    expect(await companyBaseUrl('console')).toBe('http://127.0.0.1:3000');
+    await expect(companyBaseUrl('console')).rejects.toThrow(/CONSOLE_HOST/);
     delete process.env.CONSOLE_HOST;
     await expect(companyBaseUrl('console')).rejects.toThrow(/CONSOLE_HOST/);
     expect(productionTenants).not.toHaveBeenCalled();
