@@ -2,6 +2,7 @@ import 'server-only';
 import { resetProductionCache } from '@/lib/tenant/production';
 import type { CompanyRow, SharedProject } from './companies';
 import { consoleAdminActive } from './admin-active';
+import type { ErrorEntry } from './errors';
 import { createConsoleServiceClient } from './supabase';
 
 export type HistoryRow = { at: string; action: string; actor: string; reason: string | null; changed: string[] };
@@ -23,6 +24,8 @@ export type ConsoleStore = {
   setStatus(slug: string, status: 'active' | 'suspended', reason: string, actor: string): Promise<string | null>;
   log(slug: string, action: LogAction, detail: string, actor: string): Promise<string | null>;
   adminActive(userId: string): Promise<boolean>;
+  /** The server errors recorded in error_log (kept 30 days), newest first. */
+  errors(): Promise<ErrorEntry[]>;
 };
 
 const message = (r: { error: { message: string } | null }) => r.error?.message ?? null;
@@ -86,6 +89,11 @@ export function consoleStore(): ConsoleStore {
     setStatus: async (slug, status, reason, actor) => fresh(message(await db.rpc('console_set_company_status', { p_slug: slug, p_status: status, p_reason: reason, p_actor: actor }))),
     log: async (slug, action, detail, actor) => message(await db.rpc('console_log_company', { p_slug: slug, p_action: action, p_detail: detail, p_actor: actor })),
     adminActive: consoleAdminActive,
+    async errors() {
+      const { data, error } = await db.from('error_log').select('at, message, path').order('at', { ascending: false }).limit(1000);
+      if (error) throw new Error('Could not load the errors.');
+      return (data ?? []) as ErrorEntry[];
+    },
   };
 }
 
