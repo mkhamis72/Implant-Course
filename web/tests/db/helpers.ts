@@ -39,12 +39,24 @@ export async function actAs(c: Client, userId: string | null, extraClaims: Recor
   await c.query('set local role authenticated');
 }
 
+/** A live self_auth.session for the user (as postgres, rolled back with the test), as sign-in makes: bind_session
+ *  (0103) refuses a session id with no live row. A user without a Self-Auth account gets a made-up id, which
+ *  bind_session refuses, as it would in production. */
+export async function liveSessionId(c: Client, userId: string, id: string = crypto.randomUUID()): Promise<string> {
+  await c.query('reset role');
+  await c.query(
+    `insert into self_auth.session (id, "expiresAt", token, "updatedAt", "userId")
+     select $2, now() + interval '1 hour', gen_random_uuid()::text, now(), u.id from self_auth."user" u where u.id = $1
+     on conflict (id) do nothing`, [userId, id]);
+  return id;
+}
+
 /** Impersonates the user with a new sign-in session bound to the company (academy by default), as the
  *  company-aware app does after sign-in. Definers that act on the caller's company (0087) need it. */
 export async function actAsBound(
   c: Client, userId: string, company = ACADEMY_ID,
 ): Promise<void> {
-  await actAs(c, userId, { session_id: crypto.randomUUID() });
+  await actAs(c, userId, { session_id: await liveSessionId(c, userId) });
   await c.query('select public.bind_my_session($1)', [company]);
 }
 

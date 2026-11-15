@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 
 /**
- * Maintenance mode for the Self-Auth switch-over (docs/history/self-auth-switch-over.md §E): with MAINTENANCE=1 every host (companies,
+ * Maintenance mode, the whole-site emergency switch (docs/operations.md §I2; first used for the Self-Auth switch-over): with MAINTENANCE=1 every host (companies,
  * console, landing) answers a static "back soon" page, except /brand/* (the logo) and static assets (the
  * middleware matcher skips those). The owner gets through for the smoke test with MAINTENANCE_BYPASS_TOKEN, sent as
  * the cookie icm_maintenance_bypass or the header x-maintenance-bypass. The token is never logged or echoed.

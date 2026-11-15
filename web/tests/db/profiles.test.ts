@@ -1,36 +1,9 @@
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, asPostgres } from './helpers';
-import { adminClient, pendingLoginFor } from '../../scripts/users';
 
 const users = inject('testUsers');
 
 describe('profiles & settings', () => {
-  it('a new Auth account gets its profile and the membership of its pending login', async () => {
-    const admin = adminClient();
-    const email = `icm-new-${Date.now()}@example.com`;
-    await pendingLoginFor(email);
-    const { data, error } = await admin.auth.admin.createUser({ email, password: 'Xx-123456789!', email_confirm: true });
-    expect(error).toBeNull();
-    try {
-      await withTx(async (c) => {
-        const { rows } = await c.query(
-          `select p.email, m.company_id, m.role, m.active from public.profiles p
-           join public.company_members m on m.user_id = p.user_id where p.user_id = $1`, [data.user!.id]);
-        expect(rows).toEqual([{ email, company_id: 'a7c0de00-0000-4000-8000-000000000001', role: 'organizer', active: true }]);
-      });
-    } finally {
-      await admin.auth.admin.deleteUser(data.user!.id);
-    }
-  });
-
-  it('refuses a new Auth account without a pending login', async () => {
-    const { data, error } = await adminClient().auth.admin.createUser({
-      email: `icm-none-${Date.now()}@example.com`, password: 'Xx-123456789!', email_confirm: true,
-    });
-    expect(error).not.toBeNull();
-    expect(data.user).toBeNull();
-  });
-
   it('active organizer can read profiles and settings', async () => {
     await withTx(async (c) => {
       await actAs(c, users.organizer);

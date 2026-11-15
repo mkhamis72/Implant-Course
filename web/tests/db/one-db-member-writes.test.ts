@@ -1,6 +1,6 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs, asPostgres, liveSessionId } from './helpers';
 import { pendingLogin, setPerms, insertSelfAuthSession, insertSelfAuthUser } from './fixtures';
 
 const users = inject('testUsers');
@@ -29,7 +29,7 @@ async function companyB(c: Client, viewerRole = 'organizer'): Promise<string> {
 
 /** Acts as the user, with the session bound to the company. */
 async function bound(c: Client, user: string, session: string, company = ACADEMY_ID) {
-  await actAs(c, user, { session_id: session });
+  await actAs(c, user, { session_id: await liveSessionId(c, user, session) });
   await c.query('select public.bind_my_session($1)', [company]);
 }
 

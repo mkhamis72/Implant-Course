@@ -301,3 +301,7 @@ The result lists each step. Once the company exists, a failed address or invite 
 3. Create a test patient named "Pilot test …", add a checklist, and tick an item.
 4. Browser dev tools → Network → reload: the page response has `content-security-policy` and `strict-transport-security` headers.
 5. Catalog check: `npm run catalog-export` (with `ENV_FILE=.env.prod`), then compare the CSV with your supplier lists. Fix products in the app; untick **Sample** on each verified product, and deactivate products you don't stock.
+
+## I2. Take the whole site offline (emergency)
+
+For a problem that affects every company (a suspected data leak, a release that damages data): Vercel → `implant-course` → Settings → Environment Variables → Production, set `MAINTENANCE` = `1`, then Deployments → the current one → Redeploy. Every address (companies, console, landing) then answers a "back soon" page (503) before any sign-in or database call; only the logo (`/brand/*`) still loads. To look around yourself meanwhile, set `MAINTENANCE_BYPASS_TOKEN` to 32 or more random characters and send it as the cookie `icm_maintenance_bypass` (browser dev tools → Application → Cookies) or the header `x-maintenance-bypass`. To end it, remove `MAINTENANCE` (any value other than `1` is off) and redeploy. For one company only, suspend it in the console instead (§G).

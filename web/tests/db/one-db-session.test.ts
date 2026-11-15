@@ -60,9 +60,18 @@ describe('bind_my_session / my_session_company (0086)', () => {
 
   it('never removes the session it has just bound', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.organizer, { session_id: S1 }); // no self_auth.session row for S1
+      await asPostgres(c);
+      await authSession(c, S1, users.organizer);
+      await actAs(c, users.organizer, { session_id: S1 });
       await c.query('select public.bind_my_session($1)', [ACADEMY_ID]);
       expect(await boundSessions(c)).toEqual([S1]);
+    });
+  });
+
+  it('refuses a session id with no live Self-Auth session (0103)', async () => {
+    await withTx(async (c) => {
+      await actAs(c, users.organizer, { session_id: S1 }); // no self_auth.session row for S1
+      await refused(c, () => c.query('select public.bind_my_session($1)', [ACADEMY_ID]), /No sign-in session./);
     });
   });
 
@@ -80,6 +89,7 @@ describe('bind_my_session / my_session_company (0086)', () => {
     await withTx(async (c) => {
       await asPostgres(c);
       await c.query('update public.company_members set active = false where company_id = $1 and user_id = $2', [ACADEMY_ID, users.viewer]);
+      await authSession(c, S1, users.viewer);
       await actAs(c, users.viewer, { session_id: S1 });
       await c.query('select public.bind_my_session($1)', [ACADEMY_ID]);
       expect((await c.query('select public.my_session_company() as id')).rows[0].id).toBe(ACADEMY_ID);
@@ -90,6 +100,7 @@ describe('bind_my_session / my_session_company (0086)', () => {
     await withTx(async (c) => {
       await asPostgres(c);
       await c.query('delete from public.company_members where company_id = $1 and user_id = $2', [ACADEMY_ID, users.viewer]);
+      await authSession(c, S1, users.viewer);
       await actAs(c, users.viewer, { session_id: S1 });
       await refused(c, () => c.query('select public.bind_my_session($1)', [ACADEMY_ID]), /You do not have access to this company\./);
     });
