@@ -16,7 +16,7 @@
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:status": "supabase status",
-    "canary:check": "tsx scripts/canary-check.ts",
+    "isolation:check": "tsx scripts/isolation-check.ts",
     "company:export": "tsx scripts/company-export.ts",
     "company:restore": "tsx scripts/company-restore.ts",
     "test:db": "vitest run -c vitest.db.config.mts",
