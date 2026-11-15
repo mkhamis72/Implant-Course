@@ -25,6 +25,7 @@ npm run console:admin -- you@example.com   # console admin: Self-Auth company `c
 npm run create-user -- you@example.com "Name" [--role admin | --role delegate --delegate <id>]   # temporary password; ENV_FILE=.env.prod targets prod
 npm run dev:companies                       # local stack only: the local companies and their addresses (db:migrate on a local stack runs it too)
 npm run companies:list                      # every company slug, one per line (Backup uses it; ENV_FILE picks the database)
+npm run isolation:check [-- --company <slug>]   # can a signed-in admin of one company see another's rows? every pair, both ways, 0 expected (ENV_FILE=.env.prod for prod); acts as an admin in a rolled-back transaction, needs only the database
 npm run build                               # next build — Release runs it after tsc, lint and unit tests
 npm run company:export -- --company <slug> --out <file|->   # one company's rows as JSON; company:restore -- --company <slug> --in <file> (or --delete) replaces/erases them (docs/operations.md §D). --tenant / --all-tenants / --control are refused (one database)
 ./scripts/ship.sh verify [e2e specs…]   # on a feature branch, all committed: tsc, lint, unit, test:db (local), named E2E specs
