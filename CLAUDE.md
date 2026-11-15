@@ -27,7 +27,7 @@ npm run dev:companies                       # local stack only: the local compan
 npm run companies:list                      # every company slug, one per line (Backup uses it; ENV_FILE picks the database)
 npm run isolation:check [-- --company <slug>]   # can a signed-in admin of one company see another's rows? every pair, both ways, 0 expected (ENV_FILE=.env.prod for prod); acts as an admin in a rolled-back transaction, needs only the database
 npm run build                               # next build — Release runs it after tsc, lint and unit tests
-npm run company:export -- --company <slug> --out <file|->   # one company's rows as JSON; company:restore -- --company <slug> --in <file> (or --delete) replaces/erases them (docs/operations.md §D). --tenant / --all-tenants / --control are refused (one database)
+npm run company:export -- --company <slug> --out <file|->   # one company's row, sign-in accounts (no OAuth tokens) and rows as JSON (company-export-v2); company:restore -- --company <slug> --in <file> [--create] (or --delete) replaces/erases them, --create rebuilds a fully erased company (docs/operations.md §D). --tenant / --all-tenants / --control are refused (one database)
 ./scripts/ship.sh verify [e2e specs…]   # on a feature branch, all committed: tsc, lint, unit, test:db (local), named E2E specs
 ./scripts/ship.sh ship                  # push → PR → merge → watch release.yml (migrates PROD, then deploys) — the owner runs this (auto mode blocks Claude): `! cd web && ./scripts/ship.sh ship`, after switching the repo public
 ```

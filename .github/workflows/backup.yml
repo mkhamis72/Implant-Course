@@ -221,8 +221,10 @@ jobs:
           shopt -s nullglob
           CHECK_EXPORT='const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
             const t = d && d.tables;
-            const ok = d.format === "company-export-v1" && typeof d.company_id === "string" && !Number.isNaN(Date.parse(d.exported_at))
-              && t && Array.isArray(t["public.patients"]) && Array.isArray(t["auth.users"]);
+            const ok = typeof d.company_id === "string" && !Number.isNaN(Date.parse(d.exported_at))
+              && t && Array.isArray(t["public.patients"])
+              && (d.format === "company-export-v2" ? (d.company && typeof d.company === "object" && Array.isArray(t["self_auth.user"]))
+                : (d.format === "company-export-v1" && Array.isArray(t["auth.users"])));
             if (!ok) process.exit(1);
             console.log(Object.keys(t).length + " tables, exported_at " + d.exported_at);'
           # The slugs of the whole dump's public.companies rows (COPY text: the slug column of each row).
