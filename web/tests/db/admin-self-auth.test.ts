@@ -1,28 +1,38 @@
 import bcrypt from 'bcryptjs';
 import { authenticator } from 'otplib';
 import { randomUUID } from 'node:crypto';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
 import { temporaryPassword } from '../../src/lib/admin/passwords';
 import { closeNodeAuth, nodeAuth } from '../../scripts/self-auth-node';
 
-// Two companies of Self-Auth (ids are DNS-label-like); the same person has a separate account in each.
-const A = `zz-a-${randomUUID().slice(0, 8)}`;
-const B = `zz-b-${randomUUID().slice(0, 8)}`;
+// Two local companies (academy and company-b); the same person has a separate Self-Auth account in each.
+let A: string;
+let B: string;
 const PASSWORD = 'Admin-tools-pass-1';
 const created: string[] = [];
 
-/** A Self-Auth account with its profile made first, so Migration A's provisioning trigger skips it (it would want a pending login). */
-async function account(companyId: string, email: string, totpSecret: string | null = null): Promise<string> {
-  const userId = randomUUID();
+async function sql<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T[]> {
   const pg = new Client(pgConfig());
   await pg.connect();
   try {
-    await pg.query("insert into public.profiles (user_id, email, full_name) values ($1, $2, 'Zz Admin Tools')", [userId, email]);
+    return (await pg.query(text, params)).rows as T[];
   } finally {
     await pg.end();
   }
+}
+
+beforeAll(async () => {
+  A = (await sql<{ id: string }>("select id from public.companies where slug = 'academy'"))[0].id;
+  B = (await sql<{ id: string }>("select id from public.companies where slug = 'company-b'"))[0].id;
+});
+
+/** A Self-Auth account made as an invitation is accepted: a pending login first, then the account (its trigger makes the profile and membership). */
+async function account(companyId: string, email: string, totpSecret: string | null = null): Promise<string> {
+  const userId = randomUUID();
+  await sql(`insert into app_private.pending_logins (company_id, email, full_name, role, created_by)
+    values ($1, lower($2), 'Zz Admin Tools', 'organizer', '00000000-0000-0000-0000-000000000000')`, [companyId, email]);
   const auth = await nodeAuth();
   await auth.importSupabaseUser({ companyId, userId, email, passwordHash: bcrypt.hashSync(PASSWORD, 10), totpSecret, createdAt: new Date() });
   created.push(userId);

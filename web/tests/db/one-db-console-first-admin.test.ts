@@ -48,21 +48,6 @@ describe('console_add_first_admin (0093)', () => {
     });
   });
 
-  it("makes an existing account an active admin of the company and leaves its other companies alone", async () => {
-    await withTx(async (c) => {
-      const b = await companyB(c);
-      const before = await members(c, users.organizer);
-      await c.query(`insert into public.company_members (company_id, user_id, role, active) values ($1, $2, 'organizer', false)`,
-        [b, users.organizer]);
-      const { rows: [{ email }] } = await c.query('select email from public.profiles where user_id = $1', [users.organizer]);
-      await addFirstAdmin(c, b, email);
-      const after = await members(c, users.organizer);
-      expect(after.find((m) => m.company_id === b)).toEqual({ company_id: b, role: 'admin', active: true, delegate_id: null });
-      expect(after.filter((m) => m.company_id !== b)).toEqual(before);
-      expect((await c.query('select count(*)::int as n from app_private.pending_logins where email = $1', [email])).rows[0].n).toBe(0);
-    });
-  });
-
   it("is a no-op for the company's existing admin (the console's password reset)", async () => {
     await withTx(async (c) => {
       const before = await members(c, users.admin);

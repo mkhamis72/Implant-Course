@@ -8,7 +8,7 @@ import { isLandingHost, landingResponse, privacyResponse } from '@/lib/tenant/la
 import { maintenanceResponse } from '@/lib/maintenance';
 
 export async function middleware(request: NextRequest) {
-  // MAINTENANCE=1 (switch-over): every host gets the "back soon" page before any sign-in or database call.
+  // MAINTENANCE=1 (whole-site emergency switch): every host gets the "back soon" page before any sign-in or database call.
   const maintenance = maintenanceResponse(request);
   if (maintenance) return maintenance;
   // The bare domain belongs to no company: the privacy page on /privacy, one plain page on every other path.

@@ -74,18 +74,6 @@ describe.skipIf(!local)('migrate: definer owner check (0092)', () => {
       .toEqual([{ owner: 'tenant_definer' }]);
   });
 
-  it('skips a held file without recording it, and still applies the files after it', async () => {
-    // Stands in for Migration B: if it ran, the function would exist. The real file name is never used here.
-    const d = migration('9993_zz_held.sql', `create function public.${NAME}() returns int language sql as $$ select 1 $$;`);
-    writeFileSync(path.join(d, '9994_zz_after.sql'), 'select 1;');
-    files.push('9994_zz_after.sql');
-    const log: string[] = [];
-    expect(await migrate(d, pgConfig(), { held: new Set(['9993_zz_held.sql']), log: (l) => log.push(l) })).toEqual(['9994_zz_after.sql']);
-    expect(await query(`select 1 from pg_proc where proname = $1`, [NAME])).toEqual([]);
-    expect(await query('select 1 from app_private.schema_migrations where name = $1', ['9993_zz_held.sql'])).toEqual([]);
-    expect(log.join('\n')).toContain('Held: 9993_zz_held.sql (SELF_AUTH_B_HOLD');
-  });
-
   it('shares its allowlist with the definer-owner guard', () => {
     expect(DEFINER_ALLOWLIST.has('app_private.audit_row')).toBe(true);
     expect(DEFINER_ALLOWLIST.has('public.can')).toBe(false);

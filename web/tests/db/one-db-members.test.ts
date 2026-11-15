@@ -1,6 +1,6 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
-import { withTx, actAs, actAsBound, asPostgres } from './helpers';
+import { withTx, actAs, actAsBound, asPostgres, liveSessionId } from './helpers';
 import { pendingLogin, insertSelfAuthUser } from './fixtures';
 
 const users = inject('testUsers');
@@ -96,7 +96,7 @@ describe('company_members (0085)', () => {
 describe('session binding (0085)', () => {
   it('binds a session to a company once, and current_company_id() follows it', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.organizer, { session_id: SESSION });
+      await actAs(c, users.organizer, { session_id: await liveSessionId(c, users.organizer, SESSION) });
       expect((await c.query('select app.current_company_id() as id')).rows[0].id).toBeNull();
       await c.query('select app.bind_session($1)', [ACADEMY_ID]);
       expect((await c.query('select app.current_company_id() as id')).rows[0].id).toBe(ACADEMY_ID);
@@ -109,7 +109,7 @@ describe('session binding (0085)', () => {
 
   it('gives no company to another user carrying the same session id', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.organizer, { session_id: SESSION });
+      await actAs(c, users.organizer, { session_id: await liveSessionId(c, users.organizer, SESSION) });
       await c.query('select app.bind_session($1)', [ACADEMY_ID]);
       await actAs(c, users.admin, { session_id: SESSION });
       expect((await c.query('select app.current_company_id() as id')).rows[0].id).toBeNull();
@@ -120,14 +120,14 @@ describe('session binding (0085)', () => {
     await withTx(async (c) => {
       await asPostgres(c);
       const other = (await c.query(`insert into public.companies (slug, name) values ('zz-other', 'Other') returning id`)).rows[0].id;
-      await actAs(c, users.organizer, { session_id: SESSION });
+      await actAs(c, users.organizer, { session_id: await liveSessionId(c, users.organizer, SESSION) });
       await refused(c, () => c.query('select app.bind_session($1)', [other]), /You do not have access to this company\./);
       await c.query('select app.bind_session($1)', [ACADEMY_ID]);
       await asPostgres(c);
       // Even with a membership there, a bound session never moves to another company.
       await c.query(`insert into public.company_members (company_id, user_id, role, active) values ($1, $2, 'organizer', true)`,
         [other, users.organizer]);
-      await actAs(c, users.organizer, { session_id: SESSION });
+      await actAs(c, users.organizer, { session_id: await liveSessionId(c, users.organizer, SESSION) });
       await refused(c, () => c.query('select app.bind_session($1)', [other]), /You do not have access to this company\./);
 
       await actAs(c, users.organizer, { session_id: undefined }); // a JWT without a session id
@@ -135,7 +135,7 @@ describe('session binding (0085)', () => {
 
       await asPostgres(c);
       await c.query('update public.company_members set active = false where user_id = $1', [users.viewer]);
-      await actAs(c, users.viewer, { session_id: '0e5e5510-0000-4000-8000-000000000002' });
+      await actAs(c, users.viewer, { session_id: await liveSessionId(c, users.viewer, '0e5e5510-0000-4000-8000-000000000002') });
       await c.query('select app.bind_session($1)', [ACADEMY_ID]);
       expect((await c.query('select app.current_company_id() as id')).rows[0].id).toBe(ACADEMY_ID);
     });
@@ -143,7 +143,7 @@ describe('session binding (0085)', () => {
 
   it('binds a delegate login', async () => {
     await withTx(async (c) => {
-      await actAs(c, users.delegate, { session_id: SESSION });
+      await actAs(c, users.delegate, { session_id: await liveSessionId(c, users.delegate, SESSION) });
       await c.query('select app.bind_session($1)', [ACADEMY_ID]);
       expect((await c.query('select app.current_company_id() as id')).rows[0].id).toBe(ACADEMY_ID);
     });

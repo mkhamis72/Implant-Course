@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('server-only', () => ({}));
 
-const requireSignedIn = vi.hoisted(() => vi.fn(async (_o?: unknown) => ({ user_id: 'u1', email: 'u@example.com' })));
+const requireSignedIn = vi.hoisted(() => vi.fn<(o?: unknown) => Promise<{ user_id: string; email: string }>>(async () => ({ user_id: 'u1', email: 'u@example.com' })));
 vi.mock('@/lib/auth/session', () => ({ requireSignedIn }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/flags', () => ({ emailEnabled: () => true }));
 vi.mock('@/lib/self-auth/cookie', () => ({ readSessionCookie: async () => 'tok' }));
 vi.mock('@/lib/tenant/current', () => ({ currentTenant: async () => ({ slug: 'academy', companyId: 'company-a' }) }));
 vi.mock('@/lib/branding/get', () => ({ getBranding: async () => ({ name: 'Kaleidoscope Academy', brandColor: null, navColor: null, logoUrl: null }) }));
-const rpc = vi.fn(async (_n: string) => ({ error: null as unknown }));
+const rpc = vi.fn<(n: string) => Promise<{ error: unknown }>>(async () => ({ error: null }));
 const forSession = vi.fn();
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ rpc }),
@@ -18,12 +18,12 @@ vi.mock('@/lib/supabase/server', () => ({
   },
 }));
 const totp = {
-  startEnroll: vi.fn(async (..._a: unknown[]) => ({ secret: 'ABCDEF', otpauthUrl: 'otpauth://totp/Implant%20Course:u@example.com?secret=ABCDEF' })),
-  confirmEnroll: vi.fn(async (..._a: unknown[]) => ({ sessionId: 's1', aal: 'aal2' }) as unknown),
-  remove: vi.fn(async (..._a: unknown[]) => true),
+  startEnroll: vi.fn<(...a: unknown[]) => Promise<{ secret: string; otpauthUrl: string }>>(async () => ({ secret: 'ABCDEF', otpauthUrl: 'otpauth://totp/Implant%20Course:u@example.com?secret=ABCDEF' })),
+  confirmEnroll: vi.fn<(...a: unknown[]) => Promise<unknown>>(async () => ({ sessionId: 's1', aal: 'aal2' })),
+  remove: vi.fn<(...a: unknown[]) => Promise<boolean>>(async () => true),
 };
-const requestPasswordReset = vi.fn(async (..._a: unknown[]) => undefined);
-const changePassword = vi.fn(async (..._a: unknown[]) => true);
+const requestPasswordReset = vi.fn<(...a: unknown[]) => Promise<undefined>>(async () => undefined);
+const changePassword = vi.fn<(...a: unknown[]) => Promise<boolean>>(async () => true);
 vi.mock('@/lib/self-auth/tenant', () => ({ tenantAuth: async () => ({ totp, requestPasswordReset, changePassword }) }));
 
 import { changeOwnPassword, confirmEnroll, emailPasswordLink, finishMfaSetup, removeFactor, startEnroll } from './actions';

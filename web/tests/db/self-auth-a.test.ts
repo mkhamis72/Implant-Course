@@ -49,19 +49,6 @@ describe('Migration A: Self-Auth schema and dual-source auth helpers (0101)', ()
     });
   });
 
-  it('supabase_factor_still_satisfies_mfa', async () => {
-    await withTx(async (c) => {
-      await asPostgres(c);
-      await c.query(
-        `insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret)
-         values (gen_random_uuid(), $1, 'test', 'totp', 'verified', now(), now(), 'x')`, [users.organizer]);
-      await actAs(c, users.organizer, { aal: 'aal1' });
-      expect(await isActive(c)).toBe(false);
-      await actAs(c, users.organizer, { aal: 'aal2' });
-      expect(await isActive(c)).toBe(true);
-    });
-  });
-
   it('unconfirmed_self_auth_factor_does_not_count', async () => {
     await withTx(async (c) => {
       await saUser(c, users.organizer, 'zz-org@example.com');
@@ -94,7 +81,7 @@ describe('Migration A: Self-Auth schema and dual-source auth helpers (0101)', ()
       const live = await saSession(c, users.admin, '1 hour');
       const expired = await saSession(c, users.admin, '-1 hour');
       const gone = crypto.randomUUID();
-      const current = crypto.randomUUID();
+      const current = await saSession(c, users.admin, '1 hour'); // the session signing in now (0103: must be live)
       for (const s of [live, expired, gone]) await bind(c, s, users.admin);
       await actAs(c, users.admin, { session_id: current });
       await c.query('select public.bind_my_session($1)', [ACADEMY_ID]);
@@ -105,24 +92,6 @@ describe('Migration A: Self-Auth schema and dual-source auth helpers (0101)', ()
       expect(kept).toContain(current);
       expect(kept).not.toContain(expired);
       expect(kept).not.toContain(gone);
-    });
-  });
-
-  it('end_sessions_hits_both', async () => {
-    await withTx(async (c) => {
-      await saUser(c, users.organizer, 'zz-org@example.com');
-      const sa = await saSession(c, users.organizer, '1 hour');
-      const supa = crypto.randomUUID();
-      await asPostgres(c);
-      await c.query('insert into auth.sessions (id, user_id, created_at, updated_at) values ($1, $2, now(), now())',
-        [supa, users.organizer]);
-      await bind(c, sa, users.organizer);
-      await bind(c, supa, users.organizer);
-      await actAsBound(c, users.admin);
-      await c.query('select public.admin_end_sessions($1)', [users.organizer]);
-      await asPostgres(c);
-      expect((await c.query('select 1 from self_auth.session where id = $1', [sa])).rowCount).toBe(0);
-      expect((await c.query('select 1 from auth.sessions where id = $1', [supa])).rowCount).toBe(0);
     });
   });
 

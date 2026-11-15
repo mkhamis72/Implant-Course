@@ -95,9 +95,10 @@ describe('release.yml', () => {
     expect(copy).toContain('R2 secrets are missing');
     for (const n of ['R2_ENDPOINT', 'R2_BUCKET', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) expect(cleans(copy, n)).toBe(true);
   });
-  it('holds Migration B unless the production variable SELF_AUTH_B_HOLD is exactly 0', () => {
+  it('migrates every file: no migration is held (Migration B, 0103, is applied everywhere since 2026-11-12)', () => {
     const step = deploy.steps.find((s) => s.name?.startsWith('Migrate'));
-    expect(step?.env?.SELF_AUTH_B_HOLD).toBe('${{ vars.SELF_AUTH_B_HOLD }}');
+    expect(step?.env).toBeDefined();
+    expect(Object.keys(step?.env ?? {}).filter((k) => /HOLD/.test(k))).toEqual([]);
   });
   it('builds every deploy without Vercel build cache (the vendored self-auth tarball has no lockfile integrity)', () => {
     const run = runOf(deploy, 'Deploy');
