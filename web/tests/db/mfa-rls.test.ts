@@ -1,6 +1,6 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs } from './helpers';
 import { insertSelfAuthFactor } from './fixtures';
 
 const users = inject('testUsers');
