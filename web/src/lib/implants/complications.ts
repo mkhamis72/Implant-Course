@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isRealDate, todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
+import { blankToNull } from '@/lib/form-values';
 
 export const COMPLICATION_CATEGORIES = ['surgical', 'biological', 'mechanical'] as const;
 export type ComplicationCategory = (typeof COMPLICATION_CATEGORIES)[number];
@@ -82,7 +83,6 @@ export function openComplicationTeeth(
   return teeth;
 }
 
-const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
 const RESOLVED = 'The resolved date must be on or after the date noticed, and not in the future.';
 
 export const complicationSchema = z

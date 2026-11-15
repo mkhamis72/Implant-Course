@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isRealDate, todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
+import { blankToNull } from '@/lib/form-values';
 
 export const FAILURE_TYPES = ['lost', 'removed', 'failed_in_place'] as const;
 export type FailureType = (typeof FAILURE_TYPES)[number];
@@ -44,7 +45,6 @@ export function describeFailure(site: FailureSite, restorations: readonly Fitted
   ].filter(Boolean).join(' · ');
 }
 
-const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
 
 export const failureSchema = z.object({
   siteId: z.string().uuid({ message: 'Implant not found.' }),

@@ -27,10 +27,6 @@ export function canEdit(p: Who, area: Area): boolean {
   return p.role === 'organizer' && p.permissions[area] === 'edit';
 }
 
-export function permissionMessage(level: Level, area: Area): string {
-  return `You don't have permission to ${level} ${AREA_LABELS[area]}.`;
-}
-
 /** user_permissions rows → { area: level }. */
 export function toPermissions(rows: { area: string; level: string }[] | null | undefined): Permissions {
   const out: Permissions = {};

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AREAS, canEdit, canSeeImplants, canView, permissionMessage, reportAccessNote, toPermissions } from './permissions';
+import { AREAS, canEdit, canSeeImplants, canView, reportAccessNote, toPermissions } from './permissions';
 
 const org = (permissions = {}) => ({ role: 'organizer' as const, permissions });
 
@@ -17,9 +17,6 @@ describe('permissions', () => {
     expect(canView(p, 'courses')).toBe(true);
     expect(canEdit(p, 'courses')).toBe(false);
     expect(canView(p, 'patients')).toBe(false);
-  });
-  it('words the refusal like the database does', () => {
-    expect(permissionMessage('edit', 'inventory')).toBe("You don't have permission to edit Inventory.");
   });
   it('maps permission rows, ignoring unknown areas and levels', () => {
     expect(

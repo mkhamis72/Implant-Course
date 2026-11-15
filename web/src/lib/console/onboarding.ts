@@ -18,9 +18,3 @@ export function baseDomain(consoleHost: string | null): string | null {
   const dot = consoleHost.indexOf('.');
   return dot > 0 ? consoleHost.slice(dot + 1) : null;
 }
-
-/** The company's own origin, with the console's scheme and port (http://acme.localhost:3000 locally). */
-export function companyOrigin(consoleOrigin: string, host: string): string {
-  const u = new URL(consoleOrigin);
-  return `${u.protocol}//${host}${u.port ? `:${u.port}` : ''}`;
-}

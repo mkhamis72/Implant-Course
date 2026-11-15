@@ -9,6 +9,7 @@ import { TIMEPOINTS, type TimepointKey } from '@/lib/analysis/timepoints'
 import type { View } from '@/lib/analysis/types'
 import type { Level } from '@/lib/analysis/variables'
 import { fmt } from '@/lib/analysis/wording'
+import { escapeHtml } from '@/lib/html'
 
 export type Palette = { series: string[]; ink: string; muted: string; line: string }
 
@@ -33,8 +34,6 @@ const VIEW_NAMES: Record<View, string> = {
 
 const round = (x: number) => Number(x.toFixed(6))
 // Custom tooltip formatters return HTML: every user-entered text in them (group, delegate, brand, level names) is escaped.
-const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
-export const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => ESCAPES[c])
 const colorAt = (p: Palette, i: number) => p.series[i] ?? p.muted
 const withUnit = (x: number, unit?: string) => `${fmt(x)}${unit ? ` ${unit}` : ''}`
 

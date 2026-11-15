@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { baseDomain, companyOrigin, suggestSlug } from './onboarding';
+import { baseDomain, suggestSlug } from './onboarding';
 
 describe('suggestSlug', () => {
   it('lower-cases, drops accents and joins words with hyphens', () => {
@@ -20,12 +20,5 @@ describe('baseDomain', () => {
     expect(baseDomain('console.localhost')).toBe('localhost');
     expect(baseDomain('localhost')).toBeNull();
     expect(baseDomain(null)).toBeNull();
-  });
-});
-
-describe('companyOrigin', () => {
-  it('keeps the console’s scheme and port', () => {
-    expect(companyOrigin('https://console.imploid.net', 'acme.imploid.net')).toBe('https://acme.imploid.net');
-    expect(companyOrigin('http://console.localhost:3000', 'acme.localhost')).toBe('http://acme.localhost:3000');
   });
 });

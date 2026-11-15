@@ -1,7 +1,6 @@
+import { escapeHtml } from '@/lib/html';
 export type NoticeEmail = { subject: string; text: string; html: string };
 
-const escapeHtml = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 /** Sent after an admin changes someone's sign-in email. No link on purpose: it must not look like a sign-in prompt. */
 export function emailChangedNotice(a: { company: string; newEmail: string }): NoticeEmail {
@@ -9,17 +8,3 @@ export function emailChangedNotice(a: { company: string; newEmail: string }): No
   return { subject: 'Your sign-in email was changed', text, html: `<p>${escapeHtml(text)}</p>` };
 }
 
-/** Sent when an admin adds someone who already has an account to their company. No link, as above. */
-export function addedToCompanyNotice(a: { company: string }): NoticeEmail {
-  const text = `An administrator added you to ${a.company}. Sign in there with your existing email and password. If you didn't expect this, contact your course organizer.`;
-  return { subject: `You've been added to ${a.company}`, text, html: `<p>${escapeHtml(text)}</p>` };
-}
-
-/** A resent invitation, worded like the invite email (src/lib/self-auth/email.ts). */
-export function inviteEmail(a: { company: string; link: string }): NoticeEmail {
-  return {
-    subject: `You're invited to ${a.company}`,
-    text: `You have been invited\n\nAccept the invitation and set your password: ${a.link}`,
-    html: `<h2>You have been invited</h2>\n<p><a href="${escapeHtml(a.link)}">Accept the invitation and set your password</a></p>`,
-  };
-}

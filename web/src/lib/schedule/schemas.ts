@@ -3,9 +3,8 @@ import { isRealDate } from '@/lib/dates';
 import { isFdiTooth } from '@/lib/patients/fdi';
 import { TECHNIQUES } from '@/lib/inventory/types';
 import { SESSION_TYPES } from './types';
+import { optionalUuid } from '@/lib/form-values';
 
-const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
-const optionalId = z.preprocess(blankToNull, z.string().uuid().nullable());
 const requiredId = (message: string) => z.string({ message }).uuid({ message });
 const text = (max: number) => z.string().trim().max(max).default('');
 const date = (message: string) => z.string().refine(isRealDate, { message });
@@ -39,7 +38,7 @@ export const sessionSchema = z
   .object({
     course_id: requiredId('Course not found.'),
     type: z.enum(SESSION_TYPES, { message: 'Choose the session type.' }),
-    lead_organizer_id: optionalId,
+    lead_organizer_id: optionalUuid,
     ...sessionFields,
   })
   .refine((s) => s.end_time > s.start_time, sessionEndsAfterStart);
@@ -88,7 +87,7 @@ export const slotSchema = z
       .array(
         z.object({
           tooth: z.coerce.number().refine(isFdiTooth, { message: 'Unknown tooth number.' }),
-          productId: optionalId,
+          productId: optionalUuid,
           technique,
         }),
       )
@@ -126,8 +125,8 @@ export const cancelSlotSchema = z.object({
 export const correctionSchema = z.object({
   siteId: requiredId('Implant not found.'),
   patientId: requiredId('Patient not found.'),
-  componentId: optionalId,
-  newProductId: optionalId,
+  componentId: optionalUuid,
+  newProductId: optionalUuid,
   newLotId: requiredId('Choose the correct batch.'),
   reason: reason('Explain the correction (at least 3 characters).'),
 });

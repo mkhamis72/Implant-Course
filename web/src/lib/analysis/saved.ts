@@ -5,11 +5,11 @@
 import { z } from 'zod'
 import { RESEARCH_FILTER_KEYS } from '@/lib/research/view'
 import { exploreQuery, type ExploreState } from './url'
+import { isUuid } from '@/lib/uuid'
 
 export type SavedConfig = { version: 1; query: Record<string, string> }
 
 const KEYS = new Set<string>([...RESEARCH_FILTER_KEYS, 'f', 'o', 'w', 'v', 'alt'])
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export const savedConfigSchema = z.object({
   version: z.literal(1),
@@ -30,5 +30,5 @@ export function savedHref(config: SavedConfig): string {
 
 export function savedCourse(config: SavedConfig): string | null {
   const course = config.query.course
-  return course && UUID.test(course) ? course : null
+  return course && isUuid(course) ? course : null
 }

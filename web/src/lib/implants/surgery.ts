@@ -3,6 +3,7 @@ import { isRealDate, todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
 import { YES_NO, type YesNo } from '@/lib/patients/risk-factors';
 import { BONE_TYPES } from '@/lib/inventory/schemas';
+import { blankToNull } from '@/lib/form-values';
 
 export const PLACEMENT_TIMINGS = ['immediate', 'early_soft_tissue', 'early_partial_bone', 'delayed'] as const;
 export type PlacementTiming = (typeof PLACEMENT_TIMINGS)[number];
@@ -169,7 +170,6 @@ export function describeGraft(g: ImplantGraft): string {
   ].filter(Boolean).join(' · ');
 }
 
-const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
 const optionalEnum = <T extends readonly [string, ...string[]]>(values: T, message: string) =>
   z.preprocess(blankToNull, z.enum(values, { message }).nullable());
 const optionalPastDate = (message: string) =>

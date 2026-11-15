@@ -1,5 +1,8 @@
 import { APP_TIME_ZONE } from '@/lib/format';
 
+/** The average month in days (365.25 / 12): follow-up days → months in survival analysis. */
+export const DAYS_PER_MONTH = 30.4375;
+
 export function isRealDate(v: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
   const d = new Date(`${v}T00:00:00Z`);
