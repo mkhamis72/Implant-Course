@@ -55,13 +55,16 @@ export async function verifyConsoleMfa(_prev: ConsoleAuthState, formData: FormDa
   redirect('/console');
 }
 
+const CONSOLE_AUTHENTICATOR_NAME = 'Implant Course Console';
+
 export async function startConsoleEnroll(): Promise<Enrollment | { error: string }> {
   await requireConsoleHost();
   await requireConsoleUser();
   const token = await consoleToken();
   try {
     // Replaces an unconfirmed secret; a confirmed authenticator must be removed first (never from an aal1 session).
-    const { secret, otpauthUrl } = await (await consoleAuth()).totp.startEnroll(token, CONSOLE_COMPANY);
+    // Named apart from the companies in the authenticator app (they share one sign-in database).
+    const { secret, otpauthUrl } = await (await consoleAuth()).totp.startEnroll(token, CONSOLE_COMPANY, { issuer: CONSOLE_AUTHENTICATOR_NAME });
     const qrCode = await QRCode.toDataURL(otpauthUrl, { width: 180, margin: 1 });
     return { factorId: 'totp', qrCode, secret };
   } catch (e) {

@@ -27,7 +27,7 @@
     "companies:list": "tsx scripts/companies-list.ts"
   },
   "dependencies": {
-    "@mkhamis72/self-auth": "file:vendor/mkhamis72-self-auth-0.2.2.tgz",
+    "@mkhamis72/self-auth": "file:vendor/mkhamis72-self-auth-0.2.3.tgz",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "@types/qrcode": "^1.5.6",

@@ -74,7 +74,8 @@ describe('console host', () => {
 describe('startConsoleEnroll', () => {
   it('returns the secret and a QR code for the session', async () => {
     expect(await startConsoleEnroll()).toEqual({ factorId: 'totp', qrCode: 'data:image/png;base64,QR', secret: 'SECRET' });
-    expect(auth.totp.startEnroll).toHaveBeenCalledWith('tok', 'console');
+    // The authenticator entry says it is the console, not a company (all share one sign-in database).
+    expect(auth.totp.startEnroll).toHaveBeenCalledWith('tok', 'console', { issuer: 'Implant Course Console' });
   });
   it('refuses when an authenticator is already confirmed', async () => {
     auth.totp.startEnroll.mockRejectedValue(Object.assign(new Error('x'), { code: 'totp_already_enrolled' }));
