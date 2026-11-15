@@ -1,3 +1,4 @@
+import { escapeHtml } from '@/lib/html';
 /** The placeholders a consent form version's text may use; the print pages fill them. */
 export const CONSENT_PLACEHOLDERS = [
   'company_name', 'patient_name', 'file_no', 'course_name', 'date', 'version', 'effective_date',
@@ -16,8 +17,6 @@ export function fillConsent(text: string, values: ConsentValues): string {
   });
 }
 
-const escapeHtml = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 const inline = (s: string) => escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 

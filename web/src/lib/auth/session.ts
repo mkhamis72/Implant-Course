@@ -6,7 +6,7 @@ import { currentTenant } from '@/lib/tenant/current';
 import { currentSelfAuthSession } from '@/lib/self-auth/session';
 import { ensureSessionCompany } from './company-session';
 import {
-  canEdit, canView, permissionMessage, toPermissions, type Area, type Level, type Permissions, type Role,
+  canEdit, canView, toPermissions, type Area, type Level, type Permissions, type Role,
 } from './permissions';
 
 export type Profile = {
@@ -22,7 +22,6 @@ export type Profile = {
 };
 
 export const MFA_SETUP_PATH = '/account/security';
-export const MFA_SETUP_MESSAGE = 'Set up two-factor authentication first.';
 
 export type Settings = { expiry_alert_days: number; session_timeout_minutes: number };
 
@@ -123,13 +122,6 @@ export async function requirePermission(area: Area, level: Level = 'view'): Prom
   const profile = await requireActiveUser();
   if (!(level === 'edit' ? canEdit(profile, area) : canView(profile, area))) redirect('/');
   return profile;
-}
-
-/** Actions: an error message to show in the form, or null when allowed. */
-export async function checkPermission(area: Area, level: Level = 'edit'): Promise<string | null> {
-  if ((await requireSignedIn({ allowMfaSetup: true })).mfa_setup_required) return MFA_SETUP_MESSAGE;
-  const profile = await requireActiveUser();
-  return (level === 'edit' ? canEdit(profile, area) : canView(profile, area)) ? null : permissionMessage(level, area);
 }
 
 /** Delegate pages. */

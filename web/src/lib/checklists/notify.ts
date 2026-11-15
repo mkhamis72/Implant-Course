@@ -1,4 +1,5 @@
 import { formatDate } from '@/lib/format';
+import { escapeHtml } from '@/lib/html';
 
 export type ItemSnapshot = { text: string; assignee_id: string | null; due_date: string | null };
 export type Notice = 'assigned' | 'changed';
@@ -16,8 +17,6 @@ const SUBJECTS: Record<Notice, string> = {
   changed: 'Checklist: an item assigned to you changed',
 };
 
-const escapeHtml = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 export function assignmentEmail(
   notice: Notice,

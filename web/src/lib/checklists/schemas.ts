@@ -2,9 +2,8 @@ import { z } from 'zod';
 import { isRealDate } from '@/lib/dates';
 import { parseChecklistText } from './parse';
 import { SCOPES } from './types';
+import { blankToNull, optionalUuid } from '@/lib/form-values';
 
-const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
-const optionalId = z.preprocess(blankToNull, z.string().uuid().nullable());
 
 function itemsField(required: boolean, emptyMessage: string) {
   return z
@@ -20,7 +19,7 @@ function itemsField(required: boolean, emptyMessage: string) {
 }
 
 export const templateSchema = z.object({
-  id: optionalId,
+  id: optionalUuid,
   name: z.string().trim().min(2, { message: 'Enter the template name (at least 2 characters).' }).max(120),
   applies_to: z.enum(SCOPES, { message: 'Choose what the template is for.' }),
   is_default: z.preprocess((v) => v === 'on' || v === 'true' || v === true, z.boolean()),
@@ -31,7 +30,7 @@ export const newChecklistSchema = z
   .object({
     title: z.string().trim().min(2, { message: 'Enter the checklist title (at least 2 characters).' }).max(120),
     items: itemsField(false, ''),
-    template_id: optionalId,
+    template_id: optionalUuid,
   })
   .refine((c) => c.items.length > 0 || c.template_id !== null, {
     message: 'Add at least one item (one per line) or choose a template.',
@@ -45,6 +44,6 @@ export const addItemsSchema = z.object({
 export const itemEditSchema = z.object({
   id: z.string().uuid(),
   text: z.string().trim().min(1, { message: 'The item cannot be empty.' }).max(300, { message: 'Each item can be at most 300 characters.' }),
-  assignee_id: optionalId,
+  assignee_id: optionalUuid,
   due_date: z.preprocess(blankToNull, z.string().refine(isRealDate, { message: 'Enter a valid due date or leave it empty.' }).nullable()),
 });

@@ -11,8 +11,8 @@ import { fetchAll } from '@/lib/research/export/fetch-all';
 import { consentCounts, mergeConsent } from '@/lib/research/consent';
 import { buildXlsx } from '@/lib/research/export/xlsx';
 import { buildZip } from '@/lib/research/export/zip';
+import { isUuid } from '@/lib/uuid';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export async function GET(req: NextRequest) {
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   const studyId = params.get('study')?.trim() || null;
   let study: StudyAbout | null = null;
   if (studyId) {
-    if (!UUID.test(studyId)) return new NextResponse('Study not found', { status: 400 });
+    if (!isUuid(studyId)) return new NextResponse('Study not found', { status: 400 });
     const { data, error } = await supabase.from('studies').select('title, committee, approval_number, protocol_version').eq('id', studyId).maybeSingle<StudyAbout>();
     if (error) {
       console.error('Research export failed', error.message);

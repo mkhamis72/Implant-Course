@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { formatDate } from '@/lib/format';
+import { blankToNull } from '@/lib/form-values';
 
 export const IMPRESSION_TYPES = ['digital_scan', 'conventional'] as const;
 export type ImpressionType = (typeof IMPRESSION_TYPES)[number];
@@ -11,7 +12,6 @@ export const IMPRESSION_LABELS: Record<ImpressionType, string> = {
 
 export const NOT_TAKEN_LABEL = 'Not taken';
 
-const blankToNull = (v: unknown) => (v === '' || v === undefined ? null : v);
 
 export const impressionSchema = z
   .object({

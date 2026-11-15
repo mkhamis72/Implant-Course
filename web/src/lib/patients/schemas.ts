@@ -3,6 +3,7 @@ import { isRealDate, todayIso } from '@/lib/dates';
 import { isFdiTooth, parseTeeth } from './fdi';
 import { SMOKING, YES_NO } from './risk-factors';
 import { MANUAL_STATES } from './types';
+import { blankToNull } from '@/lib/form-values';
 
 const text = (max: number) => z.string().trim().max(max).default('');
 
@@ -45,7 +46,6 @@ export function toPatientRow(p: PatientInput): Record<string, string | null> {
   return row;
 }
 
-const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
 const yesNo = z.preprocess(blankToNull, z.enum(YES_NO, { message: 'Choose yes, no or not assessed.' }).nullable());
 const number = (message: string, check: (n: number) => boolean) =>
   z.preprocess((v) => (blankToNull(v) === null ? null : Number(v)), z.number({ message }).refine(check, { message }).nullable());

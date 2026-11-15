@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { addDays, isRealDate, todayIso } from '@/lib/dates';
+import { blankToNull } from '@/lib/form-values';
 
 export const RESTORATION_STAGES = ['temporary', 'final'] as const;
 export type RestorationStage = (typeof RESTORATION_STAGES)[number];
@@ -81,14 +82,6 @@ export function jawOf(tooth: number): 'upper' | 'lower' {
   return quadrant === 1 || quadrant === 2 ? 'upper' : 'lower';
 }
 
-/** The contiguous run from the first to the last implant in arch order. */
-export function defaultTeeth(implantTeeth: number[]): number[] {
-  if (implantTeeth.length === 0) return [];
-  const arch = ARCH_ORDER[jawOf(implantTeeth[0])];
-  const pos = implantTeeth.map((t) => arch.indexOf(t));
-  return arch.slice(Math.min(...pos), Math.max(...pos) + 1);
-}
-
 /** "36" or "34–36" (teeth are stored in arch order). */
 export function describeTeeth(teeth: number[]): string {
   return teeth.length <= 1 ? String(teeth[0] ?? '') : `${teeth[0]}–${teeth[teeth.length - 1]}`;
@@ -159,7 +152,6 @@ export function coursesForDate(courses: CourseOption[], date: string) {
   return { running: courses.filter(runs), others: courses.filter((c) => !runs(c)) };
 }
 
-const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
 const optionalId = (message: string) => z.preprocess(blankToNull, z.string().uuid({ message }).nullable());
 
 const details = {

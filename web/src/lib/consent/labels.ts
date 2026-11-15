@@ -6,7 +6,6 @@ export const CONSENT_ITEMS = [
   { key: 'follow_up', short: 'Follow-up', label: 'Follow-up visits and phone contact' },
 ] as const;
 
-export type ConsentItem = (typeof CONSENT_ITEMS)[number]['key'];
 
 export const CONSENT_LANGUAGES = ['en', 'ar'] as const;
 export type ConsentLanguage = (typeof CONSENT_LANGUAGES)[number];

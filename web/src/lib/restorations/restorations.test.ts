@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  coursesForDate, currentRestoration, defaultTeeth, describeTeeth, jawOf, loadingOf, problemEditSchema, problemSchema, restorationEditSchema, restorationSchema,
+  coursesForDate, currentRestoration, describeTeeth, jawOf, loadingOf, problemEditSchema, problemSchema, restorationEditSchema, restorationSchema,
   restorationSpans,
   type Restoration,
 } from './restorations';
@@ -12,14 +12,6 @@ const r = (over: Partial<Restoration>): Restoration => ({
 });
 
 describe('arch helpers', () => {
-  it('fills the run from the first to the last implant in arch order', () => {
-    expect(defaultTeeth([34, 36])).toEqual([34, 35, 36]);
-    expect(defaultTeeth([36, 34])).toEqual([34, 35, 36]);
-    expect(defaultTeeth([15, 12, 22, 25])).toEqual([15, 14, 13, 12, 11, 21, 22, 23, 24, 25]);
-    expect(defaultTeeth([46, 41, 31])).toEqual([46, 45, 44, 43, 42, 41, 31]);
-    expect(defaultTeeth([])).toEqual([]);
-  });
-
   it('tells the jaw of a tooth', () => {
     expect(jawOf(26)).toBe('upper');
     expect(jawOf(11)).toBe('upper');

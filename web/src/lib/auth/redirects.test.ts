@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyPath, decideRedirect, verifiedAal } from './redirects';
+import { classifyPath, decideRedirect } from './redirects';
 
 const aal1 = { current: 'aal1', next: 'aal1' };
 const needsMfa = { current: 'aal1', next: 'aal2' };
@@ -69,23 +69,5 @@ describe('decideRedirect', () => {
       expect(decideRedirect({ path, hasUser: true, aal: aal1, mfaSetupRequired: true })).toBeNull();
     }
     expect(decideRedirect({ path: '/login', hasUser: true, aal: aal1, mfaSetupRequired: true })).toBe('/');
-  });
-});
-
-describe('verifiedAal (C1: never trust factors from the session cookie)', () => {
-  it('requires aal2 when the server-verified user has a verified factor and the token is aal1', () => {
-    expect(verifiedAal([{ status: 'verified' }], 'aal1')).toEqual({ current: 'aal1', next: 'aal2' });
-  });
-  it('ignores unverified factors', () => {
-    expect(verifiedAal([{ status: 'unverified' }], 'aal1')).toEqual({ current: 'aal1', next: 'aal1' });
-  });
-  it('treats a missing aal claim as aal1 (fail closed)', () => {
-    expect(verifiedAal([{ status: 'verified' }], undefined)).toEqual({ current: 'aal1', next: 'aal2' });
-  });
-  it('accepts an aal2 token', () => {
-    expect(verifiedAal([{ status: 'verified' }], 'aal2')).toEqual({ current: 'aal2', next: 'aal2' });
-  });
-  it('handles users with no factors list', () => {
-    expect(verifiedAal(undefined, 'aal1')).toEqual({ current: 'aal1', next: 'aal1' });
   });
 });

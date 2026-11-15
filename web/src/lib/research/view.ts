@@ -2,6 +2,7 @@
 // statuses SQL returned (implant_outcomes_detail / crown_outcomes_detail); nothing is recomputed here.
 import type { CrownRow, ImplantRow } from './summary';
 import { isCompareKey } from './groups';
+import { isUuid } from '@/lib/uuid';
 
 export const RESEARCH_FILTER_KEYS = ['course', 'from', 'to', 'delegate', 'brand', 'system'] as const;
 /** The filters, plus the page's Compare by choice (`compare`), which links carry but the readers ignore. */
@@ -32,7 +33,6 @@ export type CrownDetailRow = CrownRow & {
   file_no: string | null
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const realDate = (s: string) => {
@@ -63,10 +63,10 @@ export function drilldownFilters<F extends ResearchFilters>(f: F): F {
 /** Arguments for implant_outcomes_detail / crown_outcomes_detail; empty or malformed filters mean "all". */
 export function rpcArgs(f: ResearchFilters) {
   return {
-    p_course: UUID.test(f.course) ? f.course : null,
+    p_course: isUuid(f.course) ? f.course : null,
     p_from: realDate(f.from) ? f.from : null,
     p_to: realDate(f.to) ? f.to : null,
-    p_delegate: UUID.test(f.delegate) ? f.delegate : null,
+    p_delegate: isUuid(f.delegate) ? f.delegate : null,
     p_brand: f.brand || null,
     p_system: f.system || null,
   };

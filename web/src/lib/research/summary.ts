@@ -1,5 +1,6 @@
 // Aggregates what SQL decided (implant_outcomes_detail / crown_outcomes_detail). Never recomputes a status.
 import { kmFit, survivalAtTime } from './stats'
+import { DAYS_PER_MONTH } from '@/lib/dates'
 
 export type Milestone = 'survived' | 'failed' | 'unknown' | 'not_reached' | 'not_loaded'
 
@@ -19,7 +20,6 @@ export type CrownRow = {
   problems: number
 }
 
-const MONTH_DAYS = 30.4375
 const SMALL_SAMPLE = 30
 
 export function survivalAt(rows: ImplantRow[], key: 'year_1' | 'year_2') {
@@ -79,7 +79,7 @@ export function crownSummary(crowns: CrownRow[]) {
 // Product-limit estimate; at tied times events are applied before censorings.
 export function kaplanMeier(rows: ImplantRow[]) {
   const known = rows.filter((r) => !r.event_time_unknown)
-  const fit = kmFit(known.map((r) => ({ months: r.follow_up_days / MONTH_DAYS, event: r.event })))
+  const fit = kmFit(known.map((r) => ({ months: r.follow_up_days / DAYS_PER_MONTH, event: r.event })))
   const points = [{ month: 0, survival: 1 }]
   // The 95% CI from each event onwards (it only changes at events); null where it can't be estimated.
   const band: { month: number; lower: number | null; upper: number | null }[] = []
@@ -94,7 +94,7 @@ export function kaplanMeier(rows: ImplantRow[]) {
     band,
     atRisk: ([[0, 0], [12, MILESTONE_DAYS.year_1], [24, MILESTONE_DAYS.year_2]] as const).map(([month, days]) => ({
       month,
-      n: survivalAtTime(fit, days / MONTH_DAYS).nRisk,
+      n: survivalAtTime(fit, days / DAYS_PER_MONTH).nRisk,
     })),
     excludedUnknownTime: rows.length - known.length,
   }
@@ -107,9 +107,9 @@ export const MILESTONE_DAYS = { year_1: 365, year_2: 730 } as const
 // last follow-up (nobody left at risk and the curve hasn't reached 0); `events` are the failures up to that time;
 // `n` is the implants in the fit (known failure date).
 export function kmEstimate(rows: ImplantRow[], days: number) {
-  const months = days / MONTH_DAYS
+  const months = days / DAYS_PER_MONTH
   const known = rows.filter((r) => !r.event_time_unknown)
-  const fit = kmFit(known.map((r) => ({ months: r.follow_up_days / MONTH_DAYS, event: r.event })))
+  const fit = kmFit(known.map((r) => ({ months: r.follow_up_days / DAYS_PER_MONTH, event: r.event })))
   const at = survivalAtTime(fit, months)
   let events = 0
   fit.times.forEach((t, i) => {

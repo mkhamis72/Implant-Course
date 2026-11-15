@@ -8,8 +8,8 @@ import { curveStyle } from '@/lib/research/curve-style';
 import { consentWarning, type ConsentCounts } from '@/lib/research/consent';
 import { SurvivalChart, type Curve } from './survival-chart';
 import { CiText, ComparePanel, Note, Warning } from './compare-panel';
+import { DAYS_PER_MONTH } from '@/lib/dates';
 
-const MONTH_DAYS = 30.4375;
 
 export function NoPatientsNote() {
   return <p className="rounded-md bg-warn-soft p-3 text-sm text-warn">Research needs View on Patients to read the records</p>;
@@ -60,7 +60,7 @@ function SurvivalTile({ rows, year, filters }: { rows: DetailRow[]; year: 'year_
 }
 
 const monthsOf = (rows: DetailRow[]) =>
-  Math.max(0, ...rows.filter((r) => !r.event_time_unknown).map((r) => r.follow_up_days / MONTH_DAYS));
+  Math.max(0, ...rows.filter((r) => !r.event_time_unknown).map((r) => r.follow_up_days / DAYS_PER_MONTH));
 
 const GRADE_ORDER = ['I', 'II', 'III', 'IV', 'not_assessable', 'not_graded'] as const;
 const GRADE_BAR: Record<(typeof GRADE_ORDER)[number], string> = {

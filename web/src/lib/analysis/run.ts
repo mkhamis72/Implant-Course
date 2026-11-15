@@ -15,6 +15,7 @@ import { TIMEPOINTS, type TimepointKey, type Window, windowRange } from './timep
 import type { Effect, GroupSummary, Method, Missing, SurvivalCurve, TestResult, TrendPoint, View } from './types'
 import { variable, type Variable } from './variables'
 import { findingsFor, fmt } from './wording'
+import { DAYS_PER_MONTH } from '@/lib/dates'
 
 export type AnalysisConfig = { factor: string | null; outcome: string; window: Window | 'all'; filters: Filter[] }
 export type { LevelLabels }
@@ -40,7 +41,6 @@ export type AnalysisResult = {
   findings: string[]
 }
 
-const MONTH_DAYS = 30.4375
 type Value = number | string
 type Item = { row: ImplantRow; factor: Value | null; outcome: Value; days?: number }
 
@@ -219,10 +219,10 @@ export function runAnalysis(data: AnalysisData, config: AnalysisConfig, today: s
         const nulls = items.filter((i) => i.factor === null)
         if (nulls.length) grouped.push({ level: null, label: NOT_ASSESSED, items: nulls })
       } else grouped = groupBy(items, factorKey, fv, labels)
-      points = pointsFrom(grouped, (i) => (i.outcome as number) / MONTH_DAYS)
+      points = pointsFrom(grouped, (i) => (i.outcome as number) / DAYS_PER_MONTH)
       groups = grouped.map((g) => ({ level: g.level, label: g.label, n: g.items.length, patients: patientsOf(g.items.map((i) => i.row)), stats: null, tested: g.level !== null && !!fv }))
       if (!fv) groups[0].tested = false
-      const rowsOf = (its: Item[]): SurvivalRow[] => its.map((i) => ({ months: (i.outcome as number) / MONTH_DAYS, event: i.row.event }))
+      const rowsOf = (its: Item[]): SurvivalRow[] => its.map((i) => ({ months: (i.outcome as number) / DAYS_PER_MONTH, event: i.row.event }))
       const curves = grouped.filter((g) => g.level !== null || !fv)
       if (!unsplittable && curves.length) {
         survival = curves.map((g) => {

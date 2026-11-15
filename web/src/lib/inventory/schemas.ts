@@ -2,9 +2,8 @@ import { z } from 'zod';
 import { isRealDate, todayIso } from '@/lib/dates';
 import { isFdiTooth } from '@/lib/patients/fdi';
 import { COMPONENT_TYPES, PRODUCT_TYPES, TECHNIQUES } from './types';
+import { blankToNull, optionalUuid } from '@/lib/form-values';
 
-const blankToNull = (v: unknown) => (v === '' || v === undefined || v === null ? null : v);
-const optionalId = z.preprocess(blankToNull, z.string().uuid().nullable());
 const requiredId = (message: string) => z.string({ message }).uuid({ message });
 const text = (max: number) => z.string().trim().max(max).default('');
 const pastDate = (message: string) => z.string().refine((v) => isRealDate(v) && v <= todayIso(), { message });
@@ -69,7 +68,7 @@ const tooth = z.coerce.number().refine(isFdiTooth, { message: 'Unknown tooth num
 export const planSchema = z.object({
   patientId: requiredId('Patient not found.'),
   tooth,
-  productId: optionalId,
+  productId: optionalUuid,
   technique,
   notes: text(1000),
 });
@@ -83,8 +82,8 @@ export const placeSchema = z.object({
   lotId: requiredId('Choose a stock batch.'),
   placedOn: pastDate('Enter the placement date (today or earlier).'),
   placingDelegateId: requiredId('Choose the delegate who placed the implant.'),
-  slotId: optionalId,
-  assistingDelegateId: optionalId,
+  slotId: optionalUuid,
+  assistingDelegateId: optionalUuid,
   supervisorId: requiredId('Choose a supervisor.'),
   courseId: requiredId('Choose the course.'),
   technique,
@@ -103,11 +102,11 @@ export const componentSchema = z
     patientId: requiredId('Patient not found.'),
     componentType: z.enum(COMPONENT_TYPES, { message: 'Choose the component.' }),
     fittedOn: pastDate('Enter the date the component was fitted (today or earlier).'),
-    productId: optionalId,
-    lotId: optionalId,
-    byDelegateId: optionalId,
-    byOrganizerId: optionalId,
-    courseId: optionalId,
+    productId: optionalUuid,
+    lotId: optionalUuid,
+    byDelegateId: optionalUuid,
+    byOrganizerId: optionalUuid,
+    courseId: optionalUuid,
     notes: text(1000),
   })
   .refine((c) => c.productId === null || c.lotId !== null, { message: 'Choose the stock batch used.' })

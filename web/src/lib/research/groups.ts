@@ -4,8 +4,8 @@ import { LOADING_LABELS, loadingFrom } from '@/lib/restorations/restorations';
 import { TECHNIQUE_LABELS } from '@/lib/inventory/types';
 import { logRank, thinData } from './stats';
 import { MILESTONE_DAYS, kmEstimate, type ImplantRow } from './summary';
+import { DAYS_PER_MONTH } from '@/lib/dates';
 
-const MONTH_DAYS = 30.4375;
 
 export const COMPARE_KEYS = ['brand', 'technique', 'loading', 'smoking', 'diabetes', 'periodontitis', 'bone_type'] as const;
 export type CompareKey = (typeof COMPARE_KEYS)[number];
@@ -128,7 +128,7 @@ export function compareGroups(groups: Group<ImplantRow>[]) {
   const base = { n, events, unknownDate, p: null as number | null, chisq: null as number | null, df: null as number | null, thin: false };
   if (tested.length < 2) return { ...base, status: 'one_group' as const };
   if (events === 0) return { ...base, status: 'no_failures' as const };
-  const lr = logRank(tested.map((g) => g.map((r) => ({ months: r.follow_up_days / MONTH_DAYS, event: r.event }))));
+  const lr = logRank(tested.map((g) => g.map((r) => ({ months: r.follow_up_days / DAYS_PER_MONTH, event: r.event }))));
   return {
     ...base,
     status: lr.p === null ? ('undefined' as const) : ('ok' as const),

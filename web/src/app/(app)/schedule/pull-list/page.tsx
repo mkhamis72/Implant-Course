@@ -33,7 +33,7 @@ export default async function PullListPage({ searchParams }: { searchParams: Pag
                 <th>Implant</th>
                 <th className="text-right">Needed</th>
                 <th className="text-right">Usable stock</th>
-                <th />
+                <th>Shortage</th>
               </tr>
             </thead>
             <tbody>
@@ -44,7 +44,7 @@ export default async function PullListPage({ searchParams }: { searchParams: Pag
                     <td data-label="Implant">{r.product_id ? productLabel(r) : 'Implant not chosen yet'}</td>
                     <td data-label="Needed" className="text-right">{r.needed}</td>
                     <td data-label="Usable stock" className="text-right">{r.product_id ? r.available : '—'}</td>
-                    <td>
+                    <td data-label="Shortage">
                       {r.product_id && short > 0 && <span className="badge badge-bad">Short by {short}</span>}
                     </td>
                   </tr>

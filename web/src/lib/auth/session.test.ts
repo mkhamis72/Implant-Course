@@ -56,7 +56,7 @@ vi.mock('@/lib/supabase/server', () => ({
   },
 }));
 import {
-  checkPermission, getCurrentProfile, getSettings, requireActiveUser, requireAdmin, requireDelegate, requirePermission, requireSignedIn,
+  getCurrentProfile, getSettings, requireActiveUser, requireAdmin, requireDelegate, requirePermission, requireSignedIn,
 } from './session';
 
 const profile = (over: Record<string, unknown> = {}) => ({
@@ -130,9 +130,6 @@ describe('while two-factor set-up is required', () => {
     row.current = profile({ role: 'delegate', mfa_setup_required: true });
     await expect(requireDelegate()).rejects.toThrow('REDIRECT /account/security');
   });
-  it('checkPermission returns the message instead of redirecting', async () => {
-    expect(await checkPermission('patients')).toBe('Set up two-factor authentication first.');
-  });
   it('the security page itself is still allowed', async () => {
     await expect(requireSignedIn({ allowMfaSetup: true })).resolves.toMatchObject({ user_id: 'u1', mfa_setup_required: true });
   });
@@ -145,7 +142,6 @@ describe('while two-factor set-up is required', () => {
 describe('without the flag', () => {
   it('lets an admin through', async () => {
     await expect(requireAdmin()).resolves.toMatchObject({ user_id: 'u1', mfa_setup_required: false });
-    expect(await checkPermission('patients')).toBeNull();
   });
 });
 
