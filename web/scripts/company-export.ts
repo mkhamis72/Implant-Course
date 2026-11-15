@@ -6,22 +6,25 @@ import { companyIdBySlug, takeCompanyArg, UnknownCompanyError } from './one-data
 import { targetLabel } from './create-user-args';
 
 /*
- * Limits (company-export and company-restore): for one company in a healthy shared database, not a disaster
- * restore. Only the current members' accounts and profiles are exported, so a former member (one now in another
- * company, say), still named by this company's rows, is not in the file (the restore's foreign-key check then fails on
- * an empty database). Identity sequences are not advanced by the restore (the live database's are already past
- * the restored ids). Files' bytes (bytea) travel as hex inside the JSON and the whole file is held in memory.
+ * Limits (company-export and company-restore): for one company in a shared database, not a whole-database
+ * disaster. The company's own Self-Auth accounts and its members' profiles are exported; a former member still
+ * named by this company's rows is not in the file (the restore's foreign-key check then fails on an empty
+ * database). Identity sequences are not advanced by the restore (the live database's are already past the
+ * restored ids). Files' bytes (bytea) travel as hex inside the JSON and the whole file is held in memory.
  * Whole-database disasters use the nightly pg_dump (docs/operations.md section D).
  */
 
 export type Row = Record<string, unknown>;
 
-/** One company's data: its rows from every company table (parents before children), preceded by its
- *  members' sign-in accounts and profiles. Holds password hashes: keep it as private as a database dump. */
+/** One company's data: its companies row; its sign-in accounts (Self-Auth users, password and Google links,
+ *  authenticators) and its members' profiles; then its rows from every company table (parents before children).
+ *  Holds password hashes and encrypted authenticator secrets: keep it as private as a database dump.
+ *  v1 files (before 2026-11-16) had `auth.users` instead of the self_auth tables and no `company`. */
 export type CompanyExport = {
-  format: 'company-export-v1';
+  format: 'company-export-v2';
   company_id: string;
   exported_at: string;
+  company: Row;
   tables: Record<string, Row[]>;
 };
 
@@ -45,9 +48,24 @@ export function parseExport(text: string): unknown {
   return parseExact(text);
 }
 
-export const ACCOUNT_TABLES = ['auth.users', 'public.profiles'] as const;
-/** The column holding the user id in each account table. */
-export const ACCOUNT_KEY: Record<(typeof ACCOUNT_TABLES)[number], string> = { 'auth.users': 'id', 'public.profiles': 'user_id' };
+/** The company's own Self-Auth accounts ($1 = company id). */
+const COMPANY_ACCOUNTS = `(select id from self_auth."user" where "companyId" = $1::text)`;
+
+/**
+ * Account tables, in load order (parents first), read before the company tables. `key` holds the user id;
+ * `where` selects the company's rows; `nullColumns` are never exported (OAuth tokens: Google sign-in needs only
+ * the link, and tokens are credentials). Sessions are not exported: people sign in again.
+ */
+export const ACCOUNT_TABLES = [
+  { table: 'self_auth.user', key: 'id', where: `t."companyId" = $1::text` },
+  {
+    table: 'self_auth.account', key: 'userId', where: `t."userId" in ${COMPANY_ACCOUNTS}`,
+    nullColumns: ['accessToken', 'refreshToken', 'idToken', 'accessTokenExpiresAt', 'refreshTokenExpiresAt'],
+  },
+  { table: 'self_auth.totp_factor', key: 'user_id', where: `t.user_id in ${COMPANY_ACCOUNTS}` },
+  { table: 'public.profiles', key: 'user_id', where: 't.user_id in (select user_id from public.company_members where company_id = $1)' },
+] as const satisfies readonly { table: string; key: string; where: string; nullColumns?: readonly string[] }[];
+export const ACCOUNT_TABLE_NAMES: string[] = ACCOUNT_TABLES.map((a) => a.table);
 
 export const quoteIdent = (name: string) => `"${name.replaceAll('"', '""')}"`;
 /** `schema.table` as written by this module, quoted for SQL. */
@@ -96,16 +114,23 @@ export async function insertableColumns(c: Client, qualified: string): Promise<s
 
 /** Reads one company's data. Callers must give it one consistent snapshot (begin isolation level repeatable read read only), or the ~50 reads see different moments. Runs on the caller's connection and transaction (no session needed: it filters on company_id). */
 export async function exportCompany(c: Client, companyId: string): Promise<CompanyExport> {
-  const members = '(select user_id from public.company_members where company_id = $1)';
   const tables: Record<string, Row[]> = {};
-  const read = async (qualified: string, where: string) => {
+  const read = async (qualified: string, where: string, nullColumns: readonly string[] = []) => {
     const { rows } = await c.query<{ r: string }>(
       `select to_jsonb(t)::text as r from ${quoteTable(qualified)} t where ${where} order by to_jsonb(t)`, [companyId]);
-    tables[qualified] = rows.map((x) => parseExact(x.r) as Row);
+    tables[qualified] = rows.map((x) => {
+      const row = parseExact(x.r) as Row;
+      for (const col of nullColumns) if (col in row) row[col] = null;
+      return row;
+    });
   };
-  for (const t of ACCOUNT_TABLES) await read(t, `t.${ACCOUNT_KEY[t]} in ${members}`);
+  const company = (await c.query<{ r: string }>('select to_jsonb(t)::text as r from public.companies t where t.id = $1', [companyId])).rows[0];
+  if (!company) throw new Error(`Company ${companyId} does not exist in this database.`);
+  for (const a of ACCOUNT_TABLES) await read(a.table, a.where, 'nullColumns' in a ? a.nullColumns : []);
   for (const t of await companyTableOrder(c)) await read(t, 't.company_id = $1');
-  return { format: 'company-export-v1', company_id: companyId, exported_at: new Date().toISOString(), tables };
+  return {
+    format: 'company-export-v2', company_id: companyId, exported_at: new Date().toISOString(), company: parseExact(company.r) as Row, tables,
+  };
 }
 
 /** Removes `flag <value>` from argv. */
