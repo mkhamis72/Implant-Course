@@ -124,7 +124,7 @@ export default async function DashboardPage() {
         </Card>
         )}
 
-        {show.schedule && (
+        {show.schedule && show.inventory && (
         <Card title="Stock shortages for surgeries" failed={Boolean(pullToday.error || pullTomorrow.error)} count={shortages.length} tone="bad">
           {shortages.length === 0 ? (
             <p className="text-sm text-muted">Stock covers today’s and tomorrow’s planned implants.</p>

@@ -11,6 +11,7 @@ import { SLOT_SELECT } from '@/lib/schedule/queries';
 import { progressOf } from '@/lib/checklists/format';
 import { TECHNIQUE_LABELS } from '@/lib/inventory/types';
 import { bookingTechnique, TECHNIQUE_SHORT, type BookingTechnique } from '@/lib/schedule/technique';
+import { featureOn } from '@/lib/modules/modules';
 import { CancelBooking } from './cancel-booking';
 import { BookingStatus } from './booking-status';
 import { SurgerySessions, type DaySession } from './surgery-sessions';
@@ -88,7 +89,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
       <div className="page-header">
         <h1>Schedule · {formatDate(date)}</h1>
         <div className="flex items-center gap-3">
-          <Link href={`/schedule/pull-list?date=${date}`} className="text-accent hover:underline">Pull list</Link>
+          {featureOn(profile.features, 'inventory') && <Link href={`/schedule/pull-list?date=${date}`} className="text-accent hover:underline">Pull list</Link>}
           {editable && <Link href={`/schedule/new?date=${date}`} className="btn">New booking</Link>}
         </div>
       </div>
