@@ -5,21 +5,26 @@ import { valueOf, type FormState } from '@/lib/patients/form-state';
 import type { Option } from '@/lib/inventory/types';
 import { addSurgeryDay } from './actions';
 
-/** Adds a surgery session on the day being viewed; `courses` are the courses whose dates include it. */
-export function SurgeryDayForm({ date, courses }: { date: string; courses: Option[] }) {
+/**
+ * Adds a surgery session on the day being viewed; `courses` are the courses whose dates include it. In a clinic
+ * (`clinic`) it adds a clinic day, which has no course.
+ */
+export function SurgeryDayForm({ date, courses, clinic = false }: { date: string; courses: Option[]; clinic?: boolean }) {
   const [state, action, pending] = useActionState<FormState, FormData>(addSurgeryDay, {});
   return (
     <form action={action} className="grid gap-4 sm:grid-cols-3" key={state.ok}>
       <input type="hidden" name="date" value={date} readOnly />
+      {!clinic && (
       <label className="block sm:col-span-2">
         <span className="label">Course</span>
         <select className="input" name="course_id" defaultValue={valueOf(state, 'course_id', courses[0]?.id)} key={state.error}>
           {courses.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
         </select>
       </label>
+      )}
       <label className="block">
         <span className="label">Session title</span>
-        <input className="input" name="title" defaultValue={valueOf(state, 'title', 'Surgery day')} />
+        <input className="input" name="title" defaultValue={valueOf(state, 'title', clinic ? 'Clinic day' : 'Surgery day')} />
       </label>
       <label className="block">
         <span className="label">Starts</span>
@@ -36,7 +41,7 @@ export function SurgeryDayForm({ date, courses }: { date: string; courses: Optio
       {state.error && <p role="alert" className="text-sm text-bad sm:col-span-3">{state.error}</p>}
       {state.ok && <p role="status" className="text-sm text-ok sm:col-span-3">{state.ok}</p>}
       <div className="sm:col-span-3">
-        <button className="btn" disabled={pending}>Add surgery day</button>
+        <button className="btn" disabled={pending}>{clinic ? 'Add clinic day' : 'Add surgery day'}</button>
       </div>
     </form>
   );

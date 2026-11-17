@@ -6,6 +6,8 @@ import { productLabel } from '@/lib/inventory/labels';
 import type { Option, Product } from '@/lib/inventory/types';
 import { SlotForm, type SessionOption } from './slot-form';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
+import { teachingOn } from '@/lib/modules/modules';
+import { sessionLabel } from '@/lib/schedule/labels';
 
 export default async function NewBookingPage({
   searchParams,
@@ -15,6 +17,7 @@ export default async function NewBookingPage({
   const q = await readParams(searchParams, 'date', 'chair', 'time', 'session', 'patient');
   const supabase = await createClient();
   const me = await requirePermission('schedule', 'edit');
+  const teaching = teachingOn(me.features);
   const results = await Promise.all([
     supabase.from('sessions').select('id, title, date, start_time, course_id, course:courses(name)').eq('type', 'surgery')
       .gte('date', todayIso()).order('date'),
@@ -23,14 +26,15 @@ export default async function NewBookingPage({
     supabase.from('enrollments').select('course_id, delegate:delegates(id, full_name, active)'),
     supabase.from('products').select('*').eq('type', 'implant').eq('active', true),
     supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name'),
+    supabase.from('doctors').select('id, name').eq('active', true).order('name'),
   ]);
   // A failed query must not look like an empty list (e.g. "no sessions").
   if (results.some((r) => r.error)) throw new Error('Could not load the booking form');
-  const [{ data: sessions }, { data: chairs }, { data: patients }, { data: enrollments }, { data: implants }, { data: supervisors }] = results;
+  const [{ data: sessions }, { data: chairs }, { data: patients }, { data: enrollments }, { data: implants }, { data: supervisors }, { data: doctors }] = results;
 
   const sessionOptions: SessionOption[] = ((sessions ?? []) as unknown as {
-    id: string; title: string; date: string; course_id: string; course: { name: string } | null;
-  }[]).map((s) => ({ id: s.id, courseId: s.course_id, label: `${formatDate(s.date)} · ${s.course?.name ?? ''} · ${s.title}` }));
+    id: string; title: string; date: string; course_id: string | null; course: { name: string } | null;
+  }[]).map((s) => ({ id: s.id, courseId: s.course_id ?? '', label: sessionLabel(s) }));
 
   const enrolled: Record<string, Option[]> = {};
   for (const e of (enrollments ?? []) as unknown as { course_id: string; delegate: { id: string; full_name: string; active: boolean } | null }[]) {
@@ -51,6 +55,8 @@ export default async function NewBookingPage({
         enrolled={enrolled}
         implants={((implants ?? []) as Product[]).sort((a, b) => productLabel(a).localeCompare(productLabel(b), undefined, { numeric: true }))}
         supervisors={(supervisors ?? []).map((s) => ({ id: s.id as string, label: s.full_name as string }))}
+        doctors={(doctors ?? []).map((d) => ({ id: d.id as string, label: d.name as string }))}
+        teaching={teaching}
         me={me?.user_id ?? ''}
         initial={{ sessionId: initialSession, chairId: q.chair, start: q.time || '09:00', fileNo: q.patient, date: q.date && isRealDate(q.date) ? q.date : undefined }}
       />

@@ -2,12 +2,14 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
-import { formatDate, formatTime } from '@/lib/format';
+import { formatTime } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
 import type { Option } from '@/lib/inventory/types';
 import { SLOT_SELECT } from '@/lib/schedule/queries';
 import type { SlotRow } from '@/lib/schedule/types';
 import { SlotForm } from '../../new/slot-form';
+import { teachingOn } from '@/lib/modules/modules';
+import { sessionLabel } from '@/lib/schedule/labels';
 
 export default async function EditBookingPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requirePermission('schedule', 'edit');
@@ -19,7 +21,8 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
   const slot = data as unknown as SlotRow;
   const { data: session } = await supabase
     .from('sessions').select('id, title, date, course_id, course:courses(name)').eq('id', slot.session_id).single();
-  const s = session as unknown as { id: string; title: string; date: string; course_id: string; course: { name: string } | null };
+  const s = session as unknown as { id: string; title: string; date: string; course_id: string | null; course: { name: string } | null };
+  const teaching = teachingOn(me.features);
   const back = `/schedule?date=${s.date}`;
 
   if (slot.status !== 'scheduled') {
@@ -36,12 +39,20 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
 
   const results = await Promise.all([
     supabase.from('chairs').select('id, name').or(`active.eq.true,id.eq.${slot.chair_id}`).order('name'),
-    supabase.from('enrollments').select('course_id, delegate:delegates(id, full_name, active)').eq('course_id', s.course_id),
-    supabase.from('supervisors').select('id, full_name').or(`active.eq.true,id.eq.${slot.supervisor_id}`).order('full_name'),
+    // A clinic day has no course, so no delegates.
+    s.course_id
+      ? supabase.from('enrollments').select('course_id, delegate:delegates(id, full_name, active)').eq('course_id', s.course_id)
+      : Promise.resolve({ data: [], error: null }),
+    slot.supervisor_id
+      ? supabase.from('supervisors').select('id, full_name').or(`active.eq.true,id.eq.${slot.supervisor_id}`).order('full_name')
+      : supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name'),
     supabase.from('slot_delegates').select('delegate_id, role').eq('slot_id', id),
+    slot.placing_doctor_id
+      ? supabase.from('doctors').select('id, name').or(`active.eq.true,id.eq.${slot.placing_doctor_id}`).order('name')
+      : supabase.from('doctors').select('id, name').eq('active', true).order('name'),
   ]);
   if (results.some((r) => r.error)) throw new Error('Could not load the booking form');
-  const [{ data: chairs }, { data: enrollments }, { data: supervisors }, { data: slotDelegates }] = results;
+  const [{ data: chairs }, { data: enrollments }, { data: supervisors }, { data: slotDelegates }, { data: doctors }] = results;
 
   const delegates: Option[] = ((enrollments ?? []) as unknown as { delegate: { id: string; full_name: string; active: boolean } | null }[])
     .filter((e) => e.delegate?.active)
@@ -58,21 +69,24 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
         <Link href={back} className="text-accent hover:underline">Back to the schedule</Link>
       </div>
       <SlotForm
-        sessions={[{ id: s.id, courseId: s.course_id, label: '' }]}
+        sessions={[{ id: s.id, courseId: s.course_id ?? '', label: '' }]}
         chairs={(chairs ?? []).map((c) => ({ id: c.id as string, label: c.name as string }))}
         patients={[]}
-        enrolled={{ [s.course_id]: delegates }}
+        enrolled={s.course_id ? { [s.course_id]: delegates } : {}}
         implants={[]}
         supervisors={(supervisors ?? []).map((o) => ({ id: o.id as string, label: o.full_name as string }))}
+        doctors={(doctors ?? []).map((d) => ({ id: d.id as string, label: d.name as string }))}
+        teaching={teaching}
         me={me.user_id}
         initial={{ sessionId: s.id, chairId: slot.chair_id, start: formatTime(slot.starts_at), fileNo: '' }}
         edit={{
           slotId: slot.id,
           sessionId: s.id,
-          sessionLabel: `${formatDate(s.date)} · ${s.course?.name ?? ''} · ${s.title}`,
+          sessionLabel: sessionLabel(s),
           patientLabel: slot.patient ? `${slot.patient.full_name} (${slot.patient.file_no})` : '',
           chairId: slot.chair_id,
-          supervisorId: slot.supervisor_id,
+          supervisorId: slot.supervisor_id ?? '',
+          placingDoctorId: slot.placing_doctor_id ?? '',
           start: formatTime(slot.starts_at),
           end: formatTime(slot.ends_at),
           roles,

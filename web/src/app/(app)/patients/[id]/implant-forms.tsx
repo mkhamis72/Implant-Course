@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { PlacedByChoice, type PlacedBy } from '@/components/placed-by-choice';
 import { availableLots } from '@/lib/inventory/lots';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { acceptsProduct } from '@/lib/inventory/components';
@@ -259,24 +260,8 @@ function People({ booked, summary, children }: { booked: boolean; summary: (stri
   );
 }
 
-export type PlacedBy = 'delegate' | 'doctor';
-
-/** A course organizer's choice of who placed the implant: a delegate (default) or a doctor (0115). */
-export function PlacedByChoice({ value, onChange }: { value: PlacedBy; onChange: (v: PlacedBy) => void }) {
-  return (
-    <fieldset>
-      <legend className="label">Placed by</legend>
-      <div className="flex gap-4 text-sm">
-        {(['delegate', 'doctor'] as const).map((p) => (
-          <label key={p} className="flex items-center gap-2">
-            <input type="radio" name="placed-by" value={p} checked={value === p} onChange={() => onChange(p)} />
-            {p === 'delegate' ? 'Delegate' : 'Doctor'}
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
+// Shared with the Schedule's booking form; corrections.tsx imports them from here.
+export { PlacedByChoice, type PlacedBy };
 
 /** The doctor who placed the implant, from Admin → Doctors (required whenever it is shown). */
 export function DoctorSelect({ label, doctors, value, onChange }: {
