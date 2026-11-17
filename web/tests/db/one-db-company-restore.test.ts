@@ -229,6 +229,20 @@ describe('company export and restore', () => {
     });
   });
 
+  it('restores a company row exported before plans existed', async () => {
+    await withTx(async (c) => {
+      const b = await seededCompanyB(c);
+      const file = viaFile(await exportCompany(c, b));
+      for (const k of ['kind', 'plan_id', 'extra_modules']) delete (file.company as Record<string, unknown>)[k];
+      await eraseFully(c, b);
+      await restoreCompany(c, b, file, { create: true });
+      const row = (await c.query('select kind, plan_id, extra_modules from public.companies where id = $1', [b])).rows[0];
+      expect(row.plan_id).toBe('fa110000-0000-4000-8000-000000000001');
+      expect(row.kind).toBe('course_organizer');
+      expect(row.extra_modules).toEqual([]);
+    });
+  });
+
   it('a restore never changes an account that still exists (a password changed after the export stays)', async () => {
     await withTx(async (c) => {
       const b = await seededCompanyB(c);
