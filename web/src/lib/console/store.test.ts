@@ -53,7 +53,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe('console store (production database)', () => {
   beforeEach(() => stub(PROD));
-  const osdic = { id: 'c-osdic', slug: 'osdic', name: 'OSDIC', hosts: ['osdic.imploid.net'], status: 'active' };
+  const osdic = { id: 'c-osdic', slug: 'osdic', name: 'OSDIC', hosts: ['osdic.imploid.net'], status: 'active', kind: 'course_organizer', plan_id: 'p1', extra_modules: ['statistics'] };
 
   it('lists companies with the project keys from the env and the company id from the row', async () => {
     h.results.set('companies', { data: [osdic], error: null });
@@ -61,8 +61,9 @@ describe('console store (production database)', () => {
     expect(await s.list()).toEqual([{
       slug: 'osdic', name: 'OSDIC', hosts: ['osdic.imploid.net'], status: 'active',
       supabase_url: 'https://prod.supabase.co', anon_key: 'p-anon', company_id: 'c-osdic',
+      kind: 'course_organizer', plan_id: 'p1', extra_modules: ['statistics'],
     }]);
-    expect(h.calls[0]).toEqual({ table: 'companies', ops: [['select', ['id, slug, name, hosts, status']], ['order', ['slug']]] });
+    expect(h.calls[0]).toEqual({ table: 'companies', ops: [['select', ['id, slug, name, hosts, status, kind, plan_id, extra_modules']], ['order', ['slug']]] });
   });
   it('gets one company by slug', async () => {
     h.results.set('companies', { data: [osdic], error: null });
@@ -78,6 +79,33 @@ describe('console store (production database)', () => {
       ['select', ['at, action, actor, reason, before, after']], ['eq', ['slug', 'osdic']],
       ['order', ['at', { ascending: false }]], ['order', ['id', { ascending: false }]], ['limit', [50]],
     ]);
+  });
+  it('history ignores keys an older snapshot never had (written before 0110)', async () => {
+    h.results.set('company_log', { data: [{ at: 't', action: 'update', actor: 'me', reason: null, before: { name: 'A' }, after: { name: 'B', kind: 'course_organizer', plan_id: 'p', extra_modules: [] } }], error: null });
+    expect((await consoleStore().history('osdic'))[0].changed).toEqual(['name']);
+  });
+  it('history lists a changed plan when both snapshots have it', async () => {
+    h.results.set('company_log', { data: [{ at: 't', action: 'update', actor: 'me', reason: null, before: { plan_id: 'a', kind: 'course_organizer' }, after: { plan_id: 'b', kind: 'course_organizer' } }], error: null });
+    expect((await consoleStore().history('osdic'))[0].changed).toEqual(['plan_id']);
+  });
+  it('lists plans with the number of companies on each', async () => {
+    h.results.set('plans', { data: [{ id: 'p1', name: 'Starter', kind: 'course_organizer', modules: ['inventory'] }, { id: 'p2', name: 'Full', kind: 'course_organizer', modules: ['inventory', 'statistics'] }], error: null });
+    h.results.set('companies', { data: [{ plan_id: 'p1' }, { plan_id: 'p1' }, { plan_id: 'p2' }], error: null });
+    expect(await consoleStore().plans()).toEqual([
+      { id: 'p1', name: 'Starter', kind: 'course_organizer', modules: ['inventory'], companies: 2 },
+      { id: 'p2', name: 'Full', kind: 'course_organizer', modules: ['inventory', 'statistics'], companies: 1 },
+    ]);
+  });
+  it('saves a plan through console_save_plan; the message comes back', async () => {
+    expect(await consoleStore().savePlan({ id: null, name: 'X', kind: 'course_organizer', modules: ['inventory'] }, 'me')).toBeNull();
+    expect(h.rpc).toHaveBeenCalledWith('console_save_plan', { p_id: null, p_name: 'X', p_kind: 'course_organizer', p_modules: ['inventory'], p_actor: 'me' });
+    h.rpc.mockResolvedValueOnce({ data: null, error: { message: 'A plan called X already exists.' } });
+    expect(await consoleStore().savePlan({ id: null, name: 'X', kind: 'course_organizer', modules: [] }, 'me')).toBe('A plan called X already exists.');
+  });
+  it('sets a company plan through console_set_company_plan and refreshes the routing cache', async () => {
+    expect(await consoleStore().setCompanyPlan('osdic', 'course_organizer', 'p1', ['statistics'], 'me')).toBeNull();
+    expect(h.rpc).toHaveBeenCalledWith('console_set_company_plan', { p_slug: 'osdic', p_kind: 'course_organizer', p_plan: 'p1', p_extras: ['statistics'], p_actor: 'me' });
+    expect(h.resetProductionCache).toHaveBeenCalled();
   });
   it('reads the recorded errors from error_log, newest first, 1000 at most', async () => {
     h.results.set('error_log', { data: [{ at: 't', message: 'boom', path: null }], error: null });

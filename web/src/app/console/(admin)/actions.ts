@@ -6,7 +6,7 @@ import { requireConsoleAdmin } from '@/lib/console/session';
 import { consoleStore, type CompanyRow, type ConsoleStore } from '@/lib/console/store';
 import { createFirstAdmin, inviteFirstAdmin, type InviteResult } from '@/lib/console/first-admin';
 import { addProjectDomain, vercelConfigured } from '@/lib/console/vercel';
-import { firstAdminSchema, onboardSchema, statusSchema, updateSchema } from '@/lib/console/schemas';
+import { companyPlanSchema, firstAdminSchema, onboardSchema, planSchema, statusSchema, updateSchema } from '@/lib/console/schemas';
 import { emailEnabled } from '@/lib/flags';
 import { failed, type FormState } from '@/lib/patients/form-state';
 
@@ -122,6 +122,30 @@ export async function setCompanyStatus(_prev: FormState, formData: FormData): Pr
   revalidatePath(`/console/companies/${s.slug}`);
   revalidatePath('/console');
   return { ok: s.status === 'suspended' ? 'Suspended. Its users see “temporarily unavailable” within about a minute.' : 'Reactivated.' };
+}
+
+/** Creates or edits a plan (Plans page). */
+export async function savePlan(_prev: FormState, formData: FormData): Promise<FormState> {
+  const admin = await requireConsoleAdmin();
+  const parsed = planSchema.safeParse(fields(formData));
+  if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
+  const error = await consoleStore().savePlan({ ...parsed.data, id: parsed.data.id ?? null }, admin.email);
+  if (error) return failed(error, formData);
+  revalidatePath('/console/plans');
+  return { ok: 'Saved.' };
+}
+
+/** A company's type, plan and extra modules (company page). */
+export async function setCompanyPlan(_prev: FormState, formData: FormData): Promise<FormState> {
+  const admin = await requireConsoleAdmin();
+  const parsed = companyPlanSchema.safeParse(fields(formData));
+  if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
+  const p = parsed.data;
+  const error = await consoleStore().setCompanyPlan(p.slug, p.kind, p.plan_id, p.extras, admin.email);
+  if (error) return failed(error, formData);
+  revalidatePath(`/console/companies/${p.slug}`);
+  revalidatePath('/console/plans');
+  return { ok: 'Saved.' };
 }
 
 export type FirstAdminState = FormState & { password?: string; email?: string; seq?: number };

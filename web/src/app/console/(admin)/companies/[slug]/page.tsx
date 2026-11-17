@@ -3,7 +3,7 @@ import { requireConsoleAdmin } from '@/lib/console/session';
 import { consoleStore } from '@/lib/console/store';
 import { formatDateTime } from '@/lib/format';
 import { emailEnabled } from '@/lib/flags';
-import { DetailsForm, FirstAdminForm, StatusForm } from './forms';
+import { DetailsForm, FirstAdminForm, PlanForm, StatusForm } from './forms';
 import { AddressPanel } from './address-panel';
 
 export default async function CompanyPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -12,7 +12,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ slug: 
   const store = consoleStore();
   const company = await store.get(slug);
   if (!company) notFound();
-  const history = await store.history(slug);
+  const [history, plans] = await Promise.all([store.history(slug), store.plans()]);
   return (
     <div className="max-w-3xl space-y-6">
       <div className="page-header">
@@ -22,6 +22,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ slug: 
         </h1>
       </div>
       <DetailsForm slug={company.slug} name={company.name} hosts={company.hosts} />
+      <PlanForm slug={company.slug} kind={company.kind} planId={company.plan_id} extras={company.extra_modules} plans={plans.map(({ id, name, kind }) => ({ id, name, kind }))} />
       <AddressPanel slug={company.slug} hosts={company.hosts} />
       <FirstAdminForm slug={company.slug} byEmail={emailEnabled()} />
       <StatusForm slug={company.slug} status={company.status} />

@@ -1,9 +1,10 @@
 'use client';
 
-import { useActionState } from 'react';
-import { valueOf, type FormState } from '@/lib/patients/form-state';
+import { useActionState, useState } from 'react';
+import { checkedOf, valueOf, type FormState } from '@/lib/patients/form-state';
+import { KIND_LABELS, MODULES, MODULE_LABELS, type CompanyKind, type Module } from '@/lib/modules/modules';
 import { TemporaryPassword } from '@/components/temporary-password';
-import { addDomain, firstAdmin, setCompanyStatus, updateCompany, type FirstAdminState } from '../../actions';
+import { addDomain, firstAdmin, setCompanyPlan, setCompanyStatus, updateCompany, type FirstAdminState } from '../../actions';
 
 /** useActionState plus a sequence number carried in each result, so the form remounts (React 19 resets uncontrolled inputs). */
 function useRemountingAction(action: (prev: FirstAdminState, formData: FormData) => Promise<FirstAdminState>) {
@@ -42,6 +43,67 @@ export function DetailsForm({ slug, name, hosts }: { slug: string; name: string;
       </form>
       <Messages state={state} />
     </section>
+  );
+}
+
+type PlanChoice = { id: string; name: string; kind: CompanyKind };
+
+/** The company's type, plan and extra modules. Release 1: only Course organizer, Inventory always on. */
+export function PlanForm({ slug, kind, planId, extras, plans }: { slug: string; kind: CompanyKind; planId: string; extras: Module[]; plans: PlanChoice[] }) {
+  const { state, formAction, pending, attempt } = useRemountingAction(setCompanyPlan);
+  return (
+    <section className="card">
+      <h2 className="mb-3 text-lg font-semibold">Plan</h2>
+      <PlanFields key={attempt} slug={slug} state={state} formAction={formAction} pending={pending} kind={kind} planId={planId} extras={extras} plans={plans} />
+      <Messages state={state} />
+    </section>
+  );
+}
+
+function PlanFields({ slug, state, formAction, pending, kind, planId, extras, plans }: {
+  slug: string; state: FormState; formAction: (f: FormData) => void; pending: boolean;
+  kind: CompanyKind; planId: string; extras: Module[]; plans: PlanChoice[];
+}) {
+  const [chosen, setChosen] = useState<CompanyKind>((valueOf(state, 'kind', kind) as CompanyKind) || kind);
+  const ofKind = plans.filter((p) => p.kind === chosen);
+  const wanted = valueOf(state, 'plan_id', planId);
+  return (
+    <form action={formAction} className="space-y-3">
+      <input type="hidden" name="slug" value={slug} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="label" htmlFor="plan-kind">Type</label>
+          <select id="plan-kind" name="kind" className="input" value={chosen} onChange={(e) => setChosen(e.target.value as CompanyKind)}>
+            <option value="course_organizer">{KIND_LABELS.course_organizer}</option>
+            <option value="clinic" disabled>{KIND_LABELS.clinic} (later release)</option>
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="plan-plan">Plan</label>
+          <select id="plan-plan" name="plan_id" className="input" required defaultValue={ofKind.some((p) => p.id === wanted) ? wanted : ''}>
+            <option value="" disabled>Choose a plan</option>
+            {ofKind.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+      </div>
+      <fieldset>
+        <legend className="label">Extra modules (on top of the plan)</legend>
+        <div className="flex flex-wrap gap-4">
+          {MODULES.map((m) =>
+            m === 'inventory' ? (
+              <label key={m} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked disabled readOnly /> {MODULE_LABELS[m]} <span className="text-muted">Always on for now</span>
+              </label>
+            ) : (
+              <label key={m} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name={`extra_${m}`} defaultChecked={checkedOf(state, `extra_${m}`, extras.includes(m))} /> {MODULE_LABELS[m]}
+              </label>
+            ),
+          )}
+        </div>
+      </fieldset>
+      <button className="btn" disabled={pending}>Save</button>
+    </form>
   );
 }
 

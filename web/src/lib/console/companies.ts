@@ -1,8 +1,9 @@
 import 'server-only';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { checkTenant } from '@/lib/tenant/check';
+import type { CompanyKind, Module } from '@/lib/modules/modules';
 
-export type CompanyRow = { slug: string; name: string; hosts: string[]; status: 'active' | 'suspended'; supabase_url: string; anon_key: string; company_id: string | null };
+export type CompanyRow = { slug: string; name: string; hosts: string[]; status: 'active' | 'suspended'; supabase_url: string; anon_key: string; company_id: string | null; kind: CompanyKind; plan_id: string; extra_modules: Module[] };
 export type SharedProject = { supabaseUrl: string; anonKey: string; serviceRoleKey: string; databaseUrl: string };
 export type CompanyHealth = { problems: string[]; users: number | null; patients: number | null };
 

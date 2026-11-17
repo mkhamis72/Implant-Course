@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { firstAdminSchema, onboardSchema, statusSchema } from './schemas';
+import { companyPlanSchema, firstAdminSchema, onboardSchema, planSchema, statusSchema } from './schemas';
 
 const err = (r: { error?: { issues: { message: string }[] } }) => r.error?.issues[0].message;
 const base = { slug: 'acme', name: 'Acme Implants', hosts: 'acme.example.com\n Clinic.Acme.com ', email: ' Ann@Acme.com ', fullName: 'Ann Admin' };
@@ -30,5 +30,26 @@ describe('statusSchema', () => {
 describe('firstAdminSchema', () => {
   it('normalises the email', () => {
     expect(firstAdminSchema.parse({ slug: 'acme', email: ' Owner@Acme.COM ', fullName: 'Dr Owner' })).toEqual({ slug: 'acme', email: 'owner@acme.com', fullName: 'Dr Owner' });
+  });
+});
+
+describe('planSchema', () => {
+  const p = { name: ' Starter ', kind: 'course_organizer', module_inventory: 'on', module_statistics: 'on' };
+  it('lists the checked modules and trims the name', () => {
+    expect(planSchema.parse(p)).toEqual({ id: undefined, name: 'Starter', kind: 'course_organizer', modules: ['inventory', 'statistics'] });
+    expect(planSchema.parse({ ...p, module_statistics: undefined }).modules).toEqual(['inventory']);
+  });
+  it('refuses a 1-character name and an unknown type', () => {
+    expect(err(planSchema.safeParse({ ...p, name: ' A ' }))).toBe('Give a name (2–60 characters).');
+    expect(planSchema.safeParse({ ...p, kind: 'hospital' }).success).toBe(false);
+  });
+});
+
+describe('companyPlanSchema', () => {
+  const id = 'c0000000-0000-4000-8000-00000000000c';
+  it('reads the plan and the extras', () => {
+    expect(companyPlanSchema.parse({ slug: 'acme', kind: 'course_organizer', plan_id: id, extra_statistics: 'on' }))
+      .toEqual({ slug: 'acme', kind: 'course_organizer', plan_id: id, extras: ['statistics'] });
+    expect(companyPlanSchema.safeParse({ slug: 'acme', kind: 'clinic', plan_id: 'x' }).success).toBe(false);
   });
 });

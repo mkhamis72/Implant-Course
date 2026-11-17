@@ -39,7 +39,9 @@ vi.mock('@/lib/console/supabase', () => ({
 import { createClient } from '@supabase/supabase-js';
 import { createFirstAdmin, inviteFirstAdmin } from '@/lib/console/first-admin';
 import { addProjectDomain } from '@/lib/console/vercel';
-import { addDomain, firstAdmin, onboardCompany, setCompanyStatus, updateCompany } from './actions';
+import { requireConsoleAdmin } from '@/lib/console/session';
+import { revalidatePath } from 'next/cache';
+import { addDomain, firstAdmin, onboardCompany, savePlan, setCompanyPlan, setCompanyStatus, updateCompany } from './actions';
 
 const NEW_COMPANY = 'c0000000-0000-4000-8000-0000000000aa';
 /** A companies row as the store reads it (id, slug, name, hosts, status). */
@@ -226,5 +228,44 @@ describe('firstAdmin', () => {
     const r = await firstAdmin({}, form(admin));
     expect(r.ok).toBe('Password reset for the existing login.');
     expect(r.password).toBe('Temp-Pass-456');
+  });
+});
+
+describe('setCompanyPlan', () => {
+  const PLAN = 'c0000000-0000-4000-8000-0000000000bb';
+  const data = { slug: 'acme', kind: 'course_organizer', plan_id: PLAN, extra_statistics: 'on' };
+  it('passes the parsed values and the admin email to the store', async () => {
+    const r = await setCompanyPlan({}, form(data));
+    expect(rpc).toHaveBeenCalledWith('console_set_company_plan', { p_slug: 'acme', p_kind: 'course_organizer', p_plan: PLAN, p_extras: ['statistics'], p_actor: 'owner@example.com' });
+    expect(r).toEqual({ ok: 'Saved.' });
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/console/companies/acme');
+  });
+  it('returns the store error', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'Choose a plan for this type of company.' } });
+    expect((await setCompanyPlan({}, form(data))).error).toBe('Choose a plan for this type of company.');
+  });
+  it('refuses a bad form before calling the database', async () => {
+    expect((await setCompanyPlan({}, form({ ...data, plan_id: '' }))).error).toBe('Choose a plan for this type of company.');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it('needs a signed-in console admin', async () => {
+    vi.mocked(requireConsoleAdmin).mockRejectedValueOnce(new Error('REDIRECT:/console/login'));
+    await expect(setCompanyPlan({}, form(data))).rejects.toThrow('REDIRECT:/console/login');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('savePlan', () => {
+  it('creates a plan with the ticked modules and the admin email', async () => {
+    const r = await savePlan({}, form({ name: 'Starter', kind: 'course_organizer', module_inventory: 'on', module_statistics: 'on' }));
+    expect(rpc).toHaveBeenCalledWith('console_save_plan', { p_id: null, p_name: 'Starter', p_kind: 'course_organizer', p_modules: ['inventory', 'statistics'], p_actor: 'owner@example.com' });
+    expect(r).toEqual({ ok: 'Saved.' });
+    expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith('/console/plans');
+  });
+  it('returns the store error and needs an admin', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'A plan called Starter already exists.' } });
+    expect((await savePlan({}, form({ name: 'Starter', kind: 'course_organizer' }))).error).toBe('A plan called Starter already exists.');
+    vi.mocked(requireConsoleAdmin).mockRejectedValueOnce(new Error('REDIRECT:/console/login'));
+    await expect(savePlan({}, form({ name: 'Starter', kind: 'course_organizer' }))).rejects.toThrow('REDIRECT');
   });
 });
