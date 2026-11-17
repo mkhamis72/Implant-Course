@@ -53,3 +53,15 @@ describe('canSeeImplants', () => {
     expect(canSeeImplants({ role: 'delegate', permissions: {} })).toBe(false);
   });
 });
+
+describe('features', () => {
+  const features = ['inventory', 'teaching'] as const;
+  it('hides an area whose module is off, even from admins', () => {
+    expect(canView({ role: 'admin', permissions: {}, features }, 'research')).toBe(false);
+    expect(canEdit({ role: 'admin', permissions: {}, features }, 'patients')).toBe(true);
+  });
+  it('hides it from organizers with a grant', () => {
+    expect(canEdit({ role: 'organizer', permissions: { research: 'edit' }, features }, 'research')).toBe(false);
+    expect(canView({ role: 'organizer', permissions: { research: 'edit' }, features }, 'research')).toBe(false);
+  });
+});

@@ -31,6 +31,9 @@ export default async function UsersPage() {
       full_name: profile?.full_name ?? '',
       email: profile?.email ?? '',
       permissions: toPermissions(permRows.filter((p) => p.user_id === m.user_id)),
+      // Other users' rows: the company's features are not needed here (the grid reads permissions only).
+      features: [],
+      plan: null,
     }))
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
 

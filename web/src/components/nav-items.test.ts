@@ -14,6 +14,12 @@ describe('visibleNavItems', () => {
     expect(labels({ role: 'organizer', permissions: { patients: 'view' } })).not.toContain('Statistics');
     expect(labels({ role: 'organizer', permissions: { research: 'view' } })).toContain('Statistics');
   });
+  it('drops a switched-off module', () => {
+    const l = labels({ role: 'admin', permissions: {}, features: ['inventory', 'teaching'] });
+    expect(l).not.toContain('Statistics');
+    expect(l).toContain('Checklists');
+    expect(l).toContain('Inventory');
+  });
   it('gives delegates their own menu', () => {
     expect(labels({ role: 'delegate', permissions: {} })).toEqual(DELEGATE_NAV.map((i) => i.label));
     expect(DELEGATE_NAV.map((i) => i.href)).toEqual(['/my', '/my/report', '/account/security']);

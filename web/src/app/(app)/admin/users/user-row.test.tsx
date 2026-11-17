@@ -11,6 +11,7 @@ vi.mock('./actions', () => ({
 const user: Profile = {
   user_id: '1b4e28ba-2fa1-41d2-883f-0016d3cca427', full_name: 'Dr Org', email: 'org@example.com', role: 'organizer',
   active: true, delegate_id: null, mfa_setup_required: false, permissions: {},
+  features: ['inventory', 'statistics', 'teaching'], plan: null,
 };
 const account = (over: Partial<Account> = {}): Account => ({ lastSignIn: '2026-10-23T08:05:00Z', hasFactor: true, hasGoogle: false, invitePending: false, history: [], ...over });
 

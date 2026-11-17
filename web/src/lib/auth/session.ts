@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { currentTenant } from '@/lib/tenant/current';
 import { currentSelfAuthSession } from '@/lib/self-auth/session';
+import { toFeatures, type CompanyKind, type Feature } from '@/lib/modules/modules';
 import { ensureSessionCompany } from './company-session';
 import {
   canEdit, canView, toPermissions, type Area, type Level, type Permissions, type Role,
@@ -19,6 +20,9 @@ export type Profile = {
   /** Set by an admin's 2FA reset: nothing but Account → Security until a factor is verified again. */
   mfa_setup_required: boolean;
   permissions: Permissions;
+  /** The company's effective features (my_company_plan); a switched-off area is hidden by canView/canEdit. */
+  features: Feature[];
+  plan: { kind: CompanyKind; name: string } | null;
 };
 
 export const MFA_SETUP_PATH = '/account/security';
@@ -38,7 +42,7 @@ const loadAccount = cache(async (): Promise<Account> => {
   const supabase = await createClient();
   const { companyId } = await currentTenant();
   if ((await ensureSessionCompany(supabase, companyId)) === 'refused') return { profile: null, companyRefused: true };
-  const [member, perms] = await Promise.all([
+  const [member, perms, plan] = await Promise.all([
     supabase
       .from('company_members')
       .select('role, active, delegate_id, mfa_setup_required, profile:profiles(full_name, email)')
@@ -46,14 +50,16 @@ const loadAccount = cache(async (): Promise<Account> => {
       .eq('user_id', user.id)
       .maybeSingle(),
     supabase.from('user_permissions').select('area, level').eq('company_id', companyId).eq('user_id', user.id),
+    supabase.rpc('my_company_plan').maybeSingle(),
   ]);
   // A failed lookup is an error page, not "signed out": redirecting to /login would loop.
-  if (member.error || perms.error) throw new Error('Could not load your account');
+  if (member.error || perms.error || plan.error) throw new Error('Could not load your account');
   const row = member.data as MemberRow | null;
+  const planRow = plan.data as { kind: CompanyKind; plan_name: string; features: string[] } | null;
   // Signed in but no member row: treat as deactivated (an admin has to set the account up).
   if (!row) {
     return {
-      profile: { user_id: user.id, full_name: '', email: user.email ?? '', role: 'organizer', active: false, delegate_id: null, mfa_setup_required: false, permissions: {} },
+      profile: { user_id: user.id, full_name: '', email: user.email ?? '', role: 'organizer', active: false, delegate_id: null, mfa_setup_required: false, permissions: {}, features: [], plan: null },
       companyRefused: false,
     };
   }
@@ -66,6 +72,8 @@ const loadAccount = cache(async (): Promise<Account> => {
       email: profile?.email ?? user.email ?? '',
       ...membership,
       permissions: toPermissions(perms.data as { area: string; level: string }[] | null),
+      features: toFeatures(planRow?.features),
+      plan: planRow ? { kind: planRow.kind, name: planRow.plan_name } : null,
     },
     companyRefused: false,
   };
