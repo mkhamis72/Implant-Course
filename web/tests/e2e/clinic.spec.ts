@@ -1,0 +1,175 @@
+import { test, expect } from '@playwright/test';
+import { TEST_USERS } from '../support/test-users';
+import { login } from './helpers';
+import { createPatientViaUi, uniqueName } from './patients';
+import { apiAs, seedChair, seedImplantStock } from './api';
+import { ACADEMY, withPg } from './companies';
+
+// Academy switched to a Clinic company (kind 'clinic', a clinic plan) by SQL; restored afterwards.
+// The company is read per request, so a SQL change shows on the next page load.
+
+const FULL_PLAN = 'fa110000-0000-4000-8000-000000000001';
+const PLAN_NAME = `E2E Clinic ${Date.now()}`;
+const TEACHING = /courses|delegates|supervisor|lecture|workshop/i;
+
+test.describe.configure({ mode: 'serial' });
+
+const doctor = uniqueName('Dr Clinic');
+const dayTitle = uniqueName('Clinic day');
+let brand = '';
+let chair = '';
+let defaultItem = '';
+
+async function restore() {
+  await withPg(async (pg) => {
+    await pg.query(`update public.companies set kind = 'course_organizer', plan_id = $2 where id = $1`, [ACADEMY, FULL_PLAN]);
+    await pg.query('delete from public.plans where name = $1 and id <> $2', [PLAN_NAME, FULL_PLAN]);
+  });
+}
+
+test.beforeAll(async () => {
+  test.setTimeout(180_000);
+  // Seed while academy is still a course organizer on Full.
+  const api = await apiAs(TEST_USERS.organizer.email);
+  const admin = await apiAs(TEST_USERS.admin.email);
+  brand = uniqueName('ClinicBrand');
+  await seedImplantStock(api, { brand, qty: 2, lot: `E2E-CL${Date.now()}`, expiry: '2031-12-31' });
+  chair = uniqueName('Chair');
+  await seedChair(admin, chair);
+  const d = await admin.from('doctors').insert({ name: doctor });
+  expect(d.error).toBeNull();
+  defaultItem = uniqueName('Clinic room ready');
+  const t = await api.rpc('save_template', {
+    p_template: null, p_name: uniqueName('Default clinic day'), p_applies_to: 'surgery', p_is_default: true, p_items: [defaultItem],
+  });
+  expect(t.error).toBeNull();
+  await withPg(async (pg) => {
+    await pg.query('delete from public.plans where name = $1 and id <> $2', [PLAN_NAME, FULL_PLAN]);
+    const { rows } = await pg.query(
+      `insert into public.plans (name, kind, modules) values ($1, 'clinic', '{inventory,statistics}') returning id`,
+      [PLAN_NAME],
+    );
+    await pg.query(`update public.companies set kind = 'clinic', plan_id = $2 where id = $1`, [ACADEMY, rows[0].id]);
+  });
+});
+
+test.afterAll(async () => {
+  try {
+    await restore();
+  } finally {
+    await withPg(async (pg) => {
+      try {
+        const ids = (await pg.query('select id from public.sessions where title = $1', [dayTitle])).rows.map((r) => r.id);
+        if (ids.length) {
+          await pg.query('delete from public.checklists where session_id = any($1)', [ids]);
+          await pg.query('delete from public.surgery_slots where session_id = any($1)', [ids]);
+          await pg.query('delete from public.sessions where id = any($1)', [ids]);
+        }
+      } catch {
+        // A slot that still has implants goes with its patient in the global teardown; the unique title keeps reruns apart.
+      }
+      try {
+        await pg.query('delete from public.doctors where name = $1', [doctor]);
+      } catch {
+        await pg.query('update public.doctors set active = false where name = $1', [doctor]);
+      }
+    });
+  }
+});
+
+test('a clinic sees nothing about teaching', async ({ page }) => {
+  test.setTimeout(180_000);
+  await login(page, TEST_USERS.admin.email);
+  const nav = page.getByRole('navigation');
+  await expect(nav).not.toContainText(TEACHING);
+
+  await page.goto('/admin/doctors');
+  await expect(page.getByRole('heading', { name: 'Doctors' })).toBeVisible();
+  await expect(page.getByRole('main')).not.toContainText(TEACHING);
+
+  await page.goto('/patients');
+  await expect(page.getByRole('main')).not.toContainText(TEACHING);
+
+  const patientId = await createPatientViaUi(page, { full_name: uniqueName('Clinic form patient') });
+  await page.getByRole('button', { name: 'Tooth 36, Present' }).click();
+  const panel = page.getByRole('complementary', { name: 'Tooth details' });
+  await panel.getByRole('button', { name: 'Place implant' }).click();
+  await expect(page.getByRole('combobox', { name: 'Placed by' })).toBeVisible();
+  await expect(panel).not.toContainText(TEACHING);
+  expect(patientId).toBeTruthy();
+
+  await page.goto('/schedule');
+  await expect(page.getByRole('button', { name: 'Add clinic day' }).or(page.getByText('Add clinic day', { exact: true })).first()).toBeVisible();
+  await expect(page.getByRole('main')).not.toContainText(TEACHING);
+
+  for (const path of ['/courses', '/delegates', '/admin/supervisors', '/admin/lecturers', '/statistics/courses']) {
+    await page.goto(path);
+    await expect(page, path).not.toHaveURL(new RegExp(`${path}$`));
+  }
+
+  await page.goto('/admin/settings');
+  await expect(page.getByRole('heading', { name: 'Your plan' })).toBeVisible();
+  await expect(page.getByText('Courses and delegates')).toHaveCount(0);
+});
+
+test('clinic day to placement', async ({ page }) => {
+  test.setTimeout(180_000);
+  await login(page, TEST_USERS.organizer.email);
+  await page.goto('/schedule');
+  // The form is open when the day has no session yet.
+  const summary = page.locator('summary', { hasText: 'Add clinic day' });
+  await summary.waitFor();
+  if (!(await page.getByLabel('Session title').isVisible())) await summary.click();
+  await page.getByLabel('Session title').fill(dayTitle);
+  await page.getByRole('button', { name: 'Add clinic day' }).click();
+  await expect(page.getByText(dayTitle)).toBeVisible();
+
+  const name = uniqueName('Clinic patient');
+  const patientId = await createPatientViaUi(page, { full_name: name });
+  const fileNo = await withPg(async (pg) => (await pg.query('select file_no from public.patients where id = $1', [patientId])).rows[0].file_no as string);
+
+  await page.goto('/schedule/new');
+  const sessionValue = await page.getByRole('combobox', { name: 'Surgery session' }).locator('option', { hasText: dayTitle }).first().getAttribute('value');
+  await page.getByRole('combobox', { name: 'Surgery session' }).selectOption(sessionValue!);
+  await page.getByRole('combobox', { name: 'Chair' }).selectOption({ label: chair });
+  await page.getByRole('combobox', { name: 'Doctor' }).selectOption({ label: doctor });
+  await page.getByLabel('Start', { exact: true }).fill('10:00');
+  await page.getByLabel('End', { exact: true }).fill('11:00');
+  await page.getByLabel('Patient (file number)').fill(fileNo);
+  await page.getByLabel('Tooth 1').fill('36');
+  const sizeValue = await page.getByRole('combobox', { name: 'Implant 1' }).locator('option', { hasText: brand }).first().getAttribute('value');
+  await page.getByRole('combobox', { name: 'Implant 1' }).selectOption(sizeValue!);
+  await page.getByRole('combobox', { name: 'Technique 1' }).selectOption({ label: 'Free hand' });
+  await page.getByRole('button', { name: 'Book surgery' }).click();
+  await expect(page).toHaveURL(/\/schedule\?date=/);
+  const card = page.getByTestId(`booking-${fileNo}`);
+  await expect(card).toContainText(`Doctor: ${doctor}`);
+
+  await page.goto(`/patients/${patientId}?tooth=36`);
+  const panel = page.getByRole('complementary', { name: 'Tooth details' });
+  await expect(panel).toContainText('Booked: ');
+  await panel.getByRole('button', { name: 'Place implant' }).click();
+  await expect(page.getByTestId('booked-people')).toHaveText(new RegExp(`Placed by ${doctor}`));
+  await page.getByRole('radiogroup', { name: 'Stock batch' }).getByRole('radio').first().check();
+  await page.getByRole('button', { name: 'Save placement' }).click();
+  await expect(page.getByRole('button', { name: 'Tooth 36, Implant placed' })).toBeVisible();
+
+  await page.goto(`/patients/${patientId}?tooth=36`);
+  await expect(page.getByRole('complementary', { name: 'Tooth details' }).getByTestId('site-details')).toContainText(`Placed by ${doctor}`);
+  await page.goto('/schedule');
+  await expect(page.getByTestId(`booking-${fileNo}`)).toContainText('Completed');
+});
+
+test('checklist on a clinic day', async ({ page }) => {
+  test.setTimeout(180_000);
+  const id = await withPg(async (pg) =>
+    (await pg.query(
+      `select c.id from public.checklists c join public.sessions s on s.id = c.session_id where s.title = $1 limit 1`,
+      [dayTitle],
+    )).rows[0]?.id as string | undefined);
+  expect(id, 'the default checklist attached to the clinic day').toBeTruthy();
+  await login(page, TEST_USERS.organizer.email);
+  await page.goto(`/checklists/${id}`);
+  await expect(page.getByRole('checkbox', { name: defaultItem })).toBeVisible();
+  await expect(page.getByRole('link', { name: new RegExp(`Session · ${dayTitle}`) })).toHaveAttribute('href', /^\/schedule\?date=\d{4}-\d{2}-\d{2}$/);
+});
