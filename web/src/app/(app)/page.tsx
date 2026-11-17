@@ -11,6 +11,8 @@ import { SLOT_SELECT } from '@/lib/schedule/queries';
 import { groupByChair } from '@/lib/dashboard/by-chair';
 import type { PullRow, SlotRow } from '@/lib/schedule/types';
 import { dashboardShortages } from '@/lib/dashboard/shortages';
+import { featureOn } from '@/lib/modules/modules';
+import { showShortageCard } from '@/lib/dashboard/shortage-card';
 import { recallCounts, type RecallRow } from '@/lib/visits/recall';
 
 type StockRow = Product & { on_hand: number; nearest_expiry: string | null };
@@ -52,14 +54,18 @@ export default async function DashboardPage() {
     checklists: canView(profile, 'checklists'),
     patients: canView(profile, 'patients'),
   };
+  const invOn = featureOn(profile.features, 'inventory');
+  const needPull = show.schedule && invOn;
+  const needStock = show.inventory && invOn;
+  const none = Promise.resolve({ data: [], error: null });
   const settings = await getSettings();
   const today = todayIso();
   const tomorrow = addDays(today, 1);
   const [slots, pullToday, pullTomorrow, stock, mine, recall] = await Promise.all([
     supabase.rpc('slots_on', { p_date: today }).select(SLOT_SELECT),
-    supabase.rpc('pull_list', { p_date: today }),
-    supabase.rpc('pull_list', { p_date: tomorrow }),
-    supabase.rpc('inventory_overview', { q: '', p_category: '', include_all: false }),
+    needPull ? supabase.rpc('pull_list', { p_date: today }) : none,
+    needPull ? supabase.rpc('pull_list', { p_date: tomorrow }) : none,
+    needStock ? supabase.rpc('inventory_overview', { q: '', p_category: '', include_all: false }) : none,
     supabase
       .from('checklist_items')
       .select('id, text, due_date, checklist:checklists(id, title)')
@@ -124,7 +130,7 @@ export default async function DashboardPage() {
         </Card>
         )}
 
-        {show.schedule && show.inventory && (
+        {showShortageCard(show.schedule, profile.features) && (
         <Card title="Stock shortages for surgeries" failed={Boolean(pullToday.error || pullTomorrow.error)} count={shortages.length} tone="bad">
           {shortages.length === 0 ? (
             <p className="text-sm text-muted">Stock covers today’s and tomorrow’s planned implants.</p>
@@ -151,7 +157,7 @@ export default async function DashboardPage() {
         </Card>
         )}
 
-        {show.inventory && (
+        {needStock && (
         <Card title="Low stock" failed={Boolean(stock.error)} count={low.length} tone="warn">
           {low.length === 0 ? (
             <p className="text-sm text-muted">Nothing is at or below its reorder level.</p>
@@ -168,7 +174,7 @@ export default async function DashboardPage() {
         </Card>
         )}
 
-        {show.inventory && (
+        {needStock && (
         <Card title="Expiring soon" failed={Boolean(stock.error)} count={expiring.length} tone="warn">
           {expiring.length === 0 ? (
             <p className="text-sm text-muted">Nothing expires in the next {settings.expiry_alert_days} days.</p>

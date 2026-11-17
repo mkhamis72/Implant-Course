@@ -266,6 +266,14 @@ describe('without Inventory', () => {
     expect(vi.mocked(placeImplant).mock.calls.at(-1)?.[0]).toMatchObject({ productId: 'p1', lotId: null });
   });
 
+  it('says No product recorded instead of Not from stock', () => {
+    const site = { id: 's1', tooth: 36, state: 'placed', components: [] } as unknown as Parameters<typeof ComponentForm>[0]['site'];
+    render(<ComponentForm patientId='pt' site={site} data={off} onDone={() => {}} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Component' }), { target: { value: 'ti_base' } });
+    expect(screen.getByRole('option', { name: 'No product recorded' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Not from stock' })).not.toBeInTheDocument();
+  });
+
   it('fits a component with no batch group and lotId null', async () => {
     const { fitComponent } = await import('./implant-actions');
     vi.mocked(fitComponent).mockResolvedValue({});
