@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
+import { teachingOn } from '@/lib/modules/modules';
 import { getBranding } from '@/lib/branding/get';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
 import { todayIso } from '@/lib/dates';
@@ -11,7 +12,9 @@ import { ConsentDocument, type PrintableVersion } from '@/components/consent-doc
 import { PrintButton } from '@/app/(app)/schedule/pull-list/print-button';
 
 export default async function ConsentPrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: PageSearchParams }) {
-  await requirePermission('patients');
+  const profile = await requirePermission('patients');
+  // A clinic (no Teaching) prints without a course.
+  const teaching = teachingOn(profile.features);
   const { id } = await params;
   const q = await readParams(searchParams, 'lang', 'course');
   const language: ConsentLanguage = q.lang === 'ar' ? 'ar' : 'en';
@@ -36,13 +39,15 @@ export default async function ConsentPrintPage({ params, searchParams }: { param
             {CONSENT_LANGUAGES.map((l) => <option key={l} value={l}>{CONSENT_LANGUAGE_LABELS[l]}</option>)}
           </select>
         </div>
-        <div>
-          <label htmlFor="consent-course" className="label">Course</label>
-          <select id="consent-course" name="course" defaultValue={course?.id ?? ''} className="input">
-            <option value="">No course (blank line)</option>
-            {courseList.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
+        {teaching && (
+          <div>
+            <label htmlFor="consent-course" className="label">Course</label>
+            <select id="consent-course" name="course" defaultValue={course?.id ?? ''} className="input">
+              <option value="">No course (blank line)</option>
+              {courseList.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        )}
         <button type="submit" className="btn-secondary btn">Show</button>
         <PrintButton />
         <Link href={`/patients/${id}/consent`} className="text-accent hover:underline">Back to consent</Link>

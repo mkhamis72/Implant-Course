@@ -15,7 +15,7 @@ const site = {
   components: [], followups: [], slot: null, created_at: '2026-05-02T00:00:00Z',
 } as unknown as ImplantSite;
 const data = {
-  inventoryOn: true, lots: [], implants: [], componentProducts: [],
+  inventoryOn: true, teachingOn: true, doctors: [{ id: 'doc1', name: 'Dr Nabil' }], lots: [], implants: [], componentProducts: [],
   delegates: [{ id: 'd1', label: 'Dr Right' }], enrollments: [{ course_id: 'c1', delegate_id: 'd1' }, { course_id: 'c2', delegate_id: 'd1' }],
   supervisors: [{ id: 'sup1', label: 'Prof A' }, { id: 'sup2', label: 'Prof B' }],
   courses: [
@@ -31,21 +31,21 @@ describe('<Corrections> placement details', () => {
     render(<Corrections patientId="pt" site={site} data={data} />);
     const box = screen.getByRole('group', { name: 'Placement details' });
     expect(within(box).getByLabelText('Placement date')).toHaveValue('2026-05-02');
-    expect(within(box).getByRole('combobox', { name: 'Placed by' })).toHaveValue('gone');
-    expect(within(within(box).getByRole('combobox', { name: 'Placed by' })).getByRole('option', { name: 'Dr Former (inactive)' })).toBeInTheDocument();
+    expect(within(box).getByRole('combobox', { name: 'Placed by (delegate)' })).toHaveValue('gone');
+    expect(within(within(box).getByRole('combobox', { name: 'Placed by (delegate)' })).getByRole('option', { name: 'Dr Former (inactive)' })).toBeInTheDocument();
     expect(within(box).queryByLabelText(/Insertion torque/)).not.toBeInTheDocument();
     expect(within(box).queryByLabelText('ISQ')).not.toBeInTheDocument();
     expect(within(box).queryByRole('combobox', { name: 'Bone type' })).not.toBeInTheDocument();
 
     expect(within(box).queryByLabelText('Graft')).not.toBeInTheDocument();
     fireEvent.change(within(box).getByLabelText('Placement date'), { target: { value: '2026-05-01' } });
-    fireEvent.change(within(box).getByRole('combobox', { name: 'Placed by' }), { target: { value: 'd1' } });
+    fireEvent.change(within(box).getByRole('combobox', { name: 'Placed by (delegate)' }), { target: { value: 'd1' } });
     fireEvent.change(within(box).getByRole('combobox', { name: 'Supervisor' }), { target: { value: 'sup2' } });
     expect(within(box).getByRole('combobox', { name: 'Course' })).toHaveValue('c1');
     fireEvent.change(within(box).getByRole('combobox', { name: 'Course' }), { target: { value: 'c2' } });
     fireEvent.click(within(box).getByRole('button', { name: 'Save details' }));
     expect(vi.mocked(correctPlacement)).toHaveBeenCalledWith({
-      siteId: 's1', patientId: 'pt', placedOn: '2026-05-01', placingDelegateId: 'd1', assistingDelegateId: '', supervisorId: 'sup2', courseId: 'c2',
+      siteId: 's1', patientId: 'pt', placedOn: '2026-05-01', placedBy: 'delegate', placingDelegateId: 'd1', placingDoctorId: null, assistingDelegateId: '', supervisorId: 'sup2', courseId: 'c2',
       graft: 'Bio-Oss old note', notes: 'first',
     });
     expect(await screen.findByRole('status')).toHaveTextContent('Correction saved.');
@@ -60,7 +60,7 @@ describe('<Corrections> placement details', () => {
     } as unknown as ChartData;
     render(<Corrections patientId="pt" site={{ ...site, placing_delegate_id: 'd2' } as ImplantSite} data={twoDelegates} />);
     const box = screen.getByRole('group', { name: 'Placement details' });
-    const placing = within(box).getByRole('combobox', { name: 'Placed by' });
+    const placing = within(box).getByRole('combobox', { name: 'Placed by (delegate)' });
     expect(placing).toHaveValue('d2');
     expect(within(placing).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose the delegate…', 'Dr Visitor (not enrolled)']);
     fireEvent.change(within(box).getByRole('combobox', { name: 'Course' }), { target: { value: 'c2' } });
@@ -73,6 +73,47 @@ describe('<Corrections> placement details', () => {
     render(<Corrections patientId="pt" site={{ ...site, course_id: null } as ImplantSite} data={data} />);
     const box = screen.getByRole('group', { name: 'Placement details' });
     expect(within(box).getByRole('combobox', { name: 'Course' })).toHaveValue('');
+  });
+});
+
+describe('<Corrections> placed by a doctor', () => {
+  it('switches to Doctor and sends the doctor with no delegate', async () => {
+    const { correctPlacement } = await import('./implant-actions');
+    vi.mocked(correctPlacement).mockClear().mockResolvedValue({});
+    render(<Corrections patientId="pt" site={site} data={data} />);
+    const box = screen.getByRole('group', { name: 'Placement details' });
+    expect(within(box).getByRole('radio', { name: 'Delegate' })).toBeChecked();
+    fireEvent.click(within(box).getByRole('radio', { name: 'Doctor' }));
+    expect(within(box).queryByRole('combobox', { name: 'Placed by (delegate)' })).not.toBeInTheDocument();
+    fireEvent.change(within(box).getByRole('combobox', { name: 'Doctor' }), { target: { value: 'doc1' } });
+    expect(within(box).getByRole('combobox', { name: 'Supervisor (optional)' })).toBeInTheDocument();
+    fireEvent.click(within(box).getByRole('button', { name: 'Save details' }));
+    expect(vi.mocked(correctPlacement)).toHaveBeenCalledWith(expect.objectContaining({
+      placedBy: 'doctor', placingDoctorId: 'doc1', placingDelegateId: null,
+    }));
+  });
+
+  it('starts on Doctor for an implant placed by a doctor, keeping an inactive one', () => {
+    render(<Corrections patientId="pt" site={{ ...site, placing_delegate_id: null, placing: null, placing_doctor_id: 'old', doctor: { name: 'Dr Gone' } } as unknown as ImplantSite} data={data} />);
+    const box = screen.getByRole('group', { name: 'Placement details' });
+    expect(within(box).getByRole('radio', { name: 'Doctor' })).toBeChecked();
+    expect(within(box).getByRole('combobox', { name: 'Doctor' })).toHaveValue('old');
+    expect(within(box).getByRole('option', { name: 'Dr Gone (inactive)' })).toBeInTheDocument();
+  });
+
+  it('in a clinic shows only the doctor: no course, delegate or supervisor', async () => {
+    const { correctPlacement } = await import('./implant-actions');
+    vi.mocked(correctPlacement).mockClear().mockResolvedValue({});
+    const clinic = { ...data, teachingOn: false, delegates: [], supervisors: [], courses: [], enrollments: [] } as unknown as ChartData;
+    render(<Corrections patientId="pt" site={{ ...site, placing_delegate_id: null, placing: null, supervisor_id: null, supervisor: null, course_id: null, placing_doctor_id: 'doc1', doctor: { name: 'Dr Nabil' } } as unknown as ImplantSite} data={clinic} />);
+    const box = screen.getByRole('group', { name: 'Placement details' });
+    expect(box).not.toHaveTextContent(/Supervisor|Course|Delegate/i);
+    expect(within(box).queryByRole('radio')).not.toBeInTheDocument();
+    expect(within(box).getByRole('combobox', { name: 'Placed by' })).toHaveValue('doc1');
+    fireEvent.click(within(box).getByRole('button', { name: 'Save details' }));
+    expect(vi.mocked(correctPlacement)).toHaveBeenCalledWith(expect.objectContaining({
+      placedBy: 'doctor', placingDoctorId: 'doc1', placingDelegateId: null, assistingDelegateId: null, supervisorId: null, courseId: null,
+    }));
   });
 });
 

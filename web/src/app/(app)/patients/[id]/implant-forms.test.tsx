@@ -10,7 +10,7 @@ import { ComponentForm, PlaceForm } from './implant-forms';
 const implant = { id: 'p1', type: 'implant', brand: 'Brand', system: 'S', platform: null, diameter_mm: 4, length_mm: 10, description: '' };
 const lot = { stock_lot_id: 'l1', product_id: 'p1', lot_no: 'OLD', expiry: '2030-06-09', received_on: '2030-01-01', qty_received: 1, on_hand: 1 };
 const data = {
-  today: '2030-06-10', me: 'u1', editable: true, canReceive: true, inventoryOn: true, implants: [implant], lots: [lot], delegates: [], enrollments: [], organizers: [], supervisors: [], componentProducts: [],
+  today: '2030-06-10', me: 'u1', editable: true, canReceive: true, inventoryOn: true, teachingOn: true, doctors: [], implants: [implant], lots: [lot], delegates: [], enrollments: [], organizers: [], supervisors: [], componentProducts: [],
   courses: [
     { id: 'c1', name: 'June course', start_date: '2030-06-08', end_date: '2030-06-12' },
     { id: 'c2', name: 'Earlier course', start_date: '2030-01-01', end_date: '2030-01-05' },
@@ -286,5 +286,64 @@ describe('without Inventory', () => {
     expect(screen.queryByText(/No usable stock/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save component' }));
     expect(vi.mocked(fitComponent).mock.calls.at(-1)?.[0]).toMatchObject({ productId: 'a1', lotId: null });
+  });
+});
+
+describe('<PlaceForm> placed by', () => {
+  const org = {
+    ...data,
+    delegates: [{ id: 'd1', label: 'Dr Right' }], supervisors: [{ id: 'sup1', label: 'Prof A' }],
+    enrollments: [{ course_id: 'c1', delegate_id: 'd1' }], doctors: [{ id: 'doc1', name: 'Dr Nabil' }],
+  } as unknown as ChartData;
+
+  it('a course organizer places by a delegate by default, or by a doctor with the supervisor optional', async () => {
+    const { placeImplant } = await import('./implant-actions');
+    vi.mocked(placeImplant).mockClear().mockResolvedValue({});
+    render(<PlaceForm patientId="pt" tooth={36} data={org} onDone={() => {}} plannedProductId="p1" />);
+    expect(screen.getByRole('radio', { name: 'Delegate' })).toBeChecked();
+    expect(screen.queryByRole('combobox', { name: /^Doctor/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Doctor' }));
+    expect(screen.queryByRole('combobox', { name: /Placed by \(delegate\)/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /Assisted by/ })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /Supervisor \(optional\)/ })).not.toHaveAttribute('aria-required');
+    fireEvent.change(screen.getByRole('combobox', { name: /Course/ }), { target: { value: 'c1' } });
+    fireEvent.change(screen.getByRole('combobox', { name: /^Doctor/ }), { target: { value: 'doc1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save placement' }));
+    await vi.waitFor(() => expect(vi.mocked(placeImplant)).toHaveBeenCalledWith(expect.objectContaining({
+      placedBy: 'doctor', placingDoctorId: 'doc1', placingDelegateId: null, courseId: 'c1',
+    })));
+  });
+
+  it('starts on Doctor with the booking’s doctor', () => {
+    const slot = { id: 's1', starts_at: '2030-06-10T08:00:00Z', supervisor_id: null, placing_doctor_id: 'doc1', chair: null, delegates: [] };
+    render(<PlaceForm patientId="pt" tooth={36} data={org} onDone={() => {}} plannedProductId="p1" slot={slot} />);
+    expect(screen.getByTestId('booked-people')).toHaveTextContent('Placed by Dr Nabil');
+    expect(screen.getByRole('radio', { name: 'Doctor', hidden: true })).toBeChecked();
+    expect(screen.getByRole('combobox', { name: /^Doctor/, hidden: true })).toHaveValue('doc1');
+  });
+
+  it('a clinic asks only for the doctor: no course, delegate or supervisor', async () => {
+    const { placeImplant } = await import('./implant-actions');
+    vi.mocked(placeImplant).mockClear().mockResolvedValue({});
+    const clinic = { ...org, teachingOn: false, delegates: [], supervisors: [], courses: [], enrollments: [] } as unknown as ChartData;
+    const { container } = render(<PlaceForm patientId="pt" tooth={36} data={clinic} onDone={() => {}} plannedProductId="p1" />);
+    expect(container).not.toHaveTextContent(/Supervisor|Course|Delegate/i);
+    expect(screen.queryByRole('radio', { name: 'Doctor' })).not.toBeInTheDocument();
+    const doctor = screen.getByRole('combobox', { name: /Placed by/ });
+    expect(doctor).toHaveAttribute('aria-required', 'true');
+    fireEvent.change(doctor, { target: { value: 'doc1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save placement' }));
+    await vi.waitFor(() => expect(vi.mocked(placeImplant)).toHaveBeenCalledWith(expect.objectContaining({
+      placedBy: 'doctor', placingDoctorId: 'doc1', placingDelegateId: null, assistingDelegateId: null, supervisorId: null, courseId: null,
+    })));
+  });
+});
+
+describe('<ComponentForm> in a clinic', () => {
+  it('has no course and no fitted-by-delegate field', () => {
+    const site = { id: 's1', tooth: 36, state: 'placed', course_id: null, components: [] } as unknown as Parameters<typeof ComponentForm>[0]['site'];
+    const { container } = render(<ComponentForm patientId="pt" site={site} data={{ ...data, teachingOn: false } as ChartData} onDone={() => {}} />);
+    expect(container).not.toHaveTextContent(/Course|delegate/i);
+    expect(screen.getByRole('combobox', { name: /Fitted by/ })).toBeInTheDocument();
   });
 });

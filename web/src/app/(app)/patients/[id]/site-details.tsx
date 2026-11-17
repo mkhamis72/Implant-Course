@@ -109,10 +109,12 @@ export function ImplantFacts({ site, patientId, data }: { site: ImplantSite; pat
     site.bone_type ? `Bone ${site.bone_type}` : null,
     site.graft ? `Graft (old note): ${site.graft}` : null,
   ].filter(Boolean) as string[];
+  // A clinic (no Teaching) shows only the doctor, even where older records name delegates or a supervisor.
+  const teaching = data.teachingOn;
   const people = [
-    site.placing?.full_name ? `Placed by ${site.placing.full_name}` : null,
-    site.assisting?.full_name ? `assisted by ${site.assisting.full_name}` : null,
-    site.supervisor ? `supervised by ${site.supervisor.full_name}` : null,
+    site.doctor?.name ? `Placed by ${site.doctor.name}` : teaching && site.placing?.full_name ? `Placed by ${site.placing.full_name}` : null,
+    teaching && site.assisting?.full_name ? `assisted by ${site.assisting.full_name}` : null,
+    teaching && site.supervisor ? `supervised by ${site.supervisor.full_name}` : null,
   ].filter(Boolean) as string[];
   return (
     <>
@@ -141,7 +143,7 @@ export function ImplantFacts({ site, patientId, data }: { site: ImplantSite; pat
             {site.components.map((c) => (
               <li key={c.id} className={c.voided_at ? 'text-muted line-through' : ''}>
                 {COMPONENT_LABELS[c.component_type]} — {formatDate(c.fitted_on)}
-                {c.course_id && ` — ${data.courses.find((x) => x.id === c.course_id)?.name ?? 'Unknown course'}`}
+                {data.teachingOn && c.course_id && ` — ${data.courses.find((x) => x.id === c.course_id)?.name ?? 'Unknown course'}`}
                 {c.voided_at ? ` — undone: ${c.voided_reason}` : c.removed_on ? ` (until ${formatDate(c.removed_on)})` : ' (current)'}
               </li>
             ))}

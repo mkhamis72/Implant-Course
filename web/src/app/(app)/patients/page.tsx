@@ -9,6 +9,8 @@ import { firstParam, type PageSearchParams } from '@/lib/search-params';
 import { idParam, supervisorChoices, type SupervisorRow } from '@/lib/patients/list-filters';
 import { DeletePatient } from './delete-patient';
 import { FilterMenu } from './filter-menu';
+import { TeachingFilters } from './teaching-filters';
+import { teachingOn } from '@/lib/modules/modules';
 
 export default async function PatientsPage({ searchParams }: { searchParams: PageSearchParams }) {
   const profile = await requirePermission('patients');
@@ -17,17 +19,20 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
   const q = firstParam(sp.q);
   const archived = firstParam(sp.archived);
   const stages = parseStages(sp.stage);
-  const course = idParam(firstParam(sp.course));
-  const supervisor = idParam(firstParam(sp.supervisor));
+  // A clinic (no Teaching) has no course or supervisor filter.
+  const teaching = teachingOn(profile.features);
+  const course = teaching ? idParam(firstParam(sp.course)) : '';
+  const supervisor = teaching ? idParam(firstParam(sp.supervisor)) : '';
   const supabase = await createClient();
+  const none = Promise.resolve({ data: [], error: null });
   const [search, courseRows, supervisorRows] = await Promise.all([
     supabase.rpc('search_patients', {
       q, include_archived: archived === '1', stages, course: course || null, supervisor: supervisor || null,
     }),
     // course_options() needs View on Patients, like this page (the courses table needs Courses or Schedule).
-    supabase.rpc('course_options'),
+    teaching ? supabase.rpc('course_options') : none,
     // Inactive supervisors too: past implants and bookings still name them.
-    supabase.from('supervisors').select('id, full_name, active'),
+    teaching ? supabase.from('supervisors').select('id, full_name, active') : none,
   ]);
   const { data, error } = search;
   if (error || courseRows.error || supervisorRows.error) throw new Error('Could not load patients');
@@ -75,20 +80,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
           <input type="checkbox" name="archived" value="1" defaultChecked={archived === '1'} />
           Include archived
         </label>
-        <label className="block w-full sm:w-48">
-          <span className="label">Course</span>
-          <select className="input" name="course" defaultValue={course}>
-            <option value="">All courses</option>
-            {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </label>
-        <label className="block w-full sm:w-48">
-          <span className="label">Supervisor</span>
-          <select className="input" name="supervisor" defaultValue={supervisor}>
-            <option value="">All supervisors</option>
-            {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-        </label>
+        <TeachingFilters teachingOn={teaching} courses={courses} supervisors={supervisors} course={course} supervisor={supervisor} />
         <FilterMenu label="Teeth and implants" name="stage" options={PATIENT_FILTERS} labels={PATIENT_FILTER_LABELS} checked={stages} />
         <FilterMenu label="Scan / impression" name="stage" options={SCAN_FILTERS} labels={PATIENT_FILTER_LABELS} checked={stages} align="end" />
         <button className="btn-secondary btn">Search</button>

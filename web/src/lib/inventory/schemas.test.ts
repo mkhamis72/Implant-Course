@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { adjustSchema, componentSchema, delegateSchema, placeSchema, productSchema, receiveSchema } from './schemas';
+import { adjustSchema, componentSchema, correctPlacementSchema, delegateSchema, placeSchema, productSchema, receiveSchema } from './schemas';
 
 const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
 const err = (r: { error?: { issues: { message: string }[] } }) => r.error?.issues[0].message;
@@ -65,6 +65,18 @@ describe('placeSchema / componentSchema', () => {
   it('names the first missing piece', () => {
     expect(err(placeSchema.safeParse({ ...place, placingDelegateId: '' }))).toBe('Choose the delegate who placed the implant.');
     expect(err(placeSchema.safeParse({ ...place, technique: '' }))).toBe('Choose Guided or Free hand.');
+  });
+  it('placed by a doctor: needs the doctor, no delegate, and leaves course and supervisor to the database', () => {
+    const byDoctor = { ...place, placedBy: 'doctor', placingDelegateId: '', supervisorId: '', courseId: '', placingDoctorId: id };
+    expect(placeSchema.parse(byDoctor)).toMatchObject({ placingDoctorId: id, placingDelegateId: null, supervisorId: null, courseId: null });
+    expect(err(placeSchema.safeParse({ ...byDoctor, placingDoctorId: '' }))).toBe('Choose the doctor who placed the implant.');
+    // Delegate (the default) ignores a stray doctor.
+    expect(placeSchema.parse({ ...place, placingDoctorId: id })).toMatchObject({ placingDoctorId: null, placingDelegateId: id });
+  });
+  it('correcting by a doctor works the same way', () => {
+    const fix = { siteId: id, patientId: id, placedOn: '2026-01-10', placedBy: 'doctor', placingDoctorId: id, placingDelegateId: '', supervisorId: '', courseId: '' };
+    expect(correctPlacementSchema.parse(fix)).toMatchObject({ placingDoctorId: id, placingDelegateId: null });
+    expect(err(correctPlacementSchema.safeParse({ ...fix, placingDoctorId: '' }))).toBe('Choose the doctor who placed the implant.');
   });
   it('components are accepted without a batch (the database decides), and need someone who fitted them', () => {
     const c = { siteId: id, patientId: id, componentType: 'ti_base', fittedOn: '2026-01-10', byDelegateId: id };

@@ -6,7 +6,7 @@ import { delegatesForCourse, keepIfEnrolled, withRecordedDelegate } from '@/lib/
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, type ChartData, type ImplantSite, type LotOnHand } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
-import { CourseOptions, NoneEnrolled } from './implant-forms';
+import { CourseOptions, NoneEnrolled, PlacedByChoice, type PlacedBy } from './implant-forms';
 import { visitResult } from '@/lib/visits/visits';
 import { correctBatch, correctPlacement, removePlacement, voidComponent, voidFollowup } from './implant-actions';
 
@@ -51,9 +51,12 @@ function withRecorded(options: Option[], id: string | null, name: string | null 
 function PlacementDetails({ patientId, site, data, run, pending }: {
   patientId: string; site: ImplantSite; data: ChartData; run: (fn: () => Promise<Result>) => void; pending: boolean;
 }) {
+  const teaching = data.teachingOn;
+  const [placedBy, setPlacedBy] = useState<PlacedBy>(!teaching || site.placing_doctor_id ? 'doctor' : 'delegate');
   const [v, setV] = useState({
     placedOn: site.placed_on ?? '',
     placingDelegateId: site.placing_delegate_id ?? '',
+    placingDoctorId: site.placing_doctor_id ?? '',
     assistingDelegateId: site.assisting_delegate_id ?? '',
     supervisorId: site.supervisor_id ?? '',
     courseId: site.course_id ?? '',
@@ -77,44 +80,66 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
     site.assisting?.full_name,
   );
   const supervisors = withRecorded(data.supervisors, site.supervisor_id, site.supervisor?.full_name);
+  const doctors = withRecorded(data.doctors.map((d) => ({ id: d.id, label: d.name })), site.placing_doctor_id, site.doctor?.name);
+  const byDoctor = placedBy === 'doctor';
+  const doctorSelect = (label: string) => (
+    <label className="block">
+      <span className="label">{label}</span>
+      <select className="input" value={v.placingDoctorId} onChange={set('placingDoctorId')}>
+        <option value="">Choose the doctor…</option>
+        {doctors.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+      </select>
+    </label>
+  );
+  const values = teaching
+    ? { ...v, placedBy, placingDelegateId: byDoctor ? null : v.placingDelegateId, placingDoctorId: byDoctor ? v.placingDoctorId : null }
+    // A clinic records only the doctor.
+    : { ...v, placedBy, placingDelegateId: null, assistingDelegateId: null, supervisorId: null, courseId: null };
   return (
     <div className="space-y-2" role="group" aria-label="Placement details">
       <p className="font-medium">Placement details</p>
+      {teaching && <PlacedByChoice value={placedBy} onChange={setPlacedBy} />}
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="block">
           <span className="label">Placement date</span>
           <input className="input" type="date" max={data.today} value={v.placedOn} onChange={set('placedOn')} />
         </label>
-        <label className="block">
-          <span className="label">Placed by</span>
-          <select className="input" value={v.placingDelegateId} onChange={set('placingDelegateId')}>
-            <option value="">Choose the delegate…</option>
-            {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="label">Assisted by</span>
-          <select className="input" value={v.assistingDelegateId} onChange={set('assistingDelegateId')}>
-            <option value="">Nobody</option>
-            {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="label">Supervisor</span>
-          <select className="input" value={v.supervisorId} onChange={set('supervisorId')}>
-            <option value="">Choose the supervisor…</option>
-            {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="label">Course</span>
-          <select className="input" value={v.courseId} onChange={set('courseId')}>
-            <option value="">Choose the course…</option>
-            <CourseOptions courses={data.courses} date={v.placedOn} />
-          </select>
-        </label>
+        {!teaching ? doctorSelect('Placed by') : (
+          <>
+            {byDoctor ? doctorSelect('Doctor') : (
+              <label className="block">
+                <span className="label">Placed by (delegate)</span>
+                <select className="input" value={v.placingDelegateId} onChange={set('placingDelegateId')}>
+                  <option value="">Choose the delegate…</option>
+                  {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+                </select>
+              </label>
+            )}
+            <label className="block">
+              <span className="label">Assisted by</span>
+              <select className="input" value={v.assistingDelegateId} onChange={set('assistingDelegateId')}>
+                <option value="">Nobody</option>
+                {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="label">{byDoctor ? 'Supervisor (optional)' : 'Supervisor'}</span>
+              <select className="input" value={v.supervisorId} onChange={set('supervisorId')}>
+                <option value="">{byDoctor ? 'No supervisor' : 'Choose the supervisor…'}</option>
+                {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="label">Course</span>
+              <select className="input" value={v.courseId} onChange={set('courseId')}>
+                <option value="">Choose the course…</option>
+                <CourseOptions courses={data.courses} date={v.placedOn} />
+              </select>
+            </label>
+          </>
+        )}
       </div>
-      <NoneEnrolled courseId={v.courseId} delegates={delegates} />
+      {teaching && <NoneEnrolled courseId={v.courseId} delegates={delegates} />}
       <label className="block">
         <span className="label">Notes</span>
         <input className="input" value={v.notes} onChange={set('notes')} />
@@ -123,7 +148,7 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
         type="button"
         className="btn-secondary btn"
         disabled={pending}
-        onClick={() => run(() => correctPlacement({ siteId: site.id, patientId, ...v }))}
+        onClick={() => run(() => correctPlacement({ siteId: site.id, patientId, ...values }))}
       >
         Save details
       </button>
