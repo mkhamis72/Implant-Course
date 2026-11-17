@@ -204,6 +204,7 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
   const [productId, setProductId] = useState(currentProductId);
   const [lotId, setLotId] = useState('');
   const [batchReason, setBatchReason] = useState('');
+  const [resetKey, setResetKey] = useState(0);
   const [followupReason, setFollowupReason] = useState('');
   const [componentReason, setComponentReason] = useState('');
   const [removeReason, setRemoveReason] = useState('');
@@ -220,17 +221,25 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
   const usedOn = component ? component.fitted_on : site.placed_on;
   const hasLot = !!currentLotId;
   const lots = correctionLots(data.lots, productId, currentLotId, usedOn, !hasLot);
-  const sendCorrection = (newLotId: string | null) =>
-    run(() =>
-      correctBatch({
+  const sendCorrection = (newLotId: string | null) => {
+    if (hasLot && !newLotId) return run(async () => ({ error: 'Choose the correct batch.' }));
+    return run(async () => {
+      const r = await correctBatch({
         siteId: site.id,
         patientId,
         componentId: component?.id ?? '',
         newProductId: productId !== currentProductId ? productId : '',
         newLotId,
         reason: batchReason,
-      }),
-    );
+      });
+      if (!r.error) {
+        setLotId('');
+        setBatchReason('');
+        setResetKey((k) => k + 1);
+      }
+      return r;
+    });
+  };
   const latest = site.followups.filter((f) => !f.voided_at).at(-1);
 
   function chooseTarget(value: string) {
@@ -261,14 +270,14 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
               <p className="text-muted">Switch Inventory on to correct the stock batch.</p>
             ) : (
               <>
-                <label className="block">
+                <label key={`product-${resetKey}`} className="block">
                   <span className="label">Product actually used</span>
                   <select className="input" value={productId} onChange={(e) => { setProductId(e.target.value); setLotId(''); }}>
                     {productOptions.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
                   </select>
                 </label>
                 {(hasLot || data.inventoryOn) && (
-                  <label className="block">
+                  <label key={`lot-${resetKey}`} className="block">
                     <span className="label">{hasLot ? 'Correct batch' : 'Stock batch'}</span>
                     <select className="input" value={lotId} onChange={(e) => setLotId(e.target.value)}>
                       <option value="">{hasLot ? 'Choose the batch actually used…' : 'Choose the batch used…'}</option>
@@ -276,7 +285,7 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
                     </select>
                   </label>
                 )}
-                <label className="block">
+                <label key={`reason-${resetKey}`} className="block">
                   <span className="label">Reason for correction</span>
                   <input className="input" value={batchReason} onChange={(e) => setBatchReason(e.target.value)} />
                 </label>
@@ -286,7 +295,7 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
                   </button>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" className="btn-secondary btn" disabled={pending} onClick={() => sendCorrection(null)}>
+                    <button type="button" className="btn-secondary btn" disabled={pending || (productId === currentProductId && !!currentProductId)} onClick={() => sendCorrection(null)}>
                       Correct product
                     </button>
                     {data.inventoryOn && (

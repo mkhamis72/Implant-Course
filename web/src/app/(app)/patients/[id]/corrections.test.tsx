@@ -126,6 +126,32 @@ describe('<Corrections> product and stock batch', () => {
     });
   });
 
+  it('Inventory on, with a lot: Correct batch with no batch chosen is stopped on the client', async () => {
+    const { correctBatch } = await import('./implant-actions');
+    vi.mocked(correctBatch).mockClear();
+    const { s, d } = base({ stock_lot_id: 'l1' }, true, [lot('l2', 'p1', 4)]);
+    render(<Corrections patientId="pt" site={s} data={d} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Correct batch' }));
+    expect(await screen.findByText('Choose the correct batch.')).toBeInTheDocument();
+    expect(vi.mocked(correctBatch)).not.toHaveBeenCalled();
+  });
+
+  it('clears the batch and reason after a saved attach, and disables Correct product for the same product', async () => {
+    const { correctBatch } = await import('./implant-actions');
+    vi.mocked(correctBatch).mockClear();
+    vi.mocked(correctBatch).mockResolvedValue({});
+    const { s, d } = base({ stock_lot_id: null }, true, [lot('l9', 'p1', 0)]);
+    render(<Corrections patientId="pt" site={s} data={d} />);
+    expect(screen.getByRole('button', { name: 'Correct product' })).toBeDisabled();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Stock batch' }), { target: { value: 'l9' } });
+    fireEvent.change(screen.getByLabelText('Reason for correction'), { target: { value: 'Late entry' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Attach stock batch' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Correction saved.');
+    expect(screen.getByRole('combobox', { name: 'Stock batch' })).toHaveValue('');
+    expect(screen.getByLabelText('Reason for correction')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Attach stock batch' })).toBeDisabled();
+  });
+
   it('Inventory on, with a lot: the usual batch correction', () => {
     const { s, d } = base({ stock_lot_id: 'l1' }, true, [lot('l2', 'p1', 4)]);
     render(<Corrections patientId="pt" site={s} data={d} />);
