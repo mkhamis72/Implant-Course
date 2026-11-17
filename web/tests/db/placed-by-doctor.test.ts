@@ -208,7 +208,7 @@ describe('placed by a doctor; clinic rules (0115)', () => {
         p_placing => $5::uuid[], p_assisting => $6::uuid[], p_implants => $7::jsonb, p_override_reason => '', p_notes => '',
         p_placing_doctor => $8) as id`;
       const implants = JSON.stringify([{ tooth: 36, product_id: s.product }]);
-      expect(await raised(c, slotSql, [day, chair, s.patient, null, [], [], implants, null])).toBe(CHOOSE_DOCTOR);
+      expect(await raised(c, slotSql, [day, chair, s.patient, null, [], [], implants, null])).toBe('Choose the doctor.');
       expect(await raised(c, slotSql, [day, chair, s.patient, s.supervisor, [], [], implants, s.doctor])).toBe(NOT_USED);
       expect(await raised(c, slotSql, [day, chair, s.patient, null, [s.delegate], [], implants, s.doctor])).toBe(NOT_USED);
       expect(await raised(c, slotSql, [day, chair, s.patient, null, [], [s.delegate], implants, s.doctor])).toBe(NOT_USED);
@@ -220,7 +220,7 @@ describe('placed by a doctor; clinic rules (0115)', () => {
       const updSql = `select public.update_surgery_slot_v2(
         p_slot => $1, p_chair => $2, p_start => '09:00', p_end => '11:00', p_supervisor => $3, p_placing => $4::uuid[],
         p_assisting => '{}'::uuid[], p_override_reason => '', p_notes => 'Zz edited', p_placing_doctor => $5)`;
-      expect(await raised(c, updSql, [slot, chair, null, [], null])).toBe(CHOOSE_DOCTOR);
+      expect(await raised(c, updSql, [slot, chair, null, [], null])).toBe('Choose the doctor.');
       expect(await raised(c, updSql, [slot, chair, s.supervisor, [], s.doctor])).toBe(NOT_USED);
       expect(await raised(c, updSql, [slot, chair, null, [], s.doctor])).toBeNull();
 
@@ -305,6 +305,49 @@ describe('placed by a doctor; clinic rules (0115)', () => {
         p_delegate => $2, p_supervisor => null, p_course => null, p_notes => 'Zz', p_expected_updated_at => $3::timestamptz)`;
       expect(await raised(c, updSql, [r, s.delegate, at])).toBe(NOT_USED);
       expect(await raised(c, updSql, [r, null, at])).toBeNull();
+    });
+  });
+
+  it('a doctor booked twice at once is a clash (0116)', async () => {
+    await withTx(async (c) => {
+      const s = await seed(c, 'Clash');
+      const other = await makePatient(c, 'Zz Doc Clash Other');
+      const third = await makePatient(c, 'Zz Doc Clash Third');
+      const chairA = await makeChair(c);
+      const chairB = await makeChair(c);
+      const chairC = await makeChair(c);
+      await clinic(c);
+      await actAs(c, users.organizer);
+      const day = await one(c, `select public.add_surgery_session(null, '2030-03-02', 'Zz Clash day', '08:00', '17:00', null)`);
+      const slotSql = `select public.create_surgery_slot_v2(
+        p_session => $1, p_chair => $2, p_start => $3::time, p_end => $4::time, p_patient => $5, p_supervisor => null,
+        p_placing => '{}'::uuid[], p_assisting => '{}'::uuid[], p_implants => '[]'::jsonb, p_override_reason => $6, p_notes => '',
+        p_placing_doctor => $7) as id`;
+      const first = await one(c, slotSql, [day, chairA, '09:00', '10:00', s.patient, '', s.doctor]);
+
+      const conflicts = (await c.query(
+        `select kind, message from public.slot_conflicts_v2(p_session => $1, p_chair => $2, p_start => '09:30', p_end => '10:30',
+           p_patient => $3, p_supervisor => null, p_delegates => '{}'::uuid[], p_doctor => $4, p_exclude => null)`,
+        [day, chairB, other, s.doctor])).rows;
+      expect(conflicts).toEqual([{ kind: 'doctor', message: 'Zz Dr Clash is already booked 09:00–10:00 (Zz Doc Clash Patient).' }]);
+      // Excluding the booking itself (an edit) finds nothing.
+      expect((await c.query(
+        `select kind from public.slot_conflicts_v2(p_session => $1, p_chair => $2, p_start => '09:30', p_end => '10:30',
+           p_patient => $3, p_supervisor => null, p_delegates => '{}'::uuid[], p_doctor => $4, p_exclude => $5)`,
+        [day, chairA, s.patient, s.doctor, first])).rows).toEqual([]);
+
+      expect(await raised(c, slotSql, [day, chairB, '09:30', '10:30', other, '', s.doctor]))
+        .toBe('This booking clashes with another surgery. Give a reason to book anyway.');
+      expect(await raised(c, slotSql, [day, chairB, '09:30', '10:30', other, 'Zz two chairs', s.doctor])).toBeNull();
+
+      // Moving a later booking onto the doctor's time is a clash too.
+      const later = await one(c, slotSql, [day, chairC, '12:00', '13:00', third, '', s.doctor]);
+      const updSql = `select public.update_surgery_slot_v2(
+        p_slot => $1, p_chair => $2, p_start => '09:00', p_end => '10:00', p_supervisor => null, p_placing => '{}'::uuid[],
+        p_assisting => '{}'::uuid[], p_override_reason => $3, p_notes => '', p_placing_doctor => $4)`;
+      expect(await raised(c, updSql, [later, chairC, '', s.doctor]))
+        .toBe('This booking clashes with another surgery. Give a reason to book anyway.');
+      expect(await raised(c, updSql, [later, chairC, 'Zz overlap', s.doctor])).toBeNull();
     });
   });
 });
