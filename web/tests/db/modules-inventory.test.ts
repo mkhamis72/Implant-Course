@@ -248,6 +248,26 @@ describe('modules: inventory optional (0111)', () => {
       });
     });
 
+    it('a lot attached later can be corrected to another lot without changing stock (0113)', async () => {
+      await withTx(async (c) => {
+        const w = await world(c);
+        await inventoryOff(c);
+        await asAdmin(c);
+        const site = await placeAt(c, w, 36, null);
+        await backToFull(c);
+        await asAdmin(c);
+        const l2 = await receive(c, w.product, 2, 'ZZINVL2');
+        const expired = await receive(c, w.product, 1, 'ZZINVOLD2', '2020-01-01');
+        await correct(c, site, w.lot, null, null);
+        await correct(c, site, l2, null, null, 'wrong lot');
+        expect(await one(c, 'select stock_lot_id from public.implant_sites where id = $1', [site])).toBe(l2);
+        expect(await onHand(c, w.lot)).toBe(3);
+        expect(await onHand(c, l2)).toBe(2);
+        expect(await movements(c, site)).toBe(0);
+        await refused(c, () => correct(c, site, expired, null, null, 'wrong lot'), 'Lot ZZINVOLD2 had expired on 2020-01-01, before it was used.');
+      });
+    });
+
     it('attach later refuses a lot that expired before the placement', async () => {
       await withTx(async (c) => {
         const w = await world(c);
