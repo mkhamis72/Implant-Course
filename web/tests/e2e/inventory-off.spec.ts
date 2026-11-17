@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
-import { login } from './helpers';
+import { login, chooseImplant } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
 import { apiAs, enroll, seedDelegate, seedImplantStock, seedRunningCourse } from './api';
 import { ACADEMY, withPg } from './companies';
@@ -30,13 +30,6 @@ const onHand = (lot: string) =>
 
 function panel(page: Page) {
   return page.getByRole('complementary', { name: 'Tooth details' });
-}
-
-async function chooseImplant(page: Page, b: string, size: string) {
-  await page.getByRole('combobox', { name: 'Implant brand' }).selectOption({ label: b });
-  const sizes = page.getByRole('combobox', { name: 'Implant size' });
-  const value = await sizes.locator('option', { hasText: size }).getAttribute('value');
-  await sizes.selectOption(value!);
 }
 
 test.beforeAll(async () => {
