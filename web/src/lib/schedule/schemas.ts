@@ -136,3 +136,6 @@ export const voidSchema = z.object({
   patientId: requiredId('Patient not found.'),
   reason: reason('Explain why (at least 3 characters).'),
 });
+export const doctorSchema = z.object({
+  name: z.string().trim().min(2, { message: 'Enter the doctor’s name.' }).max(120, { message: 'Keep the name under 120 characters.' }),
+});

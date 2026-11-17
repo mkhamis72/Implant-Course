@@ -26,6 +26,12 @@ describe('visibleNavItems', () => {
   });
 });
 
+describe('delegate menu in a clinic', () => {
+  it('keeps only Account security when teaching is off', () => {
+    expect(labels({ role: 'delegate', permissions: {}, features: ['inventory'] })).toEqual(['Account security']);
+  });
+});
+
 describe('isActive', () => {
   it('marks the section containing the current page', () => {
     expect(isActive('/', '/')).toBe(true);

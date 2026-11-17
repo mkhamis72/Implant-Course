@@ -46,3 +46,4 @@ export type ReportRow = {
   diameter_mm: number | null; length_mm: number | null; description: string | null; lot_no: string | null;
   last_outcome: string | null; technique: Technique | null;
 };
+export type Doctor = { id: string; name: string; active: boolean };

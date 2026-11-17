@@ -28,3 +28,11 @@ describe("featureOn", () => {
     expect(featureOn([], "inventory")).toBe(false);
   });
 });
+
+describe('teachingOn', () => {
+  it('is true only when teaching is listed', async () => {
+    const { teachingOn } = await import('./modules');
+    expect(teachingOn(['inventory', 'teaching'])).toBe(true);
+    expect(teachingOn(['inventory', 'statistics'])).toBe(false);
+  });
+});

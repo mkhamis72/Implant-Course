@@ -35,3 +35,8 @@ const KNOWN: readonly string[] = [...MODULES, 'teaching'];
 export function toFeatures(raw: unknown): Feature[] {
   return Array.isArray(raw) ? (raw.filter((f) => typeof f === 'string' && KNOWN.includes(f)) as Feature[]) : [];
 }
+
+/** True when the company teaches (a course organizer); a clinic has no courses, delegates or supervisors. */
+export function teachingOn(features: readonly Feature[]): boolean {
+  return featureOn(features, 'teaching');
+}
