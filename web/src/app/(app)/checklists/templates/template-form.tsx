@@ -1,12 +1,13 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { SCOPE_LABELS } from '@/lib/checklists/format';
+import { scopeLabel } from '@/lib/checklists/format';
 import { SCOPES, type ChecklistScope, type Template } from '@/lib/checklists/types';
 import { checkedOf, valueOf, type FormState } from '@/lib/patients/form-state';
 import { saveTemplate } from '../actions';
 
-export function TemplateForm({ template }: { template?: Template }) {
+/** `teaching` false (a clinic): the surgery session scope reads Clinic day and lectures and workshops aren't offered (a template already on one keeps it). */
+export function TemplateForm({ template, teaching = true }: { template?: Template; teaching?: boolean }) {
   const [state, action, pending] = useActionState<FormState, FormData>(saveTemplate, {});
   const itemsText = template ? template.items.map((i) => i.text).join('\n') : '';
   // General checklists are never attached automatically, so they have no "default" option.
@@ -28,7 +29,8 @@ export function TemplateForm({ template }: { template?: Template }) {
             defaultValue={valueOf(state, 'applies_to', template?.applies_to ?? 'general')}
             onChange={(e) => setScope(e.target.value as ChecklistScope)}
           >
-            {SCOPES.map((s) => <option key={s} value={s}>{SCOPE_LABELS[s]}</option>)}
+            {SCOPES.filter((s) => teaching || !['lecture', 'workshop'].includes(s) || s === template?.applies_to)
+              .map((s) => <option key={s} value={s}>{scopeLabel(s, teaching)}</option>)}
           </select>
         </label>
       </div>

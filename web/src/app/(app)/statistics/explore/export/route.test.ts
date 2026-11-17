@@ -25,7 +25,7 @@ vi.mock('@/lib/dates', async (orig) => ({ ...(await orig<typeof import('@/lib/da
 import { GET } from './route';
 
 const SITE = '00000000-0000-4000-8000-0000000000aa';
-const admin = { role: 'admin', active: true, mfa_setup_required: false, permissions: {} };
+const admin = { role: 'admin', active: true, mfa_setup_required: false, permissions: {}, features: ['teaching', 'statistics'] };
 const req = (q: string) => new Request(`http://x/statistics/explore/export?${q}`) as never;
 
 beforeEach(() => {
@@ -42,9 +42,9 @@ beforeEach(() => {
 
 describe('GET /statistics/explore/export', () => {
   it('refuses without Research view or Patients view, and without an outcome', async () => {
-    profile.mockReturnValue({ role: 'organizer', active: true, mfa_setup_required: false, permissions: { patients: 'view' } });
+    profile.mockReturnValue({ role: 'organizer', active: true, mfa_setup_required: false, permissions: { patients: 'view' }, features: ['teaching', 'statistics'] });
     expect((await GET(req('o=failed'))).status).toBe(403);
-    profile.mockReturnValue({ role: 'organizer', active: true, mfa_setup_required: false, permissions: { research: 'view' } });
+    profile.mockReturnValue({ role: 'organizer', active: true, mfa_setup_required: false, permissions: { research: 'view' }, features: ['teaching', 'statistics'] });
     expect((await GET(req('o=failed'))).status).toBe(403);
     profile.mockReturnValue(admin);
     expect((await GET(req('f=smoking'))).status).toBe(400);

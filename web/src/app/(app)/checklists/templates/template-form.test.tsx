@@ -17,3 +17,14 @@ describe('<TemplateForm>', () => {
     expect(screen.getByRole('combobox', { name: 'Used for' })).toHaveValue('surgery_booking');
   });
 });
+
+describe('TemplateForm in a clinic', () => {
+  it('reads Clinic day for the surgery scope and offers no lecture or workshop', () => {
+    render(<TemplateForm teaching={false} />);
+    const options = screen.getAllByRole('option').map((o) => o.textContent);
+    expect(options).toContain('Clinic day');
+    expect(options).not.toContain('Surgery session');
+    expect(options).not.toContain('Lecture');
+    expect(options).not.toContain('Workshop');
+  });
+});

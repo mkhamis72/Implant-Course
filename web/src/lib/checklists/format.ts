@@ -10,6 +10,16 @@ export const SCOPE_LABELS: Record<ChecklistScope, string> = {
   surgery_booking: 'Surgery booking (per patient)',
 };
 
+/** The template scope as the company sees it: a clinic's surgery session is a clinic day. */
+export function scopeLabel(scope: ChecklistScope, teaching: boolean): string {
+  return scope === 'surgery' && !teaching ? 'Clinic day' : SCOPE_LABELS[scope];
+}
+
+/** Where a checklist's session links to: its course, or the schedule day for a clinic day or a company without courses. */
+export function sessionHref(session: { date: string; course_id: string | null }, teaching: boolean): string {
+  return teaching && session.course_id ? `/courses/${session.course_id}` : `/schedule?date=${session.date}`;
+}
+
 export function progressOf(items: readonly { done_at: string | null }[]): { done: number; total: number; label: string } {
   const done = items.filter((i) => i.done_at).length;
   return { done, total: items.length, label: items.length ? `${done}/${items.length} done` : 'No items' };

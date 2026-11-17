@@ -244,6 +244,20 @@ export const DICTIONARY: Record<TableName, Record<string, DictionaryEntry>> = {
   grafts: GRAFTS_DICTIONARY,
 };
 
+/** Columns that name a course, delegate or supervisor: a clinic has none of them, so its export leaves them out. */
+export const TEACHING_COLUMNS: Partial<Record<TableName, string[]>> = {
+  implants: ['course_code', 'placing_delegate_code', 'supervisor_code'],
+  restorations: ['delegate_code', 'supervisor_code'],
+};
+
+/** The dictionary a company's export uses: the full one, or without TEACHING_COLUMNS when it doesn't teach. */
+export function dictionaryFor(teaching: boolean): Record<TableName, Record<string, DictionaryEntry>> {
+  if (teaching) return DICTIONARY;
+  return Object.fromEntries(TABLE_NAMES.map((t) => [t, Object.fromEntries(
+    Object.entries(DICTIONARY[t]).filter(([c]) => !TEACHING_COLUMNS[t]?.includes(c)),
+  )])) as Record<TableName, Record<string, DictionaryEntry>>;
+}
+
 /** Columns added to a table from another reader (research_export_consent), merged by patient_code: not reader columns. */
 export const MERGED_COLUMNS: Partial<Record<TableName, string[]>> = { patients: ['research_consent'] };
 

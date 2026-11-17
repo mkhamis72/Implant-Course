@@ -1,5 +1,7 @@
 import { SectionNav } from '@/components/section-nav';
 import { requirePermission } from '@/lib/auth/session';
+import { teachingOn } from '@/lib/modules/modules';
+import { statisticsTabs } from '@/lib/research/tabs';
 
 export default async function StatisticsLayout({ children }: { children: React.ReactNode }) {
   const profile = await requirePermission('research');
@@ -7,13 +9,7 @@ export default async function StatisticsLayout({ children }: { children: React.R
     <div className="space-y-6">
       <SectionNav
         label="Statistics sections"
-        items={[
-          { href: '/statistics', label: 'Results' },
-          { href: '/statistics/explore', label: 'Explore' },
-          { href: '/statistics/courses', label: 'Courses' },
-          { href: '/statistics/studies', label: 'Studies' },
-          ...(profile.role === 'admin' ? [{ href: '/statistics/exports', label: 'Recent exports' }] : []),
-        ]}
+        items={statisticsTabs(profile.role, teachingOn(profile.features))}
       />
       {children}
     </div>
