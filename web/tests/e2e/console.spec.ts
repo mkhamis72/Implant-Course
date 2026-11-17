@@ -333,7 +333,8 @@ test('plans: the owner creates a plan and gives it to a company', async ({ page 
     await expect(page.getByRole('heading', { name: 'Plans', level: 1 })).toBeVisible();
     const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Add plan' }) });
     await form.getByLabel('Name').fill(name);
-    await expect(form.getByRole('checkbox', { name: /Inventory/ })).toBeDisabled();
+    await expect(form.getByRole('checkbox', { name: /Inventory/ })).toBeEnabled();
+    await form.getByRole('checkbox', { name: /Inventory/ }).check();
     await expect(form.getByRole('checkbox', { name: /Statistics/ })).not.toBeChecked();
     // The dev server may still be hydrating the page, which swallows an early click: click again until it saves.
     await expect(async () => {
@@ -348,6 +349,8 @@ test('plans: the owner creates a plan and gives it to a company', async ({ page 
     await page.reload();
     const planId = await withPg(async (pg) => (await pg.query('select id from public.plans where name = $1', [name])).rows[0]?.id as string);
     expect(planId).toBeTruthy();
+    const modules = await withPg(async (pg) => (await pg.query('select modules from public.plans where id = $1', [planId])).rows[0]?.modules as string[]);
+    expect(modules).toEqual(['inventory']);
     const stored = await withPg(async (pg) => (await pg.query('select plan_id from public.companies where id = $1', [ACADEMY])).rows[0]?.plan_id as string);
     expect(stored).toBe(planId);
     await expect(page.getByLabel('Plan', { exact: true })).toHaveValue(planId);
