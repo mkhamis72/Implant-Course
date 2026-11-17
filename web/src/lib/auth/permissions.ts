@@ -16,7 +16,7 @@ export const AREA_LABELS: Record<Area, string> = {
   research: 'Statistics',
 };
 
-export type Who = { role: Role; permissions: Permissions; features?: readonly Feature[] };
+export type Who = { role: Role; permissions: Permissions; features: readonly Feature[] };
 
 export function canView(p: Who, area: Area): boolean {
   if (!areaOn(p.features, area)) return false;

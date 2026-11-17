@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { AREAS, canEdit, canSeeImplants, canView, reportAccessNote, toPermissions } from './permissions';
 
-const org = (permissions = {}) => ({ role: 'organizer' as const, permissions });
+const ALL = ['inventory', 'statistics', 'teaching'] as const;
+const org = (permissions = {}) => ({ role: 'organizer' as const, permissions, features: ALL });
 
 describe('permissions', () => {
   it('admins can do everything; delegates nothing', () => {
     for (const a of AREAS) {
-      expect(canEdit({ role: 'admin', permissions: {} }, a)).toBe(true);
-      expect(canView({ role: 'delegate', permissions: { [a]: 'edit' } }, a)).toBe(false);
+      expect(canEdit({ role: 'admin', permissions: {}, features: ALL }, a)).toBe(true);
+      expect(canView({ role: 'delegate', permissions: { [a]: 'edit' }, features: ALL }, a)).toBe(false);
     }
   });
   it('organizers follow their rows; edit implies view', () => {
@@ -33,24 +34,24 @@ describe('permissions', () => {
 
 describe('reportAccessNote', () => {
   it('explains an implant report that the viewer cannot fully see', () => {
-    expect(reportAccessNote({ role: 'organizer', permissions: { delegates: 'view' } })).toBe(
+    expect(reportAccessNote({ role: 'organizer', permissions: { delegates: 'view' }, features: ALL })).toBe(
       'Implant records are only shown to users with access to Patients.',
     );
-    expect(reportAccessNote({ role: 'organizer', permissions: { delegates: 'view', schedule: 'view' } })).toBe(
+    expect(reportAccessNote({ role: 'organizer', permissions: { delegates: 'view', schedule: 'view' }, features: ALL })).toBe(
       'Follow-up results and restorations are only shown to users with access to Patients.',
     );
-    expect(reportAccessNote({ role: 'organizer', permissions: { delegates: 'view', patients: 'view' } })).toBeNull();
-    expect(reportAccessNote({ role: 'admin', permissions: {} })).toBeNull();
+    expect(reportAccessNote({ role: 'organizer', permissions: { delegates: 'view', patients: 'view' }, features: ALL })).toBeNull();
+    expect(reportAccessNote({ role: 'admin', permissions: {}, features: ALL })).toBeNull();
   });
 });
 
 describe('canSeeImplants', () => {
   it('needs Patients or Schedule view (implant records are readable through either)', () => {
-    expect(canSeeImplants({ role: 'organizer', permissions: { courses: 'view' } })).toBe(false);
-    expect(canSeeImplants({ role: 'organizer', permissions: { courses: 'view', schedule: 'view' } })).toBe(true);
-    expect(canSeeImplants({ role: 'organizer', permissions: { patients: 'edit' } })).toBe(true);
-    expect(canSeeImplants({ role: 'admin', permissions: {} })).toBe(true);
-    expect(canSeeImplants({ role: 'delegate', permissions: {} })).toBe(false);
+    expect(canSeeImplants({ role: 'organizer', permissions: { courses: 'view' }, features: ALL })).toBe(false);
+    expect(canSeeImplants({ role: 'organizer', permissions: { courses: 'view', schedule: 'view' }, features: ALL })).toBe(true);
+    expect(canSeeImplants({ role: 'organizer', permissions: { patients: 'edit' }, features: ALL })).toBe(true);
+    expect(canSeeImplants({ role: 'admin', permissions: {}, features: ALL })).toBe(true);
+    expect(canSeeImplants({ role: 'delegate', permissions: {}, features: ALL })).toBe(false);
   });
 });
 
