@@ -27,10 +27,6 @@ const MODULE_TABLES: Record<string, { areas: string[]; tables: string[]; allowed
     tables: ['courses', 'delegates', 'enrollments', 'lecturers', 'supervisors', 'talks', 'slot_delegates', 'study_courses'],
     allowed: {
       set_user_permissions: 'stores area levels; names the courses and delegates areas only as keys',
-      place_implant_v3: 'previous app version; Course organizers only (requires course/delegates)',
-      correct_placement_v2: 'previous app version; Course organizers only (requires course/delegates)',
-      create_surgery_slot: 'previous app version; Course organizers only (requires course/delegates)',
-      update_surgery_slot: 'previous app version; Course organizers only (requires course/delegates)',
     },
   },
 };

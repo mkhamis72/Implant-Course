@@ -189,18 +189,144 @@ describe('placed by a doctor; clinic rules (0115)', () => {
       await actAs(c, users.organizer);
       const sql = `select public.correct_placement_v3(p_site => $1, p_placed_on => public.cairo_today(), p_placing_delegate => $2,
          p_assisting_delegate => $3, p_supervisor => $4, p_course => $5, p_graft => '', p_notes => $6, p_placing_doctor => $7)`;
-      // The recorded people and course, unchanged, with a doctor and a new note.
-      expect(await raised(c, sql, [site, s.delegate, assistant, s.supervisor, s.course, 'Zz new note', s.doctor])).toBeNull();
-      expect((await c.query(`select placing_delegate_id, assisting_delegate_id, supervisor_id, course_id, placing_doctor_id, notes
-        from public.implant_sites where id = $1`, [site])).rows[0]).toEqual({
+      // The recorded people and course, unchanged, and a new note: a delegate placed it, so no doctor (0121).
+      expect(await raised(c, sql, [site, s.delegate, assistant, s.supervisor, s.course, 'Zz new note', null])).toBeNull();
+      const recorded = {
         placing_delegate_id: s.delegate, assisting_delegate_id: assistant, supervisor_id: s.supervisor, course_id: s.course,
-        placing_doctor_id: s.doctor, notes: 'Zz new note',
-      });
+        placing_doctor_id: null,
+      };
+      const row = async () => (await c.query(`select placing_delegate_id, assisting_delegate_id, supervisor_id, course_id,
+        placing_doctor_id, notes from public.implant_sites where id = $1`, [site])).rows[0];
+      expect(await row()).toEqual({ ...recorded, notes: 'Zz new note' });
+      // A doctor would replace the delegate who placed it: refused.
+      expect(await raised(c, sql, [site, s.delegate, assistant, s.supervisor, s.course, '', s.doctor])).toBe(NOT_USED);
       // Changing any of them is still refused.
-      expect(await raised(c, sql, [site, assistant, assistant, s.supervisor, s.course, '', s.doctor])).toBe(NOT_USED);
-      expect(await raised(c, sql, [site, s.delegate, null, s.supervisor, s.course, '', s.doctor])).toBe(NOT_USED);
-      expect(await raised(c, sql, [site, s.delegate, assistant, null, s.course, '', s.doctor])).toBe(NOT_USED);
-      expect(await raised(c, sql, [site, s.delegate, assistant, s.supervisor, null, '', s.doctor])).toBe(NOT_USED);
+      expect(await raised(c, sql, [site, assistant, assistant, s.supervisor, s.course, '', null])).toBe(NOT_USED);
+      expect(await raised(c, sql, [site, s.delegate, null, s.supervisor, s.course, '', null])).toBe(NOT_USED);
+      expect(await raised(c, sql, [site, s.delegate, assistant, null, s.course, '', null])).toBe(NOT_USED);
+      expect(await raised(c, sql, [site, s.delegate, assistant, s.supervisor, null, '', null])).toBe(NOT_USED);
+
+      // Back to a course organizer: the delegate is still the one who placed it.
+      await asPostgres(c);
+      await c.query(`update public.companies set kind = 'course_organizer' where id = $1`, [ACADEMY]);
+      await actAs(c, users.organizer);
+      expect(await row()).toEqual({ ...recorded, notes: 'Zz new note' });
+      expect(await raised(c, sql, [site, s.delegate, assistant, s.supervisor, s.course, 'Zz back', null])).toBeNull();
+      expect(await row()).toEqual({ ...recorded, notes: 'Zz back' });
+    });
+  });
+
+  it('a course organizer corrects an implant placed while a clinic, keeping its null course (0121)', async () => {
+    await withTx(async (c) => {
+      const s = await seed(c, 'NullCourse');
+      await clinic(c);
+      await actAs(c, users.organizer);
+      const site = await v4(c, { patient: s.patient, tooth: 36, product: s.product, lot: s.lot, doctor: s.doctor });
+      await asPostgres(c);
+      await c.query(`update public.companies set kind = 'course_organizer' where id = $1`, [ACADEMY]);
+      await actAs(c, users.organizer);
+      const sql = `select public.correct_placement_v3(p_site => $1, p_placed_on => public.cairo_today(), p_placing_delegate => $2,
+         p_assisting_delegate => $3, p_supervisor => null, p_course => $4, p_graft => '', p_notes => 'Zz fixed', p_placing_doctor => $5)`;
+      expect(await raised(c, sql, [site, null, null, null, s.doctor])).toBeNull();
+      expect((await c.query('select course_id, placing_doctor_id, notes from public.implant_sites where id = $1', [site])).rows[0])
+        .toEqual({ course_id: null, placing_doctor_id: s.doctor, notes: 'Zz fixed' });
+      // Naming a delegate still needs a course.
+      expect(await raised(c, sql, [site, null, s.delegate, null, s.doctor])).toBe('Choose the course.');
+      expect(await raised(c, sql, [site, s.delegate, null, null, null])).toBe('Choose the course.');
+      // A course can be given.
+      expect(await raised(c, sql, [site, null, null, s.course, s.doctor])).toBeNull();
+      // Once it has one, it can't be cleared.
+      expect(await raised(c, sql, [site, null, null, null, s.doctor])).toBe('Choose the course.');
+    });
+  });
+
+  it('the previous version\'s placement and booking functions refuse in a clinic, and still work for a course organizer (0121)', async () => {
+    await withTx(async (c) => {
+      const s = await seed(c, 'Old');
+      const chair = await makeChair(c);
+      const session = await makeSession(c, s.course);
+      await actAs(c, users.organizer);
+      const placeV3 = `select public.place_implant_v3(
+          p_patient => $1, p_tooth => $2::smallint, p_product => $3, p_lot => $4, p_placed_on => public.cairo_today(),
+          p_placing_delegate => $5, p_supervisor => $6, p_assisting_delegate => null, p_graft => '', p_notes => '',
+          p_slot => null, p_technique => null, p_course => $7) as id`;
+      const correctV2 = `select public.correct_placement_v2(p_site => $1, p_placed_on => public.cairo_today(), p_placing_delegate => $2,
+          p_assisting_delegate => null, p_supervisor => $3, p_course => $4, p_graft => '', p_notes => 'Zz v2')`;
+      const createSlot = `select public.create_surgery_slot(
+          p_session => $1, p_chair => $2, p_start => $3::time, p_end => $4::time, p_patient => $5, p_supervisor => $6,
+          p_placing => $7::uuid[]) as id`;
+      const updateSlot = `select public.update_surgery_slot(
+          p_slot => $1, p_chair => $2, p_start => '09:00', p_end => '10:30', p_supervisor => $3, p_placing => $4::uuid[],
+          p_assisting => '{}'::uuid[], p_override_reason => '', p_notes => 'Zz v1')`;
+
+      // A course organizer: all four work.
+      const site = await one(c, placeV3, [s.patient, 36, s.product, s.lot, s.delegate, s.supervisor, s.course]);
+      expect(await raised(c, correctV2, [site, s.delegate, s.supervisor, s.course])).toBeNull();
+      const slot = await one(c, createSlot, [session, chair, '09:00', '10:00', s.patient, s.supervisor, [s.delegate]]);
+      expect(await raised(c, updateSlot, [slot, chair, s.supervisor, [s.delegate]])).toBeNull();
+
+      // A clinic: each refuses before reading a course, delegate or supervisor.
+      await clinic(c);
+      await actAs(c, users.organizer);
+      expect(await raised(c, placeV3, [s.patient, 46, s.product, s.lot, s.delegate, s.supervisor, s.course])).toBe(NOT_USED);
+      expect(await raised(c, correctV2, [site, s.delegate, s.supervisor, s.course])).toBe(NOT_USED);
+      expect(await raised(c, createSlot, [session, chair, '11:00', '12:00', s.patient, s.supervisor, [s.delegate]])).toBe(NOT_USED);
+      expect(await raised(c, updateSlot, [slot, chair, s.supervisor, [s.delegate]])).toBe(NOT_USED);
+      // Not even a delegate's name leaks through the enrolment message.
+      const stranger = await (async () => { await asCompany(c); const d = await makeDelegate(c, 'Zz Old Stranger'); await actAs(c, users.organizer); return d; })();
+      expect(await raised(c, updateSlot, [slot, chair, s.supervisor, [stranger]])).toBe(NOT_USED);
+    });
+  });
+
+  it('place_implant_v4 takes the booking\'s doctor even if he has since become inactive (0121)', async () => {
+    await withTx(async (c) => {
+      const s = await seed(c, 'InactiveSlotDoc');
+      const chair = await makeChair(c);
+      const session = await makeSession(c, s.course);
+      await actAs(c, users.organizer);
+      const slot = (await one(c, `select public.create_surgery_slot_v2(
+        p_session => $1, p_chair => $2, p_start => '09:00', p_end => '10:00', p_patient => $3, p_supervisor => null,
+        p_placing => '{}'::uuid[], p_assisting => '{}'::uuid[], p_implants => '[]'::jsonb, p_override_reason => '', p_notes => '',
+        p_placing_doctor => $4) as id`, [session, chair, s.patient, s.doctor])) as string;
+      await asPostgres(c);
+      await c.query('update public.doctors set active = false where id = $1', [s.doctor]);
+      await actAs(c, users.organizer);
+      const base = { patient: s.patient, product: s.product, lot: s.lot, course: s.course, slot };
+      // Chosen explicitly, an inactive doctor is still refused.
+      expect(await v4Error(c, { ...base, tooth: 36, doctor: s.doctor })).toBe(CHOOSE_DOCTOR);
+      const site = await v4(c, { ...base, tooth: 36 });
+      expect(await one(c, 'select placing_doctor_id from public.implant_sites where id = $1', [site])).toBe(s.doctor);
+
+      // The same in a clinic.
+      await clinic(c);
+      await actAs(c, users.organizer);
+      const site2 = await v4(c, { patient: s.patient, product: s.product, lot: s.lot, slot, tooth: 46 });
+      expect(await one(c, 'select placing_doctor_id from public.implant_sites where id = $1', [site2])).toBe(s.doctor);
+    });
+  });
+
+  it('slot_conflicts_v2 names no supervisor clash in a clinic (0121)', async () => {
+    await withTx(async (c) => {
+      const s = await seed(c, 'SupClash');
+      const chair = await makeChair(c);
+      const chair2 = await makeChair(c);
+      const session = await makeSession(c, s.course);
+      await actAs(c, users.organizer);
+      await one(c, `select public.create_surgery_slot_v2(
+        p_session => $1, p_chair => $2, p_start => '09:00', p_end => '10:00', p_patient => $3, p_supervisor => $4,
+        p_placing => $5::uuid[], p_assisting => '{}'::uuid[], p_implants => '[]'::jsonb, p_override_reason => '', p_notes => '',
+        p_placing_doctor => null) as id`, [session, chair, s.patient, s.supervisor, [s.delegate]]);
+      await asCompany(c);
+      const other = await makePatient(c, 'Zz Doc SupClash Other');
+      await actAs(c, users.organizer);
+      const kinds = async () => (await c.query(
+        `select kind, message from public.slot_conflicts_v2($1, $2, '09:30', '10:30', $3, $4, '{}'::uuid[], null, null)`,
+        [session, chair2, other, s.supervisor])).rows;
+      expect((await kinds()).map((r) => r.kind)).toEqual(['supervisor']);
+      expect((await kinds())[0].message).toMatch(/^Zz Sup SupClash is already supervising/);
+      await clinic(c);
+      await actAs(c, users.organizer);
+      expect(await kinds()).toEqual([]);
     });
   });
 

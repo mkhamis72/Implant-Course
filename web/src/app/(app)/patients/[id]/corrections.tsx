@@ -91,10 +91,18 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
       </select>
     </label>
   );
+  // In a clinic, an implant a delegate placed (before the switch) takes no doctor: its people go back as recorded (0121).
+  const placedByRecorded = !teaching && !!site.placing_delegate_id;
   const values = teaching
     ? { ...v, placedBy, placingDelegateId: byDoctor ? null : v.placingDelegateId, placingDoctorId: byDoctor ? v.placingDoctorId : null }
-    // A clinic sends only the doctor; the action re-reads what an older record names (before the switch) and keeps it (0119).
-    : { ...v, placedBy, placingDelegateId: null, assistingDelegateId: null, supervisorId: null, courseId: null };
+    : placedByRecorded
+      // The recorded people satisfy the form's checks; the action re-reads them server-side anyway.
+      ? {
+          ...v, placedBy: 'delegate' as const, placingDelegateId: site.placing_delegate_id, placingDoctorId: null,
+          assistingDelegateId: site.assisting_delegate_id, supervisorId: site.supervisor_id, courseId: site.course_id,
+        }
+      // A clinic sends only the doctor; the action re-reads what an older record names (before the switch) and keeps it (0119).
+      : { ...v, placedBy, placingDelegateId: null, assistingDelegateId: null, supervisorId: null, courseId: null };
   return (
     <div className="space-y-2" role="group" aria-label="Placement details">
       <p className="font-medium">Placement details</p>
@@ -104,7 +112,7 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
           <span className="label">Placement date</span>
           <input className="input" type="date" max={data.today} value={v.placedOn} onChange={set('placedOn')} />
         </label>
-        {!teaching ? doctorSelect('Placed by') : (
+        {!teaching ? (!placedByRecorded && doctorSelect('Placed by')) : (
           <>
             {byDoctor ? doctorSelect('Doctor') : (
               <label className="block">

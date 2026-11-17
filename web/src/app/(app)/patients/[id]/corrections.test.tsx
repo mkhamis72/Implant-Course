@@ -118,19 +118,19 @@ describe('<Corrections> placed by a doctor', () => {
 });
 
 describe('<Corrections> in a clinic, an implant recorded before the switch', () => {
-  it('shows none of what it names and sends only the doctor (the action keeps the recorded values)', async () => {
+  it('a delegate placed it: shows none of what it names, no doctor select, and sends it back as recorded (0121)', async () => {
     const { correctPlacement } = await import('./implant-actions');
     vi.mocked(correctPlacement).mockClear().mockResolvedValue({});
     const clinic = { ...data, teachingOn: false, delegates: [], supervisors: [], courses: [], enrollments: [] } as unknown as ChartData;
     render(<Corrections patientId="pt" site={{ ...site, placing_delegate_id: 'd1', assisting_delegate_id: 'd2', placing_doctor_id: null, doctor: null } as unknown as ImplantSite} data={clinic} />);
     const box = screen.getByRole('group', { name: 'Placement details' });
-    expect(box).not.toHaveTextContent(/Supervisor|Course|Delegate|Dr Former|Prof A/i);
-    fireEvent.change(within(box).getByRole('combobox', { name: 'Placed by' }), { target: { value: 'doc1' } });
+    expect(box).not.toHaveTextContent(/Supervisor|Course|Delegate|Dr Former|Prof A|Doctor|Placed by/i);
+    expect(within(box).queryByRole('combobox')).toBeNull();
     fireEvent.change(within(box).getByLabelText('Notes'), { target: { value: 'fixed' } });
     fireEvent.click(within(box).getByRole('button', { name: 'Save details' }));
     expect(vi.mocked(correctPlacement)).toHaveBeenCalledWith(expect.objectContaining({
-      placedBy: 'doctor', placingDoctorId: 'doc1', notes: 'fixed',
-      placingDelegateId: null, assistingDelegateId: null, supervisorId: null, courseId: null,
+      placedBy: 'delegate', placingDoctorId: null, notes: 'fixed',
+      placingDelegateId: 'd1', assistingDelegateId: 'd2', supervisorId: 'sup1', courseId: 'c1',
     }));
   });
 });

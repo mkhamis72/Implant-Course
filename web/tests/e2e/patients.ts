@@ -90,6 +90,14 @@ export async function deactivateE2eCatalog(): Promise<void> {
     await pg.query('update public.chairs set active = false where name like $1 and active', [`${E2E_PREFIX}%`]);
     await pg.query('update public.supervisors set active = false where full_name like $1 and active', [`${E2E_PREFIX}%`]);
     await pg.query('update public.lecturers set active = false where full_name like $1 and active', [`${E2E_PREFIX}%`]);
+    // Doctors no record names are deleted; the others are deactivated, like supervisors.
+    await pg.query(
+      `delete from public.doctors d where d.name like $1
+         and not exists (select 1 from public.implant_sites s where s.placing_doctor_id = d.id)
+         and not exists (select 1 from public.surgery_slots o where o.placing_doctor_id = d.id)`,
+      [`${E2E_PREFIX}%`],
+    );
+    await pg.query('update public.doctors set active = false where name like $1 and active', [`${E2E_PREFIX}%`]);
   } finally {
     await pg.end();
   }

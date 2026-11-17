@@ -62,10 +62,11 @@ describe('placement actions send the course', () => {
 });
 
 describe('correctPlacement in a clinic', () => {
-  it('sends the recorded delegate, assistant, supervisor and course, whatever the input says', async () => {
+  it('sends the recorded delegate, assistant, supervisor, course and (no) doctor, whatever the input says', async () => {
     features.list = [];
     maybeSingle.mockResolvedValue({
-      data: { placing_delegate_id: uuid(4), assisting_delegate_id: uuid(9), supervisor_id: uuid(5), course_id: uuid(6) }, error: null,
+      data: { placing_delegate_id: uuid(4), assisting_delegate_id: uuid(9), supervisor_id: uuid(5), course_id: uuid(6), placing_doctor_id: null },
+      error: null,
     });
     try {
       const r = await correctPlacement({
@@ -75,8 +76,27 @@ describe('correctPlacement in a clinic', () => {
       expect(r).toEqual({});
       expect(from).toHaveBeenCalledWith('implant_sites');
       expect(rpc).toHaveBeenCalledWith('correct_placement_v3', expect.objectContaining({
-        p_site: uuid(7), p_placing_doctor: uuid(8), p_notes: 'n',
+        p_site: uuid(7), p_placing_doctor: null, p_notes: 'n',
         p_placing_delegate: uuid(4), p_assisting_delegate: uuid(9), p_supervisor: uuid(5), p_course: uuid(6),
+      }));
+    } finally {
+      features.list = ['teaching'];
+    }
+  });
+
+  it('an implant a doctor placed sends the chosen doctor (0121)', async () => {
+    features.list = [];
+    maybeSingle.mockResolvedValue({
+      data: { placing_delegate_id: null, assisting_delegate_id: null, supervisor_id: null, course_id: null, placing_doctor_id: uuid(3) },
+      error: null,
+    });
+    try {
+      await correctPlacement({
+        siteId: uuid(7), patientId: uuid(1), placedOn: '2026-01-10', placedBy: 'doctor', placingDoctorId: uuid(8),
+        placingDelegateId: null, assistingDelegateId: null, supervisorId: null, courseId: null, graft: '', notes: '',
+      });
+      expect(rpc).toHaveBeenCalledWith('correct_placement_v3', expect.objectContaining({
+        p_placing_doctor: uuid(8), p_placing_delegate: null, p_course: null,
       }));
     } finally {
       features.list = ['teaching'];
