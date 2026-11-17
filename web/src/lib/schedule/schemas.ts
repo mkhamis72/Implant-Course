@@ -127,7 +127,7 @@ export const correctionSchema = z.object({
   patientId: requiredId('Patient not found.'),
   componentId: optionalUuid,
   newProductId: optionalUuid,
-  newLotId: requiredId('Choose the correct batch.'),
+  newLotId: optionalUuid,
   reason: reason('Explain the correction (at least 3 characters).'),
 });
 

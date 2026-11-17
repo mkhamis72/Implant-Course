@@ -29,9 +29,13 @@ function useRun() {
 }
 
 /** Batches a correction may point to: in stock, other than the current one, and not expired on the day of use. */
-function correctionLots(lots: readonly LotOnHand[], productId: string, currentLotId: string | null, usedOn: string | null): LotOnHand[] {
+function correctionLots(
+  lots: readonly LotOnHand[], productId: string, currentLotId: string | null, usedOn: string | null, includeEmpty = false,
+): LotOnHand[] {
   return lots.filter(
-    (l) => l.product_id === productId && l.on_hand > 0 && l.stock_lot_id !== currentLotId && !(l.expiry && usedOn && l.expiry < usedOn),
+    (l) =>
+      l.product_id === productId && (includeEmpty || l.on_hand > 0) && l.stock_lot_id !== currentLotId &&
+      !(l.expiry && usedOn && l.expiry < usedOn),
   );
 }
 
@@ -193,7 +197,7 @@ function Shell({ bare, children }: { bare: boolean; children: React.ReactNode })
 
 export function Corrections({ patientId, site, data, bare = false }: { patientId: string; site: ImplantSite; data: ChartData; bare?: boolean }) {
   const { error, ok, pending, run } = useRun();
-  const stockComponents = site.components.filter((c) => !c.voided_at && c.stock_lot_id && c.product);
+  const stockComponents = site.components.filter((c) => !c.voided_at && c.product);
   const [target, setTarget] = useState('implant');
   const component = stockComponents.find((c) => c.id === target) ?? null;
   const currentProductId = component ? component.product!.id : (site.product?.id ?? '');
@@ -212,12 +216,21 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
   const productOptions = products.some((p) => p.id === currentProductId) || !currentProductId
     ? products
     : [...products, (component ? component.product : site.product)!];
-  const lots = correctionLots(
-    data.lots,
-    productId,
-    component ? component.stock_lot_id : site.stock_lot_id,
-    component ? component.fitted_on : site.placed_on,
-  );
+  const currentLotId = component ? component.stock_lot_id : site.stock_lot_id;
+  const usedOn = component ? component.fitted_on : site.placed_on;
+  const hasLot = !!currentLotId;
+  const lots = correctionLots(data.lots, productId, currentLotId, usedOn, !hasLot);
+  const sendCorrection = (newLotId: string | null) =>
+    run(() =>
+      correctBatch({
+        siteId: site.id,
+        patientId,
+        componentId: component?.id ?? '',
+        newProductId: productId !== currentProductId ? productId : '',
+        newLotId,
+        reason: batchReason,
+      }),
+    );
   const latest = site.followups.filter((f) => !f.voided_at).at(-1);
 
   function chooseTarget(value: string) {
@@ -244,42 +257,47 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
                 ))}
               </select>
             </label>
-            <label className="block">
-              <span className="label">Product actually used</span>
-              <select className="input" value={productId} onChange={(e) => { setProductId(e.target.value); setLotId(''); }}>
-                {productOptions.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="label">Correct batch</span>
-              <select className="input" value={lotId} onChange={(e) => setLotId(e.target.value)}>
-                <option value="">Choose the batch actually used…</option>
-                {lots.map((l) => <option key={l.stock_lot_id} value={l.stock_lot_id}>{lotLabel(l)}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="label">Reason for correction</span>
-              <input className="input" value={batchReason} onChange={(e) => setBatchReason(e.target.value)} />
-            </label>
-            <button
-              type="button"
-              className="btn-secondary btn"
-              disabled={pending}
-              onClick={() =>
-                run(() =>
-                  correctBatch({
-                    siteId: site.id,
-                    patientId,
-                    componentId: component?.id ?? '',
-                    newProductId: productId !== currentProductId ? productId : '',
-                    newLotId: lotId,
-                    reason: batchReason,
-                  }),
-                )
-              }
-            >
-              Correct batch
-            </button>
+            {hasLot && !data.inventoryOn ? (
+              <p className="text-muted">Switch Inventory on to correct the stock batch.</p>
+            ) : (
+              <>
+                <label className="block">
+                  <span className="label">Product actually used</span>
+                  <select className="input" value={productId} onChange={(e) => { setProductId(e.target.value); setLotId(''); }}>
+                    {productOptions.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
+                  </select>
+                </label>
+                {(hasLot || data.inventoryOn) && (
+                  <label className="block">
+                    <span className="label">{hasLot ? 'Correct batch' : 'Stock batch'}</span>
+                    <select className="input" value={lotId} onChange={(e) => setLotId(e.target.value)}>
+                      <option value="">{hasLot ? 'Choose the batch actually used…' : 'Choose the batch used…'}</option>
+                      {lots.map((l) => <option key={l.stock_lot_id} value={l.stock_lot_id}>{lotLabel(l)}</option>)}
+                    </select>
+                  </label>
+                )}
+                <label className="block">
+                  <span className="label">Reason for correction</span>
+                  <input className="input" value={batchReason} onChange={(e) => setBatchReason(e.target.value)} />
+                </label>
+                {hasLot ? (
+                  <button type="button" className="btn-secondary btn" disabled={pending} onClick={() => sendCorrection(lotId)}>
+                    Correct batch
+                  </button>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" className="btn-secondary btn" disabled={pending} onClick={() => sendCorrection(null)}>
+                      Correct product
+                    </button>
+                    {data.inventoryOn && (
+                      <button type="button" className="btn-secondary btn" disabled={pending || !lotId} onClick={() => sendCorrection(lotId)}>
+                        Attach stock batch
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
         {current && site.state !== 'failed' && (

@@ -86,6 +86,13 @@ describe('reasons', () => {
   });
 });
 
+describe('correctionSchema lot', () => {
+  it('accepts no batch (a product-only correction)', () => {
+    const r = correctionSchema.parse({ siteId: id, patientId: id, newLotId: null, newProductId: id, reason: 'Wrong size' });
+    expect(r.newLotId).toBeNull();
+  });
+});
+
 describe('supervisorSchema', () => {
   it('trims the name and requires 2–120 characters', () => {
     expect(supervisorSchema.parse({ full_name: '  Prof. Laila Samir ' })).toEqual({ full_name: 'Prof. Laila Samir' });

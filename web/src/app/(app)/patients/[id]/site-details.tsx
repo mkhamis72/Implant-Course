@@ -98,7 +98,11 @@ export function TechniqueControl({ site, patientId, editable }: { site: ImplantS
 /** The implant itself: product, lot, measurements, people, technique, components and any failure. */
 export function ImplantFacts({ site, patientId, data }: { site: ImplantSite; patientId: string; data: ChartData }) {
   const facts = [
-    site.lot ? (site.lot.lot_no ? `Lot ${site.lot.lot_no}` : 'No lot') : null,
+    !data.inventoryOn
+      ? null
+      : site.lot
+        ? (site.lot.lot_no ? `Lot ${site.lot.lot_no}` : 'No lot')
+        : !site.stock_lot_id && site.state !== 'planned' ? 'No stock batch recorded' : null,
     site.placed_on ? formatDate(site.placed_on) : null,
     site.torque_ncm !== null ? `${site.torque_ncm} Ncm` : null,
     site.isq !== null && site.isq !== undefined ? `ISQ ${site.isq}` : null,
