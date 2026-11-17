@@ -180,4 +180,6 @@ export type ChartData = {
   editable: boolean;
   /** Inventory/edit: may receive missing stock from inside the placement form. */
   canReceive: boolean;
+  /** The company's plan includes Inventory: false places and fits from the catalogue, with no stock batch. */
+  inventoryOn: boolean;
 };

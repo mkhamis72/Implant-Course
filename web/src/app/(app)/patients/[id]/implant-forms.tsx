@@ -268,7 +268,7 @@ export function PlanForm({ patientId, tooth, data, onDone }: Base) {
   const { error, pending, submit } = useSubmit(planImplant, onDone);
   return (
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, productId, technique, notes }); }}>
-      <ImplantPicker implants={data.implants} lots={data.lots} usedOn={data.today} value={productId} onChange={setProductId} inStockDefault={false} />
+      <ImplantPicker implants={data.implants} lots={data.lots} usedOn={data.today} value={productId} onChange={setProductId} inStockDefault={false} stockFilter={data.inventoryOn} />
       <TechniqueField value={technique} onChange={setTechnique} />
       <Field label="Notes (optional)">
         <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -316,7 +316,7 @@ export function PlaceForm({
   const enrolled = delegatesForCourse(data.delegates, data.enrollments, v.courseId);
   const { error, pending, submit } = useSubmit(placeImplant, () => { onPlaced?.(); onDone(); });
   return (
-    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, slotId: slot?.id ?? '', ...v }); }}>
+    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, slotId: slot?.id ?? '', ...v, lotId: data.inventoryOn ? v.lotId : null }); }}>
       <p className="text-xs text-muted"><span aria-hidden="true" className="text-bad">*</span> Required</p>
       <ImplantPicker
         implants={data.implants}
@@ -325,17 +325,18 @@ export function PlaceForm({
         value={v.productId}
         onChange={set('productId')}
         required
+        stockFilter={data.inventoryOn}
         // A planned implant with no stock stays visible: the box starts unticked so it can be received.
         inStockDefault={!plannedProductId || availableLots(data.lots, plannedProductId, data.today).length > 0}
       />
-      <BatchSelect
+      {data.inventoryOn && <BatchSelect
         data={data}
         productId={v.productId}
         usedOn={v.placedOn}
         value={v.lotId}
         onChange={set('lotId')}
         receive={{ patientId, canReceive: data.canReceive, onReceived: set('lotId') }}
-      />
+      />}
       <TechniqueField value={v.technique} onChange={set('technique')} />
       <Field label="Placement date" required>
         <input className="input" type="date" aria-required="true" max={data.today} value={v.placedOn} onChange={(e) => set('placedOn')(e.target.value)} />
@@ -400,7 +401,7 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
   const products = data.componentProducts.filter((p) => acceptsProduct(v.componentType, p.type));
   const { error, pending, submit } = useSubmit(fitComponent, onDone);
   return (
-    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, siteId: site.id, ...v }); }}>
+    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, siteId: site.id, ...v, lotId: data.inventoryOn ? v.lotId : null }); }}>
       <Field label="Component">
         <select className="input" value={v.componentType} onChange={(e) => set('componentType')(e.target.value)}>
           {/* Crowns and bridges are recorded on the Restoration tab; final_restoration stays for old records only. */}
@@ -409,11 +410,11 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
       </Field>
       <Field label="Product (optional)">
         <select className="input" value={v.productId} onChange={(e) => set('productId')(e.target.value)}>
-          <option value="">Not from stock</option>
+          <option value="">{data.inventoryOn ? 'Not from stock' : 'No product recorded'}</option>
           {products.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
         </select>
       </Field>
-      {v.productId && <BatchSelect data={data} productId={v.productId} usedOn={v.fittedOn} value={v.lotId} onChange={set('lotId')} />}
+      {data.inventoryOn && v.productId && <BatchSelect data={data} productId={v.productId} usedOn={v.fittedOn} value={v.lotId} onChange={set('lotId')} />}
       <Field label="Fitted on">
         <input className="input" type="date" min={site.placed_on ?? undefined} max={data.today} value={v.fittedOn} onChange={(e) => set('fittedOn')(e.target.value)} />
       </Field>

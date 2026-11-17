@@ -79,7 +79,8 @@ export const placeSchema = z.object({
   patientId: requiredId('Patient not found.'),
   tooth,
   productId: requiredId('Choose the implant.'),
-  lotId: requiredId('Choose a stock batch.'),
+  // Whether a batch is needed depends on the plan (Inventory): the database decides.
+  lotId: optionalUuid,
   placedOn: pastDate('Enter the placement date (today or earlier).'),
   placingDelegateId: requiredId('Choose the delegate who placed the implant.'),
   slotId: optionalUuid,
@@ -109,5 +110,4 @@ export const componentSchema = z
     courseId: optionalUuid,
     notes: text(1000),
   })
-  .refine((c) => c.productId === null || c.lotId !== null, { message: 'Choose the stock batch used.' })
   .refine((c) => c.byDelegateId !== null || c.byOrganizerId !== null, { message: 'Choose who fitted the component.' });

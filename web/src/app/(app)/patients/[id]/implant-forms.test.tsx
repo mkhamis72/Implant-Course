@@ -10,7 +10,7 @@ import { ComponentForm, PlaceForm } from './implant-forms';
 const implant = { id: 'p1', type: 'implant', brand: 'Brand', system: 'S', platform: null, diameter_mm: 4, length_mm: 10, description: '' };
 const lot = { stock_lot_id: 'l1', product_id: 'p1', lot_no: 'OLD', expiry: '2030-06-09', received_on: '2030-01-01', qty_received: 1, on_hand: 1 };
 const data = {
-  today: '2030-06-10', me: 'u1', editable: true, canReceive: true, implants: [implant], lots: [lot], delegates: [], enrollments: [], organizers: [], supervisors: [], componentProducts: [],
+  today: '2030-06-10', me: 'u1', editable: true, canReceive: true, inventoryOn: true, implants: [implant], lots: [lot], delegates: [], enrollments: [], organizers: [], supervisors: [], componentProducts: [],
   courses: [
     { id: 'c1', name: 'June course', start_date: '2030-06-08', end_date: '2030-06-12' },
     { id: 'c2', name: 'Earlier course', start_date: '2030-01-01', end_date: '2030-01-05' },
@@ -247,5 +247,36 @@ describe('implant date limits', () => {
     render(<ComponentForm patientId="pt" site={site} data={data} onDone={() => {}} />);
     expect(screen.getByLabelText(/Fitted on/)).toHaveAttribute('min', '2026-03-10');
     expect(screen.getByLabelText(/Fitted on/)).toHaveAttribute('max', data.today);
+  });
+});
+
+describe('without Inventory', () => {
+  const off = { ...data, inventoryOn: false, canReceive: false, lots: [] } as unknown as ChartData;
+
+  it('places from the catalogue: no batch group, no stock filter, lotId null', async () => {
+    const { placeImplant } = await import('./implant-actions');
+    vi.mocked(placeImplant).mockResolvedValue({});
+    render(<PlaceForm patientId='pt' tooth={36} data={off} onDone={() => {}} plannedProductId='p1' />);
+    expect(screen.queryByRole('radiogroup', { name: 'Stock batch' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/No usable stock/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Receive stock here' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'In stock only' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Ø4.0 × 10 mm' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save placement' }));
+    expect(vi.mocked(placeImplant).mock.calls.at(-1)?.[0]).toMatchObject({ productId: 'p1', lotId: null });
+  });
+
+  it('fits a component with no batch group and lotId null', async () => {
+    const { fitComponent } = await import('./implant-actions');
+    vi.mocked(fitComponent).mockResolvedValue({});
+    const abutment = { id: 'a1', type: 'ti_base', brand: 'Brand', system: 'S', platform: null, diameter_mm: null, length_mm: null, description: '' };
+    const site = { id: 's1', tooth: 36, state: 'placed', components: [] } as unknown as Parameters<typeof ComponentForm>[0]['site'];
+    render(<ComponentForm patientId='pt' site={site} data={{ ...off, componentProducts: [abutment] } as unknown as ChartData} onDone={() => {}} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Component' }), { target: { value: 'ti_base' } });
+    fireEvent.change(screen.getByRole('combobox', { name: /^Product/ }), { target: { value: 'a1' } });
+    expect(screen.queryByRole('radiogroup', { name: 'Stock batch' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/No usable stock/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save component' }));
+    expect(vi.mocked(fitComponent).mock.calls.at(-1)?.[0]).toMatchObject({ productId: 'a1', lotId: null });
   });
 });

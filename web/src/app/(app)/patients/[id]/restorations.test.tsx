@@ -30,7 +30,7 @@ const data = (restorations: Restoration[], editable = true) =>
     delegates: [{ id: 'd1', label: 'Dr Delegate' }, { id: 'd2', label: 'Dr Second' }], supervisors: [{ id: 'v1', label: 'Dr Supervisor' }],
     enrollments: [{ course_id: 'c1', delegate_id: 'd1' }],
     courses: [{ id: 'c1', name: 'Autumn course', start_date: '2026-10-01', end_date: '2026-10-30' }],
-    restorations, today: '2026-10-21', me: 'u1', editable, canReceive: false,
+    restorations, today: '2026-10-21', me: 'u1', editable, canReceive: false, inventoryOn: true,
   }) as unknown as ChartData;
 
 beforeEach(() => {

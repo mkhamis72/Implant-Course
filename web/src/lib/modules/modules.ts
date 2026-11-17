@@ -23,6 +23,11 @@ export function areaOn(features: readonly Feature[] | undefined, area: Area): bo
   return !feature || !features || features.includes(feature);
 }
 
+/** True when the company's features list the feature. */
+export function featureOn(features: readonly Feature[], f: Feature): boolean {
+  return features.includes(f);
+}
+
 const KNOWN: readonly string[] = [...MODULES, 'teaching'];
 
 export function toFeatures(raw: unknown): Feature[] {

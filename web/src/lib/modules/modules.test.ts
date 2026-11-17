@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { areaOn, toFeatures } from './modules';
+import { areaOn, featureOn, toFeatures } from './modules';
 
 describe('areaOn', () => {
   it('closes an area whose feature is not listed', () => {
@@ -18,5 +18,13 @@ describe('toFeatures', () => {
   it('keeps only known names', () => {
     expect(toFeatures(['statistics', 'bogus'])).toEqual(['statistics']);
     expect(toFeatures(null)).toEqual([]);
+  });
+});
+
+describe("featureOn", () => {
+  it("is true only when the feature is listed", () => {
+    expect(featureOn(["inventory", "teaching"], "inventory")).toBe(true);
+    expect(featureOn(["teaching"], "inventory")).toBe(false);
+    expect(featureOn([], "inventory")).toBe(false);
   });
 });

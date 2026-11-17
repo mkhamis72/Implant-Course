@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getCurrentProfile } from '@/lib/auth/session';
 import { staffOptions } from '@/lib/admin/staff';
 import { canEdit } from '@/lib/auth/permissions';
+import { featureOn } from '@/lib/modules/modules';
 import { todayIso } from '@/lib/dates';
 import { productLabel } from '@/lib/inventory/labels';
 import type { ChartData, ImplantSite, LotOnHand, Product } from '@/lib/inventory/types';
@@ -120,5 +121,6 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     me: me?.user_id ?? '',
     editable: me ? canEdit(me, 'patients') : false,
     canReceive: me ? canEdit(me, 'inventory') : false,
+    inventoryOn: me ? featureOn(me.features, 'inventory') : false,
   };
 }

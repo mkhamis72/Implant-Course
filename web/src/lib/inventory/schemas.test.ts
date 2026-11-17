@@ -54,17 +54,21 @@ describe('placeSchema / componentSchema', () => {
   it('accepts a complete placement and optional fields as null', () => {
     expect(placeSchema.parse({ ...place, assistingDelegateId: '' })).toMatchObject({ assistingDelegateId: null });
   });
+  it('leaves the batch to the database', () => {
+    const { lotId: _lot, ...noLot } = place;
+    expect(placeSchema.parse(noLot)).toMatchObject({ lotId: null });
+    expect(placeSchema.parse({ ...place, lotId: '' })).toMatchObject({ lotId: null });
+  });
   it('requires the course', () => {
     expect(err(placeSchema.safeParse({ ...place, courseId: '' }))).toBe('Choose the course.');
   });
   it('names the first missing piece', () => {
-    expect(err(placeSchema.safeParse({ ...place, lotId: '' }))).toBe('Choose a stock batch.');
     expect(err(placeSchema.safeParse({ ...place, placingDelegateId: '' }))).toBe('Choose the delegate who placed the implant.');
     expect(err(placeSchema.safeParse({ ...place, technique: '' }))).toBe('Choose Guided or Free hand.');
   });
-  it('components need a batch when a product is chosen, and someone who fitted them', () => {
+  it('components are accepted without a batch (the database decides), and need someone who fitted them', () => {
     const c = { siteId: id, patientId: id, componentType: 'ti_base', fittedOn: '2026-01-10', byDelegateId: id };
-    expect(componentSchema.safeParse({ ...c, productId: id, lotId: '' }).success).toBe(false);
+    expect(componentSchema.safeParse({ ...c, productId: id, lotId: '' }).success).toBe(true);
     expect(err(componentSchema.safeParse({ ...c, byDelegateId: '', byOrganizerId: '' }))).toBe('Choose who fitted the component.');
     expect(componentSchema.parse({ ...c, componentType: 'final_restoration' })).toMatchObject({ productId: null, lotId: null });
   });
