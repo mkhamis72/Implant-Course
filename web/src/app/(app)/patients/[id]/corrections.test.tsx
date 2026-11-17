@@ -118,7 +118,7 @@ describe('<Corrections> placed by a doctor', () => {
 });
 
 describe('<Corrections> in a clinic, an implant recorded before the switch', () => {
-  it('sends its recorded delegate, assistant, supervisor and course back unchanged, without showing them', async () => {
+  it('shows none of what it names and sends only the doctor (the action keeps the recorded values)', async () => {
     const { correctPlacement } = await import('./implant-actions');
     vi.mocked(correctPlacement).mockClear().mockResolvedValue({});
     const clinic = { ...data, teachingOn: false, delegates: [], supervisors: [], courses: [], enrollments: [] } as unknown as ChartData;
@@ -130,7 +130,7 @@ describe('<Corrections> in a clinic, an implant recorded before the switch', () 
     fireEvent.click(within(box).getByRole('button', { name: 'Save details' }));
     expect(vi.mocked(correctPlacement)).toHaveBeenCalledWith(expect.objectContaining({
       placedBy: 'doctor', placingDoctorId: 'doc1', notes: 'fixed',
-      placingDelegateId: 'd1', assistingDelegateId: 'd2', supervisorId: 'sup1', courseId: 'c1',
+      placingDelegateId: null, assistingDelegateId: null, supervisorId: null, courseId: null,
     }));
   });
 });

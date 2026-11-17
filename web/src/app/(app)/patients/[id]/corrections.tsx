@@ -93,11 +93,8 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
   );
   const values = teaching
     ? { ...v, placedBy, placingDelegateId: byDoctor ? null : v.placingDelegateId, placingDoctorId: byDoctor ? v.placingDoctorId : null }
-    // A clinic records only the doctor; what an older record names (before the switch) goes back unchanged (0119).
-    : {
-      ...v, placedBy, placingDelegateId: site.placing_delegate_id, assistingDelegateId: site.assisting_delegate_id,
-      supervisorId: site.supervisor_id, courseId: site.course_id,
-    };
+    // A clinic sends only the doctor; the action re-reads what an older record names (before the switch) and keeps it (0119).
+    : { ...v, placedBy, placingDelegateId: null, assistingDelegateId: null, supervisorId: null, courseId: null };
   return (
     <div className="space-y-2" role="group" aria-label="Placement details">
       <p className="font-medium">Placement details</p>

@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/auth/session';
 import { componentSchema, correctPlacementSchema, placeSchema, planSchema, receiveSchema } from '@/lib/inventory/schemas';
 import { TECHNIQUES, type Technique } from '@/lib/inventory/types';
 import { userMessage } from '@/lib/db-errors';
+import { teachingOn } from '@/lib/modules/modules';
 import { impressionSchema } from '@/lib/implants/impression';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { correctionSchema, voidSchema } from '@/lib/schedule/schemas';
@@ -110,17 +111,30 @@ export async function fitComponent(input: Record<string, unknown>): Promise<Resu
 }
 
 export async function correctPlacement(input: Record<string, unknown>): Promise<Result> {
-  await requirePermission('patients', 'edit');
+  const profile = await requirePermission('patients', 'edit');
   const parsed = correctPlacementSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const p = parsed.data;
+  let people = { delegate: p.placingDelegateId, assistant: p.assistingDelegateId, supervisor: p.supervisorId, course: p.courseId };
+  if (!teachingOn(profile.features)) {
+    // A clinic doesn't see what an older record names (before the switch), so it goes back as recorded, whatever
+    // the client sent: correct_placement_v3 refuses any change to it (0119).
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('implant_sites')
+      .select('placing_delegate_id, assisting_delegate_id, supervisor_id, course_id')
+      .eq('id', p.siteId)
+      .maybeSingle();
+    if (error || !data) return { error: 'Implant not found.' };
+    people = { delegate: data.placing_delegate_id, assistant: data.assisting_delegate_id, supervisor: data.supervisor_id, course: data.course_id };
+  }
   return run(p.patientId, 'correct_placement_v3', {
     p_site: p.siteId,
     p_placed_on: p.placedOn,
-    p_placing_delegate: p.placingDelegateId,
-    p_assisting_delegate: p.assistingDelegateId,
-    p_supervisor: p.supervisorId,
-    p_course: p.courseId,
+    p_placing_delegate: people.delegate,
+    p_assisting_delegate: people.assistant,
+    p_supervisor: people.supervisor,
+    p_course: people.course,
     p_placing_doctor: p.placingDoctorId,
     p_graft: p.graft,
     p_notes: p.notes,

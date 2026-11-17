@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc }) }));
-vi.mock('@/lib/auth/session', () => ({ requirePermission: vi.fn(async () => ({})) }));
+const { rpc, from, maybeSingle, features } = vi.hoisted(() => {
+  const maybeSingle = vi.fn();
+  const chain: { select: () => unknown; eq: () => unknown; maybeSingle: typeof maybeSingle } = { select: () => chain, eq: () => chain, maybeSingle };
+  return { rpc: vi.fn(), from: vi.fn(() => chain), maybeSingle, features: { list: ['teaching'] as string[] } };
+});
+vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc, from }) }));
+vi.mock('@/lib/auth/session', () => ({ requirePermission: vi.fn(async () => ({ features: features.list })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 import { correctPlacement, placeImplant } from './implant-actions';
 
@@ -54,5 +58,38 @@ describe('placement actions send the course', () => {
     });
     expect(r).toEqual({});
     expect(rpc).toHaveBeenCalledWith('correct_placement_v3', expect.objectContaining({ p_placing_doctor: uuid(8), p_placing_delegate: null, p_supervisor: null }));
+  });
+});
+
+describe('correctPlacement in a clinic', () => {
+  it('sends the recorded delegate, assistant, supervisor and course, whatever the input says', async () => {
+    features.list = [];
+    maybeSingle.mockResolvedValue({
+      data: { placing_delegate_id: uuid(4), assisting_delegate_id: uuid(9), supervisor_id: uuid(5), course_id: uuid(6) }, error: null,
+    });
+    try {
+      const r = await correctPlacement({
+        siteId: uuid(7), patientId: uuid(1), placedOn: '2026-01-10', placedBy: 'doctor', placingDoctorId: uuid(8),
+        placingDelegateId: null, assistingDelegateId: null, supervisorId: null, courseId: null, graft: '', notes: 'n',
+      });
+      expect(r).toEqual({});
+      expect(from).toHaveBeenCalledWith('implant_sites');
+      expect(rpc).toHaveBeenCalledWith('correct_placement_v3', expect.objectContaining({
+        p_site: uuid(7), p_placing_doctor: uuid(8), p_notes: 'n',
+        p_placing_delegate: uuid(4), p_assisting_delegate: uuid(9), p_supervisor: uuid(5), p_course: uuid(6),
+      }));
+    } finally {
+      features.list = ['teaching'];
+    }
+  });
+
+  it('a course organizer sends what the form chose, reading nothing', async () => {
+    from.mockClear();
+    await correctPlacement({
+      siteId: uuid(7), patientId: uuid(1), placedOn: '2026-01-10', placedBy: 'doctor', placingDoctorId: uuid(8),
+      placingDelegateId: uuid(4), assistingDelegateId: '', supervisorId: '', courseId: uuid(6), graft: '', notes: '',
+    });
+    expect(from).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith('correct_placement_v3', expect.objectContaining({ p_placing_delegate: null, p_supervisor: null }));
   });
 });
