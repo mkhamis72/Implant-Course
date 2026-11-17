@@ -101,7 +101,7 @@ test('missing fields are explained and nothing is saved', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Technique' }).selectOption({ label: 'Free hand' });
   await page.getByRole('combobox', { name: 'Course' }).selectOption(s.courseId);
   await page.getByRole('button', { name: 'Save placement' }).click();
-  await expect(panel(page).getByRole('alert')).toHaveText('Choose a stock batch.');
+  await expect(panel(page).getByRole('alert')).toHaveText('Choose the delegate who placed the implant.');
   await expect(page.getByRole('button', { name: 'Tooth 11, Present' })).toBeVisible();
 });
 
