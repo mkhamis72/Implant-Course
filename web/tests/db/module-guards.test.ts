@@ -6,14 +6,14 @@ import { withTx } from './helpers';
  * security-definer function touching one of them must check the feature (module_on) or the area (can /
  * require_perm), or be listed in ALLOWED with the reason it may skip the check.
  */
-const MODULE_TABLES: Record<string, { area: string; tables: string[]; allowed: Record<string, string> }> = {
+const MODULE_TABLES: Record<string, { areas: string[]; tables: string[]; allowed: Record<string, string> }> = {
   statistics: {
-    area: 'research',
+    areas: ['research'],
     tables: ['research_exports', 'studies', 'saved_analyses', 'study_courses'],
     allowed: {},
   },
   inventory: {
-    area: 'inventory',
+    areas: ['inventory'],
     tables: ['stock_lots', 'stock_movements'],
     allowed: {
       delete_patient: 'ledger purge: deletes the movements of what it removes, whatever the module',
@@ -22,14 +22,23 @@ const MODULE_TABLES: Record<string, { area: string; tables: string[]; allowed: R
       correct_placement_v3: "reads the implant's own lot expiry only",
     },
   },
-  // release 3
-  teaching: { area: 'courses', tables: [], allowed: {} },
+  teaching: {
+    areas: ['courses', 'delegates'],
+    tables: ['courses', 'delegates', 'enrollments', 'lecturers', 'supervisors', 'talks', 'slot_delegates', 'study_courses'],
+    allowed: {
+      set_user_permissions: 'stores area levels; names the courses and delegates areas only as keys',
+      place_implant_v3: 'previous app version; Course organizers only (requires course/delegates)',
+      correct_placement_v2: 'previous app version; Course organizers only (requires course/delegates)',
+      create_surgery_slot: 'previous app version; Course organizers only (requires course/delegates)',
+      update_surgery_slot: 'previous app version; Course organizers only (requires course/delegates)',
+    },
+  },
 };
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 describe('module guards', () => {
-  for (const [feature, { area, tables }] of Object.entries(MODULE_TABLES)) {
+  for (const [feature, { areas, tables }] of Object.entries(MODULE_TABLES)) {
     for (const table of tables) {
       it(`${table} has a restrictive ${feature} read policy`, async () => {
         await withTx(async (c) => {
@@ -38,7 +47,7 @@ describe('module guards', () => {
              where schemaname = 'public' and tablename = $1 and permissive = 'RESTRICTIVE' and cmd = 'SELECT'`,
             [table],
           );
-          const guard = new RegExp(`module_on\\('${escape(feature)}'|can\\('${escape(area)}'`);
+          const guard = new RegExp(`module_on\\('${escape(feature)}'|can\\('(${areas.map(escape).join('|')})'`);
           expect(rows.filter((r) => guard.test(r.qual ?? '')).map((r) => r.policyname), table).not.toEqual([]);
         });
       });
@@ -52,8 +61,9 @@ describe('module guards', () => {
          where n.nspname = 'public' and p.prosecdef`,
       );
       const missing: string[] = [];
-      for (const [feature, { area, tables, allowed }] of Object.entries(MODULE_TABLES)) {
-        const guard = new RegExp(`module_on\\('${escape(feature)}'\\)|can\\('${escape(area)}'|require_perm\\('${escape(area)}'`);
+      for (const [feature, { areas, tables, allowed }] of Object.entries(MODULE_TABLES)) {
+        const area = `(${areas.map(escape).join('|')})`;
+        const guard = new RegExp(`module_on\\('${escape(feature)}'\\)|can\\('${area}'|require_perm\\('${area}'`);
         for (const { proname, src } of rows) {
           const touched = tables.filter((t) => new RegExp(`\\b${escape(t)}\\b`).test(src));
           if (touched.length && !guard.test(src) && !(proname in allowed)) missing.push(`${feature}: ${proname} (${touched.join(', ')})`);

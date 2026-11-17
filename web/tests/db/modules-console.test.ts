@@ -37,7 +37,6 @@ describe('modules console (0110)', () => {
       expect(rows[0].updated_at).toBeInstanceOf(Date);
 
       await refused(c, SAVE, [null, 'Zz Basic', 'course_organizer', [], 'owner@x'], /A plan called Zz Basic already exists\./);
-      await refused(c, SAVE, [null, 'Zz Clinic', 'clinic', [], 'owner@x'], /Clinic plans come in a later release\./);
       await refused(c, SAVE, [null, 'Zz Teach', 'course_organizer', ['teaching'], 'owner@x'], /Unknown module teaching/);
       await refused(c, SAVE, [null, 'Z', 'course_organizer', [], 'owner@x'], /Give a name \(2–60 characters\)\./);
       await refused(c, SAVE, [id, 'Zz Basic', 'clinic', [], 'owner@x'], /A plan can't change its type\./);
@@ -74,7 +73,7 @@ describe('modules console (0110)', () => {
       const plan = await savePlan(c, null, 'Zz Basic', []);
       await asServiceRole(c);
       await c.query(SET, ['academy', 'course_organizer', plan, ['statistics'], 'owner@x']);
-      await refused(c, SET, ['academy', 'clinic', plan, [], 'owner@x'], /Clinic companies come in a later release\./);
+      await refused(c, SET, ['academy', 'clinic', plan, [], 'owner@x'], /Choose a plan for this type of company\./);
       await refused(c, SET, ['academy', 'course_organizer', plan, ['teaching'], 'owner@x'], /Unknown module teaching/);
       await refused(c, SET, ['zz-nowhere', 'course_organizer', plan, [], 'owner@x'], /Unknown company zz-nowhere/);
       await asPostgres(c);
