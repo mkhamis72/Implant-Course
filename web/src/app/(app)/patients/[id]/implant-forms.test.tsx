@@ -347,3 +347,29 @@ describe('<ComponentForm> in a clinic', () => {
     expect(screen.getByRole('combobox', { name: /Fitted by/ })).toBeInTheDocument();
   });
 });
+
+describe('<PlaceForm> supervisor default with a doctor', () => {
+  const meSupervises = {
+    ...data, me: 'u1', supervisors: [{ id: 'u1', label: 'Me' }, { id: 'sup1', label: 'Prof A' }], doctors: [{ id: 'doc1', name: 'Dr Nabil' }],
+  } as unknown as ChartData;
+
+  it('empties the supervisor on Doctor and restores it on Delegate, keeping one chosen by hand', () => {
+    render(<PlaceForm patientId="pt" tooth={36} data={meSupervises} onDone={() => {}} plannedProductId="p1" />);
+    expect(screen.getByRole('combobox', { name: /Supervisor/ })).toHaveValue('u1');
+    fireEvent.click(screen.getByRole('radio', { name: 'Doctor' }));
+    expect(screen.getByRole('combobox', { name: /Supervisor/ })).toHaveValue('');
+    fireEvent.click(screen.getByRole('radio', { name: 'Delegate' }));
+    expect(screen.getByRole('combobox', { name: /Supervisor/ })).toHaveValue('u1');
+    fireEvent.change(screen.getByRole('combobox', { name: /Supervisor/ }), { target: { value: 'sup1' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Doctor' }));
+    expect(screen.getByRole('combobox', { name: /Supervisor/ })).toHaveValue('sup1');
+  });
+
+  it('a booking with a doctor and no supervisor starts with none', () => {
+    const slot = { id: 's1', starts_at: '2030-06-10T08:00:00Z', supervisor_id: null, placing_doctor_id: 'doc1', chair: null, delegates: [] };
+    render(<PlaceForm patientId="pt" tooth={36} data={meSupervises} onDone={() => {}} plannedProductId="p1" slot={slot} />);
+    expect(screen.getByRole('combobox', { name: /Supervisor/, hidden: true })).toHaveValue('');
+    expect(screen.getByTestId('booked-people')).toHaveTextContent('Placed by Dr Nabil');
+    expect(screen.getByTestId('booked-people')).not.toHaveTextContent(/supervised/);
+  });
+});

@@ -335,11 +335,14 @@ export function PlaceForm({
   const doctorFromSlot = slot?.placing_doctor_id ?? '';
   const teaching = data.teachingOn;
   const [placedBy, setPlacedBy] = useState<PlacedBy>(!teaching || (doctorFromSlot && !placingFromSlot) ? 'doctor' : 'delegate');
+  // With a doctor the supervisor is optional, so it starts empty (or the booking's); with a delegate, the current user if a supervisor.
+  const defaultSupervisor = (by: PlacedBy) =>
+    slot?.supervisor_id ?? (by === 'delegate' && data.supervisors.some((s) => s.id === data.me) ? data.me : '');
   const [v, setV] = useState({
     productId: plannedProductId ?? '', technique: plannedTechnique ?? '', lotId: '', placedOn: data.today,
     courseId: plannedCourseId ?? '',
     placingDelegateId: placingFromSlot, assistingDelegateId: assistingFromSlot, placingDoctorId: doctorFromSlot,
-    supervisorId: slot?.supervisor_id ?? (data.supervisors.some((s) => s.id === data.me) ? data.me : ''), graft: '', notes: '',
+    supervisorId: defaultSupervisor(placedBy), graft: '', notes: '',
   });
   const set = (key: keyof typeof v) => (value: string) =>
     setV((cur) => ({
@@ -353,6 +356,11 @@ export function PlaceForm({
       } : {}),
     }));
   const enrolled = delegatesForCourse(data.delegates, data.enrollments, v.courseId);
+  /** Switching who placed it swaps the supervisor default, unless one was chosen by hand. */
+  function choosePlacedBy(by: PlacedBy) {
+    setV((cur) => (cur.supervisorId === defaultSupervisor(placedBy) ? { ...cur, supervisorId: defaultSupervisor(by) } : cur));
+    setPlacedBy(by);
+  }
   const { error, pending, submit } = useSubmit(placeImplant, () => { onPlaced?.(); onDone(); });
   const byDoctor = placedBy === 'doctor';
   const doctors = data.doctors.map((d) => ({ id: d.id, label: d.name }));
@@ -404,7 +412,7 @@ export function PlaceForm({
       <People booked={Boolean(placingFromSlot || doctorFromSlot)} summary={summary}>
         {teaching ? (
           <>
-            <PlacedByChoice value={placedBy} onChange={setPlacedBy} />
+            <PlacedByChoice value={placedBy} onChange={choosePlacedBy} />
             {byDoctor ? (
               <DoctorSelect label="Doctor" doctors={doctors} value={v.placingDoctorId} onChange={set('placingDoctorId')} />
             ) : (

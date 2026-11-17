@@ -166,9 +166,67 @@ describe('placed by a doctor; clinic rules (0115)', () => {
       await actAs(c, users.organizer);
       expect(await correct({ doctor: s.doctor, supervisor: s.supervisor, course: null })).toBe(NOT_USED);
       expect(await correct({ doctor: s.doctor })).toBe(NOT_USED);
-      expect(await correct({ course: null })).toBe(CHOOSE_DOCTOR);
-      expect(await correct({ doctor: s.doctor, course: null })).toBeNull();
-      expect(await one(c, 'select course_id from public.implant_sites where id = $1', [site])).toBeNull();
+      expect(await correct({ supervisor: s.supervisor })).toBe(CHOOSE_DOCTOR);
+      // Clearing what was recorded before the switch is a change too (0119): hidden values are kept.
+      expect(await correct({ doctor: s.doctor, course: null })).toBe(NOT_USED);
+      expect(await correct({ doctor: s.doctor, supervisor: s.supervisor })).toBeNull();
+      expect(await one(c, 'select course_id from public.implant_sites where id = $1', [site])).toBe(s.course);
+    });
+  });
+
+  it('a clinic correcting a pre-switch implant keeps its delegate, supervisor and course (0119)', async () => {
+    await withTx(async (c) => {
+      const s = await seed(c, 'Keep');
+      await asCompany(c);
+      const assistant = await makeDelegate(c, 'Zz Doc Keep Assistant');
+      await enroll(c, s.course, assistant);
+      await actAs(c, users.organizer);
+      const site = await v4(c, {
+        patient: s.patient, tooth: 36, product: s.product, lot: s.lot, course: s.course, delegate: s.delegate,
+        assistant, supervisor: s.supervisor,
+      });
+      await clinic(c);
+      await actAs(c, users.organizer);
+      const sql = `select public.correct_placement_v3(p_site => $1, p_placed_on => public.cairo_today(), p_placing_delegate => $2,
+         p_assisting_delegate => $3, p_supervisor => $4, p_course => $5, p_graft => '', p_notes => $6, p_placing_doctor => $7)`;
+      // The recorded people and course, unchanged, with a doctor and a new note.
+      expect(await raised(c, sql, [site, s.delegate, assistant, s.supervisor, s.course, 'Zz new note', s.doctor])).toBeNull();
+      expect((await c.query(`select placing_delegate_id, assisting_delegate_id, supervisor_id, course_id, placing_doctor_id, notes
+        from public.implant_sites where id = $1`, [site])).rows[0]).toEqual({
+        placing_delegate_id: s.delegate, assisting_delegate_id: assistant, supervisor_id: s.supervisor, course_id: s.course,
+        placing_doctor_id: s.doctor, notes: 'Zz new note',
+      });
+      // Changing any of them is still refused.
+      expect(await raised(c, sql, [site, assistant, assistant, s.supervisor, s.course, '', s.doctor])).toBe(NOT_USED);
+      expect(await raised(c, sql, [site, s.delegate, null, s.supervisor, s.course, '', s.doctor])).toBe(NOT_USED);
+      expect(await raised(c, sql, [site, s.delegate, assistant, null, s.course, '', s.doctor])).toBe(NOT_USED);
+      expect(await raised(c, sql, [site, s.delegate, assistant, s.supervisor, null, '', s.doctor])).toBe(NOT_USED);
+    });
+  });
+
+  it('a clinic editing a pre-switch restoration keeps its delegate, supervisor and course (0119)', async () => {
+    await withTx(async (c) => {
+      const s = await seed(c, 'KeepResto');
+      await actAs(c, users.organizer);
+      const site = await v4(c, { patient: s.patient, tooth: 36, product: s.product, lot: s.lot, course: s.course, delegate: s.delegate, supervisor: s.supervisor });
+      const r = await one(c, `select public.add_restoration(
+        p_patient => $1, p_stage => 'temporary', p_type => 'single_crown', p_sites => array[$2]::uuid[], p_teeth => null,
+        p_fitted_on => public.cairo_today(), p_retention => null, p_material => null, p_delegate => $3, p_supervisor => $4,
+        p_course => $5, p_remake_reason => null, p_notes => '') as id`, [s.patient, site, s.delegate, s.supervisor, s.course]);
+      await clinic(c);
+      await actAs(c, users.organizer);
+      const upd = async (delegate: string | null, supervisor: string | null, course: string | null) => {
+        const at = await one(c, 'select updated_at::text from public.restorations where id = $1', [r]);
+        return raised(c, `select public.update_restoration(p_restoration => $1, p_retention => 'screw', p_material => null,
+          p_delegate => $2, p_supervisor => $3, p_course => $4, p_notes => 'Zz kept', p_expected_updated_at => $5::timestamptz)`,
+        [r, delegate, supervisor, course, at]);
+      };
+      expect(await upd(s.delegate, s.supervisor, s.course)).toBeNull();
+      expect((await c.query('select delegate_id, supervisor_id, course_id, retention, notes from public.restorations where id = $1', [r])).rows[0])
+        .toEqual({ delegate_id: s.delegate, supervisor_id: s.supervisor, course_id: s.course, retention: 'screw', notes: 'Zz kept' });
+      expect(await upd(null, s.supervisor, s.course)).toBe(NOT_USED);
+      expect(await upd(s.delegate, null, s.course)).toBe(NOT_USED);
+      expect(await upd(s.delegate, s.supervisor, null)).toBe(NOT_USED);
     });
   });
 

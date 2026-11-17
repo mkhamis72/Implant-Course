@@ -117,6 +117,24 @@ describe('<Corrections> placed by a doctor', () => {
   });
 });
 
+describe('<Corrections> in a clinic, an implant recorded before the switch', () => {
+  it('sends its recorded delegate, assistant, supervisor and course back unchanged, without showing them', async () => {
+    const { correctPlacement } = await import('./implant-actions');
+    vi.mocked(correctPlacement).mockClear().mockResolvedValue({});
+    const clinic = { ...data, teachingOn: false, delegates: [], supervisors: [], courses: [], enrollments: [] } as unknown as ChartData;
+    render(<Corrections patientId="pt" site={{ ...site, placing_delegate_id: 'd1', assisting_delegate_id: 'd2', placing_doctor_id: null, doctor: null } as unknown as ImplantSite} data={clinic} />);
+    const box = screen.getByRole('group', { name: 'Placement details' });
+    expect(box).not.toHaveTextContent(/Supervisor|Course|Delegate|Dr Former|Prof A/i);
+    fireEvent.change(within(box).getByRole('combobox', { name: 'Placed by' }), { target: { value: 'doc1' } });
+    fireEvent.change(within(box).getByLabelText('Notes'), { target: { value: 'fixed' } });
+    fireEvent.click(within(box).getByRole('button', { name: 'Save details' }));
+    expect(vi.mocked(correctPlacement)).toHaveBeenCalledWith(expect.objectContaining({
+      placedBy: 'doctor', placingDoctorId: 'doc1', notes: 'fixed',
+      placingDelegateId: 'd1', assistingDelegateId: 'd2', supervisorId: 'sup1', courseId: 'c1',
+    }));
+  });
+});
+
 describe('<Corrections> product and stock batch', () => {
   const p1 = { id: 'p1', brand: 'Oxy', system: 'PSK', type: 'implant', diameter_mm: 4, length_mm: 10 };
   const p2 = { id: 'p2', brand: 'Oxy', system: 'PSK', type: 'implant', diameter_mm: 4.5, length_mm: 10 };
