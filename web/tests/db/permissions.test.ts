@@ -319,7 +319,9 @@ describe('permissions: guard rails', () => {
         // Error alerts (0107): no company-user grants; the app writes and the hourly check reads with the service role.
         'error_log', 'error_alert_state',
         // Modules (0109): global plan list, closed to company users.
-        'plans']);
+        'plans',
+        // Modules release 3 (0114): the doctors list, kept by admins and read by staff, like supervisors.
+        'doctors']);
       expect(rows.map((r) => r.relname).filter((n) => !shared.has(n)).sort()).toEqual([]);
     });
   });
