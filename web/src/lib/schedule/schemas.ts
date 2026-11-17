@@ -89,10 +89,11 @@ const placedByFields = {
   placing: z.array(z.string().uuid()).default([]),
   assisting: z.array(z.string().uuid()).default([]),
 };
-type PlacedBy = { placedBy: 'delegate' | 'doctor'; placingDoctorId: string | null; supervisorId: string | null; placing: string[] };
+type PlacedBy = { placedBy: 'delegate' | 'doctor' | 'recorded'; placingDoctorId: string | null; supervisorId: string | null; placing: string[] };
 
 function checkPlacedBy(p: PlacedBy, ctx: z.RefinementCtx) {
   const need = (ok: unknown, message: string) => { if (!ok) ctx.addIssue({ code: 'custom', message }); };
+  if (p.placedBy === 'recorded') return;
   if (p.placedBy === 'doctor') return need(p.placingDoctorId, 'Choose the doctor.');
   need(p.supervisorId, 'Choose a supervisor.');
   need(p.placing.length > 0, 'Choose at least one placing delegate.');
@@ -100,6 +101,7 @@ function checkPlacedBy(p: PlacedBy, ctx: z.RefinementCtx) {
 
 /** Only the chosen kind of person is sent. */
 function onlyChosen<T extends PlacedBy>(p: T): T {
+  if (p.placedBy === 'recorded') return { ...p, placing: [], placingDoctorId: null };
   return p.placedBy === 'doctor' ? { ...p, placing: [] } : { ...p, placingDoctorId: null };
 }
 
@@ -127,6 +129,10 @@ export const slotSchema = z
   .superRefine(checkPlacedBy)
   .transform(onlyChosen);
 
+/**
+ * Editing a booking: `recorded` is set only by the action, in a clinic, for a booking made before the switch whose
+ * delegates place the implants: they stay as recorded (update_surgery_slot_v2 keeps them, 0120) and no doctor is asked.
+ */
 export const updateSlotSchema = z
   .object({
     slotId: requiredId('Booking not found.'),
@@ -134,6 +140,7 @@ export const updateSlotSchema = z
     start: time('Enter the start time (HH:MM).'),
     end: time('Enter the end time (HH:MM).'),
     ...placedByFields,
+    placedBy: z.enum(['delegate', 'doctor', 'recorded']).default('delegate'),
     implants: z.array(z.object({ siteId: requiredId('Implant not found.'), technique })).default([]),
     overrideReason: text(300),
     notes: text(1000),

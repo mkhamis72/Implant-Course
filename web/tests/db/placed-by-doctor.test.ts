@@ -289,6 +289,59 @@ describe('placed by a doctor; clinic rules (0115)', () => {
     });
   });
 
+  it('a clinic editing a pre-switch booking keeps its supervisor and delegates (0120)', async () => {
+    await withTx(async (c) => {
+      const s = await seed(c, 'KeepSlot');
+      const chair = await makeChair(c);
+      const session = await makeSession(c, s.course);
+      await asCompany(c);
+      const assistant = await makeDelegate(c, 'Zz Doc KeepSlot Assistant');
+      await enroll(c, s.course, assistant);
+      const other = (await one(c, `insert into public.supervisors (full_name) values ('Zz Sup KeepSlot Other') returning id`)) as string;
+      await actAs(c, users.organizer);
+      const slot = await one(c, `select public.create_surgery_slot_v2(
+        p_session => $1, p_chair => $2, p_start => '09:00', p_end => '10:00', p_patient => $3, p_supervisor => $4,
+        p_placing => $5::uuid[], p_assisting => $6::uuid[], p_implants => '[]'::jsonb, p_override_reason => '', p_notes => '',
+        p_placing_doctor => null) as id`, [session, chair, s.patient, s.supervisor, [s.delegate], [assistant]]);
+      await clinic(c);
+      await actAs(c, users.organizer);
+      const updSql = `select public.update_surgery_slot_v2(
+        p_slot => $1, p_chair => $2, p_start => '09:00', p_end => '10:00', p_supervisor => $3, p_placing => $4::uuid[],
+        p_assisting => $5::uuid[], p_override_reason => '', p_notes => $6, p_placing_doctor => $7)`;
+      // Read as postgres: a clinic's RLS hides slot_delegates.
+      const people = async () => {
+        await asPostgres(c);
+        const found = {
+          slot: (await c.query('select supervisor_id, placing_doctor_id, notes from public.surgery_slots where id = $1', [slot])).rows[0],
+          delegates: (await c.query('select delegate_id, role from public.slot_delegates where slot_id = $1 order by role', [slot])).rows,
+        };
+        await actAs(c, users.organizer);
+        return found;
+      };
+      const recorded = [{ delegate_id: assistant, role: 'assisting' }, { delegate_id: s.delegate, role: 'placing' }];
+
+      // Notes only: the recorded supervisor, no delegates sent (kept), no doctor needed (delegates place it).
+      expect(await raised(c, updSql, [slot, chair, s.supervisor, [], [], 'Zz new note', null])).toBeNull();
+      expect(await people()).toEqual({
+        slot: { supervisor_id: s.supervisor, placing_doctor_id: null, notes: 'Zz new note' }, delegates: recorded,
+      });
+      // The recorded delegates sent back unchanged are fine too.
+      expect(await raised(c, updSql, [slot, chair, s.supervisor, [s.delegate], [assistant], '', null])).toBeNull();
+      expect((await people()).delegates).toEqual(recorded);
+
+      // Any change is refused: the supervisor changed or cleared, other delegates.
+      expect(await raised(c, updSql, [slot, chair, other, [], [], '', null])).toBe(NOT_USED);
+      expect(await raised(c, updSql, [slot, chair, null, [], [], '', null])).toBe(NOT_USED);
+      expect(await raised(c, updSql, [slot, chair, s.supervisor, [assistant], [], '', null])).toBe(NOT_USED);
+      expect(await raised(c, updSql, [slot, chair, s.supervisor, [], [s.delegate], '', null])).toBe(NOT_USED);
+      // Delegates place it, so it takes no doctor.
+      expect(await raised(c, updSql, [slot, chair, s.supervisor, [], [], '', s.doctor])).toBe('Choose a delegate or a doctor, not both.');
+      expect(await people()).toEqual({
+        slot: { supervisor_id: s.supervisor, placing_doctor_id: null, notes: '' }, delegates: recorded,
+      });
+    });
+  });
+
   it('a clinic may book any session of the company', async () => {
     await withTx(async (c) => {
       const s = await seed(c, 'AnySession');

@@ -8,12 +8,35 @@ import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
 import { escapeLike } from '@/lib/like';
 import { teachingOn } from '@/lib/modules/modules';
+import { placedByRecordedDelegates, type RecordedPeople } from '@/lib/schedule/recorded';
 
 type BookResult = { error?: string; warnings?: string[]; slotId?: string; date?: string };
 
-/** A clinic books a doctor only: whatever the client sent, no supervisor or delegates go to the database. */
+/**
+ * A clinic books a doctor only: whatever the client sent, no supervisor or delegates go to the database. A course
+ * organizer chooses delegates or a doctor (`recorded` is the action's own, below).
+ */
 function forPlan(input: Record<string, unknown>, teaching: boolean): Record<string, unknown> {
-  return teaching ? input : { ...input, placedBy: 'doctor', supervisorId: null, placing: [], assisting: [] };
+  return teaching
+    ? { ...input, placedBy: input.placedBy === 'doctor' ? 'doctor' : 'delegate' }
+    : { ...input, placedBy: 'doctor', supervisorId: null, placing: [], assisting: [] };
+}
+
+/**
+ * Editing in a clinic: what the booking recorded before the switch (supervisor, delegates) is hidden but kept, so
+ * the recorded supervisor goes back and no delegates are sent (update_surgery_slot_v2 keeps them, 0120). A booking
+ * placed by its recorded delegates takes no doctor.
+ */
+function forClinicEdit(input: Record<string, unknown>, slot: RecordedPeople): Record<string, unknown> {
+  const recorded = placedByRecordedDelegates(slot);
+  return {
+    ...input,
+    placedBy: recorded ? 'recorded' : 'doctor',
+    placingDoctorId: recorded ? null : input.placingDoctorId,
+    supervisorId: slot.supervisor_id,
+    placing: [],
+    assisting: [],
+  };
 }
 
 export async function bookSurgery(input: Record<string, unknown>): Promise<BookResult> {
@@ -53,13 +76,16 @@ export async function bookSurgery(input: Record<string, unknown>): Promise<BookR
 
 export async function updateBooking(input: Record<string, unknown>): Promise<BookResult> {
   const profile = await requirePermission('schedule', 'edit');
-  const parsed = updateSlotSchema.safeParse(forPlan(input, teachingOn(profile.features)));
+  const supabase = await createClient();
+  // Read first: a clinic sends back what the booking recorded.
+  const { data: slot } = await supabase
+    .from('surgery_slots').select('patient_id, session_id, supervisor_id, placing_doctor_id, session:sessions(date)')
+    .eq('id', typeof input.slotId === 'string' ? input.slotId : '').maybeSingle();
+  if (!slot) return { error: 'Booking not found.' };
+  const teaching = teachingOn(profile.features);
+  const parsed = updateSlotSchema.safeParse(teaching ? forPlan(input, true) : forClinicEdit(input, slot as RecordedPeople));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const s = parsed.data;
-  const supabase = await createClient();
-  const { data: slot } = await supabase
-    .from('surgery_slots').select('patient_id, session_id, session:sessions(date)').eq('id', s.slotId).maybeSingle();
-  if (!slot) return { error: 'Booking not found.' };
   const date = (slot.session as unknown as { date: string } | null)?.date;
 
   if (s.overrideReason.length < 3) {

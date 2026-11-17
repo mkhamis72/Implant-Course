@@ -148,6 +148,20 @@ describe('SlotForm: clinic', () => {
     expect(vi.mocked(bookSurgery).mock.calls.at(-1)![0]).toMatchObject({ placedBy: 'doctor', placingDoctorId: 'doc1', placing: [], assisting: [] });
   });
 
+  it('edits a booking placed by its recorded delegates without asking for a doctor or naming anyone', () => {
+    const { container } = render(
+      <SlotForm
+        {...clinic}
+        edit={{
+          slotId: 'slot1', sessionId: 's1', sessionLabel: '05 Oct 2026 · Day 1', patientLabel: 'Amal', chairId: '', supervisorId: '',
+          start: '09:00', end: '10:00', roles: {}, implants: [], notes: '', placingDoctorId: '', placedByRecorded: true,
+        }}
+      />,
+    );
+    expect(screen.queryByRole('combobox', { name: 'Doctor' })).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/supervisor|delegate/i);
+  });
+
   it('points to Add clinic day, not Courses, when there are no sessions', () => {
     render(<SlotForm {...clinic} sessions={[]} />);
     expect(screen.getByRole('link', { name: 'Add clinic day' })).toHaveAttribute('href', '/schedule');

@@ -10,6 +10,7 @@ import type { SlotRow } from '@/lib/schedule/types';
 import { SlotForm } from '../../new/slot-form';
 import { teachingOn } from '@/lib/modules/modules';
 import { sessionLabel } from '@/lib/schedule/labels';
+import { placedByRecordedDelegates } from '@/lib/schedule/recorded';
 
 export default async function EditBookingPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requirePermission('schedule', 'edit');
@@ -37,16 +38,19 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
     );
   }
 
+  const none = Promise.resolve({ data: [], error: null });
   const results = await Promise.all([
     supabase.from('chairs').select('id, name').or(`active.eq.true,id.eq.${slot.chair_id}`).order('name'),
-    // A clinic day has no course, so no delegates.
-    s.course_id
+    // A clinic has no delegates or supervisors (a clinic day has no course either).
+    teaching && s.course_id
       ? supabase.from('enrollments').select('course_id, delegate:delegates(id, full_name, active)').eq('course_id', s.course_id)
-      : Promise.resolve({ data: [], error: null }),
-    slot.supervisor_id
+      : none,
+    !teaching
+      ? none
+      : slot.supervisor_id
       ? supabase.from('supervisors').select('id, full_name').or(`active.eq.true,id.eq.${slot.supervisor_id}`).order('full_name')
       : supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name'),
-    supabase.from('slot_delegates').select('delegate_id, role').eq('slot_id', id),
+    teaching ? supabase.from('slot_delegates').select('delegate_id, role').eq('slot_id', id) : none,
     slot.placing_doctor_id
       ? supabase.from('doctors').select('id, name').or(`active.eq.true,id.eq.${slot.placing_doctor_id}`).order('name')
       : supabase.from('doctors').select('id, name').eq('active', true).order('name'),
@@ -87,6 +91,7 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
           chairId: slot.chair_id,
           supervisorId: slot.supervisor_id ?? '',
           placingDoctorId: slot.placing_doctor_id ?? '',
+          placedByRecorded: !teaching && placedByRecordedDelegates(slot),
           start: formatTime(slot.starts_at),
           end: formatTime(slot.ends_at),
           roles,

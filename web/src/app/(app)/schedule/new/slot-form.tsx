@@ -24,6 +24,8 @@ export type EditedBooking = {
   roles: Record<string, Role>;
   /** Set when a doctor places the implants (then no delegate is placing). */
   placingDoctorId: string;
+  /** A clinic editing a booking made before the switch whose (hidden) delegates place the implants: no doctor is asked. */
+  placedByRecorded?: boolean;
   implants: { siteId: string; tooth: number; label: string; technique: Technique | '' }[];
   notes: string;
 };
@@ -196,7 +198,7 @@ export function SlotForm(p: Props) {
       </div>
 
       {p.teaching && <PlacedByChoice value={placedBy} onChange={choosePlacedBy} />}
-      {byDoctor && (
+      {byDoctor && !edit?.placedByRecorded && (
         <div className="max-w-sm">
           <label className="block">
             <span className="label">Doctor</span>

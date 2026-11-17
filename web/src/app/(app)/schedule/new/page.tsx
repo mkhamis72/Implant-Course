@@ -18,14 +18,16 @@ export default async function NewBookingPage({
   const supabase = await createClient();
   const me = await requirePermission('schedule', 'edit');
   const teaching = teachingOn(me.features);
+  const none = Promise.resolve({ data: [], error: null });
   const results = await Promise.all([
     supabase.from('sessions').select('id, title, date, start_time, course_id, course:courses(name)').eq('type', 'surgery')
       .gte('date', todayIso()).order('date'),
     supabase.from('chairs').select('id, name').eq('active', true).order('name'),
     supabase.from('patients').select('file_no, full_name').eq('archived', false).order('full_name').limit(2000),
-    supabase.from('enrollments').select('course_id, delegate:delegates(id, full_name, active)'),
+    // A clinic has no delegates or supervisors.
+    teaching ? supabase.from('enrollments').select('course_id, delegate:delegates(id, full_name, active)') : none,
     supabase.from('products').select('*').eq('type', 'implant').eq('active', true),
-    supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name'),
+    teaching ? supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name') : none,
     supabase.from('doctors').select('id, name').eq('active', true).order('name'),
   ]);
   // A failed query must not look like an empty list (e.g. "no sessions").
