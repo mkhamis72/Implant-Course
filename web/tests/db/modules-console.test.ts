@@ -33,7 +33,7 @@ describe('modules console (0110)', () => {
       const id = await savePlan(c, null, 'Zz Basic', []);
       expect(id).toMatch(/^[0-9a-f-]{36}$/);
       const { rows } = await c.query('select name, kind, modules, updated_by, updated_at from public.plans where id = $1', [id]);
-      expect(rows[0]).toMatchObject({ name: 'Zz Basic', kind: 'course_organizer', modules: ['inventory'], updated_by: 'owner@x' });
+      expect(rows[0]).toMatchObject({ name: 'Zz Basic', kind: 'course_organizer', modules: [], updated_by: 'owner@x' });
       expect(rows[0].updated_at).toBeInstanceOf(Date);
 
       await refused(c, SAVE, [null, 'Zz Basic', 'course_organizer', [], 'owner@x'], /A plan called Zz Basic already exists\./);
@@ -48,7 +48,7 @@ describe('modules console (0110)', () => {
       await c.query(`update public.plans set updated_by = null, updated_at = now() - interval '1 day' where id = $1`, [id]);
       expect(await savePlan(c, id, 'Zz Basic', ['statistics'])).toBe(id);
       const after = (await c.query('select modules, updated_by, updated_at > now() - interval \'1 minute\' as fresh from public.plans where id = $1', [id])).rows[0];
-      expect(after).toEqual({ modules: ['inventory', 'statistics'], updated_by: 'owner@x', fresh: true });
+      expect(after).toEqual({ modules: ['statistics'], updated_by: 'owner@x', fresh: true });
 
       await actAs(c, users.admin, { aal: 'aal2' });
       await refused(c, SAVE, [null, 'Zz Other', 'course_organizer', [], 'x'], /permission denied for function console_save_plan/);
