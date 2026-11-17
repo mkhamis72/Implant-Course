@@ -134,6 +134,25 @@ describe('modules: teaching hidden in a clinic (0117)', () => {
     });
   });
 
+  it('admin user tools work in a clinic (0118)', async () => {
+    await withTx(async (c) => {
+      await clinic(c);
+      await asAdmin(c);
+      const u = users.target;
+      await c.query(`select public.admin_set_name($1, 'Zz Clinic Name')`, [u]);
+      await c.query(`select public.admin_change_email($1, 'zz-clinic-tools@example.com')`, [u]);
+      await c.query(`select public.admin_require_mfa_setup($1)`, [u]);
+      await c.query(`select public.admin_end_sessions($1)`, [u]);
+      await c.query(`select public.admin_record_event($1, 'invite_resent')`, [u]);
+      const kinds = (await c.query('select kind from public.admin_user_history($1)', [u])).rows.map((r) => r.kind);
+      expect(kinds).toEqual(expect.arrayContaining(['name_changed', 'email_changed', 'mfa_reset', 'invite_resent']));
+
+      // Still admin-only.
+      await actAs(c, users.organizer);
+      await refused(c, `select public.admin_set_name($1, 'Zz Nope')`, [u], /Only an admin can do this\./);
+    });
+  });
+
   it('the console can choose Clinic', async () => {
     await withTx(async (c) => {
       await asPostgres(c);

@@ -10,7 +10,6 @@ const S_VIEWER_A = '0e5e5530-0000-4000-8000-000000000002';
 const S_VIEWER_B = '0e5e5530-0000-4000-8000-000000000003';
 const S_OTHER = '0e5e5530-0000-4000-8000-000000000004';
 const LAST_ADMIN = /Cannot remove the last active admin/;
-const NO_DELEGATES_EDIT = /You don't have permission to edit Delegates\./;
 
 async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp) {
   await c.query('savepoint s');
@@ -161,9 +160,9 @@ describe('cross-company: an academy admin who is only an organizer in B (0087)',
       await refused(c, () => c.query(`select public.set_member_role($1, 'admin')`, [users.viewer]), /Only admins can do this\./);
       await refused(c, () => c.query('select public.set_member_active($1, false)', [users.viewer]), /Only admins can do this\./);
       await refused(c, () => c.query('select public.delete_user($1)', [users.viewer]), /Only an admin can remove users\./);
-      // No Delegates permission in B either (0089: permissions are per company), so require_perm refuses first.
-      await refused(c, () => c.query('select public.admin_end_sessions($1)', [users.viewer]), NO_DELEGATES_EDIT);
-      await refused(c, () => c.query('select public.admin_require_mfa_setup($1)', [users.viewer]), NO_DELEGATES_EDIT);
+      // Admin user tools check the admin role in the bound company (0118: no Delegates area any more).
+      await refused(c, () => c.query('select public.admin_end_sessions($1)', [users.viewer]), /Only an admin can do this\./);
+      await refused(c, () => c.query('select public.admin_require_mfa_setup($1)', [users.viewer]), /Only an admin can do this\./);
       expect((await member(c, b, users.viewer)).role).toBe('organizer');
     });
   });

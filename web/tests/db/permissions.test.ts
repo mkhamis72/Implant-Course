@@ -285,6 +285,9 @@ describe('permissions: guard rails', () => {
         'module_on', 'my_company_plan',
         // Modules (0110): the console's plan writes; service role only, no company session.
         'console_save_plan', 'console_set_company_plan',
+        // Modules release 3 (0118): admin user tools; admin-only, no area (work in every plan).
+        'admin_change_email', 'admin_end_sessions', 'admin_record_event', 'admin_require_mfa_setup', 'admin_set_name',
+        'admin_user_history',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
