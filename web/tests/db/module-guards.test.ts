@@ -19,9 +19,6 @@ const MODULE_TABLES: Record<string, { area: string; tables: string[]; allowed: R
       delete_patient: 'ledger purge: deletes the movements of what it removes, whatever the module',
       remove_placement: 'ledger purge: deletes the movements of what it removes, whatever the module',
       correct_placement_v2: "reads the implant's own lot expiry only",
-      place_implant_v3: 'Task 2 adds their module check and removes them from this list',
-      fit_component_v2: 'Task 2 adds their module check and removes them from this list',
-      correct_batch: 'Task 2 adds their module check and removes them from this list',
     },
   },
   // release 3
@@ -62,6 +59,24 @@ describe('module guards', () => {
         }
       }
       expect(missing).toEqual([]);
+    });
+  });
+
+  it('every ALLOWED entry still touches one of its feature tables (no stale entries)', async () => {
+    await withTx(async (c) => {
+      const { rows } = await c.query<{ proname: string; src: string }>(
+        `select p.proname, p.prosrc as src from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'public' and p.prosecdef`,
+      );
+      const stale: string[] = [];
+      for (const [feature, { tables, allowed }] of Object.entries(MODULE_TABLES)) {
+        for (const name of Object.keys(allowed)) {
+          const touches = rows.some(({ proname, src }) =>
+            proname === name && tables.some((t) => new RegExp(`\\b${escape(t)}\\b`).test(src)));
+          if (!touches) stale.push(`${feature}: ${name}`);
+        }
+      }
+      expect(stale).toEqual([]);
     });
   });
 });
