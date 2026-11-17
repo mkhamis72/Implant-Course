@@ -23,6 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Nav
         role={profile.role}
         permissions={profile.permissions}
+        features={profile.features}
         name={profile.full_name || profile.email}
         brand={{ name: branding.name, logoUrl: branding.logoUrl }}
       />
