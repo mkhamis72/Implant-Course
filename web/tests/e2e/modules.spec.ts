@@ -54,15 +54,15 @@ test('an organizer keeps their Statistics permission', async ({ page }) => {
        where lower(p.email) = $1 and up.area = 'research'`,
       [TEST_USERS.organizer.email],
     )).rows[0]?.level as string | undefined);
-  // Global setup gives the organizer no Statistics row: give them View (the only level), as an admin once did.
+  // Global setup gives the organizer no Statistics row: give them Edit, as an admin once did.
   await withPg((pg) => pg.query(
     `insert into public.user_permissions (company_id, user_id, area, level)
-     select $2::uuid, user_id, 'research', 'view' from public.profiles where lower(email) = $1
-     on conflict (company_id, user_id, area) do update set level = 'view'`,
+     select $2::uuid, user_id, 'research', 'edit' from public.profiles where lower(email) = $1
+     on conflict (company_id, user_id, area) do update set level = 'edit'`,
     [TEST_USERS.organizer.email, ACADEMY],
   ));
   try {
-    expect(await stored()).toBe('view');
+    expect(await stored()).toBe('edit');
     await login(page, TEST_USERS.admin.email);
     await page.goto('/admin/users');
     const row = page.getByTestId(`user-row-${TEST_USERS.organizer.email}`);
@@ -70,7 +70,7 @@ test('an organizer keeps their Statistics permission', async ({ page }) => {
     await expect(row.getByRole('group', { name: 'Statistics' })).toHaveCount(0);
     await row.getByRole('button', { name: 'Save permissions' }).click();
     await expect(row.getByText('Permissions saved.')).toBeVisible();
-    expect(await stored()).toBe('view');
+    expect(await stored()).toBe('edit');
   } finally {
     await withPg((pg) => pg.query(
       `delete from public.user_permissions where area = 'research'

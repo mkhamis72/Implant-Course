@@ -346,8 +346,12 @@ test('plans: the owner creates a plan and gives it to a company', async ({ page 
     await page.getByRole('button', { name: 'Save', exact: true }).last().click();
     await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
     await page.reload();
-    await expect(page.getByLabel('Plan', { exact: true })).toHaveValue(/.+/);
-    await expect(page.getByRole('table')).toContainText(/plan/i);
+    const planId = await withPg(async (pg) => (await pg.query('select id from public.plans where name = $1', [name])).rows[0]?.id as string);
+    expect(planId).toBeTruthy();
+    const stored = await withPg(async (pg) => (await pg.query('select plan_id from public.companies where id = $1', [ACADEMY])).rows[0]?.plan_id as string);
+    expect(stored).toBe(planId);
+    await expect(page.getByLabel('Plan', { exact: true })).toHaveValue(planId);
+    await expect(page.getByRole('row').filter({ hasText: 'plan_id' }).first()).toBeVisible();
   } finally {
     await withPg(async (pg) => {
       await pg.query('update public.companies set plan_id = $2 where id = $1', [ACADEMY, FULL_PLAN]);
