@@ -283,6 +283,8 @@ describe('permissions: guard rails', () => {
         'is_console_user', 'console_update_company', 'console_set_company_status', 'console_log_company',
         // Modules (0109): read the bound company's features; no area of their own.
         'module_on', 'my_company_plan',
+        // Modules (0110): the console's plan writes; service role only, no company session.
+        'console_save_plan', 'console_set_company_plan',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
