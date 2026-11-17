@@ -24,6 +24,8 @@ const NOT_EDIT = new Set([
   'my_report', 'my_restorations', 'my_schedule', 'next_file_no',
   // The console's guard (0105): says whether the caller is an active console user; reads only their own row.
   'is_console_user',
+  // Modules (0109): read the bound company's own features (kind, plan, extras); write nothing.
+  'module_on', 'my_company_plan',
 ]);
 const FILE_READERS = new Set(['consent_file', 'study_letter']);
 
