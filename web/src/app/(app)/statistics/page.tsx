@@ -83,7 +83,7 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
         systems={systems}
       />
       <ResearchView rows={rows} crowns={crowns} filters={filters} groups={groups} consent={consent} noProduct={base.filter((r) => r.product_id === null).length} />
-      <ExportForm filters={filters} studies={studyList} />
+      <ExportForm filters={filters} studies={studyList} teaching={teaching} />
     </div>
   );
 }

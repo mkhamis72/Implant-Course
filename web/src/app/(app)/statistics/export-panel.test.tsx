@@ -69,3 +69,16 @@ describe('<ExportLog>', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+describe('in a clinic', () => {
+  it('the export form has no R script link', () => {
+    render(<ExportForm filters={filters} teaching={false} />);
+    expect(screen.queryByRole('link', { name: 'Download R script' })).toBeNull();
+  });
+  it('the log shows no course or delegate text', () => {
+    const rows = [{ id: '1', exported_at: '2026-10-23T10:00:00Z', format: 'xlsx', filters: { course: 'all', delegate: 'd1', brand: 'Oxy' }, row_counts: { implants: 5 }, exporter: 'Dr Ann' }];
+    render(<ExportLog isAdmin teaching={false} rows={rows} />);
+    expect(screen.queryByText(/course|delegate/i)).toBeNull();
+    expect(screen.getByText(/brand Oxy/)).toBeInTheDocument();
+  });
+});

@@ -4,7 +4,7 @@ import { formatDateTime } from '@/lib/format';
 export type StudyOption = { id: string; title: string };
 
 /** GET form to the export route; the current filters ride along as hidden fields. The study (optional) only labels the file. */
-export function ExportForm({ filters, studies = [] }: { filters: ResearchFilters; studies?: StudyOption[] }) {
+export function ExportForm({ filters, studies = [], teaching = true }: { filters: ResearchFilters; studies?: StudyOption[]; teaching?: boolean }) {
   return (
     <form className="card flex flex-wrap items-center gap-4" action="/statistics/export" method="get" aria-label="Export">
       {RESEARCH_FILTER_KEYS.filter((k) => filters[k]).map((k) => <input key={k} type="hidden" name={k} value={filters[k]} />)}
@@ -21,7 +21,7 @@ export function ExportForm({ filters, studies = [] }: { filters: ResearchFilters
       <label className="flex items-center gap-2"><input type="radio" name="format" value="xlsx" defaultChecked /> Excel (.xlsx)</label>
       <label className="flex items-center gap-2"><input type="radio" name="format" value="csv" /> CSV files (.zip)</label>
       <button className="btn">Export</button>
-      <a className="text-accent" href="/statistics/analysis.R" download>Download R script</a>
+      {teaching && <a className="text-accent" href="/statistics/analysis.R" download>Download R script</a>}
     </form>
   );
 }
@@ -40,16 +40,20 @@ const describe = (o: Record<string, unknown>, sep: string) => Object.entries(o).
 type Names = Record<string, string>;
 
 /** Admins only: who exported what. The log keeps course, delegate and study ids; they are shown by name / title. */
-export function ExportLog({ isAdmin, rows, failed = false, courseNames = {}, delegateNames = {}, studyTitles = {} }: {
-  isAdmin: boolean; rows: ExportLogRow[]; failed?: boolean; courseNames?: Names; delegateNames?: Names; studyTitles?: Names;
+export function ExportLog({ isAdmin, rows, failed = false, courseNames = {}, delegateNames = {}, studyTitles = {}, teaching = true }: {
+  isAdmin: boolean; rows: ExportLogRow[]; failed?: boolean; courseNames?: Names; delegateNames?: Names; studyTitles?: Names; teaching?: boolean;
 }) {
   if (!isAdmin) return null;
-  const named = (f: Record<string, string | null>) => ({
+  // A clinic has no courses or delegates: old log entries show without those filters.
+  const named = (all: Record<string, string | null>) => {
+    const f = teaching ? all : Object.fromEntries(Object.entries(all).filter(([k]) => k !== 'course' && k !== 'delegate'));
+    return {
     ...f,
     ...(f.course ? { course: f.course === ALL_COURSES ? 'All courses' : courseNames[f.course] ?? '(deleted)' } : {}),
     ...(f.delegate ? { delegate: delegateNames[f.delegate] ?? '(deleted)' } : {}),
     ...(f.study ? { study: studyTitles[f.study] ?? '(deleted)' } : {}),
-  });
+    };
+  };
   return (
     <section className="card space-y-3" aria-labelledby="recent-exports">
       <h2 id="recent-exports">Recent exports</h2>

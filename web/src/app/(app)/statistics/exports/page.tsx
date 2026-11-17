@@ -1,15 +1,17 @@
 import { createClient } from '@/lib/supabase/server';
 import { requireAdmin } from '@/lib/auth/session';
+import { teachingOn } from '@/lib/modules/modules';
 import { ExportLog, type ExportLogRow } from '../export-panel';
 
 /** Admins only: who exported what (research_exports). */
 export default async function RecentExportsPage() {
-  await requireAdmin();
+  const profile = await requireAdmin();
+  const teaching = teachingOn(profile.features);
   const supabase = await createClient();
   const [{ data: log, error: logError }, courses, delegates, studies] = await Promise.all([
     supabase.from('research_exports').select('id, exported_by, exported_at, format, filters, row_counts').order('exported_at', { ascending: false }).limit(20),
-    supabase.rpc('course_options'),
-    supabase.from('delegates').select('id, full_name'),
+    teaching ? supabase.rpc('course_options') : { data: [], error: null },
+    teaching ? supabase.from('delegates').select('id, full_name') : { data: [], error: null },
     supabase.from('studies').select('id, title'),
   ]);
   if (courses.error || delegates.error || studies.error) throw new Error('Could not load the export names');
@@ -26,6 +28,7 @@ export default async function RecentExportsPage() {
       </div>
       <ExportLog
         isAdmin
+        teaching={teaching}
         rows={rows}
         failed={Boolean(logError)}
         courseNames={Object.fromEntries(((courses.data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]))}

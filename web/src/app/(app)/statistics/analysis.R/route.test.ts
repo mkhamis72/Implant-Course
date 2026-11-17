@@ -9,7 +9,7 @@ import { analysisScript } from '@/lib/research/export/analysis';
 
 beforeEach(() => {
   requirePermission.mockReset();
-  requirePermission.mockResolvedValue({ active: true, role: 'admin' });
+  requirePermission.mockResolvedValue({ active: true, role: 'admin', features: ['teaching', 'statistics'] });
 });
 
 describe('GET /statistics/analysis.R', () => {
@@ -24,6 +24,11 @@ describe('GET /statistics/analysis.R', () => {
     expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8');
     expect(res.headers.get('content-disposition')).toBe('attachment; filename="analysis.R"');
     expect(await res.text()).toBe(analysisScript());
+  });
+
+  it('is 404 in a clinic', async () => {
+    requirePermission.mockResolvedValue({ active: true, role: 'admin', features: ['statistics'] });
+    expect((await GET()).status).toBe(404);
   });
 
   it('sends nothing when the guard refuses', async () => {
