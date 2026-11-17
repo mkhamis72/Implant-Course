@@ -32,21 +32,21 @@ Modules and the company type build on those areas.
   - academy, osdic and demo are Course organizers.
 - **Inventory off:** implants are picked from the product catalogue only. There is no lot, no stock movement and no lot recall. Stock tracking starts from the day Inventory is switched on.
 - **Clinics have clinic days:** Schedule works with surgery days that have no course, no delegates and no enrolment checks.
-- **Doctors list:** a new admin-maintained list, Admin → Doctors (names, like Supervisors). In a clinic, the "Placed by" person on an implant and on a booking is always a doctor.
+- **Doctors list (both types, 2026-11-17):** a new admin-maintained list, Admin → Doctors (names, like Supervisors), part of Core for every company. In a clinic, the "Placed by" person on an implant and on a booking is always a doctor. A Course organizer chooses either the placing delegate(s) or a doctor, for example a case the instructor places.
 - **Inventory switched on later:** staff may attach a lot to an implant placed earlier without one, for lot recall. This **doesn't change stock**.
 
 ## Company types and modules
 
 | | What it covers | Area(s) it gates |
 |---|---|---|
-| **Core** (always on, both types) | Dashboard, Patients, Schedule (surgery days and bookings), Checklists and templates, Admin, branding, consent | `patients`, `schedule`, `checklists` |
+| **Core** (always on, both types) | Dashboard, Patients, Schedule (surgery days and bookings), Checklists and templates, Admin (including the Doctors list), branding, consent | `patients`, `schedule`, `checklists` |
 | **Teaching** (Course organizer type only; never in a clinic) | Courses, course days, lectures and workshops, lecturers, delegates, enrolments, delegate logins and the `/my` portal, course reports, the Statistics → Courses tab, the supervisor list and supervisor fields | `courses`, `delegates` |
 | **Inventory** (module, either type) | Stock, lots, receiving, lot recall, pull-list shortages, dashboard stock card, implant picker with lots | `inventory` |
 | **Statistics** (module, either type) | Results, Explore, studies, export, `analysis.R` | `research` |
 
 - Teaching is not a switchable module. It follows the company type: always on for a Course organizer, absent for a Clinic.
 - The only switchable modules are **Inventory** and **Statistics**. They are independent of each other and of the type.
-- Doctors (Admin → Doctors) is part of Core for clinics. Course organizers keep "Placed by" a delegate (my call: doctors are hidden for them, so nothing changes for current users).
+- Doctors (Admin → Doctors) is part of Core for both types. For a Course organizer, "Placed by" stays the placing delegate(s) by default, so existing records and forms don't change, and a doctor is the alternative (my call on the default).
 
 ## How it works
 
@@ -77,7 +77,7 @@ Modules and the company type build on those areas.
 - `canView`/`canEdit` return false for an area whose feature is off. As a result:
   - `visibleNavItems` (`src/components/nav-items.ts`) and the dashboard cards hide automatically;
   - `requirePermission(area)` redirects.
-- A new `hasModule(account, 'teaching')` covers the parts that have no permission area: the supervisor fields and Admin → Supervisors, the lecturers list, the Statistics Courses tab, the delegate portal, and the Doctors list (shown when teaching is off).
+- A new `hasModule(account, 'teaching')` covers the parts that have no permission area: the supervisor fields and Admin → Supervisors, the lecturers list, the Statistics Courses tab, and the delegate portal. The Doctors list is core and always shown.
 - **Delegate logins:** in a clinic, a delegate login gets a "not available" page instead of `/my`.
 
 **What a clinic never sees** (each is hidden when `hasModule(account, 'teaching')` is false, and the database refuses or returns nothing behind it):
@@ -115,8 +115,8 @@ Modules and the company type build on those areas.
 2. **Clinic type.**
    - **Course optional:** `place_implant_v3` and `correct_placement_v2` (0081) fail with "Choose the course." without one, so the course becomes optional for clinic days.
    - **Clinic days:** `sessions.course_id` becomes nullable. `check_session_in_course` allows a clinic day, and an **Add clinic day** joins `add_surgery_session` (0039). The `sessions_attach_checklist` trigger attaches the default checklist to clinic days too.
-   - **Doctors:** add a `doctors` table (admin list, like `supervisors`) and `placing_doctor_id` on `implant_sites` and `surgery_slots`.
-   - **Bookings:** `create_surgery_slot`/`update_surgery_slot` (0091) take a doctor instead of placing delegates and skip the enrolment check.
+   - **Doctors** (both types): add a `doctors` table (admin list, like `supervisors`) and `placing_doctor_id` on `implant_sites` and `surgery_slots`. Placement and booking functions accept placing delegates **or** a doctor; a clinic must use a doctor.
+   - **Bookings:** in a clinic, `create_surgery_slot`/`update_surgery_slot` (0091) take a doctor and skip the enrolment check. For a Course organizer, a doctor booking skips the enrolment check too, since no delegate is placing.
    - **Supervisors:** `surgery_slots.supervisor_id` is `not null` (0014), so that is dropped. The supervisor requirement in the placed check and in the slot/placement functions applies only to Course organizers.
    - **Placed check:** needs a placing delegate **or** a placing doctor.
    - **Reads that assume a course:**
@@ -135,7 +135,7 @@ Each step is additive and backward compatible, so the previous app version keeps
    - **Statistics** becomes switchable here, because nothing else depends on it. Checklists are core.
    - The console offers only the Course organizer type and keeps Inventory "always on until release 2", so nothing can be switched off half-built.
 2. **Inventory optional:** the catalogue-only implant path, and attaching a lot later.
-3. **Clinic type:** the Doctors list, clinic days, placed by a doctor, and everything in "What a clinic never sees". The console then offers Clinic.
+3. **Doctors and the clinic type:** the Doctors list and "placed by a doctor" for every company, then clinic days and everything in "What a clinic never sees". The console then offers Clinic.
 
 Each release gets its own short plan (superpowers:writing-plans) before any code.
 
