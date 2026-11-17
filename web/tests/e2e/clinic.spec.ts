@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
-import { createPatientViaUi, uniqueName } from './patients';
+import { createPatientViaUi, deleteE2ePatients, uniqueName } from './patients';
 import { apiAs, seedChair, seedImplantStock } from './api';
 import { ACADEMY, withPg } from './companies';
 
@@ -19,6 +19,9 @@ const dayTitle = uniqueName('Clinic day');
 let brand = '';
 let chair = '';
 let defaultItem = '';
+const templateName = uniqueName('Default clinic day');
+// Academy's own default templates for the 'surgery' scope, put back as default after the run.
+let priorDefaults: string[] = [];
 
 async function restore() {
   await withPg(async (pg) => {
@@ -38,9 +41,11 @@ test.beforeAll(async () => {
   await seedChair(admin, chair);
   const d = await admin.from('doctors').insert({ name: doctor });
   expect(d.error).toBeNull();
+  priorDefaults = await withPg(async (pg) =>
+    (await pg.query("select id from public.checklist_templates where applies_to = 'surgery' and is_default")).rows.map((r) => r.id as string));
   defaultItem = uniqueName('Clinic room ready');
   const t = await api.rpc('save_template', {
-    p_template: null, p_name: uniqueName('Default clinic day'), p_applies_to: 'surgery', p_is_default: true, p_items: [defaultItem],
+    p_template: null, p_name: templateName, p_applies_to: 'surgery', p_is_default: true, p_items: [defaultItem],
   });
   expect(t.error).toBeNull();
   await withPg(async (pg) => {
@@ -54,40 +59,56 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  try {
-    await restore();
-  } finally {
-    await withPg(async (pg) => {
-      try {
-        const ids = (await pg.query('select id from public.sessions where title = $1', [dayTitle])).rows.map((r) => r.id);
-        if (ids.length) {
-          await pg.query('delete from public.checklists where session_id = any($1)', [ids]);
-          await pg.query('delete from public.surgery_slots where session_id = any($1)', [ids]);
-          await pg.query('delete from public.sessions where id = any($1)', [ids]);
-        }
-      } catch {
-        // A slot that still has implants goes with its patient in the global teardown; the unique title keeps reruns apart.
+  // Dependency order; every failure is logged, none is swallowed. The seeded chair and stock are deactivated, and the
+  // E2E patients and templates deleted, by the global teardown (patients.ts); doctors are not covered, so they go here.
+  const step = async (what: string, fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+    } catch (e) {
+      console.error(`clinic.spec cleanup failed (${what}):`, e);
+    }
+  };
+  await step('restore company', restore);
+  await step('patients, implants, slots', deleteE2ePatients);
+  await withPg(async (pg) => {
+    await step('clinic day', async () => {
+      const ids = (await pg.query('select id from public.sessions where title = $1', [dayTitle])).rows.map((r) => r.id);
+      if (ids.length) {
+        await pg.query('delete from public.checklists where session_id = any($1)', [ids]);
+        await pg.query('delete from public.surgery_slots where session_id = any($1)', [ids]);
+        await pg.query('delete from public.sessions where id = any($1)', [ids]);
       }
+    });
+    await step('template', async () => {
+      await pg.query('delete from public.checklist_templates where name = $1', [templateName]);
+      if (priorDefaults.length) await pg.query('update public.checklist_templates set is_default = true where id = any($1)', [priorDefaults]);
+    });
+    await step('doctor', async () => {
       try {
         await pg.query('delete from public.doctors where name = $1', [doctor]);
       } catch {
         await pg.query('update public.doctors set active = false where name = $1', [doctor]);
       }
     });
-  }
+  });
 });
 
 test('a clinic sees nothing about teaching', async ({ page }) => {
   test.setTimeout(180_000);
   await login(page, TEST_USERS.admin.email);
-  const nav = page.getByRole('navigation');
+  const nav = page.getByRole('navigation').first();
+  await expect(nav.getByRole('link', { name: 'Patients' }).first()).toBeVisible();
   await expect(nav).not.toContainText(TEACHING);
 
   await page.goto('/admin/doctors');
   await expect(page.getByRole('heading', { name: 'Doctors' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Doctors', exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Supervisors' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Lecturers' })).toHaveCount(0);
   await expect(page.getByRole('main')).not.toContainText(TEACHING);
 
   await page.goto('/patients');
+  await expect(page.getByRole('heading', { level: 1, name: 'Patients' })).toBeVisible();
   await expect(page.getByRole('main')).not.toContainText(TEACHING);
 
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Clinic form patient') });
@@ -102,9 +123,13 @@ test('a clinic sees nothing about teaching', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Add clinic day' }).or(page.getByText('Add clinic day', { exact: true })).first()).toBeVisible();
   await expect(page.getByRole('main')).not.toContainText(TEACHING);
 
-  for (const path of ['/courses', '/delegates', '/admin/supervisors', '/admin/lecturers', '/statistics/courses']) {
+  const redirects: Record<string, string> = {
+    '/courses': '/', '/delegates': '/', '/admin/supervisors': '/admin/users', '/admin/lecturers': '/admin/users', '/statistics/courses': '/statistics',
+  };
+  for (const [path, to] of Object.entries(redirects)) {
     await page.goto(path);
-    await expect(page, path).not.toHaveURL(new RegExp(`${path}$`));
+    await expect(page, path).toHaveURL(new RegExp(`${to}$`));
+    expect(new URL(page.url()).pathname, path).not.toBe('/login');
   }
 
   await page.goto('/admin/settings');
