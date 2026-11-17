@@ -8,6 +8,33 @@ vi.mock('../../actions', () => ({
 }));
 
 const plans = [{ id: 'p1', name: 'Core', kind: 'course_organizer' as const }];
+const bothPlans = [...plans, { id: 'p2', name: 'Solo', kind: 'clinic' as const }];
+
+describe('company PlanForm type change', () => {
+  it('offers Clinic, and asks for confirmation only when the type differs', () => {
+    render(<PlanForm slug="a" kind="course_organizer" planId="p1" extras={[]} plans={bothPlans} />);
+    expect(screen.getByRole('option', { name: 'Clinic' })).toBeEnabled();
+    expect(screen.queryByRole('checkbox', { name: /I understand/ })).toBeNull();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Type' }), { target: { value: 'clinic' } });
+    const box = screen.getByRole('checkbox', { name: /switching to Clinic hides courses/ });
+    expect(box).toHaveAttribute('name', 'confirm_kind_change');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Type' }), { target: { value: 'course_organizer' } });
+    expect(screen.queryByRole('checkbox', { name: /I understand/ })).toBeNull();
+  });
+
+  it('the Course organizer confirmation shows them again', () => {
+    render(<PlanForm slug="a" kind="clinic" planId="p2" extras={[]} plans={bothPlans} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Type' }), { target: { value: 'course_organizer' } });
+    expect(screen.getByRole('checkbox', { name: 'I understand: switching to Course organizer shows them again.' })).toBeInTheDocument();
+  });
+
+  it('with no plan of the chosen kind, hints and disables Save', () => {
+    render(<PlanForm slug="a" kind="course_organizer" planId="p1" extras={[]} plans={plans} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Type' }), { target: { value: 'clinic' } });
+    expect(screen.getByText('Create a Clinic plan on the Plans page first.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+});
 
 describe('company PlanForm', () => {
   it('Inventory is an enabled extra, ticked from the saved extras', () => {
