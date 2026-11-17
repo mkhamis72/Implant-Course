@@ -351,7 +351,10 @@ test('plans: the owner creates a plan and gives it to a company', async ({ page 
     const stored = await withPg(async (pg) => (await pg.query('select plan_id from public.companies where id = $1', [ACADEMY])).rows[0]?.plan_id as string);
     expect(stored).toBe(planId);
     await expect(page.getByLabel('Plan', { exact: true })).toHaveValue(planId);
-    await expect(page.getByRole('row').filter({ hasText: 'plan_id' }).first()).toBeVisible();
+    const last = await withPg(async (pg) => (await pg.query("select actor, after->>'plan_id' as plan_id from public.company_log where slug = $1 order by at desc, id desc limit 1", [SLUG.one])).rows[0]);
+    expect(last).toEqual({ actor: email, plan_id: planId });
+    // The History table lists the newest entry first: its first data row is this plan change.
+    await expect(page.getByRole('table').last().getByRole('row').nth(1)).toContainText('plan_id');
   } finally {
     await withPg(async (pg) => {
       await pg.query('update public.companies set plan_id = $2 where id = $1', [ACADEMY, FULL_PLAN]);
