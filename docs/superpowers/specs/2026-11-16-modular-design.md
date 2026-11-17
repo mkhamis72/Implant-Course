@@ -46,7 +46,7 @@ Modules and the company type build on those areas.
 
 - Teaching is not a switchable module. It follows the company type: always on for a Course organizer, absent for a Clinic.
 - The only switchable modules are **Inventory** and **Statistics**. They are independent of each other and of the type.
-- Doctors (Admin → Doctors) is part of Core for both types. For a Course organizer, "Placed by" stays the placing delegate(s) by default, so existing records and forms don't change, and a doctor is the alternative (my call on the default).
+- Doctors (Admin → Doctors) is part of Core for both types. For a Course organizer, "Placed by" stays the placing delegate(s) by default, so existing records and forms don't change, and a doctor is the alternative (the owner's decision, 2026-11-17).
 
 ## How it works
 
