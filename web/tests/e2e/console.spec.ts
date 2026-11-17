@@ -5,7 +5,7 @@ import { Client } from 'pg';
 import { pgConfig } from '../../scripts/db';
 import { closeNodeAuth, nodeAuth } from '../../scripts/self-auth-node';
 import { TEST_USERS } from '../support/test-users';
-import { ACADEMY, signInThroughApi } from './companies';
+import { ACADEMY, signInThroughApi, withPg } from './companies';
 
 // Runs when the dev server and the tests have CONSOLE_HOST=console.localhost:3000 (in .env.local):
 // npx playwright test console --project=chromium. The console lives in the one local stack (merge of control).
@@ -320,6 +320,39 @@ test('console_session_not_valid_on_company_host: the two kinds of session never 
     }
   } finally {
     await other.close();
+  }
+});
+
+test('plans: the owner creates a plan and gives it to a company', async ({ page }) => {
+  test.setTimeout(120_000);
+  const name = `E2E Plan ${Date.now().toString(36)}`;
+  const FULL_PLAN = 'fa110000-0000-4000-8000-000000000001';
+  try {
+    await signInWith2fa(page);
+    await page.getByRole('link', { name: 'Plans' }).click();
+    await expect(page.getByRole('heading', { name: 'Plans', level: 1 })).toBeVisible();
+    const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Add plan' }) });
+    await form.getByLabel('Name').fill(name);
+    await expect(form.getByRole('checkbox', { name: /Inventory/ })).toBeDisabled();
+    await expect(form.getByRole('checkbox', { name: /Statistics/ })).not.toBeChecked();
+    // The dev server may still be hydrating the page, which swallows an early click: click again until it saves.
+    await expect(async () => {
+      await form.getByRole('button', { name: 'Add plan' }).click({ timeout: 2_000 });
+      await expect(page.getByText(name).first()).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 60_000 });
+
+    await page.goto(`${C}/console/companies/${SLUG.one}`);
+    await page.getByLabel('Plan', { exact: true }).selectOption({ label: name });
+    await page.getByRole('button', { name: 'Save', exact: true }).last().click();
+    await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel('Plan', { exact: true })).toHaveValue(/.+/);
+    await expect(page.getByRole('table')).toContainText(/plan/i);
+  } finally {
+    await withPg(async (pg) => {
+      await pg.query('update public.companies set plan_id = $2 where id = $1', [ACADEMY, FULL_PLAN]);
+      await pg.query('delete from public.plans where name = $1', [name]);
+    });
   }
 });
 
