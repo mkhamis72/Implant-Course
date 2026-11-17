@@ -18,7 +18,7 @@ const account = (over: Partial<Account> = {}): Account => ({ lastSignIn: '2026-1
 function renderRow(props: { isSelf?: boolean; account?: Account; emailOn?: boolean } = {}) {
   return render(
     <table><tbody>
-      <UserRow user={user} isSelf={props.isSelf ?? false} account={props.account ?? account()} emailOn={props.emailOn ?? true} />
+      <UserRow user={user} isSelf={props.isSelf ?? false} account={props.account ?? account()} emailOn={props.emailOn ?? true} features={['inventory', 'statistics', 'teaching']} />
     </tbody></table>,
   );
 }
@@ -60,7 +60,7 @@ describe('UserRow', () => {
   it('offers Reset 2FA again, with a pending badge, while the user must still set it up', () => {
     render(
       <table><tbody>
-        <UserRow user={{ ...user, mfa_setup_required: true }} isSelf={false} account={account({ hasFactor: false })} emailOn />
+        <UserRow user={{ ...user, mfa_setup_required: true }} isSelf={false} account={account({ hasFactor: false })} emailOn features={['statistics']} />
       </tbody></table>,
     );
     expect(screen.getByText('2FA set-up pending')).toBeInTheDocument();

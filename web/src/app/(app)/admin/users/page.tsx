@@ -82,6 +82,7 @@ export default async function UsersPage() {
                 isSelf={user.user_id === me.user_id}
                 account={accounts[i]}
                 emailOn={emailEnabled()}
+                features={me.features}
               />
             ))}
           </tbody>

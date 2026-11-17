@@ -4,6 +4,7 @@ import { useActionState } from 'react';
 import { AREAS, AREA_LABELS, type Permissions } from '@/lib/auth/permissions';
 import type { ActionState } from '@/lib/admin/schemas';
 import { savePermissions } from './actions';
+import { areaOn, type Feature } from '@/lib/modules/modules';
 
 const LEVELS = [
   { value: 'none', label: 'None' },
@@ -12,14 +13,14 @@ const LEVELS = [
 ] as const;
 
 /** None / View / Edit per panel for one organizer. */
-export function PermissionGrid({ userId, permissions }: { userId: string; permissions: Permissions }) {
+export function PermissionGrid({ userId, permissions, features }: { userId: string; permissions: Permissions; features: readonly Feature[] }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(savePermissions, {});
   return (
     <form action={action} className="mt-2 space-y-2">
       <input type="hidden" name="user_id" value={userId} />
       {/* Remount on new saved values: React resets the form after the action, which would show the old choices. */}
       <div key={JSON.stringify(permissions)} className="space-y-1">
-        {AREAS.map((area) => (
+        {AREAS.filter((a) => areaOn(features, a)).map((area) => (
           <fieldset key={area} className="flex flex-wrap items-center gap-x-3 text-sm">
             <legend className="float-left w-24 font-medium">{AREA_LABELS[area]}</legend>
             {LEVELS.map((l) => (
@@ -31,6 +32,9 @@ export function PermissionGrid({ userId, permissions }: { userId: string; permis
           </fieldset>
         ))}
       </div>
+      {AREAS.filter((a) => !areaOn(features, a)).map((area) => (
+        <input key={area} type="hidden" name={`perm_${area}`} value={permissions[area] ?? 'none'} />
+      ))}
       <button className="btn-secondary btn py-1" disabled={pending}>
         Save permissions
       </button>
