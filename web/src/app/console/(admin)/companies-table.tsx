@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { CompanyHealth } from '@/lib/console/companies';
+import { KIND_LABELS, type CompanyKind } from '@/lib/modules/modules';
 
-type Company = { slug: string; name: string; hosts: string[]; status: 'active' | 'suspended' };
+type Company = { slug: string; name: string; hosts: string[]; status: 'active' | 'suspended'; kind: CompanyKind };
 
 function useHealth(slug: string) {
   const [health, setHealth] = useState<CompanyHealth | null>(null);
@@ -37,6 +38,7 @@ function Row({ company }: { company: Company }) {
         <Link href={`/console/companies/${company.slug}`}>{company.name}</Link>
         <div className="text-sm text-muted">{company.slug}</div>
       </td>
+      <td data-label="Type">{KIND_LABELS[company.kind]}</td>
       <td data-label="Addresses">{company.hosts.join(', ')}</td>
       <td data-label="Status">
         {company.status === 'active' ? <span className="badge badge-ok">Active</span> : <span className="badge badge-bad">Suspended</span>}
@@ -57,6 +59,7 @@ export function CompaniesTable({ companies }: { companies: Company[] }) {
       <thead>
         <tr>
           <th>Company</th>
+          <th>Type</th>
           <th>Addresses</th>
           <th>Status</th>
           <th>Health</th>

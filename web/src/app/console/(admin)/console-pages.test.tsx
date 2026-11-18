@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 vi.mock('./actions', () => ({
   onboardCompany: vi.fn(),
@@ -19,14 +19,29 @@ describe('CompaniesTable', () => {
     render(
       <CompaniesTable
         companies={[
-          { slug: 'acme', name: 'Acme', hosts: ['acme.example.com'], status: 'active' },
-          { slug: 'beta', name: 'Beta', hosts: ['beta.example.com'], status: 'suspended' },
+          { slug: 'acme', name: 'Acme', hosts: ['acme.example.com'], status: 'active', kind: 'course_organizer' },
+          { slug: 'beta', name: 'Beta', hosts: ['beta.example.com'], status: 'suspended', kind: 'clinic' },
         ]}
       />,
     );
     expect(screen.getByTestId('company-acme')).toBeTruthy();
     expect(screen.getByTestId('company-beta')).toBeTruthy();
     expect(await screen.findAllByText('OK')).toHaveLength(2);
+  });
+
+  it('shows each company type', () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ problems: [], users: 0, patients: 0 }), { status: 200 })));
+    render(
+      <CompaniesTable
+        companies={[
+          { slug: 'acme', name: 'Acme', hosts: ['acme.example.com'], status: 'active', kind: 'course_organizer' },
+          { slug: 'beta', name: 'Beta', hosts: ['beta.example.com'], status: 'active', kind: 'clinic' },
+        ]}
+      />,
+    );
+    expect(screen.getByRole('columnheader', { name: 'Type' })).toBeTruthy();
+    expect(within(screen.getByTestId('company-acme')).getByText('Course organizer')).toBeTruthy();
+    expect(within(screen.getByTestId('company-beta')).getByText('Clinic')).toBeTruthy();
   });
 });
 
