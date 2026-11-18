@@ -12,7 +12,7 @@ export default async function ConsoleCompaniesPage() {
         <h1>Companies</h1>
         <Link className="btn" href="/console/companies/new">Add company</Link>
       </div>
-      <CompaniesTable companies={rows.map(({ slug, name, hosts, status }) => ({ slug, name, hosts, status }))} />
+      <CompaniesTable companies={rows.map(({ slug, name, hosts, status, kind }) => ({ slug, name, hosts, status, kind }))} />
     </div>
   );
 }
