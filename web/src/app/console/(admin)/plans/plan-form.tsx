@@ -2,12 +2,8 @@
 
 import { useActionState } from 'react';
 import { checkedOf, valueOf, type FormState } from '@/lib/patients/form-state';
-import { KIND_LABELS, MODULES, MODULE_LABELS, type CompanyKind, type Module } from '@/lib/modules/modules';
+import { KIND_AVAILABLE, KIND_LABELS, MODULES, MODULE_LABELS, type CompanyKind, type Module } from '@/lib/modules/modules';
 import { savePlan } from '../actions';
-
-/** Release 1: Inventory is always on (the database adds it) and only Course organizer can be chosen. */
-export const ALWAYS_ON: Module = 'inventory';
-export const LATER: CompanyKind = 'clinic';
 
 export type PlanFormPlan = { id: string; name: string; kind: CompanyKind; modules: Module[] };
 
@@ -39,7 +35,7 @@ export function PlanForm({ plan }: { plan?: PlanFormPlan }) {
           ) : (
             <select id={`plan-kind-${id}`} name="kind" className="input" defaultValue="course_organizer">
               <option value="course_organizer">{KIND_LABELS.course_organizer}</option>
-              <option value={LATER} disabled>{KIND_LABELS[LATER]} (later release)</option>
+              <option value="clinic" disabled={!KIND_AVAILABLE.clinic}>{KIND_LABELS.clinic}{KIND_AVAILABLE.clinic ? '' : ' (later release)'}</option>
             </select>
           )}
         </div>
@@ -47,17 +43,11 @@ export function PlanForm({ plan }: { plan?: PlanFormPlan }) {
       <fieldset>
         <legend className="label">Modules</legend>
         <div className="flex flex-wrap gap-4">
-          {MODULES.map((m) =>
-            m === ALWAYS_ON ? (
-              <label key={m} className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked disabled readOnly /> {MODULE_LABELS[m]} <span className="text-muted">Always on for now</span>
-              </label>
-            ) : (
-              <label key={m} className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name={`module_${m}`} defaultChecked={checkedOf(state, `module_${m}`, plan?.modules.includes(m) ?? false)} /> {MODULE_LABELS[m]}
-              </label>
-            ),
-          )}
+          {MODULES.map((m) => (
+            <label key={m} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name={`module_${m}`} defaultChecked={checkedOf(state, `module_${m}`, plan?.modules.includes(m) ?? false)} /> {MODULE_LABELS[m]}
+            </label>
+          ))}
         </div>
       </fieldset>
       <button className="btn" disabled={pending}>{plan ? 'Save' : 'Add plan'}</button>

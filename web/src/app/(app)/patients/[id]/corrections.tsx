@@ -6,7 +6,7 @@ import { delegatesForCourse, keepIfEnrolled, withRecordedDelegate } from '@/lib/
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, type ChartData, type ImplantSite, type LotOnHand } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
-import { CourseOptions, NoneEnrolled } from './implant-forms';
+import { CourseOptions, NoneEnrolled, PlacedByChoice, type PlacedBy } from './implant-forms';
 import { visitResult } from '@/lib/visits/visits';
 import { correctBatch, correctPlacement, removePlacement, voidComponent, voidFollowup } from './implant-actions';
 
@@ -29,9 +29,13 @@ function useRun() {
 }
 
 /** Batches a correction may point to: in stock, other than the current one, and not expired on the day of use. */
-function correctionLots(lots: readonly LotOnHand[], productId: string, currentLotId: string | null, usedOn: string | null): LotOnHand[] {
+function correctionLots(
+  lots: readonly LotOnHand[], productId: string, currentLotId: string | null, usedOn: string | null, includeEmpty = false,
+): LotOnHand[] {
   return lots.filter(
-    (l) => l.product_id === productId && l.on_hand > 0 && l.stock_lot_id !== currentLotId && !(l.expiry && usedOn && l.expiry < usedOn),
+    (l) =>
+      l.product_id === productId && (includeEmpty || l.on_hand > 0) && l.stock_lot_id !== currentLotId &&
+      !(l.expiry && usedOn && l.expiry < usedOn),
   );
 }
 
@@ -47,9 +51,12 @@ function withRecorded(options: Option[], id: string | null, name: string | null 
 function PlacementDetails({ patientId, site, data, run, pending }: {
   patientId: string; site: ImplantSite; data: ChartData; run: (fn: () => Promise<Result>) => void; pending: boolean;
 }) {
+  const teaching = data.teachingOn;
+  const [placedBy, setPlacedBy] = useState<PlacedBy>(!teaching || site.placing_doctor_id ? 'doctor' : 'delegate');
   const [v, setV] = useState({
     placedOn: site.placed_on ?? '',
     placingDelegateId: site.placing_delegate_id ?? '',
+    placingDoctorId: site.placing_doctor_id ?? '',
     assistingDelegateId: site.assisting_delegate_id ?? '',
     supervisorId: site.supervisor_id ?? '',
     courseId: site.course_id ?? '',
@@ -73,44 +80,74 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
     site.assisting?.full_name,
   );
   const supervisors = withRecorded(data.supervisors, site.supervisor_id, site.supervisor?.full_name);
+  const doctors = withRecorded(data.doctors.map((d) => ({ id: d.id, label: d.name })), site.placing_doctor_id, site.doctor?.name);
+  const byDoctor = placedBy === 'doctor';
+  const doctorSelect = (label: string) => (
+    <label className="block">
+      <span className="label">{label}</span>
+      <select className="input" value={v.placingDoctorId} onChange={set('placingDoctorId')}>
+        <option value="">Choose the doctor…</option>
+        {doctors.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+      </select>
+    </label>
+  );
+  // In a clinic, an implant a delegate placed (before the switch) takes no doctor: its people go back as recorded (0121).
+  const placedByRecorded = !teaching && !!site.placing_delegate_id;
+  const values = teaching
+    ? { ...v, placedBy, placingDelegateId: byDoctor ? null : v.placingDelegateId, placingDoctorId: byDoctor ? v.placingDoctorId : null }
+    : placedByRecorded
+      // The recorded people satisfy the form's checks; the action re-reads them server-side anyway.
+      ? {
+          ...v, placedBy: 'delegate' as const, placingDelegateId: site.placing_delegate_id, placingDoctorId: null,
+          assistingDelegateId: site.assisting_delegate_id, supervisorId: site.supervisor_id, courseId: site.course_id,
+        }
+      // A clinic sends only the doctor; the action re-reads what an older record names (before the switch) and keeps it (0119).
+      : { ...v, placedBy, placingDelegateId: null, assistingDelegateId: null, supervisorId: null, courseId: null };
   return (
     <div className="space-y-2" role="group" aria-label="Placement details">
       <p className="font-medium">Placement details</p>
+      {teaching && <PlacedByChoice value={placedBy} onChange={setPlacedBy} />}
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="block">
           <span className="label">Placement date</span>
           <input className="input" type="date" max={data.today} value={v.placedOn} onChange={set('placedOn')} />
         </label>
-        <label className="block">
-          <span className="label">Placed by</span>
-          <select className="input" value={v.placingDelegateId} onChange={set('placingDelegateId')}>
-            <option value="">Choose the delegate…</option>
-            {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="label">Assisted by</span>
-          <select className="input" value={v.assistingDelegateId} onChange={set('assistingDelegateId')}>
-            <option value="">Nobody</option>
-            {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="label">Supervisor</span>
-          <select className="input" value={v.supervisorId} onChange={set('supervisorId')}>
-            <option value="">Choose the supervisor…</option>
-            {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="label">Course</span>
-          <select className="input" value={v.courseId} onChange={set('courseId')}>
-            <option value="">Choose the course…</option>
-            <CourseOptions courses={data.courses} date={v.placedOn} />
-          </select>
-        </label>
+        {!teaching ? (!placedByRecorded && doctorSelect('Placed by')) : (
+          <>
+            {byDoctor ? doctorSelect('Doctor') : (
+              <label className="block">
+                <span className="label">Placed by (delegate)</span>
+                <select className="input" value={v.placingDelegateId} onChange={set('placingDelegateId')}>
+                  <option value="">Choose the delegate…</option>
+                  {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+                </select>
+              </label>
+            )}
+            <label className="block">
+              <span className="label">Assisted by</span>
+              <select className="input" value={v.assistingDelegateId} onChange={set('assistingDelegateId')}>
+                <option value="">Nobody</option>
+                {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="label">{byDoctor ? 'Supervisor (optional)' : 'Supervisor'}</span>
+              <select className="input" value={v.supervisorId} onChange={set('supervisorId')}>
+                <option value="">{byDoctor ? 'No supervisor' : 'Choose the supervisor…'}</option>
+                {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="label">Course</span>
+              <select className="input" value={v.courseId} onChange={set('courseId')}>
+                <option value="">Choose the course…</option>
+                <CourseOptions courses={data.courses} date={v.placedOn} />
+              </select>
+            </label>
+          </>
+        )}
       </div>
-      <NoneEnrolled courseId={v.courseId} delegates={delegates} />
+      {teaching && <NoneEnrolled courseId={v.courseId} delegates={delegates} />}
       <label className="block">
         <span className="label">Notes</span>
         <input className="input" value={v.notes} onChange={set('notes')} />
@@ -119,7 +156,7 @@ function PlacementDetails({ patientId, site, data, run, pending }: {
         type="button"
         className="btn-secondary btn"
         disabled={pending}
-        onClick={() => run(() => correctPlacement({ siteId: site.id, patientId, ...v }))}
+        onClick={() => run(() => correctPlacement({ siteId: site.id, patientId, ...values }))}
       >
         Save details
       </button>
@@ -193,13 +230,14 @@ function Shell({ bare, children }: { bare: boolean; children: React.ReactNode })
 
 export function Corrections({ patientId, site, data, bare = false }: { patientId: string; site: ImplantSite; data: ChartData; bare?: boolean }) {
   const { error, ok, pending, run } = useRun();
-  const stockComponents = site.components.filter((c) => !c.voided_at && c.stock_lot_id && c.product);
+  const stockComponents = site.components.filter((c) => !c.voided_at && c.product);
   const [target, setTarget] = useState('implant');
   const component = stockComponents.find((c) => c.id === target) ?? null;
   const currentProductId = component ? component.product!.id : (site.product?.id ?? '');
   const [productId, setProductId] = useState(currentProductId);
   const [lotId, setLotId] = useState('');
   const [batchReason, setBatchReason] = useState('');
+  const [resetKey, setResetKey] = useState(0);
   const [followupReason, setFollowupReason] = useState('');
   const [componentReason, setComponentReason] = useState('');
   const [removeReason, setRemoveReason] = useState('');
@@ -212,12 +250,29 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
   const productOptions = products.some((p) => p.id === currentProductId) || !currentProductId
     ? products
     : [...products, (component ? component.product : site.product)!];
-  const lots = correctionLots(
-    data.lots,
-    productId,
-    component ? component.stock_lot_id : site.stock_lot_id,
-    component ? component.fitted_on : site.placed_on,
-  );
+  const currentLotId = component ? component.stock_lot_id : site.stock_lot_id;
+  const usedOn = component ? component.fitted_on : site.placed_on;
+  const hasLot = !!currentLotId;
+  const lots = correctionLots(data.lots, productId, currentLotId, usedOn, !hasLot);
+  const sendCorrection = (newLotId: string | null) => {
+    if (hasLot && !newLotId) return run(async () => ({ error: 'Choose the correct batch.' }));
+    return run(async () => {
+      const r = await correctBatch({
+        siteId: site.id,
+        patientId,
+        componentId: component?.id ?? '',
+        newProductId: productId !== currentProductId ? productId : '',
+        newLotId,
+        reason: batchReason,
+      });
+      if (!r.error) {
+        setLotId('');
+        setBatchReason('');
+        setResetKey((k) => k + 1);
+      }
+      return r;
+    });
+  };
   const latest = site.followups.filter((f) => !f.voided_at).at(-1);
 
   function chooseTarget(value: string) {
@@ -244,42 +299,47 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
                 ))}
               </select>
             </label>
-            <label className="block">
-              <span className="label">Product actually used</span>
-              <select className="input" value={productId} onChange={(e) => { setProductId(e.target.value); setLotId(''); }}>
-                {productOptions.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="label">Correct batch</span>
-              <select className="input" value={lotId} onChange={(e) => setLotId(e.target.value)}>
-                <option value="">Choose the batch actually used…</option>
-                {lots.map((l) => <option key={l.stock_lot_id} value={l.stock_lot_id}>{lotLabel(l)}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="label">Reason for correction</span>
-              <input className="input" value={batchReason} onChange={(e) => setBatchReason(e.target.value)} />
-            </label>
-            <button
-              type="button"
-              className="btn-secondary btn"
-              disabled={pending}
-              onClick={() =>
-                run(() =>
-                  correctBatch({
-                    siteId: site.id,
-                    patientId,
-                    componentId: component?.id ?? '',
-                    newProductId: productId !== currentProductId ? productId : '',
-                    newLotId: lotId,
-                    reason: batchReason,
-                  }),
-                )
-              }
-            >
-              Correct batch
-            </button>
+            {hasLot && !data.inventoryOn ? (
+              <p className="text-muted">Switch Inventory on to correct the stock batch.</p>
+            ) : (
+              <>
+                <label key={`product-${resetKey}`} className="block">
+                  <span className="label">Product actually used</span>
+                  <select className="input" value={productId} onChange={(e) => { setProductId(e.target.value); setLotId(''); }}>
+                    {productOptions.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
+                  </select>
+                </label>
+                {(hasLot || data.inventoryOn) && (
+                  <label key={`lot-${resetKey}`} className="block">
+                    <span className="label">{hasLot ? 'Correct batch' : 'Stock batch'}</span>
+                    <select className="input" value={lotId} onChange={(e) => setLotId(e.target.value)}>
+                      <option value="">{hasLot ? 'Choose the batch actually used…' : 'Choose the batch used…'}</option>
+                      {lots.map((l) => <option key={l.stock_lot_id} value={l.stock_lot_id}>{lotLabel(l)}</option>)}
+                    </select>
+                  </label>
+                )}
+                <label key={`reason-${resetKey}`} className="block">
+                  <span className="label">Reason for correction</span>
+                  <input className="input" value={batchReason} onChange={(e) => setBatchReason(e.target.value)} />
+                </label>
+                {hasLot ? (
+                  <button type="button" className="btn-secondary btn" disabled={pending} onClick={() => sendCorrection(lotId)}>
+                    Correct batch
+                  </button>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" className="btn-secondary btn" disabled={pending || (productId === currentProductId && !!currentProductId)} onClick={() => sendCorrection(null)}>
+                      Correct product
+                    </button>
+                    {data.inventoryOn && (
+                      <button type="button" className="btn-secondary btn" disabled={pending || !lotId} onClick={() => sendCorrection(lotId)}>
+                        Attach stock batch
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
         {current && site.state !== 'failed' && (

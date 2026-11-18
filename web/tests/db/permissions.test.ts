@@ -285,6 +285,9 @@ describe('permissions: guard rails', () => {
         'module_on', 'my_company_plan',
         // Modules (0110): the console's plan writes; service role only, no company session.
         'console_save_plan', 'console_set_company_plan',
+        // Modules release 3 (0118): admin user tools; admin-only, no area (work in every plan).
+        'admin_change_email', 'admin_end_sessions', 'admin_record_event', 'admin_require_mfa_setup', 'admin_set_name',
+        'admin_user_history',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
@@ -319,7 +322,9 @@ describe('permissions: guard rails', () => {
         // Error alerts (0107): no company-user grants; the app writes and the hourly check reads with the service role.
         'error_log', 'error_alert_state',
         // Modules (0109): global plan list, closed to company users.
-        'plans']);
+        'plans',
+        // Modules release 3 (0114): the doctors list, kept by admins and read by staff, like supervisors.
+        'doctors']);
       expect(rows.map((r) => r.relname).filter((n) => !shared.has(n)).sort()).toEqual([]);
     });
   });

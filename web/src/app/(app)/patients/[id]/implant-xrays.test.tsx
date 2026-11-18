@@ -13,7 +13,7 @@ const xray = (over: Partial<Radiograph>): Radiograph => ({
   id: 'r1', taken_on: '2026-04-01', type: 'periapical', purpose: 'baseline', teeth: [46], link: null, notes: '', updated_at: 't', levels: [], ...over,
 });
 const data = (radiographs: Radiograph[], editable = true) =>
-  ({ sites: [site], radiographs, editable, today: '2026-10-22' }) as unknown as ChartData;
+  ({ sites: [site], radiographs, editable, today: '2026-10-22', inventoryOn: true }) as unknown as ChartData;
 
 describe('<ImplantXrays>', () => {
   it('lists only X-rays that include the tooth, newest first, with this implant\'s levels', () => {
@@ -57,7 +57,7 @@ describe('<ImplantXrays>', () => {
         { site: 's36', tooth: 36, mesial_mm: 1.5, distal_mm: 2.5 },
       ],
     });
-    const d = { sites: [s34, s36], radiographs: [r], editable: true, today: '2026-10-22' } as unknown as ChartData;
+    const d = { sites: [s34, s36], radiographs: [r], editable: true, today: '2026-10-22', inventoryOn: true } as unknown as ChartData;
     render(<ImplantXrays site={s36} patientId="pt" data={d} />);
     const row = within(screen.getByTestId('xray')).getAllByRole('row')[1];
     const cells = within(row).getAllByRole('cell');

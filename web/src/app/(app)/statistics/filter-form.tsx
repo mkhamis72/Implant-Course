@@ -5,24 +5,26 @@ import { isCompareKey } from '@/lib/research/groups';
 type Option = { id: string; name: string };
 
 /** GET form: the filters live in the URL so every number's drill-down link can carry them. */
-export function FilterForm({ filters, courses, delegates, brands, systems }: {
+export function FilterForm({ filters, courses, delegates, brands, systems, teaching = true }: {
   filters: ResearchFilters;
   courses: Option[];
   delegates: Option[];
   brands: string[];
   systems: string[];
+  /** False in a clinic: no course or delegate filter. */
+  teaching?: boolean;
 }) {
   return (
     // Explore adds its analysis to this GET with hidden inputs that name the form (id below), so Apply keeps it.
     <form id="research-filters" className="card grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Filters">
       {isCompareKey(filters.compare) && <input type="hidden" name="compare" value={filters.compare} />}
-      <label className="block">
+      {teaching && <label className="block">
         <span className="label">Course</span>
         <select className="input" name="course" defaultValue={filters.course}>
           <option value={ALL_COURSES}>All courses</option>
           {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-      </label>
+      </label>}
       <label className="block">
         <span className="label">Placed from</span>
         <input className="input" type="date" name="from" defaultValue={filters.from} />
@@ -31,13 +33,13 @@ export function FilterForm({ filters, courses, delegates, brands, systems }: {
         <span className="label">Placed to</span>
         <input className="input" type="date" name="to" defaultValue={filters.to} />
       </label>
-      <label className="block">
+      {teaching && <label className="block">
         <span className="label">Placing delegate</span>
         <select className="input" name="delegate" defaultValue={filters.delegate}>
           <option value="">All delegates</option>
           {delegates.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
-      </label>
+      </label>}
       <label className="block">
         <span className="label">Brand</span>
         <select className="input" name="brand" defaultValue={filters.brand}>

@@ -1,4 +1,5 @@
 import { requirePermission } from '@/lib/auth/session';
+import { teachingOn } from '@/lib/modules/modules';
 import { canEdit, canView } from '@/lib/auth/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
@@ -31,7 +32,8 @@ export default async function ExplorePage({ searchParams }: { searchParams: Page
   const sp = await searchParams;
   const params = await readParams(searchParams, ...RESEARCH_FILTER_KEYS);
   // Analyses need sample size: Explore opens on All courses (Results opens on the latest course).
-  const filters = { ...params, course: params.course || ALL_COURSES };
+  const teaching = teachingOn(profile.features);
+  const filters = teaching ? { ...params, course: params.course || ALL_COURSES } : { ...params, course: ALL_COURSES, delegate: '' };
   const exploreParams = Object.fromEntries(
     Object.entries(sp).filter(([k]) => ['f', 'o', 'w', 'v'].includes(k) || k.startsWith('x_'))
       .map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]),
@@ -54,9 +56,10 @@ export default async function ExplorePage({ searchParams }: { searchParams: Page
     <div className="space-y-6">
       {header}
       <FilterForm filters={filters} courses={courseList} delegates={delegateOptions}
+        teaching={teaching}
         brands={distinct([...data.implants.map((r) => r.brand), filters.brand])}
         systems={distinct([...data.implants.filter((r) => !filters.brand || r.brand === filters.brand).map((r) => r.system), filters.system])} />
-      <ExploreWorkspace key={JSON.stringify([filters, exploreParams])} data={data} labels={labels} today={todayIso()} initial={parseExplore(exploreParams)}
+      <ExploreWorkspace key={JSON.stringify([filters, exploreParams])} data={data} labels={labels} today={todayIso()} initial={parseExplore(exploreParams, teaching)} teaching={teaching}
         base={filters} patients={patients}
         saved={{ items: (saved.data ?? []) as unknown as SavedRow[], canEdit: canEdit(profile, 'research'), userId: profile.user_id,
           isAdmin: profile.role === 'admin', courses: labels.course ?? {} }} />

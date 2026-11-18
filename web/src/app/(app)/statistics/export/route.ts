@@ -2,8 +2,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentProfile } from '@/lib/auth/session';
 import { canView } from '@/lib/auth/permissions';
+import { teachingOn } from '@/lib/modules/modules';
 import { todayIso } from '@/lib/dates';
-import { RESEARCH_FILTER_KEYS, rpcArgs, type ResearchFilters } from '@/lib/research/view';
+import { ALL_COURSES, RESEARCH_FILTER_KEYS, rpcArgs, type ResearchFilters } from '@/lib/research/view';
 import { TABLE_NAMES, assertAllowlisted, exportOrder, type ExportTables } from '@/lib/research/export/dictionary';
 import type { ExportMeta, StudyAbout } from '@/lib/research/export/assemble';
 import { exportFileName } from '@/lib/research/export/assemble';
@@ -26,6 +27,9 @@ export async function GET(req: NextRequest) {
   if (format !== 'xlsx' && format !== 'csv') return new NextResponse('Unknown format', { status: 400 });
 
   const filters = Object.fromEntries(RESEARCH_FILTER_KEYS.map((k) => [k, params.get(k) ?? ''])) as ResearchFilters;
+  // A clinic has no courses, delegates or supervisors: those filters are ignored and their codes stay out of the files.
+  const teaching = teachingOn(profile.features);
+  if (!teaching) { filters.course = ALL_COURSES; filters.delegate = ''; }
   const args = rpcArgs(filters);
   const supabase = await createClient();
 
@@ -70,7 +74,7 @@ export async function GET(req: NextRequest) {
   const codeOf = async (entity: 'course' | 'delegate', id: string | null) =>
     id ? supabase.rpc('research_code', { p_entity: entity, p_id: id }) : { data: null, error: null };
   const [version, courseCode, delegateCode] = await Promise.all([
-    supabase.rpc('outcomes_version'), codeOf('course', args.p_course), codeOf('delegate', args.p_delegate),
+    supabase.rpc('outcomes_version'), codeOf('course', teaching ? args.p_course : null), codeOf('delegate', teaching ? args.p_delegate : null),
   ]);
   const failed = version.error ?? courseCode.error ?? delegateCode.error;
   if (failed) {
@@ -84,7 +88,7 @@ export async function GET(req: NextRequest) {
   const rowCounts = Object.fromEntries(TABLE_NAMES.map((t) => [t, tables[t].length])) as ExportMeta['rowCounts'];
   const logged = Object.fromEntries(RESEARCH_FILTER_KEYS.map((k) => [k, args[`p_${k}` as keyof typeof args] ?? null]));
   const shown = { ...logged, course: (courseCode.data as string | null) ?? null, delegate: (delegateCode.data as string | null) ?? null };
-  const meta: ExportMeta = { exportedAt: new Date().toISOString(), filters: shown, version: String(version.data ?? ''), rowCounts, consent: consentCounts(tables.patients), study };
+  const meta: ExportMeta = { exportedAt: new Date().toISOString(), filters: shown, version: String(version.data ?? ''), rowCounts, consent: consentCounts(tables.patients), study, teaching };
 
   const body = format === 'xlsx' ? await buildXlsx(tables, meta) : buildZip(tables, meta);
 

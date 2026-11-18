@@ -44,7 +44,7 @@ function DeleteStudy({ id }: { id: string }) {
   );
 }
 
-function StudyCard({ study, courses, editable, isAdmin }: { study: StudyRow; courses: CourseOption[]; editable: boolean; isAdmin: boolean }) {
+function StudyCard({ study, courses, editable, isAdmin, teaching }: { study: StudyRow; courses: CourseOption[]; editable: boolean; isAdmin: boolean; teaching: boolean }) {
   const [editing, setEditing] = useState(false);
   return (
     <article data-testid={`study-${study.id}`} className="card space-y-3">
@@ -54,7 +54,7 @@ function StudyCard({ study, courses, editable, isAdmin }: { study: StudyRow; cou
       </div>
       {editing ? (
         <>
-          <StudyForm study={study} courses={courses} onDone={() => setEditing(false)} />
+          <StudyForm study={study} courses={courses} teaching={teaching} onDone={() => setEditing(false)} />
           <button type="button" className="btn-secondary btn" onClick={() => setEditing(false)}>Cancel</button>
         </>
       ) : (
@@ -66,7 +66,7 @@ function StudyCard({ study, courses, editable, isAdmin }: { study: StudyRow; cou
             <Detail label="Protocol">{orDash(study.protocol_name)}</Detail>
             <Detail label="Protocol version">{orDash(study.protocol_version)}</Detail>
             <Detail label="Protocol date">{study.protocol_date ? formatDate(study.protocol_date) : '—'}</Detail>
-            <Detail label="Courses">{study.courses.length ? study.courses.map((c) => c.name).join(', ') : '—'}</Detail>
+            {teaching && <Detail label="Courses">{study.courses.length ? study.courses.map((c) => c.name).join(', ') : '—'}</Detail>}
             <Detail label="Approval letter">
               {study.has_letter ? (
                 <a href={studyLetterHref(study.id)} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
@@ -89,8 +89,8 @@ function StudyCard({ study, courses, editable, isAdmin }: { study: StudyRow; cou
 }
 
 /** Every study, newest first. Editing needs Research edit; deleting is for admins, never once an export names the study. */
-export function StudyList({ studies, courses, editable, isAdmin }: {
-  studies: StudyRow[]; courses: CourseOption[]; editable: boolean; isAdmin: boolean;
+export function StudyList({ studies, courses, editable, isAdmin, teaching = true }: {
+  studies: StudyRow[]; courses: CourseOption[]; editable: boolean; isAdmin: boolean; teaching?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   return (
@@ -98,14 +98,14 @@ export function StudyList({ studies, courses, editable, isAdmin }: {
       {editable && (adding ? (
         <section className="card space-y-3" aria-labelledby="add-study">
           <h2 id="add-study">Add study</h2>
-          <StudyForm courses={courses} onDone={() => setAdding(false)} />
+          <StudyForm courses={courses} teaching={teaching} onDone={() => setAdding(false)} />
           <button type="button" className="btn-secondary btn" onClick={() => setAdding(false)}>Cancel</button>
         </section>
       ) : (
         <button type="button" className="btn" onClick={() => setAdding(true)}>Add study</button>
       ))}
       {studies.length === 0 ? <p className="text-muted">No studies yet.</p> : studies.map((s) => (
-        <StudyCard key={s.id} study={s} courses={courses} editable={editable} isAdmin={isAdmin} />
+        <StudyCard key={s.id} study={s} courses={courses} editable={editable} isAdmin={isAdmin} teaching={teaching} />
       ))}
     </div>
   );

@@ -3,16 +3,45 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
-import { cancelSlotSchema, slotSchema, slotStatusSchema, surgeryDaySchema, updateSlotSchema } from '@/lib/schedule/schemas';
+import { cancelSlotSchema, clinicDaySchema, slotSchema, slotStatusSchema, surgeryDaySchema, updateSlotSchema } from '@/lib/schedule/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
 import { escapeLike } from '@/lib/like';
+import { teachingOn } from '@/lib/modules/modules';
+import { placedByRecordedDelegates, type RecordedPeople } from '@/lib/schedule/recorded';
 
 type BookResult = { error?: string; warnings?: string[]; slotId?: string; date?: string };
 
+/**
+ * A clinic books a doctor only: whatever the client sent, no supervisor or delegates go to the database. A course
+ * organizer chooses delegates or a doctor (`recorded` is the action's own, below).
+ */
+function forPlan(input: Record<string, unknown>, teaching: boolean): Record<string, unknown> {
+  return teaching
+    ? { ...input, placedBy: input.placedBy === 'doctor' ? 'doctor' : 'delegate' }
+    : { ...input, placedBy: 'doctor', supervisorId: null, placing: [], assisting: [] };
+}
+
+/**
+ * Editing in a clinic: what the booking recorded before the switch (supervisor, delegates) is hidden but kept, so
+ * the recorded supervisor goes back and no delegates are sent (update_surgery_slot_v2 keeps them, 0120). A booking
+ * placed by its recorded delegates takes no doctor.
+ */
+function forClinicEdit(input: Record<string, unknown>, slot: RecordedPeople): Record<string, unknown> {
+  const recorded = placedByRecordedDelegates(slot);
+  return {
+    ...input,
+    placedBy: recorded ? 'recorded' : 'doctor',
+    placingDoctorId: recorded ? null : input.placingDoctorId,
+    supervisorId: slot.supervisor_id,
+    placing: [],
+    assisting: [],
+  };
+}
+
 export async function bookSurgery(input: Record<string, unknown>): Promise<BookResult> {
-  await requirePermission('schedule', 'edit');
-  const parsed = slotSchema.safeParse(input);
+  const profile = await requirePermission('schedule', 'edit');
+  const parsed = slotSchema.safeParse(forPlan(input, teachingOn(profile.features)));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const s = parsed.data;
   const supabase = await createClient();
@@ -25,19 +54,19 @@ export async function bookSurgery(input: Record<string, unknown>): Promise<BookR
   if (!session) return { error: 'Choose a surgery session.' };
 
   if (s.overrideReason.length < 3) {
-    const { data: clashes, error } = await supabase.rpc('slot_conflicts', {
+    const { data: clashes, error } = await supabase.rpc('slot_conflicts_v2', {
       p_session: s.sessionId, p_chair: s.chairId, p_start: s.start, p_end: s.end, p_patient: patient.id,
-      p_supervisor: s.supervisorId, p_delegates: [...s.placing, ...s.assisting],
+      p_supervisor: s.supervisorId, p_delegates: [...s.placing, ...s.assisting], p_doctor: s.placingDoctorId, p_exclude: null,
     });
     if (error) return { error: userMessage(error)! };
     if (clashes?.length) return { warnings: (clashes as { message: string }[]).map((c) => c.message) };
   }
 
-  const { data: slotId, error } = await supabase.rpc('create_surgery_slot', {
+  const { data: slotId, error } = await supabase.rpc('create_surgery_slot_v2', {
     p_session: s.sessionId, p_chair: s.chairId, p_start: s.start, p_end: s.end, p_patient: patient.id,
     p_supervisor: s.supervisorId, p_placing: s.placing, p_assisting: s.assisting,
     p_implants: s.implants.map((i) => ({ tooth: i.tooth, product_id: i.productId, technique: i.technique })),
-    p_override_reason: s.overrideReason, p_notes: s.notes,
+    p_override_reason: s.overrideReason, p_notes: s.notes, p_placing_doctor: s.placingDoctorId,
   });
   if (error) return { error: userMessage(error)! };
   revalidatePath('/schedule');
@@ -46,28 +75,32 @@ export async function bookSurgery(input: Record<string, unknown>): Promise<BookR
 }
 
 export async function updateBooking(input: Record<string, unknown>): Promise<BookResult> {
-  await requirePermission('schedule', 'edit');
-  const parsed = updateSlotSchema.safeParse(input);
+  const profile = await requirePermission('schedule', 'edit');
+  const supabase = await createClient();
+  // Read first: a clinic sends back what the booking recorded.
+  const { data: slot } = await supabase
+    .from('surgery_slots').select('patient_id, session_id, supervisor_id, placing_doctor_id, session:sessions(date)')
+    .eq('id', typeof input.slotId === 'string' ? input.slotId : '').maybeSingle();
+  if (!slot) return { error: 'Booking not found.' };
+  const teaching = teachingOn(profile.features);
+  const parsed = updateSlotSchema.safeParse(teaching ? forPlan(input, true) : forClinicEdit(input, slot as RecordedPeople));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const s = parsed.data;
-  const supabase = await createClient();
-  const { data: slot } = await supabase
-    .from('surgery_slots').select('patient_id, session_id, session:sessions(date)').eq('id', s.slotId).maybeSingle();
-  if (!slot) return { error: 'Booking not found.' };
   const date = (slot.session as unknown as { date: string } | null)?.date;
 
   if (s.overrideReason.length < 3) {
-    const { data: clashes, error } = await supabase.rpc('slot_conflicts', {
+    const { data: clashes, error } = await supabase.rpc('slot_conflicts_v2', {
       p_session: slot.session_id, p_chair: s.chairId, p_start: s.start, p_end: s.end, p_patient: slot.patient_id,
-      p_supervisor: s.supervisorId, p_delegates: [...s.placing, ...s.assisting], p_exclude: s.slotId,
+      p_supervisor: s.supervisorId, p_delegates: [...s.placing, ...s.assisting], p_doctor: s.placingDoctorId, p_exclude: s.slotId,
     });
     if (error) return { error: userMessage(error)! };
     if (clashes?.length) return { warnings: (clashes as { message: string }[]).map((c) => c.message) };
   }
 
-  const { error } = await supabase.rpc('update_surgery_slot', {
+  const { error } = await supabase.rpc('update_surgery_slot_v2', {
     p_slot: s.slotId, p_chair: s.chairId, p_start: s.start, p_end: s.end, p_supervisor: s.supervisorId,
     p_placing: s.placing, p_assisting: s.assisting, p_override_reason: s.overrideReason, p_notes: s.notes,
+    p_placing_doctor: s.placingDoctorId,
   });
   if (error) return { error: userMessage(error)! };
   for (const i of s.implants) {
@@ -102,16 +135,19 @@ export async function cancelBooking(_prev: FormState, formData: FormData): Promi
 }
 
 export async function addSurgeryDay(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requirePermission('schedule', 'edit');
-  const parsed = surgeryDaySchema.safeParse(Object.fromEntries(formData));
+  const profile = await requirePermission('schedule', 'edit');
+  // A clinic adds a clinic day: a surgery session with no course.
+  const teaching = teachingOn(profile.features);
+  const parsed = (teaching ? surgeryDaySchema : clinicDaySchema).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const d = parsed.data;
+  const course = 'course_id' in d ? d.course_id : null;
   const supabase = await createClient();
   const { error } = await supabase.rpc('add_surgery_session', {
-    p_course: d.course_id, p_date: d.date, p_title: d.title, p_start: d.start_time, p_end: d.end_time, p_room: d.room,
+    p_course: course, p_date: d.date, p_title: d.title, p_start: d.start_time, p_end: d.end_time, p_room: d.room,
   });
   if (error) return failed(userMessage(error)!, formData);
   revalidatePath('/schedule');
-  revalidatePath(`/courses/${d.course_id}`);
-  return { ok: 'Surgery day added.' };
+  if (course) revalidatePath(`/courses/${course}`);
+  return { ok: teaching ? 'Surgery day added.' : 'Clinic day added.' };
 }

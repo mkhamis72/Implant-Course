@@ -33,7 +33,7 @@ function DateField({ name, label, defaultValue, max }: { name: string; label: st
 }
 
 /** Adds or edits a study: title, ethics approval, protocol, notes, courses covered and the approval letter. */
-export function StudyForm({ study, courses, onDone }: { study?: StudyRow; courses: CourseOption[]; onDone?: () => void }) {
+export function StudyForm({ study, courses, onDone, teaching = true }: { study?: StudyRow; courses: CourseOption[]; onDone?: () => void; teaching?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   // Remounted after a save so a new study's fields and the file input clear; a refusal keeps what was typed.
@@ -94,7 +94,7 @@ export function StudyForm({ study, courses, onDone }: { study?: StudyRow; course
         <TextField name="protocol_version" label="Protocol version" defaultValue={study?.protocol_version} maxLength={50} />
         <DateField name="protocol_date" label="Protocol date" defaultValue={study?.protocol_date} />
       </div>
-      <fieldset className="space-y-1">
+      {teaching && <fieldset className="space-y-1">
         <legend className="label">Courses covered</legend>
         {options.length === 0 ? <p className="text-sm text-muted">No courses yet.</p> : (
           <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -106,7 +106,7 @@ export function StudyForm({ study, courses, onDone }: { study?: StudyRow; course
             ))}
           </div>
         )}
-      </fieldset>
+      </fieldset>}
       <label className="block">
         <span className="label">Notes</span>
         <textarea name="notes" className="input" rows={2} maxLength={2000} defaultValue={study?.notes ?? ''} />

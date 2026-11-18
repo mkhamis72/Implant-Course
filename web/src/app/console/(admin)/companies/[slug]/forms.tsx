@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from 'react';
 import { checkedOf, valueOf, type FormState } from '@/lib/patients/form-state';
-import { KIND_LABELS, MODULES, MODULE_LABELS, type CompanyKind, type Module } from '@/lib/modules/modules';
+import { KIND_AVAILABLE, KIND_LABELS, MODULES, MODULE_LABELS, type CompanyKind, type Module } from '@/lib/modules/modules';
 import { TemporaryPassword } from '@/components/temporary-password';
 import { addDomain, firstAdmin, setCompanyPlan, setCompanyStatus, updateCompany, type FirstAdminState } from '../../actions';
 
@@ -48,7 +48,7 @@ export function DetailsForm({ slug, name, hosts }: { slug: string; name: string;
 
 type PlanChoice = { id: string; name: string; kind: CompanyKind };
 
-/** The company's type, plan and extra modules. Release 1: only Course organizer, Inventory always on. */
+/** The company's type, plan and extra modules. Only Course organizer can be chosen for now. */
 export function PlanForm({ slug, kind, planId, extras, plans }: { slug: string; kind: CompanyKind; planId: string; extras: Module[]; plans: PlanChoice[] }) {
   const { state, formAction, pending, attempt } = useRemountingAction(setCompanyPlan);
   return (
@@ -75,12 +75,12 @@ function PlanFields({ slug, state, formAction, pending, kind, planId, extras, pl
           <label className="label" htmlFor="plan-kind">Type</label>
           <select id="plan-kind" name="kind" className="input" value={chosen} onChange={(e) => setChosen(e.target.value as CompanyKind)}>
             <option value="course_organizer">{KIND_LABELS.course_organizer}</option>
-            <option value="clinic" disabled>{KIND_LABELS.clinic} (later release)</option>
+            <option value="clinic" disabled={!KIND_AVAILABLE.clinic}>{KIND_LABELS.clinic}{KIND_AVAILABLE.clinic ? '' : ' (later release)'}</option>
           </select>
         </div>
         <div>
           <label className="label" htmlFor="plan-plan">Plan</label>
-          <select id="plan-plan" name="plan_id" className="input" required defaultValue={ofKind.some((p) => p.id === wanted) ? wanted : ''}>
+          <select key={chosen} id="plan-plan" name="plan_id" className="input" required defaultValue={ofKind.some((p) => p.id === wanted) ? wanted : ''}>
             <option value="" disabled>Choose a plan</option>
             {ofKind.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
@@ -89,20 +89,23 @@ function PlanFields({ slug, state, formAction, pending, kind, planId, extras, pl
       <fieldset>
         <legend className="label">Extra modules (on top of the plan)</legend>
         <div className="flex flex-wrap gap-4">
-          {MODULES.map((m) =>
-            m === 'inventory' ? (
-              <label key={m} className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked disabled readOnly /> {MODULE_LABELS[m]} <span className="text-muted">Always on for now</span>
-              </label>
-            ) : (
-              <label key={m} className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name={`extra_${m}`} defaultChecked={checkedOf(state, `extra_${m}`, extras.includes(m))} /> {MODULE_LABELS[m]}
-              </label>
-            ),
-          )}
+          {MODULES.map((m) => (
+            <label key={m} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name={`extra_${m}`} defaultChecked={checkedOf(state, `extra_${m}`, extras.includes(m))} /> {MODULE_LABELS[m]}
+            </label>
+          ))}
         </div>
       </fieldset>
-      <button className="btn" disabled={pending}>Save</button>
+      {chosen !== kind && (
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" name="confirm_kind_change" className="mt-1" />
+          {chosen === 'clinic'
+            ? 'I understand: switching to Clinic hides courses, delegates, lectures, lecturers, supervisors and delegate logins (kept, not deleted).'
+            : 'I understand: switching to Course organizer shows them again.'}
+        </label>
+      )}
+      {ofKind.length === 0 && <p className="text-sm text-muted">Create a {KIND_LABELS[chosen]} plan on the Plans page first.</p>}
+      <button className="btn" disabled={pending || ofKind.length === 0}>Save</button>
     </form>
   );
 }

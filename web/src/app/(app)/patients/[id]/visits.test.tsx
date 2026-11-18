@@ -28,7 +28,7 @@ const oldFollowup = {
   recession_facial_mm: null, recession_mesial_mm: null, recession_distal_mm: null,
 };
 const site = { id: 's1', tooth: 36, state: 'placed', placed_on: '2026-03-10', followups: [oldFollowup] } as unknown as ImplantSite;
-const data = { today: '2026-06-01', visits, editable: true } as unknown as ChartData;
+const data = { today: '2026-06-01', visits, editable: true, inventoryOn: true } as unknown as ChartData;
 
 beforeEach(() => vi.mocked(recordVisit).mockReset().mockResolvedValue({}));
 

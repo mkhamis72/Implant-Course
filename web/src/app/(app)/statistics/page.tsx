@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
+import { teachingOn } from '@/lib/modules/modules';
 import { canView } from '@/lib/auth/permissions';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
-import { RESEARCH_FILTER_KEYS, defaultCourse, effectiveSystem } from '@/lib/research/view';
+import { ALL_COURSES, RESEARCH_FILTER_KEYS, defaultCourse, effectiveSystem } from '@/lib/research/view';
 import { todayIso } from '@/lib/dates';
 import { isCompareKey, needsGroupVars } from '@/lib/research/groups';
 import { loadResearch } from './data';
@@ -43,7 +44,11 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
   const courses = await supabase.rpc('course_options');
   if (courses.error) throw new Error('Could not load the courses');
   const courseRows = (courses.data ?? []) as { id: string; name: string; start_date: string }[];
-  const requested = { ...params, course: params.course || defaultCourse(courseRows, todayIso()) };
+  // A clinic has no courses or delegates: those filters are ignored, whatever an old link says.
+  const teaching = teachingOn(profile.features);
+  const requested = teaching
+    ? { ...params, course: params.course || defaultCourse(courseRows, todayIso()) }
+    : { ...params, course: ALL_COURSES, delegate: '' };
   const [first, delegates, studies] = await Promise.all([
     loadResearch(requested, withGroups),
     supabase.from('delegates').select('id, full_name').order('full_name'),
@@ -73,11 +78,12 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
         filters={filters}
         courses={courseList}
         delegates={delegateOptions}
+        teaching={teaching}
         brands={brands}
         systems={systems}
       />
       <ResearchView rows={rows} crowns={crowns} filters={filters} groups={groups} consent={consent} noProduct={base.filter((r) => r.product_id === null).length} />
-      <ExportForm filters={filters} studies={studyList} />
+      <ExportForm filters={filters} studies={studyList} teaching={teaching} />
     </div>
   );
 }

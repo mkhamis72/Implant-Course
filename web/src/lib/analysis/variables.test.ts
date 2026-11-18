@@ -56,3 +56,12 @@ describe('variable registry', () => {
     expect(variable('survival')!.kind).toBe('survival')
   })
 })
+
+describe('teaching off (a clinic)', () => {
+  it('offers no course, delegate or supervisor variable', () => {
+    const keys = [...factorChoices(false), ...outcomeChoices(false)].map((v) => v.key)
+    for (const k of ['course', 'delegate', 'supervisor']) expect(keys).not.toContain(k)
+    expect(factorChoices(true).map((v) => v.key)).toEqual(expect.arrayContaining(['course', 'delegate', 'supervisor']))
+    expect(factorChoices().map((v) => v.key)).toContain('course')
+  })
+})

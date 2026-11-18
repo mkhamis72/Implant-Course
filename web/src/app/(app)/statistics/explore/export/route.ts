@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentProfile } from '@/lib/auth/session';
 import { canView } from '@/lib/auth/permissions';
+import { teachingOn } from '@/lib/modules/modules';
 import { todayIso } from '@/lib/dates';
 import { ALL_COURSES, RESEARCH_FILTER_KEYS, rpcArgs, type ResearchFilters } from '@/lib/research/view';
 import { fetchAll } from '@/lib/research/export/fetch-all';
@@ -28,11 +29,13 @@ export async function GET(req: NextRequest) {
 
   const params = new URL(req.url).searchParams;
   const raw = Object.fromEntries(params.entries());
-  const state = parseExplore(raw);
+  const teaching = teachingOn(profile.features);
+  const state = parseExplore(raw, teaching);
   const outcome = variable(state.config.outcome);
   if (!outcome) return new NextResponse('Choose an outcome', { status: 400 });
   const filters = Object.fromEntries(RESEARCH_FILTER_KEYS.map((k) => [k, params.get(k) ?? ''])) as ResearchFilters;
-  if (!filters.course) filters.course = ALL_COURSES;
+  if (!filters.course || !teaching) filters.course = ALL_COURSES;
+  if (!teaching) filters.delegate = '';
   const args = rpcArgs(filters);
   const supabase = await createClient();
 

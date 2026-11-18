@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { PlacedByChoice, type PlacedBy } from '@/components/placed-by-choice';
 import { availableLots } from '@/lib/inventory/lots';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { acceptsProduct } from '@/lib/inventory/components';
@@ -259,6 +260,26 @@ function People({ booked, summary, children }: { booked: boolean; summary: (stri
   );
 }
 
+// Shared with the Schedule's booking form; corrections.tsx imports them from here.
+export { PlacedByChoice, type PlacedBy };
+
+/** The doctor who placed the implant, from Admin → Doctors (required whenever it is shown). */
+export function DoctorSelect({ label, doctors, value, onChange }: {
+  label: string; doctors: { id: string; label: string }[]; value: string; onChange: (v: string) => void;
+}) {
+  return (
+    <>
+      <Field label={label} required>
+        <select className="input" aria-required="true" value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">Choose the doctor…</option>
+          {doctors.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+        </select>
+      </Field>
+      {doctors.length === 0 && <p className="text-sm text-warn">No doctors yet: an admin adds them in Admin → Doctors.</p>}
+    </>
+  );
+}
+
 type Base = { patientId: string; tooth: number; data: ChartData; onDone: () => void };
 
 export function PlanForm({ patientId, tooth, data, onDone }: Base) {
@@ -268,7 +289,7 @@ export function PlanForm({ patientId, tooth, data, onDone }: Base) {
   const { error, pending, submit } = useSubmit(planImplant, onDone);
   return (
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, productId, technique, notes }); }}>
-      <ImplantPicker implants={data.implants} lots={data.lots} usedOn={data.today} value={productId} onChange={setProductId} inStockDefault={false} />
+      <ImplantPicker implants={data.implants} lots={data.lots} usedOn={data.today} value={productId} onChange={setProductId} inStockDefault={false} stockFilter={data.inventoryOn} />
       <TechniqueField value={technique} onChange={setTechnique} />
       <Field label="Notes (optional)">
         <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -293,14 +314,20 @@ export function PlaceForm({
   /** The course the booking's surgery session belongs to. */
   plannedCourseId?: string | null; onPlaced?: () => void;
 }) {
-  // A booked implant starts with the booking's delegates and supervisor.
+  // A booked implant starts with the booking's delegates (or doctor) and supervisor.
   const placingFromSlot = slot?.delegates.find((d) => d.role === 'placing')?.delegate_id ?? '';
   const assistingFromSlot = slot?.delegates.find((d) => d.role === 'assisting')?.delegate_id ?? '';
+  const doctorFromSlot = slot?.placing_doctor_id ?? '';
+  const teaching = data.teachingOn;
+  const [placedBy, setPlacedBy] = useState<PlacedBy>(!teaching || (doctorFromSlot && !placingFromSlot) ? 'doctor' : 'delegate');
+  // With a doctor the supervisor is optional, so it starts empty (or the booking's); with a delegate, the current user if a supervisor.
+  const defaultSupervisor = (by: PlacedBy) =>
+    slot?.supervisor_id ?? (by === 'delegate' && data.supervisors.some((s) => s.id === data.me) ? data.me : '');
   const [v, setV] = useState({
     productId: plannedProductId ?? '', technique: plannedTechnique ?? '', lotId: '', placedOn: data.today,
     courseId: plannedCourseId ?? '',
-    placingDelegateId: placingFromSlot, assistingDelegateId: assistingFromSlot,
-    supervisorId: slot?.supervisor_id ?? (data.supervisors.some((s) => s.id === data.me) ? data.me : ''), graft: '', notes: '',
+    placingDelegateId: placingFromSlot, assistingDelegateId: assistingFromSlot, placingDoctorId: doctorFromSlot,
+    supervisorId: defaultSupervisor(placedBy), graft: '', notes: '',
   });
   const set = (key: keyof typeof v) => (value: string) =>
     setV((cur) => ({
@@ -314,9 +341,27 @@ export function PlaceForm({
       } : {}),
     }));
   const enrolled = delegatesForCourse(data.delegates, data.enrollments, v.courseId);
+  /** Switching who placed it swaps the supervisor default, unless one was chosen by hand. */
+  function choosePlacedBy(by: PlacedBy) {
+    setV((cur) => (cur.supervisorId === defaultSupervisor(placedBy) ? { ...cur, supervisorId: defaultSupervisor(by) } : cur));
+    setPlacedBy(by);
+  }
   const { error, pending, submit } = useSubmit(placeImplant, () => { onPlaced?.(); onDone(); });
+  const byDoctor = placedBy === 'doctor';
+  const doctors = data.doctors.map((d) => ({ id: d.id, label: d.name }));
+  const people = teaching
+    ? { ...v, placedBy, placingDelegateId: byDoctor ? null : v.placingDelegateId, placingDoctorId: byDoctor ? v.placingDoctorId : null }
+    // A clinic records only the doctor.
+    : { ...v, placedBy, placingDelegateId: null, assistingDelegateId: null, supervisorId: null, courseId: null };
+  const summary = teaching
+    ? [
+      byDoctor ? `Placed by ${nameOf(doctors, v.placingDoctorId) ?? '—'}` : `Placed by ${nameOf(data.delegates, v.placingDelegateId) ?? '—'}`,
+      v.assistingDelegateId ? `assisted by ${nameOf(data.delegates, v.assistingDelegateId)}` : null,
+      byDoctor && !v.supervisorId ? null : `supervised by ${nameOf(data.supervisors, v.supervisorId) ?? '—'}`,
+    ]
+    : [`Placed by ${nameOf(doctors, v.placingDoctorId) ?? '—'}`];
   return (
-    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, slotId: slot?.id ?? '', ...v }); }}>
+    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, slotId: slot?.id ?? '', ...people, lotId: data.inventoryOn ? v.lotId : null }); }}>
       <p className="text-xs text-muted"><span aria-hidden="true" className="text-bad">*</span> Required</p>
       <ImplantPicker
         implants={data.implants}
@@ -325,54 +370,61 @@ export function PlaceForm({
         value={v.productId}
         onChange={set('productId')}
         required
+        stockFilter={data.inventoryOn}
         // A planned implant with no stock stays visible: the box starts unticked so it can be received.
         inStockDefault={!plannedProductId || availableLots(data.lots, plannedProductId, data.today).length > 0}
       />
-      <BatchSelect
+      {data.inventoryOn && <BatchSelect
         data={data}
         productId={v.productId}
         usedOn={v.placedOn}
         value={v.lotId}
         onChange={set('lotId')}
         receive={{ patientId, canReceive: data.canReceive, onReceived: set('lotId') }}
-      />
+      />}
       <TechniqueField value={v.technique} onChange={set('technique')} />
       <Field label="Placement date" required>
         <input className="input" type="date" aria-required="true" max={data.today} value={v.placedOn} onChange={(e) => set('placedOn')(e.target.value)} />
       </Field>
-      <Field label="Course" required>
-        <select className="input" aria-required="true" value={v.courseId} onChange={(e) => set('courseId')(e.target.value)}>
-          <option value="">Choose the course…</option>
-          <CourseOptions courses={data.courses} date={v.placedOn} />
-        </select>
-      </Field>
-      <People
-        booked={Boolean(placingFromSlot)}
-        summary={[
-          `Placed by ${nameOf(data.delegates, v.placingDelegateId) ?? '—'}`,
-          v.assistingDelegateId ? `assisted by ${nameOf(data.delegates, v.assistingDelegateId)}` : null,
-          `supervised by ${nameOf(data.supervisors, v.supervisorId) ?? '—'}`,
-        ]}
-      >
-        <Field label="Placed by (delegate)" required>
-          <select className="input" aria-required="true" disabled={!v.courseId} value={v.placingDelegateId} onChange={(e) => set('placingDelegateId')(e.target.value)}>
-            <option value="">{v.courseId ? 'Choose the delegate…' : 'Choose the course first'}</option>
-            {enrolled.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+      {teaching && (
+        <Field label="Course" required>
+          <select className="input" aria-required="true" value={v.courseId} onChange={(e) => set('courseId')(e.target.value)}>
+            <option value="">Choose the course…</option>
+            <CourseOptions courses={data.courses} date={v.placedOn} />
           </select>
         </Field>
-        <Field label="Assisted by (optional)">
-          <select className="input" disabled={!v.courseId} value={v.assistingDelegateId} onChange={(e) => set('assistingDelegateId')(e.target.value)}>
-            <option value="">Nobody</option>
-            {enrolled.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-          </select>
-        </Field>
-        <NoneEnrolled courseId={v.courseId} delegates={enrolled} />
-        <Field label="Supervisor" required>
-          <select className="input" aria-required="true" value={v.supervisorId} onChange={(e) => set('supervisorId')(e.target.value)}>
-            <option value="">Choose the supervisor…</option>
-            {data.supervisors.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-        </Field>
+      )}
+      <People booked={Boolean(placingFromSlot || doctorFromSlot)} summary={summary}>
+        {teaching ? (
+          <>
+            <PlacedByChoice value={placedBy} onChange={choosePlacedBy} />
+            {byDoctor ? (
+              <DoctorSelect label="Doctor" doctors={doctors} value={v.placingDoctorId} onChange={set('placingDoctorId')} />
+            ) : (
+              <Field label="Placed by (delegate)" required>
+                <select className="input" aria-required="true" disabled={!v.courseId} value={v.placingDelegateId} onChange={(e) => set('placingDelegateId')(e.target.value)}>
+                  <option value="">{v.courseId ? 'Choose the delegate…' : 'Choose the course first'}</option>
+                  {enrolled.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+                </select>
+              </Field>
+            )}
+            <Field label="Assisted by (optional)">
+              <select className="input" disabled={!v.courseId} value={v.assistingDelegateId} onChange={(e) => set('assistingDelegateId')(e.target.value)}>
+                <option value="">Nobody</option>
+                {enrolled.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+              </select>
+            </Field>
+            <NoneEnrolled courseId={v.courseId} delegates={enrolled} />
+            <Field label={byDoctor ? 'Supervisor (optional)' : 'Supervisor'} required={!byDoctor}>
+              <select className="input" aria-required={byDoctor ? undefined : 'true'} value={v.supervisorId} onChange={(e) => set('supervisorId')(e.target.value)}>
+                <option value="">{byDoctor ? 'No supervisor' : 'Choose the supervisor…'}</option>
+                {data.supervisors.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+            </Field>
+          </>
+        ) : (
+          <DoctorSelect label="Placed by" doctors={doctors} value={v.placingDoctorId} onChange={set('placingDoctorId')} />
+        )}
       </People>
       <Field label="Notes (optional)">
         <input className="input" value={v.notes} onChange={(e) => set('notes')(e.target.value)} />
@@ -400,7 +452,7 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
   const products = data.componentProducts.filter((p) => acceptsProduct(v.componentType, p.type));
   const { error, pending, submit } = useSubmit(fitComponent, onDone);
   return (
-    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, siteId: site.id, ...v }); }}>
+    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, siteId: site.id, ...v, ...(data.teachingOn ? {} : { courseId: null, byDelegateId: null }), lotId: data.inventoryOn ? v.lotId : null }); }}>
       <Field label="Component">
         <select className="input" value={v.componentType} onChange={(e) => set('componentType')(e.target.value)}>
           {/* Crowns and bridges are recorded on the Restoration tab; final_restoration stays for old records only. */}
@@ -409,28 +461,32 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
       </Field>
       <Field label="Product (optional)">
         <select className="input" value={v.productId} onChange={(e) => set('productId')(e.target.value)}>
-          <option value="">Not from stock</option>
+          <option value="">{data.inventoryOn ? 'Not from stock' : 'No product recorded'}</option>
           {products.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
         </select>
       </Field>
-      {v.productId && <BatchSelect data={data} productId={v.productId} usedOn={v.fittedOn} value={v.lotId} onChange={set('lotId')} />}
+      {data.inventoryOn && v.productId && <BatchSelect data={data} productId={v.productId} usedOn={v.fittedOn} value={v.lotId} onChange={set('lotId')} />}
       <Field label="Fitted on">
         <input className="input" type="date" min={site.placed_on ?? undefined} max={data.today} value={v.fittedOn} onChange={(e) => set('fittedOn')(e.target.value)} />
       </Field>
-      <Field label="Course">
-        <select className="input" value={v.courseId} onChange={(e) => set('courseId')(e.target.value)}>
-          <option value="">—</option>
-          <CourseOptions courses={data.courses} date={v.fittedOn} />
-        </select>
-      </Field>
-      <Field label="Fitted by (delegate)">
-        <select className="input" value={v.byDelegateId} onChange={(e) => set('byDelegateId')(e.target.value)}>
-          <option value="">—</option>
-          {enrolled.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-        </select>
-      </Field>
-      <NoneEnrolled courseId={v.courseId} delegates={enrolled} />
-      <Field label="Fitted by (organizer)">
+      {data.teachingOn && (
+        <>
+          <Field label="Course">
+            <select className="input" value={v.courseId} onChange={(e) => set('courseId')(e.target.value)}>
+              <option value="">—</option>
+              <CourseOptions courses={data.courses} date={v.fittedOn} />
+            </select>
+          </Field>
+          <Field label="Fitted by (delegate)">
+            <select className="input" value={v.byDelegateId} onChange={(e) => set('byDelegateId')(e.target.value)}>
+              <option value="">—</option>
+              {enrolled.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+            </select>
+          </Field>
+          <NoneEnrolled courseId={v.courseId} delegates={enrolled} />
+        </>
+      )}
+      <Field label={data.teachingOn ? 'Fitted by (organizer)' : 'Fitted by'}>
         <select className="input" value={v.byOrganizerId} onChange={(e) => set('byOrganizerId')(e.target.value)}>
           <option value="">—</option>
           {data.organizers.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}

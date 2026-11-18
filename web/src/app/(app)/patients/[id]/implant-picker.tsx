@@ -10,14 +10,17 @@ const NONE: PickerSelection = { brand: '', line: '', type: '' };
  * The implant in steps (brand when there are several, line, type, size) instead of one long list.
  * "In stock only" hides sizes with no stock usable on `usedOn`; the chosen product always stays listed.
  */
-export function ImplantPicker({ implants, lots, usedOn, value, onChange, required = false, inStockDefault }: {
+export function ImplantPicker({ implants, lots, usedOn, value, onChange, required = false, inStockDefault, stockFilter = true }: {
   implants: Product[]; lots: LotOnHand[]; usedOn: string; value: string; onChange: (productId: string) => void;
   required?: boolean; inStockDefault: boolean;
+  /** False (Inventory off): no stock filter or counts; every active implant is listed. */
+  stockFilter?: boolean;
 }) {
   const stock = useMemo(() => onHandByProduct(lots, usedOn), [lots, usedOn]);
   const chosen = implants.find((p) => p.id === value);
   const [sel, setSel] = useState<PickerSelection>(chosen ? pathOf(chosen) : NONE);
-  const [inStock, setInStock] = useState(inStockDefault);
+  const [inStockOn, setInStock] = useState(inStockDefault);
+  const inStock = stockFilter && inStockOn;
   const s = pickerState(implants, sel, inStock ? stock : null, value);
 
   // A new brand, line or type clears the size when the chosen product no longer fits it.
@@ -53,10 +56,10 @@ export function ImplantPicker({ implants, lots, usedOn, value, onChange, require
           onChange={(e) => onChange(e.target.value)}
         >
           <option value="">{required ? 'Size…' : 'Size: not chosen yet'}</option>
-          {s.sizes.map((p) => <option key={p.id} value={p.id}>{sizeLabel(p, stock.get(p.id) ?? 0)}</option>)}
+          {s.sizes.map((p) => <option key={p.id} value={p.id}>{sizeLabel(p, stockFilter ? stock.get(p.id) ?? 0 : null)}</option>)}
         </select>
       </div>
-      <label className="flex items-center gap-2 text-sm">
+      {stockFilter && <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"
           checked={inStock}
@@ -64,7 +67,7 @@ export function ImplantPicker({ implants, lots, usedOn, value, onChange, require
           onChange={(e) => { setSel(s.sel); setInStock(e.target.checked); }}
         />
         In stock only
-      </label>
+      </label>}
       {emptyHere && (
         <p className="text-sm text-muted">Nothing in stock here. Untick <em>In stock only</em> to see every size.</p>
       )}

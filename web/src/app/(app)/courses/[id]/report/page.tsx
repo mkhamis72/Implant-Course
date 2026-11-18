@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { canSeeImplants, reportAccessNote } from '@/lib/auth/permissions';
 import { formatDate, formatTime } from '@/lib/format';
+import { featureOn } from '@/lib/modules/modules';
 import { OUTCOME_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type FollowupOutcome, type SiteState, type Technique } from '@/lib/inventory/types';
 import type { Course } from '@/lib/schedule/types';
 import {
@@ -52,6 +53,7 @@ export default async function CourseReportPage({ params }: { params: Promise<{ i
   const all = summarise(rows, restorations);
   const sessions = bySession(rows);
   const note = reportAccessNote(profile);
+  const showLot = featureOn(profile.features, 'inventory');
 
   return (
     <div className="space-y-6 print:space-y-4">
@@ -144,7 +146,7 @@ export default async function CourseReportPage({ params }: { params: Promise<{ i
                   <th>Patient</th>
                   <th>Tooth</th>
                   <th>Implant</th>
-                  <th>Lot</th>
+                  {showLot && <th>Lot</th>}
                   <th>Placed by</th>
                   <th>Assisted by</th>
                   <th>Supervisor</th>
@@ -163,7 +165,7 @@ export default async function CourseReportPage({ params }: { params: Promise<{ i
                     <td data-label="Patient">{r.patient_name} ({r.file_no})</td>
                     <td data-label="Tooth">{r.tooth}</td>
                     <td data-label="Implant">{implantLabel(r)}</td>
-                    <td data-label="Lot">{dash(r.lot_no)}</td>
+                    {showLot && <td data-label="Lot">{dash(r.lot_no)}</td>}
                     <td data-label="Placed by">{dash(r.placing_delegate)}</td>
                     <td data-label="Assisted by">{dash(r.assisting_delegate)}</td>
                     <td data-label="Supervisor">{dash(r.supervisor)}</td>
