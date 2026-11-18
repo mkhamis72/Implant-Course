@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { productLabel } from '@/lib/inventory/labels';
 import { TECHNIQUES, TECHNIQUE_LABELS, type Option, type Product, type Technique } from '@/lib/inventory/types';
+import { PlacedByChoice, type PlacedBy } from '@/components/placed-by-choice';
 import { bookSurgery, updateBooking } from '../actions';
 
 export type SessionOption = { id: string; label: string; courseId: string };
@@ -21,6 +22,10 @@ export type EditedBooking = {
   start: string;
   end: string;
   roles: Record<string, Role>;
+  /** Set when a doctor places the implants (then no delegate is placing). */
+  placingDoctorId: string;
+  /** A clinic editing a booking made before the switch whose (hidden) delegates place the implants: no doctor is asked. */
+  placedByRecorded?: boolean;
   implants: { siteId: string; tooth: number; label: string; technique: Technique | '' }[];
   notes: string;
 };
@@ -32,6 +37,10 @@ type Props = {
   enrolled: Record<string, Option[]>;
   implants: Product[];
   supervisors: Option[];
+  /** Admin → Doctors (active, plus the booking's own). */
+  doctors: Option[];
+  /** A course organizer; a clinic books a doctor only, with no course, delegates or supervisor. */
+  teaching: boolean;
   me: string;
   initial: { sessionId: string; chairId: string; start: string; fileNo: string; date?: string };
   edit?: EditedBooking;
@@ -54,7 +63,12 @@ export function SlotForm(p: Props) {
   const [start, setStart] = useState(edit?.start ?? p.initial.start);
   const [end, setEnd] = useState(edit?.end ?? '');
   const [fileNo, setFileNo] = useState(p.initial.fileNo);
-  const [supervisorId, setSupervisorId] = useState(edit?.supervisorId ?? (p.supervisors.some((s) => s.id === p.me) ? p.me : ''));
+  const [placedBy, setPlacedBy] = useState<PlacedBy>(!p.teaching || (edit?.placingDoctorId && !Object.values(edit.roles).includes('placing')) ? 'doctor' : 'delegate');
+  const [doctorId, setDoctorId] = useState(edit?.placingDoctorId ?? '');
+  // With a doctor the supervisor is optional, so it starts empty (or the booking's); with delegates, the current user if a supervisor.
+  const defaultSupervisor = (by: PlacedBy) =>
+    edit ? edit.supervisorId : by === 'delegate' && p.supervisors.some((s) => s.id === p.me) ? p.me : '';
+  const [supervisorId, setSupervisorId] = useState(defaultSupervisor(placedBy));
   const [roles, setRoles] = useState<Record<string, Role>>(edit?.roles ?? {});
   const [implants, setImplants] = useState<{ tooth: string; productId: string; technique: Technique | '' }[]>([
     { tooth: '', productId: '', technique: '' },
@@ -66,19 +80,31 @@ export function SlotForm(p: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, start_] = useTransition();
 
+  const byDoctor = placedBy === 'doctor';
+  /** Switching who places swaps the supervisor default, unless one was chosen by hand. */
+  function choosePlacedBy(by: PlacedBy) {
+    if (supervisorId === defaultSupervisor(placedBy)) setSupervisorId(defaultSupervisor(by));
+    setPlacedBy(by);
+  }
+  // A doctor booking has no placing delegates: their role shows as not in this surgery (kept if switched back).
+  const roleOf = (id: string): Role => (byDoctor && roles[id] === 'placing' ? '' : roles[id] ?? '');
+
   const courseId = p.sessions.find((s) => s.id === sessionId)?.courseId ?? '';
   const delegates = useMemo(() => p.enrolled[courseId] ?? [], [p.enrolled, courseId]);
 
   // Clash warnings belong to the inputs they were checked for; any change hides them.
-  const inputKey = JSON.stringify([sessionId, chairId, supervisorId, start, end, fileNo, roles]);
+  const inputKey = JSON.stringify([sessionId, chairId, supervisorId, start, end, fileNo, roles, placedBy, doctorId]);
   const warnings = checked?.key === inputKey ? checked.warnings : null;
 
   function submit(withOverride: boolean) {
     setError(null);
     const people = {
-      chairId, start, end, supervisorId,
-      placing: delegates.filter((d) => roles[d.id] === 'placing').map((d) => d.id),
-      assisting: delegates.filter((d) => roles[d.id] === 'assisting').map((d) => d.id),
+      chairId, start, end, placedBy,
+      placingDoctorId: byDoctor ? doctorId : '',
+      // A clinic sends no supervisor or delegates.
+      supervisorId: p.teaching ? supervisorId : '',
+      placing: p.teaching ? delegates.filter((d) => roleOf(d.id) === 'placing').map((d) => d.id) : [],
+      assisting: p.teaching ? delegates.filter((d) => roleOf(d.id) === 'assisting').map((d) => d.id) : [],
       overrideReason: withOverride ? override : '',
       notes,
     };
@@ -120,8 +146,10 @@ export function SlotForm(p: Props) {
             {p.sessions.length === 0 && (
               <p className="-mt-2 text-sm text-warn sm:col-span-2">
                 No upcoming surgery sessions. Sessions dated before today aren’t listed — add one with{' '}
-                <Link href={p.initial.date ? `/schedule?date=${p.initial.date}` : '/schedule'} className="text-accent underline">Add surgery day</Link>{' '}
-                on the Schedule page, or under <Link href="/courses" className="text-accent underline">Courses</Link>.
+                <Link href={p.initial.date ? `/schedule?date=${p.initial.date}` : '/schedule'} className="text-accent underline">
+                  {p.teaching ? 'Add surgery day' : 'Add clinic day'}
+                </Link>{' '}
+                on the Schedule page{p.teaching ? <>, or under <Link href="/courses" className="text-accent underline">Courses</Link></> : null}.
               </p>
             )}
           </>
@@ -133,11 +161,12 @@ export function SlotForm(p: Props) {
             {p.chairs.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </label>
+        {p.teaching && (
         <div>
           <label className="block">
-            <span className="label">Supervisor</span>
+            <span className="label">{byDoctor ? 'Supervisor (optional)' : 'Supervisor'}</span>
             <select className="input" value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)}>
-              <option value="">Choose a supervisor…</option>
+              <option value="">{byDoctor ? 'No supervisor' : 'Choose a supervisor…'}</option>
               {p.supervisors.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
             </select>
           </label>
@@ -145,6 +174,7 @@ export function SlotForm(p: Props) {
             <p className="mt-1 text-sm text-warn">No supervisors yet — an admin can add them under Admin → Supervisors.</p>
           )}
         </div>
+        )}
         <label className="block">
           <span className="label">Start</span>
           <input className="input" type="time" step={900} value={start} onChange={(e) => setStart(e.target.value)} />
@@ -167,6 +197,21 @@ export function SlotForm(p: Props) {
         )}
       </div>
 
+      {p.teaching && <PlacedByChoice value={placedBy} onChange={choosePlacedBy} />}
+      {byDoctor && !edit?.placedByRecorded && (
+        <div className="max-w-sm">
+          <label className="block">
+            <span className="label">Doctor</span>
+            <select className="input" value={doctorId} onChange={(e) => setDoctorId(e.target.value)}>
+              <option value="">Choose the doctor…</option>
+              {p.doctors.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+            </select>
+          </label>
+          {p.doctors.length === 0 && <p className="mt-1 text-sm text-warn">No doctors yet: an admin adds them in Admin → Doctors.</p>}
+        </div>
+      )}
+
+      {p.teaching && (
       <fieldset className="space-y-2">
         <legend className="label">Delegates (enrolled in this course)</legend>
         {!courseId && <p className="text-sm text-muted">Choose a session first.</p>}
@@ -177,16 +222,17 @@ export function SlotForm(p: Props) {
             <select
               className="input max-w-40 py-1"
               aria-label={`Role of ${d.label}`}
-              value={roles[d.id] ?? ''}
+              value={roleOf(d.id)}
               onChange={(e) => setRoles((r) => ({ ...r, [d.id]: e.target.value as Role }))}
             >
               <option value="">Not in this surgery</option>
-              <option value="placing">Placing</option>
+              {!byDoctor && <option value="placing">Placing</option>}
               <option value="assisting">Assisting</option>
             </select>
           </label>
         ))}
       </fieldset>
+      )}
 
       {edit ? (
         bookedImplants.length > 0 && (

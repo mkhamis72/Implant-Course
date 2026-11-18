@@ -1,10 +1,13 @@
 import { createClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/session';
+import { teachingOn } from '@/lib/modules/modules';
 import type { Supervisor } from '@/lib/schedule/types';
 import { AddSupervisor, SupervisorRow } from './supervisor-row';
 
 export default async function SupervisorsPage() {
-  await requireAdmin();
+  const profile = await requireAdmin();
+  if (!teachingOn(profile.features)) redirect('/admin/users');
   const supabase = await createClient();
   const { data, error } = await supabase.from('supervisors').select('id, full_name, active').order('full_name');
   if (error) throw new Error('Could not load supervisors');

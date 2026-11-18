@@ -131,6 +131,9 @@ export type ImplantSite = {
   product: Product | null;
   lot: { lot_no: string | null; expiry: string | null } | null;
   placing_delegate_id: string | null;
+  /** Placed by a doctor instead of a delegate (0115). */
+  placing_doctor_id: string | null;
+  doctor: { name: string } | null;
   assisting_delegate_id: string | null;
   supervisor_id: string | null;
   course_id: string | null;
@@ -150,7 +153,9 @@ export type ImplantSite = {
   slot: {
     id: string;
     starts_at: string;
-    supervisor_id: string;
+    supervisor_id: string | null;
+    /** The booking's doctor (0115), who places it unless someone else is chosen. */
+    placing_doctor_id?: string | null;
     chair: { name: string } | null;
     delegates: { delegate_id: string; role: 'placing' | 'assisting' }[];
   } | null;
@@ -182,4 +187,8 @@ export type ChartData = {
   canReceive: boolean;
   /** The company's plan includes Inventory: false places and fits from the catalogue, with no stock batch. */
   inventoryOn: boolean;
+  /** The plan includes Teaching (a course organizer): false in a clinic, which records no course, delegate or supervisor. */
+  teachingOn: boolean;
+  /** Active doctors (Admin → Doctors), for Placed by. */
+  doctors: { id: string; name: string }[];
 };

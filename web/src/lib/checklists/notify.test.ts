@@ -55,3 +55,10 @@ describe('assignmentEmail', () => {
     expect(e.text).not.toContain('Due:');
   });
 });
+
+describe('assignmentEmail for a clinic day', () => {
+  it('has no course text', () => {
+    const e = assignmentEmail('assigned', { company: 'Cairo Clinic', checklistTitle: 'Clinic day · 01 Dec 2026', item: { text: 'Sterilise tray', assignee_id: 'u2', due_date: null }, by: 'Dr A', link: 'https://x.example/checklists/1' });
+    expect(`${e.subject} ${e.text} ${e.html}`).not.toMatch(/course/i);
+  });
+});

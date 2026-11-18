@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { requirePermission } from '@/lib/auth/session';
+import { requireTalks } from './guard';
 import { canEdit } from '@/lib/auth/permissions';
 import { addDays, isRealDate, todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
@@ -20,7 +20,7 @@ const cairoClock = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '
  * the breaks between them. The session room isn't shown (one hall per course).
  */
 export async function TalkDayView({ kind, searchParams }: { kind: TalkKind; searchParams: PageSearchParams }) {
-  const profile = await requirePermission('schedule');
+  const profile = await requireTalks();
   const editable = canEdit(profile, 'schedule');
   const raw = (await readParams(searchParams, 'date')).date;
   const date = raw && isRealDate(raw) ? raw : todayIso();

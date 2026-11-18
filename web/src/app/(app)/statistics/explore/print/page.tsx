@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { requirePermission } from '@/lib/auth/session';
+import { teachingOn } from '@/lib/modules/modules';
 import { canView } from '@/lib/auth/permissions';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
 import { ALL_COURSES, RESEARCH_FILTER_KEYS } from '@/lib/research/view';
@@ -32,9 +33,10 @@ export default async function ExplorePrintPage({ searchParams }: { searchParams:
 
   const sp = await searchParams;
   const params = await readParams(searchParams, ...RESEARCH_FILTER_KEYS);
-  const filters = { ...params, course: params.course || ALL_COURSES };
+  const teaching = teachingOn(profile.features);
+  const filters = teaching ? { ...params, course: params.course || ALL_COURSES } : { ...params, course: ALL_COURSES, delegate: '' };
   const raw = Object.fromEntries(Object.entries(sp).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v])) as Record<string, string | undefined>;
-  const state = parseExplore(raw);
+  const state = parseExplore(raw, teaching);
   const query = new URLSearchParams(Object.entries(raw).filter((e): e is [string, string] => !!e[1] && e[0] !== 'alt')).toString();
   const ov = state.config.outcome ? variable(state.config.outcome) : undefined;
   if (!ov) return <div className="space-y-4">{back(query)}<p className="card">Choose an outcome on the Explore page first.</p></div>;
@@ -55,7 +57,7 @@ export default async function ExplorePrintPage({ searchParams }: { searchParams:
 
   const timed = ov.source !== 'implant';
   const sql = [
-    `Course: ${filters.course === ALL_COURSES ? 'All courses' : labels.course?.[filters.course] ?? 'Unknown course'}`,
+    teaching && `Course: ${filters.course === ALL_COURSES ? 'All courses' : labels.course?.[filters.course] ?? 'Unknown course'}`,
     filters.from && `Placed from ${formatDate(filters.from)}`,
     filters.to && `Placed to ${formatDate(filters.to)}`,
     filters.delegate && `Placing delegate: ${labels.delegate?.[filters.delegate] ?? 'Unknown'}`,

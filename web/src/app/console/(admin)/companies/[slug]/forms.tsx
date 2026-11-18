@@ -80,7 +80,7 @@ function PlanFields({ slug, state, formAction, pending, kind, planId, extras, pl
         </div>
         <div>
           <label className="label" htmlFor="plan-plan">Plan</label>
-          <select id="plan-plan" name="plan_id" className="input" required defaultValue={ofKind.some((p) => p.id === wanted) ? wanted : ''}>
+          <select key={chosen} id="plan-plan" name="plan_id" className="input" required defaultValue={ofKind.some((p) => p.id === wanted) ? wanted : ''}>
             <option value="" disabled>Choose a plan</option>
             {ofKind.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
@@ -96,7 +96,16 @@ function PlanFields({ slug, state, formAction, pending, kind, planId, extras, pl
           ))}
         </div>
       </fieldset>
-      <button className="btn" disabled={pending}>Save</button>
+      {chosen !== kind && (
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" name="confirm_kind_change" className="mt-1" />
+          {chosen === 'clinic'
+            ? 'I understand: switching to Clinic hides courses, delegates, lectures, lecturers, supervisors and delegate logins (kept, not deleted).'
+            : 'I understand: switching to Course organizer shows them again.'}
+        </label>
+      )}
+      {ofKind.length === 0 && <p className="text-sm text-muted">Create a {KIND_LABELS[chosen]} plan on the Plans page first.</p>}
+      <button className="btn" disabled={pending || ofKind.length === 0}>Save</button>
     </form>
   );
 }

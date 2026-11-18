@@ -1,3 +1,4 @@
+import { teachingOn } from '@/lib/modules/modules';
 import { canView, type Area, type Role, type Who } from '@/lib/auth/permissions';
 
 export type { Role };
@@ -25,7 +26,7 @@ export const DELEGATE_NAV: NavItem[] = [
 ];
 
 export function visibleNavItems(p: Who): NavItem[] {
-  if (p.role === 'delegate') return DELEGATE_NAV;
+  if (p.role === 'delegate') return teachingOn(p.features) ? DELEGATE_NAV : DELEGATE_NAV.filter((i) => i.href === '/account/security');
   return NAV_ITEMS.filter((item) => (item.adminOnly ? p.role === 'admin' : !item.area || canView(p, item.area)));
 }
 

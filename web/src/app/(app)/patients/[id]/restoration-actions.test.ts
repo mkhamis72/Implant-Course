@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc }) }));
-vi.mock('@/lib/auth/session', () => ({ requirePermission: vi.fn(async () => ({})) }));
+const { rpc, from, maybeSingle, features } = vi.hoisted(() => {
+  const maybeSingle = vi.fn();
+  const chain: { select: () => unknown; eq: () => unknown; maybeSingle: typeof maybeSingle } = { select: () => chain, eq: () => chain, maybeSingle };
+  return { rpc: vi.fn(), from: vi.fn(() => chain), maybeSingle, features: { list: ['teaching'] as string[] } };
+});
+vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc, from }) }));
+vi.mock('@/lib/auth/session', () => ({ requirePermission: vi.fn(async () => ({ features: features.list })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 import {
   addRestoration, recordRestorationProblem, updateRestoration, updateRestorationProblem, voidRestoration, voidRestorationProblem,
@@ -70,5 +74,24 @@ describe('restoration actions', () => {
     rpc.mockClear();
     expect(await addRestoration({ ...add, stage: 'interim' })).toEqual({ error: 'Choose temporary or final.' });
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateRestoration in a clinic', () => {
+  it('sends the recorded delegate, supervisor and course, whatever the input says', async () => {
+    features.list = [];
+    maybeSingle.mockResolvedValue({ data: { delegate_id: uuid(6), supervisor_id: uuid(5), course_id: uuid(7) }, error: null });
+    try {
+      expect(await updateRestoration({
+        patientId: uuid(1), restorationId: uuid(4), expectedUpdatedAt: '2026-01-10T10:00:00.5+00:00',
+        retention: 'screw', material: '', delegateId: '', supervisorId: '', courseId: '', notes: 'n',
+      })).toEqual({});
+      expect(from).toHaveBeenCalledWith('restorations');
+      expect(rpc).toHaveBeenCalledWith('update_restoration', expect.objectContaining({
+        p_restoration: uuid(4), p_retention: 'screw', p_delegate: uuid(6), p_supervisor: uuid(5), p_course: uuid(7),
+      }));
+    } finally {
+      features.list = ['teaching'];
+    }
   });
 });

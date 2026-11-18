@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { DICTIONARY, TABLE_NAMES, assertAllowlisted, type ExportTables } from './dictionary';
+import { TABLE_NAMES, dictionaryFor, assertAllowlisted, type ExportTables } from './dictionary';
 import { DICTIONARY_COLUMNS, aboutLines, dictionaryRows, type ExportMeta } from './assemble';
 
 function cellValue(v: unknown): string | number | boolean | null {
@@ -20,9 +20,10 @@ function sheet(wb: ExcelJS.Workbook, name: string, columns: string[], rows: Reco
 /** One sheet per table (dictionary column order), then data_dictionary and about. Throws on a column outside the dictionary. */
 export async function buildXlsx(tables: ExportTables, meta: ExportMeta): Promise<Uint8Array> {
   assertAllowlisted(tables);
+  const dictionary = dictionaryFor(meta.teaching !== false);
   const wb = new ExcelJS.Workbook();
-  for (const t of TABLE_NAMES) sheet(wb, t, Object.keys(DICTIONARY[t]), tables[t]);
-  sheet(wb, 'data_dictionary', DICTIONARY_COLUMNS, dictionaryRows());
+  for (const t of TABLE_NAMES) sheet(wb, t, Object.keys(dictionary[t]), tables[t]);
+  sheet(wb, 'data_dictionary', DICTIONARY_COLUMNS, dictionaryRows(meta.teaching !== false));
   const about = wb.addWorksheet('about', { views: [{ state: 'frozen', ySplit: 1 }] });
   about.columns = [{ header: 'item', key: 'k', width: 24 }, { header: 'value', key: 'v', width: 110 }];
   about.getRow(1).font = { bold: true };

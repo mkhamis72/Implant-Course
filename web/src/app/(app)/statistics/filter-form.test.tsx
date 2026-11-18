@@ -23,3 +23,11 @@ describe('<FilterForm>', () => {
     expect(fields).toEqual(['course', 'from', 'to', 'delegate', 'brand', 'system']);
   });
 });
+
+describe('<FilterForm> in a clinic', () => {
+  it('has no course or delegate filter', () => {
+    render(<FilterForm filters={filters} courses={[]} delegates={[]} brands={[]} systems={[]} teaching={false} />);
+    const fields = [...screen.getByRole('form', { name: 'Filters' }).querySelectorAll('select, input:not([type=hidden])')].map((e) => e.getAttribute('name'));
+    expect(fields).toEqual(['from', 'to', 'brand', 'system']);
+  });
+});

@@ -35,3 +35,22 @@ describe('site details without a readable lot', () => {
     expect(screen.getByText('Lot A1')).toBeInTheDocument();
   });
 });
+
+describe('site details: who placed it', () => {
+  const placed = {
+    ...site, placing: { full_name: 'Dr Delegate' }, supervisor: { full_name: 'Prof Sup' }, doctor: null,
+  } as unknown as ImplantSite;
+  const teaching = (on: boolean) => ({ ...chart(true), teachingOn: on }) as ChartData;
+
+  it('names the doctor who placed it', () => {
+    render(<ImplantFacts site={{ ...placed, placing: null, doctor: { name: 'Dr Nabil' } } as unknown as ImplantSite} patientId="pt" data={teaching(true)} />);
+    expect(screen.getByText(/Placed by Dr Nabil/)).toBeInTheDocument();
+  });
+
+  it('a clinic shows no supervisor or delegate, even if recorded', () => {
+    render(<ImplantFacts site={{ ...placed, doctor: { name: 'Dr Nabil' } } as unknown as ImplantSite} patientId="pt" data={teaching(false)} />);
+    expect(screen.queryByText(/Supervis/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Dr Delegate|Prof Sup/)).not.toBeInTheDocument();
+    expect(screen.getByText('Placed by Dr Nabil')).toBeInTheDocument();
+  });
+});

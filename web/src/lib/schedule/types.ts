@@ -24,11 +24,15 @@ export type SlotRow = {
   chair: { name: string } | null;
   patient: { id: string; full_name: string; file_no: string } | null;
   supervisor: { full_name: string } | null;
+  /** The doctor placing the implants (0115), instead of placing delegates; a clinic always has one. */
+  doctor: { name: string } | null;
   session: { title: string; course: { name: string } | null } | null;
   delegates: { role: 'placing' | 'assisting'; delegate: { full_name: string } | null }[];
   notes: string;
-  supervisor_id: string;
+  /** Null for a doctor booking without a supervisor, and always in a clinic. */
+  supervisor_id: string | null;
   session_id: string;
+  placing_doctor_id: string | null;
   implants: { tooth: number; product: Product | null; site: { id: string; technique: Technique | null } | null }[];
   checklists: { id: string; items: { done_at: string | null }[] }[];
 };
@@ -46,3 +50,4 @@ export type ReportRow = {
   diameter_mm: number | null; length_mm: number | null; description: string | null; lot_no: string | null;
   last_outcome: string | null; technique: Technique | null;
 };
+export type Doctor = { id: string; name: string; active: boolean };

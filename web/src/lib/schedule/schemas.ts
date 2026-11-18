@@ -48,6 +48,11 @@ export const surgeryDaySchema = z
   .object({ course_id: requiredId('Choose a course.'), ...sessionFields })
   .refine((s) => s.end_time > s.start_time, sessionEndsAfterStart);
 
+/** "Add clinic day" in a clinic: a surgery session with no course. */
+export const clinicDaySchema = z
+  .object(sessionFields)
+  .refine((s) => s.end_time > s.start_time, sessionEndsAfterStart);
+
 export const chairSchema = z.object({ name: z.string().trim().min(1, { message: 'Enter the chair name.' }).max(40) });
 export const supervisorSchema = z.object({
   full_name: z.string().trim().min(2, { message: 'Enter the supervisor’s name.' }).max(120, { message: 'Keep the name under 120 characters.' }),
@@ -73,6 +78,33 @@ export const updateTalkSchema = z
   .object({ talk_id: requiredId('Talk not found.'), ...talkFields })
   .refine((t) => t.end > t.start, endsAfterStart);
 
+/**
+ * Who places the booked implants (0115): delegates (the default) with a required supervisor, or a doctor with no
+ * placing delegates and an optional supervisor. A clinic always books a doctor; the action clears the rest there.
+ */
+const placedByFields = {
+  placedBy: z.enum(['delegate', 'doctor']).default('delegate'),
+  placingDoctorId: optionalUuid,
+  supervisorId: optionalUuid,
+  placing: z.array(z.string().uuid()).default([]),
+  assisting: z.array(z.string().uuid()).default([]),
+};
+type PlacedBy = { placedBy: 'delegate' | 'doctor' | 'recorded'; placingDoctorId: string | null; supervisorId: string | null; placing: string[] };
+
+function checkPlacedBy(p: PlacedBy, ctx: z.RefinementCtx) {
+  const need = (ok: unknown, message: string) => { if (!ok) ctx.addIssue({ code: 'custom', message }); };
+  if (p.placedBy === 'recorded') return;
+  if (p.placedBy === 'doctor') return need(p.placingDoctorId, 'Choose the doctor.');
+  need(p.supervisorId, 'Choose a supervisor.');
+  need(p.placing.length > 0, 'Choose at least one placing delegate.');
+}
+
+/** Only the chosen kind of person is sent. */
+function onlyChosen<T extends PlacedBy>(p: T): T {
+  if (p.placedBy === 'recorded') return { ...p, placing: [], placingDoctorId: null };
+  return p.placedBy === 'doctor' ? { ...p, placing: [] } : { ...p, placingDoctorId: null };
+}
+
 export const slotSchema = z
   .object({
     sessionId: requiredId('Choose a surgery session.'),
@@ -80,9 +112,7 @@ export const slotSchema = z
     start: time('Enter the start time (HH:MM).'),
     end: time('Enter the end time (HH:MM).'),
     patientFileNo: z.string().trim().min(1, { message: 'Choose the patient.' }),
-    supervisorId: requiredId('Choose a supervisor.'),
-    placing: z.array(z.string().uuid()).min(1, { message: 'Choose at least one placing delegate.' }),
-    assisting: z.array(z.string().uuid()).default([]),
+    ...placedByFields,
     implants: z
       .array(
         z.object({
@@ -95,22 +125,29 @@ export const slotSchema = z
     overrideReason: text(300),
     notes: text(1000),
   })
-  .refine((s) => s.end > s.start, { message: 'The end time must be after the start time.' });
+  .refine((s) => s.end > s.start, { message: 'The end time must be after the start time.' })
+  .superRefine(checkPlacedBy)
+  .transform(onlyChosen);
 
+/**
+ * Editing a booking: `recorded` is set only by the action, in a clinic, for a booking made before the switch whose
+ * delegates place the implants: they stay as recorded (update_surgery_slot_v2 keeps them, 0120) and no doctor is asked.
+ */
 export const updateSlotSchema = z
   .object({
     slotId: requiredId('Booking not found.'),
     chairId: requiredId('Choose a chair.'),
     start: time('Enter the start time (HH:MM).'),
     end: time('Enter the end time (HH:MM).'),
-    supervisorId: requiredId('Choose a supervisor.'),
-    placing: z.array(z.string().uuid()).min(1, { message: 'Choose at least one placing delegate.' }),
-    assisting: z.array(z.string().uuid()).default([]),
+    ...placedByFields,
+    placedBy: z.enum(['delegate', 'doctor', 'recorded']).default('delegate'),
     implants: z.array(z.object({ siteId: requiredId('Implant not found.'), technique })).default([]),
     overrideReason: text(300),
     notes: text(1000),
   })
-  .refine((s) => s.end > s.start, { message: 'The end time must be after the start time.' });
+  .refine((s) => s.end > s.start, { message: 'The end time must be after the start time.' })
+  .superRefine(checkPlacedBy)
+  .transform(onlyChosen);
 
 export const slotStatusSchema = z.object({
   slotId: requiredId('Booking not found.'),
@@ -135,4 +172,7 @@ export const voidSchema = z.object({
   id: requiredId('Record not found.'),
   patientId: requiredId('Patient not found.'),
   reason: reason('Explain why (at least 3 characters).'),
+});
+export const doctorSchema = z.object({
+  name: z.string().trim().min(2, { message: 'Enter the doctor’s name.' }).max(120, { message: 'Keep the name under 120 characters.' }),
 });

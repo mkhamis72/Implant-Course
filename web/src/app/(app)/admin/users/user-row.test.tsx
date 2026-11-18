@@ -86,3 +86,14 @@ describe('UserRow', () => {
     expect(screen.getByText('Email changed by Dr Admin · 23 Oct 2026')).toBeInTheDocument();
   });
 });
+
+describe('UserRow in a clinic', () => {
+  it('offers no Delegate role', () => {
+    render(
+      <table><tbody>
+        <UserRow user={user} isSelf={false} account={account()} emailOn features={['inventory']} />
+      </tbody></table>,
+    );
+    expect(screen.queryByRole('option', { name: 'Delegate' })).not.toBeInTheDocument();
+  });
+});

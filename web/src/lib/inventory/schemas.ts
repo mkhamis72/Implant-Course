@@ -75,27 +75,67 @@ export const planSchema = z.object({
 
 export const BONE_TYPES = ['D1', 'D2', 'D3', 'D4'] as const;
 
-export const placeSchema = z.object({
-  patientId: requiredId('Patient not found.'),
-  tooth,
-  productId: requiredId('Choose the implant.'),
-  // Whether a batch is needed depends on the plan (Inventory): the database decides.
-  lotId: optionalUuid,
-  placedOn: pastDate('Enter the placement date (today or earlier).'),
-  placingDelegateId: requiredId('Choose the delegate who placed the implant.'),
-  slotId: optionalUuid,
+/**
+ * Who placed the implant (0115): a delegate (the default) with a course and a supervisor, or a doctor. With a
+ * doctor the course and supervisor are left to the database: a course organizer still needs the course, a clinic
+ * (no Teaching) refuses both.
+ */
+const placedByFields = {
+  placedBy: z.enum(['delegate', 'doctor']).default('delegate'),
+  placingDelegateId: optionalUuid,
+  placingDoctorId: optionalUuid,
   assistingDelegateId: optionalUuid,
-  supervisorId: requiredId('Choose a supervisor.'),
-  courseId: requiredId('Choose the course.'),
-  technique,
-  graft: text(200),
-  notes: text(1000),
-});
+  supervisorId: optionalUuid,
+  courseId: optionalUuid,
+};
+
+type PlacedBy = { placedBy: 'delegate' | 'doctor'; placingDelegateId: string | null; placingDoctorId: string | null; supervisorId: string | null; courseId: string | null };
+
+function checkPlacedBy(p: PlacedBy, ctx: z.RefinementCtx) {
+  const need = (ok: unknown, message: string) => { if (!ok) ctx.addIssue({ code: 'custom', message }); };
+  if (p.placedBy === 'doctor') {
+    need(p.placingDoctorId, 'Choose the doctor who placed the implant.');
+    return;
+  }
+  need(p.placingDelegateId, 'Choose the delegate who placed the implant.');
+  need(p.supervisorId, 'Choose a supervisor.');
+  need(p.courseId, 'Choose the course.');
+}
+
+/** Only the chosen kind of person is sent. */
+function onlyChosen<T extends PlacedBy>(p: T): T {
+  return p.placedBy === 'doctor' ? { ...p, placingDelegateId: null } : { ...p, placingDoctorId: null };
+}
+
+export const placeSchema = z
+  .object({
+    patientId: requiredId('Patient not found.'),
+    tooth,
+    productId: requiredId('Choose the implant.'),
+    // Whether a batch is needed depends on the plan (Inventory): the database decides.
+    lotId: optionalUuid,
+    placedOn: pastDate('Enter the placement date (today or earlier).'),
+    slotId: optionalUuid,
+    ...placedByFields,
+    technique,
+    graft: text(200),
+    notes: text(1000),
+  })
+  .superRefine(checkPlacedBy)
+  .transform(onlyChosen);
 
 /** Correcting a placed implant: the placement's date, people and clinical values (not the implant or batch). */
-export const correctPlacementSchema = placeSchema
-  .pick({ patientId: true, placedOn: true, placingDelegateId: true, assistingDelegateId: true, supervisorId: true, courseId: true, graft: true, notes: true })
-  .extend({ siteId: requiredId('Implant not found.') });
+export const correctPlacementSchema = z
+  .object({
+    siteId: requiredId('Implant not found.'),
+    patientId: requiredId('Patient not found.'),
+    placedOn: pastDate('Enter the placement date (today or earlier).'),
+    ...placedByFields,
+    graft: text(200),
+    notes: text(1000),
+  })
+  .superRefine(checkPlacedBy)
+  .transform(onlyChosen);
 
 export const componentSchema = z
   .object({

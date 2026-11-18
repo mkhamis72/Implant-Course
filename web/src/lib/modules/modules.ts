@@ -8,7 +8,7 @@ export type CompanyKind = 'course_organizer' | 'clinic';
 
 export const MODULE_LABELS: Record<Module, string> = { inventory: 'Inventory', statistics: 'Statistics' };
 /** Which company types can be chosen in the console (Clinic arrives in release 3). */
-export const KIND_AVAILABLE: Record<CompanyKind, boolean> = { course_organizer: true, clinic: false };
+export const KIND_AVAILABLE: Record<CompanyKind, boolean> = { course_organizer: true, clinic: true };
 export const KIND_LABELS: Record<CompanyKind, string> = { course_organizer: 'Course organizer', clinic: 'Clinic' };
 
 /** Mirrors the `case` in public.can() (0109). Areas not listed are core and never gated. */
@@ -34,4 +34,9 @@ const KNOWN: readonly string[] = [...MODULES, 'teaching'];
 
 export function toFeatures(raw: unknown): Feature[] {
   return Array.isArray(raw) ? (raw.filter((f) => typeof f === 'string' && KNOWN.includes(f)) as Feature[]) : [];
+}
+
+/** True when the company teaches (a course organizer); a clinic has no courses, delegates or supervisors. */
+export function teachingOn(features: readonly Feature[]): boolean {
+  return featureOn(features, 'teaching');
 }

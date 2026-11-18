@@ -7,7 +7,7 @@ import type { View } from './choose'
 import { NONE, type Filter } from './filters'
 import type { AnalysisConfig } from './run'
 import { TIMEPOINTS, type Window } from './timepoints'
-import { variable } from './variables'
+import { TEACHING_VARIABLES, variable } from './variables'
 
 export type ExploreState = { config: AnalysisConfig; view: View | null }
 
@@ -37,12 +37,14 @@ function parseFilter(key: string, raw: string): Filter | null {
   return values.length ? { key, values } : null
 }
 
-export function parseExplore(params: Record<string, string | undefined>): ExploreState {
-  const factor = params.f && variable(params.f)?.role !== 'outcome' && variable(params.f) ? params.f : null
+/** With `teaching` false (a clinic) a course, delegate or supervisor factor or filter is dropped, as any removed variable is. */
+export function parseExplore(params: Record<string, string | undefined>, teaching = true): ExploreState {
+  const gone = (key: string) => !teaching && TEACHING_VARIABLES.includes(key)
+  const factor = params.f && !gone(params.f) && variable(params.f)?.role !== 'outcome' && variable(params.f) ? params.f : null
   const outcome = params.o && variable(params.o)?.role !== 'factor' && variable(params.o) ? params.o : ''
   const filters = Object.entries(params)
     .filter(([k, raw]) => k.startsWith('x_') && raw)
-    .map(([k, raw]) => parseFilter(k.slice(2), raw!))
+    .map(([k, raw]) => (gone(k.slice(2)) ? null : parseFilter(k.slice(2), raw!)))
     .filter((f): f is Filter => f !== null)
   const view = VIEWS.includes(params.v as View) ? (params.v as View) : null
   return { config: { factor, outcome, window: parseWindow(params.w), filters }, view }

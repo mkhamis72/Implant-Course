@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { canEdit } from '@/lib/auth/permissions';
+import { teachingOn } from '@/lib/modules/modules';
 import type { Template } from '@/lib/checklists/types';
 import { TemplateForm } from '../template-form';
 import { DeleteTemplate } from './delete-template';
@@ -28,7 +29,7 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
       </ol>
       {canEdit(profile, 'checklists') && (
         <>
-          <TemplateForm key={t.items.map((i) => i.text).join('|')} template={t} />
+          <TemplateForm key={t.items.map((i) => i.text).join('|')} template={t} teaching={teachingOn(profile.features)} />
           <DeleteTemplate id={t.id} />
         </>
       )}
