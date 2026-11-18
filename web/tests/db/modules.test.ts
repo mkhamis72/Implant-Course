@@ -121,14 +121,14 @@ describe('modules (0109)', () => {
     });
   });
 
-  it('inventory is always on in release 1', async () => {
+  it('a plan without inventory switches it off', async () => {
     await withTx(async (c) => {
       await onPlan(c, []);
       await actAs(c, users.admin, { aal: 'aal2' });
-      expect(await one(c, `select public.module_on('inventory')`)).toBe(true);
+      expect(await one(c, `select public.module_on('inventory')`)).toBe(false);
       expect(await one(c, `select public.module_on('statistics')`)).toBe(false);
       expect(await one(c, `select public.module_on('teaching')`)).toBe(true);
-      expect(await one(c, `select public.can('inventory', 'edit')`)).toBe(true);
+      expect(await one(c, `select public.can('inventory', 'edit')`)).toBe(false);
     });
   });
 

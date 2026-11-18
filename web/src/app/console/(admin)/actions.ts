@@ -141,6 +141,10 @@ export async function setCompanyPlan(_prev: FormState, formData: FormData): Prom
   const parsed = companyPlanSchema.safeParse(fields(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const p = parsed.data;
+  const company = await consoleStore().get(p.slug);
+  if (company && company.kind !== p.kind && formData.get('confirm_kind_change') !== 'on') {
+    return failed('Tick the box to confirm the change of type.', formData);
+  }
   const error = await consoleStore().setCompanyPlan(p.slug, p.kind, p.plan_id, p.extras, admin.email);
   if (error) return failed(error, formData);
   revalidatePath(`/console/companies/${p.slug}`);

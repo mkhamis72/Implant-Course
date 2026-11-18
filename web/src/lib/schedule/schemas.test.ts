@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   cancelSlotSchema, correctionSchema, courseSchema, lecturerSchema, sessionSchema, slotSchema, slotStatusSchema, supervisorSchema,
-  surgeryDaySchema, talkSchema, updateSlotSchema, updateTalkSchema,
+  clinicDaySchema, surgeryDaySchema, talkSchema, updateSlotSchema, updateTalkSchema,
 } from './schemas';
 
 const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
@@ -35,6 +35,11 @@ describe('course and session schemas', () => {
     expect(err(surgeryDaySchema.safeParse({ ...s, end_time: '08:00' }))).toBe('The session must end after it starts.');
     expect(err(surgeryDaySchema.safeParse({ ...s, title: 'x' }))).toBe('Enter the session title.');
   });
+  it('validates a clinic day: no course', () => {
+    const s = { date: '2030-03-02', title: ' Clinic day ', start_time: '08:00', end_time: '17:00', room: '' };
+    expect(clinicDaySchema.parse({ ...s, course_id: 'ignored' })).toEqual({ ...s, title: 'Clinic day', room: null });
+    expect(err(clinicDaySchema.safeParse({ ...s, end_time: '08:00' }))).toBe('The session must end after it starts.');
+  });
 });
 
 describe('slotSchema', () => {
@@ -54,6 +59,15 @@ describe('slotSchema', () => {
       'Choose Guided or Free hand for each implant.',
     );
   });
+  it('is placed by a delegate by default: no doctor is sent', () => {
+    expect(slotSchema.parse({ ...slot, placingDoctorId: id })).toMatchObject({ placedBy: 'delegate', placingDoctorId: null, placing: [id] });
+    expect(err(slotSchema.safeParse({ ...slot, supervisorId: '' }))).toBe('Choose a supervisor.');
+  });
+  it('placed by a doctor: no placing delegates, the supervisor optional', () => {
+    const byDoctor = { ...slot, placedBy: 'doctor', placingDoctorId: id, supervisorId: '', assisting: [id] };
+    expect(slotSchema.parse(byDoctor)).toMatchObject({ placingDoctorId: id, placing: [], assisting: [id], supervisorId: null });
+    expect(err(slotSchema.safeParse({ ...byDoctor, placingDoctorId: '' }))).toBe('Choose the doctor.');
+  });
 });
 
 describe('updateSlotSchema', () => {
@@ -67,6 +81,10 @@ describe('updateSlotSchema', () => {
   it('explains what is wrong', () => {
     expect(err(updateSlotSchema.safeParse({ ...edit, end: '10:00' }))).toBe('The end time must be after the start time.');
     expect(err(updateSlotSchema.safeParse({ ...edit, placing: [] }))).toBe('Choose at least one placing delegate.');
+  });
+  it('can be placed by a doctor', () => {
+    expect(updateSlotSchema.parse({ ...edit, placedBy: 'doctor', placingDoctorId: id })).toMatchObject({ placingDoctorId: id, placing: [], supervisorId: id });
+    expect(err(updateSlotSchema.safeParse({ ...edit, placedBy: 'doctor', placingDoctorId: null }))).toBe('Choose the doctor.');
   });
 });
 
@@ -83,6 +101,13 @@ describe('reasons', () => {
     expect(err(correctionSchema.safeParse({ siteId: id, patientId: id, newLotId: id, reason: ' ' }))).toBe(
       'Explain the correction (at least 3 characters).',
     );
+  });
+});
+
+describe('correctionSchema lot', () => {
+  it('accepts no batch (a product-only correction)', () => {
+    const r = correctionSchema.parse({ siteId: id, patientId: id, newLotId: null, newProductId: id, reason: 'Wrong size' });
+    expect(r.newLotId).toBeNull();
   });
 });
 

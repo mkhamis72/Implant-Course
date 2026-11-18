@@ -11,6 +11,7 @@ import { SLOT_SELECT } from '@/lib/schedule/queries';
 import { progressOf } from '@/lib/checklists/format';
 import { TECHNIQUE_LABELS } from '@/lib/inventory/types';
 import { bookingTechnique, TECHNIQUE_SHORT, type BookingTechnique } from '@/lib/schedule/technique';
+import { featureOn, teachingOn } from '@/lib/modules/modules';
 import { CancelBooking } from './cancel-booking';
 import { BookingStatus } from './booking-status';
 import { SurgerySessions, type DaySession } from './surgery-sessions';
@@ -58,6 +59,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
   const editable = canEdit(profile, 'schedule');
   const patientsVisible = canView(profile, 'patients');
   const checklistsVisible = canView(profile, 'checklists');
+  const teaching = teachingOn(profile.features);
   const raw = (await readParams(searchParams, 'date')).date || undefined;
   const date = raw && isRealDate(String(raw)) ? String(raw) : todayIso();
   const supabase = await createClient();
@@ -66,7 +68,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
     supabase.rpc('slots_on', { p_date: date }).select(SLOT_SELECT),
     supabase.from('sessions').select('id, title, start_time, end_time, room, course:courses(id, name)')
       .eq('type', 'surgery').eq('date', date).order('start_time'),
-    editable
+    editable && teaching
       ? supabase.from('courses').select('id, name').lte('start_date', date).gte('end_date', date).order('start_date')
       : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
   ]);
@@ -88,7 +90,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
       <div className="page-header">
         <h1>Schedule · {formatDate(date)}</h1>
         <div className="flex items-center gap-3">
-          <Link href={`/schedule/pull-list?date=${date}`} className="text-accent hover:underline">Pull list</Link>
+          {featureOn(profile.features, 'inventory') && <Link href={`/schedule/pull-list?date=${date}`} className="text-accent hover:underline">Pull list</Link>}
           {editable && <Link href={`/schedule/new?date=${date}`} className="btn">New booking</Link>}
         </div>
       </div>
@@ -106,6 +108,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
         courses={(runningCourses ?? []).map((c) => ({ id: c.id, label: c.name }))}
         editable={editable}
         coursesVisible={canView(profile, 'courses')}
+        teaching={teaching}
       />
       {live.length > 0 && <Legend />}
       {chairList.length === 0 ? (
@@ -179,7 +182,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
                       })}
                     </div>
                   )}
-                  <div>Supervisor: {b.supervisor?.full_name}</div>
+                  {b.supervisor && <div>Supervisor: {b.supervisor.full_name}</div>}
+                  {b.doctor && <div>Doctor: {b.doctor.name}</div>}
                   {placing && <div>Placing: {placing}</div>}
                   {assisting && <div>Assisting: {assisting}</div>}
                   {checklistsVisible && b.checklists.map((cl) => (

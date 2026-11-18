@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { currentTenant } from '@/lib/tenant/current';
 import { requireAdmin, type Profile } from '@/lib/auth/session';
+import { teachingOn } from '@/lib/modules/modules';
 import { InviteForm } from './invite-form';
 import { UserRow, type Account } from './user-row';
 import { emailEnabled } from '@/lib/flags';
@@ -62,7 +63,7 @@ export default async function UsersPage() {
     <div className="space-y-6">
       <h1>Users</h1>
       <InviteForm emailOn={emailEnabled()} />
-      <p className="text-sm text-muted">Delegate logins are created from the delegate’s page.</p>
+      {teachingOn(me.features) && <p className="text-sm text-muted">Delegate logins are created from the delegate’s page.</p>}
       <div className="card overflow-x-auto">
         <table className="table">
           <thead>

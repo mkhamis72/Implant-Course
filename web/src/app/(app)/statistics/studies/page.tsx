@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { canEdit, canView } from '@/lib/auth/permissions';
+import { teachingOn } from '@/lib/modules/modules';
 import type { StudyRow } from '@/lib/research/studies';
 import { NoPatientsNote } from '../research-view';
 import { StudyList } from './study-list';
@@ -39,6 +40,7 @@ export default async function StudiesPage() {
         courses={((courses.data ?? []) as { id: string; name: string }[]).map((c) => ({ id: c.id, name: c.name }))}
         editable={canEdit(profile, 'research')}
         isAdmin={profile.role === 'admin'}
+        teaching={teachingOn(profile.features)}
       />
     </div>
   );

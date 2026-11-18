@@ -1,10 +1,13 @@
 import { createClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/session';
+import { teachingOn } from '@/lib/modules/modules';
 import type { Lecturer } from '@/lib/schedule/types';
 import { AddLecturer, LecturerRow } from './lecturer-row';
 
 export default async function LecturersPage() {
-  await requireAdmin();
+  const profile = await requireAdmin();
+  if (!teachingOn(profile.features)) redirect('/admin/users');
   const supabase = await createClient();
   const { data, error } = await supabase.from('lecturers').select('id, full_name, active').order('full_name');
   if (error) throw new Error('Could not load lecturers');

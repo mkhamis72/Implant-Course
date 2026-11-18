@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { AnalysisConfig } from '@/lib/analysis/run';
 import { TIMEPOINTS, type Window } from '@/lib/analysis/timepoints';
-import { factorChoices, outcomeChoices, variable, type Variable } from '@/lib/analysis/variables';
+import { factorChoices, outcomeChoices, TEACHING_VARIABLES, variable, type Variable } from '@/lib/analysis/variables';
 
 export const EXAMPLES: { factor: string; outcome: string }[] = [
   { factor: 'smoking', outcome: 'bone_change' },
@@ -24,7 +24,7 @@ function Grouped({ choices }: { choices: Variable[] }) {
 
 const windowValue = (w: Window | 'all') => (typeof w === 'string' ? w : 'custom');
 
-export function QuestionCard({ config, onChange }: { config: AnalysisConfig; onChange: (next: Partial<AnalysisConfig>) => void }) {
+export function QuestionCard({ config, onChange, teaching = true }: { config: AnalysisConfig; onChange: (next: Partial<AnalysisConfig>) => void; teaching?: boolean }) {
   const outcome = config.outcome ? variable(config.outcome) : undefined;
   const timed = outcome !== undefined && outcome.source !== 'implant';
   const custom = typeof config.window === 'string' ? null : config.window;
@@ -46,14 +46,14 @@ export function QuestionCard({ config, onChange }: { config: AnalysisConfig; onC
           <span className="label">Compare by</span>
           <select className="input" value={config.factor ?? ''} onChange={(e) => onChange({ factor: e.target.value || null })}>
             <option value="">Nothing — describe the outcome</option>
-            <Grouped choices={factorChoices()} />
+            <Grouped choices={factorChoices(teaching)} />
           </select>
         </label>
         <label className="block">
           <span className="label">Outcome</span>
           <select className="input" value={config.outcome} onChange={(e) => onChange({ outcome: e.target.value })}>
             <option value="">Choose an outcome</option>
-            <Grouped choices={outcomeChoices()} />
+            <Grouped choices={outcomeChoices(teaching)} />
           </select>
         </label>
         {timed && (
@@ -90,7 +90,7 @@ export function QuestionCard({ config, onChange }: { config: AnalysisConfig; onC
         <div className="space-y-2">
           <p className="text-sm text-muted">Or start from an example:</p>
           <div className="flex flex-wrap gap-2">
-            {EXAMPLES.map((ex) => (
+            {EXAMPLES.filter((ex) => teaching || !TEACHING_VARIABLES.includes(ex.factor)).map((ex) => (
               <button key={`${ex.factor}-${ex.outcome}`} type="button" className="btn-secondary btn text-sm"
                 onClick={() => onChange({ factor: ex.factor, outcome: ex.outcome })}>
                 {variable(ex.factor)!.label} → {variable(ex.outcome)!.label}

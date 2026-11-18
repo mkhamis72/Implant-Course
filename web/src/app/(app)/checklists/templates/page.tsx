@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { canEdit } from '@/lib/auth/permissions';
-import { SCOPE_LABELS } from '@/lib/checklists/format';
+import { scopeLabel } from '@/lib/checklists/format';
+import { teachingOn } from '@/lib/modules/modules';
 import type { ChecklistScope } from '@/lib/checklists/types';
 
 export default async function TemplatesPage() {
@@ -26,7 +27,7 @@ export default async function TemplatesPage() {
         {templates.map((t) => (
           <li key={t.id} className="flex flex-wrap gap-x-6 py-2 text-sm">
             <Link href={`/checklists/templates/${t.id}`} className="font-medium text-accent hover:underline">{t.name}</Link>
-            <span>{SCOPE_LABELS[t.applies_to]}</span>
+            <span>{scopeLabel(t.applies_to, teachingOn(profile.features))}</span>
             <span className="text-muted">{t.items[0]?.count ?? 0} items</span>
             {t.is_default && <span className="badge badge-accent">Attaches automatically</span>}
           </li>

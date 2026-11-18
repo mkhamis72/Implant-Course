@@ -1,4 +1,6 @@
+import { redirect } from 'next/navigation';
 import { requirePermission } from '@/lib/auth/session';
+import { teachingOn } from '@/lib/modules/modules';
 import { canView } from '@/lib/auth/permissions';
 import { createClient } from '@/lib/supabase/server';
 import type { PageSearchParams } from '@/lib/search-params';
@@ -13,6 +15,8 @@ const NO_FILTERS = { course: ALL_COURSES, from: '', to: '', delegate: '', brand:
 
 export default async function CoursesPage({ searchParams }: { searchParams: PageSearchParams }) {
   const profile = await requirePermission('research');
+  // A clinic has no courses: the tab is hidden and the address goes back to Results.
+  if (!teachingOn(profile.features)) redirect('/statistics');
   const header = (
     <div className="page-header">
       <div>

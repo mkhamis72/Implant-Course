@@ -17,7 +17,7 @@ export type ChecklistItem = {
 export type ChecklistSummary = {
   id: string;
   title: string;
-  session: { id: string; title: string; date: string; course_id: string } | null;
+  session: { id: string; title: string; date: string; course_id: string | null } | null;
   slot: { id: string; starts_at: string; patient: { full_name: string } | null } | null;
   items: { done_at: string | null; assignee_id: string | null }[];
 };

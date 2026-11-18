@@ -25,7 +25,7 @@ const MAX_TRAJECTORIES = 200;
 
 export type SavedProps = { items: SavedRow[]; canEdit: boolean; userId: string; isAdmin: boolean; courses: Record<string, string> };
 
-export function ExploreWorkspace({ data, labels, today, initial, base, patients, saved }: {
+export function ExploreWorkspace({ data, labels, today, initial, base, patients, saved, teaching = true }: {
   data: AnalysisData;
   labels: LevelLabels;
   today: string;
@@ -33,6 +33,8 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients,
   base: Record<string, string>;
   patients: Record<string, PatientRef>;
   saved?: SavedProps;
+  /** False in a clinic: no course, delegate or supervisor variables. */
+  teaching?: boolean;
 }) {
   const [state, setState] = useState<ExploreState>(initial);
   const [alt, setAlt] = useState(false);
@@ -76,7 +78,7 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients,
   // A saved analysis on the same data (same six filters) opens in place; another one reloads through its link.
   const openSaved = (config: SavedConfig) => {
     if (!RESEARCH_FILTER_KEYS.every((k) => (config.query[k] ?? '') === (base[k] ?? ''))) return false;
-    update(parseExplore(config.query));
+    update(parseExplore(config.query, teaching));
     setAlt(config.query.alt === '1');
     return true;
   };
@@ -85,8 +87,8 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients,
   return (
     <div className="space-y-4">
       {carried.map(([k, v]) => <input key={k} type="hidden" form="research-filters" name={k} value={v} />)}
-      <QuestionCard config={config} onChange={setConfig} />
-      <FilterChips filters={config.filters} rows={data.implants} labels={labels} onChange={(filters) => setConfig({ filters })} />
+      <QuestionCard config={config} onChange={setConfig} teaching={teaching} />
+      <FilterChips teaching={teaching} filters={config.filters} rows={data.implants} labels={labels} onChange={(filters) => setConfig({ filters })} />
       {result && ov && view && (
         <>
           <p className="text-sm text-muted" aria-label="Current analysis">

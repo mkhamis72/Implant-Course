@@ -97,6 +97,7 @@ async function seedCompany(c: Client, key: 'A' | 'B'): Promise<Company> {
   await enroll(c, r.courses, r.delegates);
   r.chairs = await makeChair(c);
   r.supervisors = await one(c, `insert into public.supervisors (full_name) values ($1) returning id`, [`${marker} Supervisor`]);
+  r.doctors = await one(c, `insert into public.doctors (name) values ($1) returning id`, [`${marker} Doctor`]);
   r.lecturers = await makeLecturer(c, `${marker} Lecturer`);
   r.products = await makeProduct(c, 'implant', `${marker} Brand`);
   r.stock_lots = await receive(c, r.products, 5);

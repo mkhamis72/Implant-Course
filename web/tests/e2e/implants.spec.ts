@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
-import { login } from './helpers';
+import { login, chooseImplant } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
 import { apiAs, enroll, receiveStock, seedDelegate, seedImplantStock, seedProduct, seedRunningCourse } from './api';
 
@@ -21,14 +21,6 @@ async function setup(page: Page) {
 
 function panel(page: Page) {
   return page.getByRole('complementary', { name: 'Tooth details' });
-}
-
-/** Brand, then size (E2E products have the single line "E2E" and no type, so those fill in themselves). */
-async function chooseImplant(page: Page, brand: string, size: string) {
-  await page.getByRole('combobox', { name: 'Implant brand' }).selectOption({ label: brand });
-  const sizes = page.getByRole('combobox', { name: 'Implant size' });
-  const value = await sizes.locator('option', { hasText: size }).getAttribute('value');
-  await sizes.selectOption(value!);
 }
 
 test('places an implant from the chart and deducts stock', async ({ page }) => {
@@ -101,7 +93,11 @@ test('missing fields are explained and nothing is saved', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Technique' }).selectOption({ label: 'Free hand' });
   await page.getByRole('combobox', { name: 'Course' }).selectOption(s.courseId);
   await page.getByRole('button', { name: 'Save placement' }).click();
-  await expect(panel(page).getByRole('alert')).toHaveText('Choose a stock batch.');
+  await expect(panel(page).getByRole('alert')).toHaveText('Choose the delegate who placed the implant.');
+  await page.getByLabel('Placed by (delegate)').selectOption({ label: s.delegate });
+  await page.getByRole('combobox', { name: 'Supervisor' }).selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'Save placement' }).click();
+  await expect(panel(page).getByRole('alert').filter({ hasText: 'Choose a stock batch.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Tooth 11, Present' })).toBeVisible();
 });
 

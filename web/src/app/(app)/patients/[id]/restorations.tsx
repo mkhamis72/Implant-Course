@@ -74,7 +74,7 @@ export function RestorationCard({ r, patientId, data, editable }: { r: Restorati
     r.retention ? RETENTION_LABELS[r.retention] : null,
     r.material ? MATERIAL_LABELS[r.material] : null,
   ].filter(Boolean).join(' · ');
-  const people = [
+  const people = !data.teachingOn ? '' : [
     nameOf(data.delegates, r.delegate_id, r.delegate?.full_name) && `Fitted by ${nameOf(data.delegates, r.delegate_id, r.delegate?.full_name)}`,
     nameOf(data.supervisors, r.supervisor_id, r.supervisor?.full_name) && `supervised by ${nameOf(data.supervisors, r.supervisor_id, r.supervisor?.full_name)}`,
     course && `course ${course}`,
@@ -244,38 +244,42 @@ function DetailsFields({ v, set, data, fittedOn, recorded }: {
             {MATERIALS.map((x) => <option key={x} value={x}>{MATERIAL_LABELS[x]}</option>)}
           </select>
         </Field>
-        <Field label="Course">
-          <select className="input" value={v.courseId} onChange={(e) => {
-            set('courseId')(e.target.value);
-            set('delegateId')(keepIfEnrolled(data.enrollments, e.target.value, v.delegateId));
-          }}>
-            <option value="">—</option>
-            {running.length > 0 && (
-              <optgroup label={`Running on ${formatDate(fittedOn)}`}>
-                {running.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </optgroup>
-            )}
-            {others.length > 0 && (
-              <optgroup label={running.length > 0 ? 'Other courses' : 'Courses'}>
-                {others.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </optgroup>
-            )}
-          </select>
-        </Field>
-        <Field label="Delegate">
-          <select className="input" value={v.delegateId} onChange={(e) => set('delegateId')(e.target.value)}>
-            <option value="">—</option>
-            {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-          </select>
-        </Field>
-        <Field label="Supervisor">
-          <select className="input" value={v.supervisorId} onChange={(e) => set('supervisorId')(e.target.value)}>
-            <option value="">—</option>
-            {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-        </Field>
+        {data.teachingOn && (
+          <>
+            <Field label="Course">
+              <select className="input" value={v.courseId} onChange={(e) => {
+                set('courseId')(e.target.value);
+                set('delegateId')(keepIfEnrolled(data.enrollments, e.target.value, v.delegateId));
+              }}>
+                <option value="">—</option>
+                {running.length > 0 && (
+                  <optgroup label={`Running on ${formatDate(fittedOn)}`}>
+                    {running.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </optgroup>
+                )}
+                {others.length > 0 && (
+                  <optgroup label={running.length > 0 ? 'Other courses' : 'Courses'}>
+                    {others.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </optgroup>
+                )}
+              </select>
+            </Field>
+            <Field label="Delegate">
+              <select className="input" value={v.delegateId} onChange={(e) => set('delegateId')(e.target.value)}>
+                <option value="">—</option>
+                {delegates.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Supervisor">
+              <select className="input" value={v.supervisorId} onChange={(e) => set('supervisorId')(e.target.value)}>
+                <option value="">—</option>
+                {supervisors.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </Field>
+          </>
+        )}
       </div>
-      <NoneEnrolled courseId={v.courseId} delegates={delegates} />
+      {data.teachingOn && <NoneEnrolled courseId={v.courseId} delegates={delegates} />}
       <Field label="Notes">
         <input className="input" value={v.notes} maxLength={1000} onChange={(e) => set('notes')(e.target.value)} />
       </Field>

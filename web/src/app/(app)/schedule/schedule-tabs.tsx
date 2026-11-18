@@ -9,10 +9,11 @@ const TABS = [
   { href: '/schedule/workshops', label: 'Workshops' },
 ];
 
-/** Schedule tabs; the selected day carries over when switching. */
-export function ScheduleTabs() {
+/** Schedule tabs; the selected day carries over when switching. A clinic has no lectures or workshops, so no tabs. */
+export function ScheduleTabs({ teaching }: { teaching: boolean }) {
   const pathname = usePathname();
   const date = useSearchParams().get('date');
+  if (!teaching) return null;
   return (
     <nav aria-label="Schedule sections" className="tabs print:hidden">
       {TABS.map((t) => (

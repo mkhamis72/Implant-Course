@@ -248,6 +248,22 @@ describe('setCompanyPlan', () => {
     expect((await setCompanyPlan({}, form({ ...data, plan_id: '' }))).error).toBe('Choose a plan for this type of company.');
     expect(rpc).not.toHaveBeenCalled();
   });
+  it('refuses a change of type without the confirmation', async () => {
+    existing = { ...row, kind: 'course_organizer' };
+    const r = await setCompanyPlan({}, form({ ...data, kind: 'clinic' }));
+    expect(r.error).toBe('Tick the box to confirm the change of type.');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it('saves a change of type once confirmed', async () => {
+    existing = { ...row, kind: 'course_organizer' };
+    const r = await setCompanyPlan({}, form({ ...data, kind: 'clinic', confirm_kind_change: 'on' }));
+    expect(r).toEqual({ ok: 'Saved.' });
+    expect(rpc).toHaveBeenCalledWith('console_set_company_plan', expect.objectContaining({ p_slug: 'acme', p_kind: 'clinic' }));
+  });
+  it('needs no confirmation when the type stays', async () => {
+    existing = { ...row, kind: 'clinic' };
+    expect((await setCompanyPlan({}, form({ ...data, kind: 'clinic' }))).ok).toBe('Saved.');
+  });
   it('needs a signed-in console admin', async () => {
     vi.mocked(requireConsoleAdmin).mockRejectedValueOnce(new Error('REDIRECT:/console/login'));
     await expect(setCompanyPlan({}, form(data))).rejects.toThrow('REDIRECT:/console/login');

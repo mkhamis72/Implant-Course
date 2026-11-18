@@ -144,3 +144,41 @@ describe('exportFileName', () => {
     expect(exportFileName('csv', '2026-10-23')).toBe('research-export-2026-10-23.zip');
   });
 });
+
+describe('clinic export drops teaching codes', () => {
+  const TEACHING = ['course_code', 'placing_delegate_code', 'supervisor_code', 'delegate_code'];
+  const clinicMeta = (): ExportMeta => ({ ...meta(), teaching: false, filters: { course: null, delegate: null, brand: 'Oxy' } });
+  const withCodes = (): ExportTables => {
+    const t = tables();
+    t.implants = [{ ...t.implants[0], course_code: 'C-AAA222', placing_delegate_code: 'D-AAA222', supervisor_code: 'S-AAA222' }];
+    t.restorations = [{ restoration_code: 'R-ABC234', delegate_code: 'D-AAA222', supervisor_code: 'S-AAA222', fitted_on: '2026-02-01' }];
+    return t;
+  };
+  const csvOf = (files: Record<string, Uint8Array>, name: string) => strFromU8(files[name]).replace(BOM, '').split('\r\n').filter(Boolean);
+
+  it('has none of them in any csv header, and rows match the headers', () => {
+    const files = unzipSync(buildZip(withCodes(), clinicMeta()));
+    for (const t of TABLE_NAMES) {
+      const [head, ...rows] = csvOf(files, `${t}.csv`);
+      const cols = head.split(',');
+      for (const c of TEACHING) expect(cols).not.toContain(c);
+      for (const r of rows) expect(r.split(',').length).toBe(cols.length);
+    }
+    const imp = csvOf(files, 'implants.csv');
+    expect(imp[1]).not.toMatch(/AAA222/);
+    expect(strFromU8(files['data_dictionary.csv'])).not.toMatch(/course_code|delegate_code|supervisor_code/);
+    expect(files['analysis.R']).toBeUndefined();
+    expect(strFromU8(files['README.txt'])).not.toMatch(/Filter: (course|delegate)/);
+  });
+  it('drops them from the xlsx sheets too', async () => {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load((await buildXlsx(withCodes(), clinicMeta())) as unknown as ArrayBuffer);
+    const head = (wb.getWorksheet('implants')!.getRow(1).values as unknown[]).slice(1);
+    for (const c of TEACHING) expect(head).not.toContain(c);
+  });
+  it('a course organizer keeps them', () => {
+    const files = unzipSync(buildZip(withCodes(), meta()));
+    expect(csvOf(files, 'implants.csv')[0]).toContain('course_code');
+    expect(files['analysis.R']).toBeDefined();
+  });
+});

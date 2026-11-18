@@ -39,3 +39,16 @@ describe('Explore URL state', () => {
     expect(toParams(q)).toEqual({ course: 'all', brand: 'Oxy', o: 'failed', w: 'm12' })
   })
 })
+
+describe('a saved analysis that names a course variable, in a clinic', () => {
+  const params = { f: 'course', o: 'failed', x_delegate: 'abc', x_smoking: 'current', w: 'm12' }
+  it('loads without it', () => {
+    const s = parseExplore(params, false)
+    expect(s.config.factor).toBeNull()
+    expect(s.config.filters).toEqual([{ key: 'smoking', values: ['current'] }])
+    expect(s.config.outcome).toBe('failed')
+  })
+  it('keeps them for a course organizer', () => {
+    expect(parseExplore(params).config.factor).toBe('course')
+  })
+})

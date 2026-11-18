@@ -8,7 +8,8 @@ import { factorChoices, variable } from '@/lib/analysis/variables';
 
 const isRange = (key: string) => ['continuous', 'count'].includes(variable(key)?.kind ?? '');
 
-export function FilterChips({ filters, rows, labels, onChange }: {
+export function FilterChips({ filters, rows, labels, onChange, teaching = true }: {
+  teaching?: boolean;
   filters: Filter[];
   rows: ImplantRow[];
   labels: LevelLabels;
@@ -20,7 +21,7 @@ export function FilterChips({ filters, rows, labels, onChange }: {
   const [min, setMin] = useState('');
   const [max, setMax] = useState('');
   const descriptions = describeLabelled(filters, labels);
-  const choices = factorChoices().filter((v) => !filters.some((f) => f.key === v.key));
+  const choices = factorChoices(teaching).filter((v) => !filters.some((f) => f.key === v.key));
 
   const reset = () => { setOpen(false); setKey(''); setValues([]); setMin(''); setMax(''); };
   const number = (s: string) => (s.trim() === '' || !Number.isFinite(Number(s)) ? undefined : Number(s));

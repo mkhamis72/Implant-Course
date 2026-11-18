@@ -6,7 +6,8 @@ import { requirePermission } from '@/lib/auth/session';
 import { staffOptions } from '@/lib/admin/staff';
 import { canEdit } from '@/lib/auth/permissions';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { progressOf } from '@/lib/checklists/format';
+import { progressOf, sessionHref } from '@/lib/checklists/format';
+import { teachingOn } from '@/lib/modules/modules';
 import type { ChecklistItem } from '@/lib/checklists/types';
 import { ItemRow } from './item-row';
 import { AddItemsForm } from './add-items-form';
@@ -52,7 +53,7 @@ export default async function ChecklistPage({ params }: { params: Promise<{ id: 
   if (!checklist) notFound();
   const c = checklist as unknown as {
     id: string; title: string;
-    session: { id: string; title: string; date: string; course_id: string } | null;
+    session: { id: string; title: string; date: string; course_id: string | null } | null;
     slot: { id: string; starts_at: string; patient: { id: string; full_name: string } | null } | null;
     items: ChecklistItem[];
   };
@@ -65,7 +66,7 @@ export default async function ChecklistPage({ params }: { params: Promise<{ id: 
         <h1>{c.title}</h1>
         <p className="text-sm text-muted">
           {c.session && (
-            <Link href={`/courses/${c.session.course_id}`} className="text-accent hover:underline">
+            <Link href={sessionHref(c.session, teachingOn(profile.features))} className="text-accent hover:underline">
               Session · {c.session.title} · {formatDate(c.session.date)}
             </Link>
           )}

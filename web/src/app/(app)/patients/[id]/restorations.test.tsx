@@ -30,7 +30,7 @@ const data = (restorations: Restoration[], editable = true) =>
     delegates: [{ id: 'd1', label: 'Dr Delegate' }, { id: 'd2', label: 'Dr Second' }], supervisors: [{ id: 'v1', label: 'Dr Supervisor' }],
     enrollments: [{ course_id: 'c1', delegate_id: 'd1' }],
     courses: [{ id: 'c1', name: 'Autumn course', start_date: '2026-10-01', end_date: '2026-10-30' }],
-    restorations, today: '2026-10-21', me: 'u1', editable, canReceive: false,
+    restorations, today: '2026-10-21', me: 'u1', editable, canReceive: false, inventoryOn: true, teachingOn: true, doctors: [],
   }) as unknown as ChartData;
 
 beforeEach(() => {
@@ -196,5 +196,25 @@ describe('replacement restoration date limit', () => {
     render(<Restorations site={s36} patientId="pt" data={data([final])} />);
     fireEvent.click(screen.getByRole('button', { name: 'Add restoration' }));
     expect(screen.getByLabelText(/Date fitted/)).toHaveAttribute('min', final.fitted_on);
+  });
+});
+
+describe('<Restorations> in a clinic', () => {
+  const clinic = (rs: Restoration[]) => ({ ...data(rs), teachingOn: false }) as ChartData;
+
+  it('the form has no delegate, supervisor or course fields', () => {
+    render(<Restorations site={s36} patientId="pt" data={clinic([])} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add restoration' }));
+    expect(screen.queryByRole('combobox', { name: /Delegate|Supervisor|Course/ })).toBeNull();
+    expect(screen.getByRole('combobox', { name: /Material/ })).toBeInTheDocument();
+  });
+
+  it('the card and its edit form name no delegate, supervisor or course', () => {
+    const withPeople = { ...temp, delegate_id: 'd1', supervisor_id: 'v1', course_id: 'c1' };
+    render(<Restorations site={s36} patientId="pt" data={clinic([withPeople])} />);
+    const card = screen.getByTestId('restoration');
+    expect(card).not.toHaveTextContent(/Dr Delegate|Dr Supervisor|course/i);
+    fireEvent.click(within(card).getByRole('button', { name: /Edit/ }));
+    expect(screen.queryByRole('combobox', { name: /Delegate|Supervisor|Course/ })).toBeNull();
   });
 });

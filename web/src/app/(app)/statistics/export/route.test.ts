@@ -34,7 +34,7 @@ const DELEGATE = '66666666-7777-4888-9999-aaaaaaaaaaaa';
 const UUID_ANY = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 const staff = (patients: 'view' | null, research: 'view' | null = 'view') => ({
-  active: true, role: 'organizer', permissions: { patients, research },
+  active: true, role: 'organizer', permissions: { patients, research }, features: ['teaching', 'statistics'],
 });
 const req = (qs: string) => new Request(`http://localhost:3000/statistics/export?${qs}`) as never;
 
@@ -63,6 +63,18 @@ describe('GET /statistics/export', () => {
     expect(logs[0][1].p_row_counts).toMatchObject({ implants: 0, grafts: 0 });
     // volatile readers: plain rpc calls, no options argument
     for (const c of rpc.mock.calls.filter((c) => c[0].startsWith('research_export_'))) expect(c[2]).toBeUndefined();
+  });
+
+  it('in a clinic ignores the course and delegate filters and leaves their codes out of the files', async () => {
+    profile.mockResolvedValue({ ...staff('view'), features: ['statistics'] });
+    const c = '11111111-1111-4111-8111-111111111111';
+    const res = await GET(req(`format=csv&course=${c}&delegate=${c}`));
+    expect(res.status).toBe(200);
+    const files = unzipSync(new Uint8Array(await res.arrayBuffer()));
+    expect(files['analysis.R']).toBeUndefined();
+    expect(strFromU8(files['README.txt'])).not.toMatch(/Filter: (course|delegate)/);
+    expect(rpc.mock.calls.some((c) => c[0] === 'research_code')).toBe(false);
+    for (const call of rpc.mock.calls.filter((c) => c[0].startsWith('research_export_'))) expect(call[1]).toMatchObject({ p_course: null, p_delegate: null });
   });
 
   it('sends a zip for csv', async () => {

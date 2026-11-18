@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getCurrentProfile } from '@/lib/auth/session';
 import { staffOptions } from '@/lib/admin/staff';
 import { canEdit } from '@/lib/auth/permissions';
+import { featureOn, teachingOn } from '@/lib/modules/modules';
 import { todayIso } from '@/lib/dates';
 import { productLabel } from '@/lib/inventory/labels';
 import type { ChartData, ImplantSite, LotOnHand, Product } from '@/lib/inventory/types';
@@ -14,12 +15,13 @@ import type { CourseOption, Restoration, RestorationProblem } from '@/lib/restor
 
 export const SITE_SELECT = `
   id, tooth, state, technique, impression_type, impression_taken_on, placed_on, torque_ncm, isq, bone_type, graft, notes, created_at, updated_at, failed_on, failure_type, failure_reason, failure_notes, stock_lot_id,
-  placing_delegate_id, assisting_delegate_id, supervisor_id, course_id,
+  placing_delegate_id, assisting_delegate_id, supervisor_id, course_id, placing_doctor_id,
   product:products(*),
   lot:stock_lots(lot_no, expiry),
   placing:delegates!implant_sites_placing_delegate_id_fkey(full_name),
   assisting:delegates!implant_sites_assisting_delegate_id_fkey(full_name),
   supervisor:supervisors!implant_sites_supervisor_ref_fkey(full_name),
+  doctor:doctors!implant_sites_placing_doctor_id_fkey(name),
   components:site_components(
     id, component_type, fitted_on, removed_on, notes, voided_at, voided_reason, stock_lot_id, course_id,
     product:products(*), lot:stock_lots(lot_no),
@@ -35,7 +37,7 @@ export const SITE_SELECT = `
   surgery:implant_surgery(*),
   grafts:implant_grafts(*),
   complications:implant_complications(*),
-  slot:surgery_slots(id, starts_at, supervisor_id, chair:chairs(name), delegates:slot_delegates(delegate_id, role))
+  slot:surgery_slots(id, starts_at, supervisor_id, placing_doctor_id, chair:chairs(name), delegates:slot_delegates(delegate_id, role))
 `;
 
 export function sortSite(site: ImplantSite): ImplantSite {
@@ -80,7 +82,7 @@ function toRestoration({ sites, problems, ...r }: RestorationRow): Restoration {
 export async function loadChartData(patientId: string): Promise<ChartData> {
   const supabase = await createClient();
   const me = await getCurrentProfile();
-  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments] = await Promise.all([
+  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors] = await Promise.all([
     supabase.from('tooth_status').select('tooth, status').eq('patient_id', patientId),
     supabase.from('implant_sites').select(SITE_SELECT).eq('patient_id', patientId).order('created_at'),
     supabase.from('products').select('*').eq('active', true),
@@ -94,8 +96,9 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supabase.rpc('course_options'),
     supabase.rpc('radiographs_for', { p_patient: patientId }),
     supabase.from('enrollments').select('course_id, delegate_id'),
+    supabase.from('doctors').select('id, name').eq('active', true).order('name'),
   ]);
-  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments]) {
+  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors]) {
     if (r.error) throw new Error('Could not load the chart');
   }
   const statusMap: Partial<Record<number, ToothState>> = {};
@@ -120,5 +123,8 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     me: me?.user_id ?? '',
     editable: me ? canEdit(me, 'patients') : false,
     canReceive: me ? canEdit(me, 'inventory') : false,
+    inventoryOn: me ? featureOn(me.features, 'inventory') : false,
+    teachingOn: me ? teachingOn(me.features) : false,
+    doctors: (doctors.data ?? []) as { id: string; name: string }[],
   };
 }

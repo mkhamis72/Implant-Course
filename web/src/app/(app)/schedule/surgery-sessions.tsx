@@ -13,9 +13,11 @@ export type DaySession = {
 
 /**
  * The day's surgery sessions (bookings need one). Schedule editors can book into them and add a surgery
- * day for a course running that day.
+ * day for a course running that day; in a clinic (no `teaching`) a clinic day, on any day, and no course is named.
  */
-export function SurgerySessions(p: { date: string; sessions: DaySession[]; courses: Option[]; editable: boolean; coursesVisible: boolean }) {
+export function SurgerySessions(p: {
+  date: string; sessions: DaySession[]; courses: Option[]; editable: boolean; coursesVisible: boolean; teaching: boolean;
+}) {
   return (
     <section className="card space-y-2 text-sm" aria-labelledby="surgery-sessions">
       <h2 id="surgery-sessions" className="font-semibold">Surgery sessions</h2>
@@ -28,7 +30,7 @@ export function SurgerySessions(p: { date: string; sessions: DaySession[]; cours
               <span>
                 <span className="font-medium">{s.title}</span> · {s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)}
                 {s.room && ` · ${s.room}`}
-                {s.course && (
+                {p.teaching && s.course && (
                   <>
                     {' · '}
                     {p.coursesVisible ? (
@@ -46,7 +48,15 @@ export function SurgerySessions(p: { date: string; sessions: DaySession[]; cours
           ))}
         </ul>
       )}
-      {p.editable &&
+      {p.editable && !p.teaching && (
+        <details open={p.sessions.length === 0}>
+          <summary className="cursor-pointer text-accent">Add clinic day</summary>
+          <div className="pt-3">
+            <SurgeryDayForm date={p.date} courses={[]} clinic />
+          </div>
+        </details>
+      )}
+      {p.editable && p.teaching &&
         (p.courses.length > 0 ? (
           <details open={p.sessions.length === 0}>
             <summary className="cursor-pointer text-accent">Add surgery day</summary>

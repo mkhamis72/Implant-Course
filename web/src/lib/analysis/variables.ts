@@ -130,12 +130,15 @@ export function variable(key: string): Variable | undefined {
   return BY_KEY.get(key)
 }
 
-export function factorChoices(): Variable[] {
-  return VARIABLES.filter((v) => v.role !== 'outcome')
+/** Variables that name a course, delegate or supervisor: a clinic has none of them. */
+export const TEACHING_VARIABLES: readonly string[] = ['delegate', 'supervisor', 'course']
+
+export function factorChoices(teaching = true): Variable[] {
+  return VARIABLES.filter((v) => v.role !== 'outcome' && (teaching || !TEACHING_VARIABLES.includes(v.key)))
 }
 
-export function outcomeChoices(): Variable[] {
-  return VARIABLES.filter((v) => v.role !== 'factor')
+export function outcomeChoices(teaching = true): Variable[] {
+  return VARIABLES.filter((v) => v.role !== 'factor' && (teaching || !TEACHING_VARIABLES.includes(v.key)))
 }
 
 /** People and courses are listed by name, never by result (spec: no rankings). */
