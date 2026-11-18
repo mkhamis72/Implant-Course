@@ -43,5 +43,8 @@ export const DEFINER_ALLOWLIST: ReadonlySet<string> = new Set([
   'public.console_log_company',
   // Consent trigger (0108): deletes the scan of a consent record just deleted, also without a session (scripts).
   'app_private.delete_consent_file',
+  // Modules (0109): the console's plan writes, service role only
+  'public.console_save_plan',
+  'public.console_set_company_plan',
   // The console / service-role functions that later plan-3 tasks add join this list there.
 ]);

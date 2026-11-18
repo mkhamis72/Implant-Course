@@ -11,6 +11,7 @@ export default async function ConsoleAdminLayout({ children }: { children: React
       <header className="flex items-center justify-between border-b border-line bg-surface px-4 py-3">
         <nav className="flex items-center gap-4">
           <Link href="/console" className="font-semibold">Console</Link>
+          <Link href="/console/plans" className="text-sm text-accent hover:underline">Plans</Link>
           <Link href="/console/errors" className="text-sm text-accent hover:underline">Errors</Link>
         </nav>
         <div className="flex items-center gap-3 text-sm">

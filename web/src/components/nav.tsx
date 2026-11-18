@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { isActive, visibleNavItems, type Role } from './nav-items';
 import type { Permissions } from '@/lib/auth/permissions';
+import type { Feature } from '@/lib/modules/modules';
 import { signOut } from '@/app/actions/auth';
 import { BrandMark } from './brand-mark';
 
@@ -21,7 +22,7 @@ function Wordmark({ brand }: { brand: { name: string; logoUrl: string | null } }
  * One set of links: a fixed sidebar from 1024px, a slide-over panel opened from the top bar below that. Menu sits
  * on the left, where the panel slides in from (.nav-panel in globals.css).
  */
-export function Nav({ role, permissions, name, brand }: { role: Role; permissions: Permissions; name: string; brand: { name: string; logoUrl: string | null } }) {
+export function Nav({ role, permissions, features, name, brand }: { role: Role; permissions: Permissions; features: readonly Feature[]; name: string; brand: { name: string; logoUrl: string | null } }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -81,7 +82,7 @@ export function Nav({ role, permissions, name, brand }: { role: Role; permission
           )}
         </div>
         <nav className="flex flex-1 flex-col gap-0.5" aria-label="Main">
-          {visibleNavItems({ role, permissions }).map((item) => {
+          {visibleNavItems({ role, permissions, features }).map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <Link

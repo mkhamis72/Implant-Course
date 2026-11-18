@@ -4,7 +4,7 @@ vi.mock('server-only', () => ({}));
 const A = 'a7c0de00-0000-4000-8000-000000000001';
 const { row, session, calls } = vi.hoisted(() => ({
   row: { current: null as Record<string, unknown> | null },
-  session: { bound: null as string | null, bindError: null as unknown },
+  session: { bound: null as string | null, bindError: null as unknown, plan: null as unknown, planError: null as unknown },
   calls: { eq: [] as [string, string, unknown][], signOut: 0 },
 }));
 vi.mock('next/navigation', () => ({
@@ -46,8 +46,10 @@ vi.mock('@/lib/supabase/server', () => ({
       };
       return chain;
     };
-    const rpc = async (name: string) =>
-      name === 'my_session_company' ? { data: session.bound, error: null } : { data: null, error: session.bindError };
+    const rpc = (name: string) => {
+      if (name === 'my_company_plan') return { maybeSingle: async () => ({ data: session.plan, error: session.planError }) };
+      return Promise.resolve(name === 'my_session_company' ? { data: session.bound, error: null } : { data: null, error: session.bindError });
+    };
     return { rpc, from };
   },
 }));
@@ -64,6 +66,8 @@ beforeEach(() => {
   row.current = profile();
   session.bound = A;
   session.bindError = null;
+  session.plan = { kind: 'course_organizer', plan_name: 'Full', features: ['inventory', 'statistics', 'teaching'] };
+  session.planError = null;
   calls.eq = [];
   calls.signOut = 0;
 });
@@ -74,11 +78,16 @@ describe("the session's company", () => {
     expect(await getCurrentProfile()).toEqual({
       user_id: 'u1', full_name: 'U', email: 'u@example.com', role: 'delegate', active: true, delegate_id: 'd1',
       mfa_setup_required: false, permissions: { patients: 'view' },
+      features: ['inventory', 'statistics', 'teaching'], plan: { kind: 'course_organizer', name: 'Full' },
     });
     expect(calls.eq).toEqual(expect.arrayContaining([
       ['company_members', 'company_id', A], ['company_members', 'user_id', 'u1'],
       ['user_permissions', 'company_id', A], ['user_permissions', 'user_id', 'u1'],
     ]));
+  });
+  it('a failed plan lookup is an error page, not signed out', async () => {
+    session.planError = { message: 'boom' };
+    await expect(getCurrentProfile()).rejects.toThrow('Could not load your account');
   });
   it('an unbound session is bound on its first request', async () => {
     session.bound = null;

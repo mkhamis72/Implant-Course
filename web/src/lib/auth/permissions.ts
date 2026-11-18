@@ -1,3 +1,4 @@
+import { areaOn, type Feature } from '@/lib/modules/modules';
 /** Per-panel access for organizers. Mirrors public.can() / app_private.require_perm() in the database (0030, research 0069, research Edit 0073). */
 export const AREAS = ['patients', 'schedule', 'courses', 'checklists', 'inventory', 'delegates', 'research'] as const;
 export type Area = (typeof AREAS)[number];
@@ -15,14 +16,16 @@ export const AREA_LABELS: Record<Area, string> = {
   research: 'Statistics',
 };
 
-type Who = { role: Role; permissions: Permissions };
+export type Who = { role: Role; permissions: Permissions; features: readonly Feature[] };
 
 export function canView(p: Who, area: Area): boolean {
+  if (!areaOn(p.features, area)) return false;
   if (p.role === 'admin') return true;
   return p.role === 'organizer' && Boolean(p.permissions[area]);
 }
 
 export function canEdit(p: Who, area: Area): boolean {
+  if (!areaOn(p.features, area)) return false;
   if (p.role === 'admin') return true;
   return p.role === 'organizer' && p.permissions[area] === 'edit';
 }

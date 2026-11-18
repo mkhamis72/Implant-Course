@@ -1,4 +1,4 @@
-import { canView, type Area, type Permissions, type Role } from '@/lib/auth/permissions';
+import { canView, type Area, type Role, type Who } from '@/lib/auth/permissions';
 
 export type { Role };
 
@@ -24,7 +24,7 @@ export const DELEGATE_NAV: NavItem[] = [
   { href: '/account/security', label: 'Account security' },
 ];
 
-export function visibleNavItems(p: { role: Role; permissions: Permissions }): NavItem[] {
+export function visibleNavItems(p: Who): NavItem[] {
   if (p.role === 'delegate') return DELEGATE_NAV;
   return NAV_ITEMS.filter((item) => (item.adminOnly ? p.role === 'admin' : !item.area || canView(p, item.area)));
 }

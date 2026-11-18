@@ -5,8 +5,9 @@ import { removeUser, resendInvite, setUserActive, setUserRole } from './actions'
 import { ConfirmDelete } from '@/components/confirm-delete';
 import { ResetPassword } from './reset-password';
 import type { ActionState } from '@/lib/admin/schemas';
-import type { Profile } from '@/lib/auth/session';
+import type { UserListRow } from './page';
 import { PermissionGrid } from './permission-grid';
+import type { Feature } from '@/lib/modules/modules';
 import { EditName } from './edit-name';
 import { ChangeEmail } from './change-email';
 import { ResetTwoFactor } from './reset-two-factor';
@@ -35,7 +36,7 @@ function lastSignInText(lastSignIn: Account['lastSignIn']): string {
   return lastSignIn === null ? 'Never' : formatDateTime(lastSignIn);
 }
 
-export function UserRow({ user, isSelf, account, emailOn }: { user: Profile; isSelf: boolean; account: Account; emailOn: boolean }) {
+export function UserRow({ user, isSelf, account, emailOn, features }: { user: UserListRow; isSelf: boolean; account: Account; emailOn: boolean; features: readonly Feature[] }) {
   const [roleState, roleAction, rolePending] = useActionState<ActionState, FormData>(setUserRole, {});
   const [activeState, activeAction, activePending] = useActionState<ActionState, FormData>(setUserActive, {});
   const [inviteState, inviteAction, invitePending] = useActionState<ActionState, FormData>(resendInvite, {});
@@ -110,7 +111,7 @@ export function UserRow({ user, isSelf, account, emailOn }: { user: Profile; isS
         {user.role === 'organizer' && !isSelf && (
           <details className="mt-2">
             <summary className="cursor-pointer text-sm text-accent">Permissions</summary>
-            <PermissionGrid userId={user.user_id} permissions={user.permissions} />
+            <PermissionGrid userId={user.user_id} permissions={user.permissions} features={features} />
           </details>
         )}
         <UserHistory entries={account.history} />

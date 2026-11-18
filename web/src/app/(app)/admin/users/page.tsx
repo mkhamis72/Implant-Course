@@ -8,6 +8,9 @@ import { toPermissions } from '@/lib/auth/permissions';
 import { invitePending, listAccounts } from '@/lib/admin/auth-accounts';
 import type { HistoryEntry } from '@/lib/admin/history';
 
+/** Other users' rows carry no company features or plan, so they cannot be passed to canView. */
+export type UserListRow = Omit<Profile, 'features' | 'plan'>;
+
 type MemberRow = Pick<Profile, 'user_id' | 'role' | 'active' | 'delegate_id' | 'mfa_setup_required'> & {
   profile: { full_name: string; email: string } | null;
 };
@@ -26,7 +29,7 @@ export default async function UsersPage() {
   if (members.error || perms.error) throw new Error('Could not load users');
   const permRows = (perms.data ?? []) as { user_id: string; area: string; level: string }[];
   const users = ((members.data ?? []) as unknown as MemberRow[])
-    .map(({ profile, ...m }): Profile => ({
+    .map(({ profile, ...m }): UserListRow => ({
       ...m,
       full_name: profile?.full_name ?? '',
       email: profile?.email ?? '',
@@ -79,6 +82,7 @@ export default async function UsersPage() {
                 isSelf={user.user_id === me.user_id}
                 account={accounts[i]}
                 emailOn={emailEnabled()}
+                features={me.features}
               />
             ))}
           </tbody>

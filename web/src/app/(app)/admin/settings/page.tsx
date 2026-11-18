@@ -3,9 +3,10 @@ import { getSettings, requireAdmin } from '@/lib/auth/session';
 import { getBranding } from '@/lib/branding/get';
 import { SettingsForm } from './settings-form';
 import { BrandingForm } from './branding-form';
+import { YourPlan } from './your-plan';
 
 export default async function SettingsPage() {
-  await requireAdmin();
+  const me = await requireAdmin();
   const [settings, branding] = await Promise.all([getSettings(), getBranding()]);
   return (
     <div className="space-y-6">
@@ -21,6 +22,7 @@ export default async function SettingsPage() {
         <p className="text-sm text-muted">The consent form patients sign: its versions and a blank form to print.</p>
         <Link href="/admin/settings/consent" className="text-accent hover:underline">Consent form settings</Link>
       </section>
+      <YourPlan plan={me.plan} features={me.features} />
     </div>
   );
 }

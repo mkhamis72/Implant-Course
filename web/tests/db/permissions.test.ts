@@ -281,6 +281,10 @@ describe('permissions: guard rails', () => {
         // Console in production (0105): is_console_user reads only the caller's own console_users row; the
         // console_* list writers are service role only, with no company session.
         'is_console_user', 'console_update_company', 'console_set_company_status', 'console_log_company',
+        // Modules (0109): read the bound company's features; no area of their own.
+        'module_on', 'my_company_plan',
+        // Modules (0110): the console's plan writes; service role only, no company session.
+        'console_save_plan', 'console_set_company_plan',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
@@ -313,7 +317,9 @@ describe('permissions: guard rails', () => {
         // Console users (0105): no company-user grants; read through is_console_user, written by the service role.
         'console_users',
         // Error alerts (0107): no company-user grants; the app writes and the hourly check reads with the service role.
-        'error_log', 'error_alert_state']);
+        'error_log', 'error_alert_state',
+        // Modules (0109): global plan list, closed to company users.
+        'plans']);
       expect(rows.map((r) => r.relname).filter((n) => !shared.has(n)).sort()).toEqual([]);
     });
   });

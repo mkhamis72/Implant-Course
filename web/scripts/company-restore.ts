@@ -107,7 +107,8 @@ async function createCompany(c: Client, company: Row | null, companyId: string):
   const taken = (await c.query<{ slug: string; host: string }>(
     'select x.slug, h as host from public.companies x, unnest(x.hosts) h where h = any($1::text[]) order by 2 limit 1', [hosts])).rows[0];
   if (taken) throw new Error(`The address ${taken.host} belongs to another company now (${taken.slug}): nothing was restored.`);
-  const cols = (await insertableColumns(c, 'public.companies')).map(quoteIdent).join(', ');
+  // Only columns the file has: one it lacks (an export from before 0109) takes its column default.
+  const cols = (await insertableColumns(c, 'public.companies')).filter((k) => k in company).map(quoteIdent).join(', ');
   await c.query(`insert into public.companies (${cols}) select ${cols} from jsonb_populate_record(null::public.companies, $1::jsonb)`,
     [JSON.stringify(company)]);
   return `created the company row ${String(company.slug)} from the file`;

@@ -1,14 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { UserRow, type Account } from './user-row';
-import type { Profile } from '@/lib/auth/session';
+import type { UserListRow } from './page';
 
 vi.mock('./actions', () => ({
   removeUser: vi.fn(), resendInvite: vi.fn(), setUserActive: vi.fn(), setUserRole: vi.fn(), resetPassword: vi.fn(),
   changeEmail: vi.fn(), resetTwoFactor: vi.fn(), resetGoogle: vi.fn(), editName: vi.fn(), savePermissions: vi.fn(),
 }));
 
-const user: Profile = {
+const user: UserListRow = {
   user_id: '1b4e28ba-2fa1-41d2-883f-0016d3cca427', full_name: 'Dr Org', email: 'org@example.com', role: 'organizer',
   active: true, delegate_id: null, mfa_setup_required: false, permissions: {},
 };
@@ -17,7 +17,7 @@ const account = (over: Partial<Account> = {}): Account => ({ lastSignIn: '2026-1
 function renderRow(props: { isSelf?: boolean; account?: Account; emailOn?: boolean } = {}) {
   return render(
     <table><tbody>
-      <UserRow user={user} isSelf={props.isSelf ?? false} account={props.account ?? account()} emailOn={props.emailOn ?? true} />
+      <UserRow user={user} isSelf={props.isSelf ?? false} account={props.account ?? account()} emailOn={props.emailOn ?? true} features={['inventory', 'statistics', 'teaching']} />
     </tbody></table>,
   );
 }
@@ -59,7 +59,7 @@ describe('UserRow', () => {
   it('offers Reset 2FA again, with a pending badge, while the user must still set it up', () => {
     render(
       <table><tbody>
-        <UserRow user={{ ...user, mfa_setup_required: true }} isSelf={false} account={account({ hasFactor: false })} emailOn />
+        <UserRow user={{ ...user, mfa_setup_required: true }} isSelf={false} account={account({ hasFactor: false })} emailOn features={['statistics']} />
       </tbody></table>,
     );
     expect(screen.getByText('2FA set-up pending')).toBeInTheDocument();
