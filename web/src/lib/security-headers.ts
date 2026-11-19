@@ -6,13 +6,15 @@ export type Header = { key: string; value: string };
  */
 export function contentSecurityPolicy(supabaseUrl: string, dev: boolean): string {
   const supabase = new URL(supabaseUrl);
+  // Dev-only allowance so the impeccable live design helper (localhost:8400) can load. Never in production.
+  const liveDev = dev ? ' http://localhost:8400' : '';
   return [
     "default-src 'self'",
-    `connect-src 'self' ${supabase.origin} ${supabase.protocol === 'http:' ? 'ws' : 'wss'}://${supabase.host}`,
+    `connect-src 'self' ${supabase.origin} ${supabase.protocol === 'http:' ? 'ws' : 'wss'}://${supabase.host}${liveDev}`,
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ''}`,
+    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ''}${liveDev}`,
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
