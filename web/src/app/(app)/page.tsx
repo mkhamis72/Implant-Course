@@ -9,8 +9,8 @@ import { stockFlags } from '@/lib/inventory/lots';
 import type { Product } from '@/lib/inventory/types';
 import { SLOT_SELECT } from '@/lib/schedule/queries';
 import { groupByChair } from '@/lib/dashboard/by-chair';
-import type { PullRow, SlotRow } from '@/lib/schedule/types';
-import { dashboardShortages } from '@/lib/dashboard/shortages';
+import type { SlotRow } from '@/lib/schedule/types';
+import { dashboardShortages, type NeedRow } from '@/lib/dashboard/shortages';
 import { featureOn } from '@/lib/modules/modules';
 import { showShortageCard } from '@/lib/dashboard/shortage-card';
 import { recallCounts, type RecallRow } from '@/lib/visits/recall';
@@ -78,7 +78,7 @@ export default async function DashboardPage() {
 
   const surgeries = ((slots.data ?? []) as unknown as SlotRow[]).filter((s) => s.status !== 'cancelled');
   const byChair = groupByChair(surgeries);
-  const shortages = dashboardShortages((pullToday.data ?? []) as PullRow[], (pullTomorrow.data ?? []) as PullRow[]);
+  const shortages = dashboardShortages((pullToday.data ?? []) as NeedRow[], (pullTomorrow.data ?? []) as NeedRow[]);
   const stockRows = (stock.data ?? []) as StockRow[];
   const flagged = stockRows.map((r) => ({ r, f: stockFlags(r, today, settings.expiry_alert_days) }));
   const low = flagged.filter((x) => x.f.low).map((x) => x.r);

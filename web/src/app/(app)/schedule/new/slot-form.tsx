@@ -9,6 +9,8 @@ import { PlacedByChoice, type PlacedBy } from '@/components/placed-by-choice';
 import { SETTINGS, SETTING_LABELS, type BookingPatient, type Setting } from '@/lib/schedule/types';
 import { bookSurgery, updateBooking } from '../actions';
 import { PatientPicker } from './patient-picker';
+import { SparesEditor } from './spares-editor';
+import type { ImplantRow } from '@/lib/schedule/schemas';
 
 export type SessionOption = { id: string; label: string; courseId: string };
 type Role = '' | 'placing' | 'assisting';
@@ -64,6 +66,8 @@ function TechniqueSelect({ label, value, onChange }: { label: string; value: str
   );
 }
 
+const emptyRow = (): ImplantRow => ({ tooth: '', productId: '', technique: '', spares: [] });
+
 export function SlotForm(p: Props) {
   const router = useRouter();
   const edit = p.edit;
@@ -81,9 +85,7 @@ export function SlotForm(p: Props) {
     edit ? edit.supervisorId : by === 'delegate' && p.supervisors.some((s) => s.id === p.me) ? p.me : '';
   const [supervisorId, setSupervisorId] = useState(defaultSupervisor(placedBy));
   const [roles, setRoles] = useState<Record<string, Role>>(edit?.roles ?? {});
-  const [implants, setImplants] = useState<{ tooth: string; productId: string; technique: Technique | '' }[]>([
-    { tooth: '', productId: '', technique: '' },
-  ]);
+  const [implants, setImplants] = useState<ImplantRow[]>([emptyRow()]);
   const [bookedImplants, setBookedImplants] = useState(edit?.implants ?? []);
   const [notes, setNotes] = useState(edit?.notes ?? '');
   const [checked, setChecked] = useState<{ key: string; warnings: string[] } | null>(null);
@@ -131,7 +133,13 @@ export function SlotForm(p: Props) {
             .filter((i, n) => i.technique !== edit.implants[n].technique)
             .map((i) => ({ siteId: i.siteId, technique: i.technique })),
         })
-        : await bookSurgery({ ...people, sessionId, patientId: patient?.id ?? '', implants: implants.filter((i) => i.tooth.trim() !== '') });
+        : await bookSurgery({
+          ...people, sessionId, patientId: patient?.id ?? '',
+          implants: implants
+            .filter((i) => i.tooth.trim() !== '')
+            // A spare still unchosen is not sent.
+            .map((i) => ({ ...i, spares: i.spares.filter(Boolean) })),
+        });
       if (result.error) setError(result.error);
       else if (result.warnings) setChecked({ key: inputKey, warnings: result.warnings });
       else router.push(`/schedule?date=${result.date}`);
@@ -271,34 +279,42 @@ export function SlotForm(p: Props) {
         <fieldset className="space-y-2">
           <legend className="label">Implants needed</legend>
           {implants.map((row, i) => (
-            <div key={i} className="flex flex-wrap gap-2">
-              <input
-                className="input w-24"
-                aria-label={`Tooth ${i + 1}`}
-                placeholder="Tooth"
-                value={row.tooth}
-                onChange={(e) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, tooth: e.target.value } : r)))}
-              />
-              <select
-                className="input flex-1"
-                aria-label={`Implant ${i + 1}`}
-                value={row.productId}
-                onChange={(e) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, productId: e.target.value } : r)))}
-              >
-                <option value="">Implant not chosen yet</option>
-                {p.implants.map((pr) => <option key={pr.id} value={pr.id}>{productLabel(pr)}</option>)}
-              </select>
-              <TechniqueSelect
-                label={`Technique ${i + 1}`}
-                value={row.technique}
-                onChange={(t) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, technique: t } : r)))}
+            <div key={i} className="space-y-1">
+              <div className="flex flex-wrap gap-2">
+                <input
+                  className="input w-24"
+                  aria-label={`Tooth ${i + 1}`}
+                  placeholder="Tooth"
+                  value={row.tooth}
+                  onChange={(e) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, tooth: e.target.value } : r)))}
+                />
+                <select
+                  className="input flex-1"
+                  aria-label={`Implant ${i + 1}`}
+                  value={row.productId}
+                  onChange={(e) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, productId: e.target.value } : r)))}
+                >
+                  <option value="">Implant not chosen yet</option>
+                  {p.implants.map((pr) => <option key={pr.id} value={pr.id}>{productLabel(pr)}</option>)}
+                </select>
+                <TechniqueSelect
+                  label={`Technique ${i + 1}`}
+                  value={row.technique}
+                  onChange={(t) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, technique: t } : r)))}
+                />
+              </div>
+              <SparesEditor
+                tooth={row.tooth}
+                value={row.spares}
+                products={p.implants}
+                onChange={(spares) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, spares } : r)))}
               />
             </div>
           ))}
           <button
             type="button"
             className="text-sm text-accent hover:underline"
-            onClick={() => setImplants((all) => [...all, { tooth: '', productId: '', technique: '' }])}
+            onClick={() => setImplants((all) => [...all, emptyRow()])}
           >
             + Add another implant
           </button>

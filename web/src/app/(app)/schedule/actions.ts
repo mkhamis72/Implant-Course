@@ -100,10 +100,11 @@ export async function bookSurgery(input: Record<string, unknown>): Promise<BookR
     if (clashes?.length) return { warnings: (clashes as { message: string }[]).map((c) => c.message) };
   }
 
-  const { data: slotId, error } = await supabase.rpc('create_surgery_slot_v3', {
+  // v4 (0125) = v3 plus each tooth's spares.
+  const { data: slotId, error } = await supabase.rpc('create_surgery_slot_v4', {
     p_session: s.sessionId, p_chair: s.chairId, p_start: s.start, p_end: s.end, p_patient: patient.id,
     p_supervisor: s.supervisorId, p_placing: s.placing, p_assisting: s.assisting,
-    p_implants: s.implants.map((i) => ({ tooth: i.tooth, product_id: i.productId, technique: i.technique })),
+    p_implants: s.implants.map((i) => ({ tooth: i.tooth, product_id: i.productId, technique: i.technique, spares: i.spares })),
     p_override_reason: s.overrideReason, p_notes: s.notes, p_placing_doctor: s.placingDoctorId,
     p_setting: s.setting, p_date: s.date,
   });

@@ -135,14 +135,14 @@ describe('bookSurgery', () => {
   };
   const ok = () => {
     tables.patients = { data: { id: uuid(3) }, error: null };
-    rpc.mockImplementation(async (name: unknown) => ({ data: name === 'create_surgery_slot_v3' ? uuid(1) : [], error: null }));
+    rpc.mockImplementation(async (name: unknown) => ({ data: name === 'create_surgery_slot_v4' ? uuid(1) : [], error: null }));
   };
 
   it('a clinic books by date and where, with no session', async () => {
     features.list = [];
     ok();
     expect(await bookSurgery({ ...book, sessionId: uuid(4), date: '2030-03-02', setting: 'hospital_ga' })).toEqual({ slotId: uuid(1), date: '2030-03-02' });
-    expect(calls('create_surgery_slot_v3')[0]).toEqual({
+    expect(calls('create_surgery_slot_v4')[0]).toEqual({
       p_session: null, p_chair: uuid(2), p_start: '09:00', p_end: '10:00', p_patient: uuid(3), p_supervisor: null,
       p_placing: [], p_assisting: [], p_implants: [], p_override_reason: '', p_notes: '', p_placing_doctor: uuid(8),
       p_setting: 'hospital_ga', p_date: '2030-03-02',
@@ -167,7 +167,7 @@ describe('bookSurgery', () => {
     tables.sessions = { data: { id: uuid(7) }, error: null };
     await bookSurgery({ ...book, date: '2030-03-02' });
     expect(calls('slot_conflicts_v2')[0]).toMatchObject({ p_session: uuid(7), p_doctor: uuid(8) });
-    expect(calls('create_surgery_slot_v3')[0]).toMatchObject({ p_setting: null });
+    expect(calls('create_surgery_slot_v4')[0]).toMatchObject({ p_setting: null });
   });
 
   it('a clinic skips the clash check only on a date with no session at all (the database still refuses clashes)', async () => {
@@ -175,7 +175,7 @@ describe('bookSurgery', () => {
     ok();
     await bookSurgery({ ...book, date: '2030-03-02' });
     expect(calls('slot_conflicts_v2')).toHaveLength(0);
-    expect(calls('create_surgery_slot_v3')).toHaveLength(1);
+    expect(calls('create_surgery_slot_v4')).toHaveLength(1);
   });
 
   it('a clinic needs a date', async () => {
@@ -189,7 +189,7 @@ describe('bookSurgery', () => {
     tables.sessions = { data: { date: '2030-03-04' }, error: null };
     expect(await bookSurgery({ ...book, sessionId: uuid(4), date: '2030-03-02', setting: 'clinic' })).toEqual({ slotId: uuid(1), date: '2030-03-04' });
     expect(calls('slot_conflicts_v2')[0]).toMatchObject({ p_session: uuid(4) });
-    expect(calls('create_surgery_slot_v3')[0]).toMatchObject({ p_session: uuid(4), p_date: null, p_setting: null });
+    expect(calls('create_surgery_slot_v4')[0]).toMatchObject({ p_session: uuid(4), p_date: null, p_setting: null });
   });
 
   it('a course organizer needs a session', async () => {
@@ -197,11 +197,44 @@ describe('bookSurgery', () => {
     expect(await bookSurgery({ ...book })).toEqual({ error: 'Choose a surgery session.' });
   });
 
+  it('bookSurgery calls create_surgery_slot_v4', async () => {
+    ok();
+    tables.sessions = { data: { date: '2030-03-04' }, error: null };
+    const implants = [
+      { tooth: '14', productId: uuid(10), technique: 'guided', spares: [uuid(11), uuid(12)] },
+      { tooth: '15', productId: '', technique: 'free_hand', spares: [] },
+    ];
+    await bookSurgery({ ...book, sessionId: uuid(4), implants });
+    expect(calls('create_surgery_slot_v3')).toHaveLength(0);
+    expect(calls('create_surgery_slot_v4')[0]).toEqual({
+      p_session: uuid(4), p_chair: uuid(2), p_start: '09:00', p_end: '10:00', p_patient: uuid(3), p_supervisor: null,
+      p_placing: [], p_assisting: [], p_override_reason: '', p_notes: '', p_placing_doctor: uuid(8),
+      p_setting: null, p_date: null,
+      p_implants: [
+        { tooth: 14, product_id: uuid(10), technique: 'guided', spares: [uuid(11), uuid(12)] },
+        { tooth: 15, product_id: null, technique: 'free_hand', spares: [] },
+      ],
+    });
+  });
+
+  it('refuses more than 5 spares on a tooth, or the same implant twice', async () => {
+    ok();
+    tables.sessions = { data: { date: '2030-03-04' }, error: null };
+    const six = [11, 12, 13, 14, 15, 16].map(uuid);
+    expect(await bookSurgery({ ...book, sessionId: uuid(4), implants: [{ tooth: '14', productId: '', technique: 'guided', spares: six }] }))
+      .toEqual({ error: 'Tooth 14 has more than 5 spares.' });
+    expect(await bookSurgery({ ...book, sessionId: uuid(4), implants: [{ tooth: '14', productId: uuid(10), technique: 'guided', spares: [uuid(10)] }] }))
+      .toEqual({ error: 'Tooth 14 lists the same implant twice.' });
+    expect(await bookSurgery({ ...book, sessionId: uuid(4), implants: [{ tooth: '14', productId: '', technique: 'guided', spares: [uuid(11), uuid(11)] }] }))
+      .toEqual({ error: 'Tooth 14 lists the same implant twice.' });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it('bookSurgery sends p_patient from patientId', async () => {
     ok();
     tables.sessions = { data: { date: '2030-03-04' }, error: null };
     await bookSurgery({ ...book, sessionId: uuid(4) });
-    expect(calls('create_surgery_slot_v3')[0]).toMatchObject({ p_patient: uuid(3) });
+    expect(calls('create_surgery_slot_v4')[0]).toMatchObject({ p_patient: uuid(3) });
     expect(calls('slot_conflicts_v2')[0]).toMatchObject({ p_patient: uuid(3) });
   });
 

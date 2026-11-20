@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { isRealDate } from '@/lib/dates';
 import { isFdiTooth } from '@/lib/patients/fdi';
-import { TECHNIQUES } from '@/lib/inventory/types';
+import { TECHNIQUES, type Technique } from '@/lib/inventory/types';
 import { SESSION_TYPES, SETTINGS } from './types';
 import { blankToNull, optionalUuid } from '@/lib/form-values';
 
@@ -115,6 +115,21 @@ function onlyChosen<T extends PlacedBy>(p: T): T {
   return p.placedBy === 'doctor' ? { ...p, placing: [] } : { ...p, placingDoctorId: null };
 }
 
+/** A booking form's implant row: the tooth as typed, '' = not chosen, and its spares ('' = a spare not chosen yet, not sent). */
+export type ImplantRow = { tooth: string; productId: string; technique: Technique | ''; spares: string[] };
+
+export const MAX_SPARES = 5;
+
+/**
+ * Spares (0125): at most 5 per tooth, none repeating the planned implant or another spare; the database checks the same.
+ * Checked on the item (not with `.max(5)` on the array) so the message names the tooth.
+ */
+function checkSpares(i: { tooth: number; productId: string | null; spares: string[] }, ctx: z.RefinementCtx) {
+  const ids = i.productId ? [i.productId, ...i.spares] : i.spares;
+  if (i.spares.length > MAX_SPARES) ctx.addIssue({ code: 'custom', message: `Tooth ${i.tooth} has more than 5 spares.` });
+  else if (new Set(ids).size !== ids.length) ctx.addIssue({ code: 'custom', message: `Tooth ${i.tooth} lists the same implant twice.` });
+}
+
 export const slotSchema = z
   .object({
     sessionId: optionalUuid,
@@ -126,11 +141,14 @@ export const slotSchema = z
     ...placedByFields,
     implants: z
       .array(
-        z.object({
-          tooth: z.coerce.number().refine(isFdiTooth, { message: 'Unknown tooth number.' }),
-          productId: optionalUuid,
-          technique,
-        }),
+        z
+          .object({
+            tooth: z.coerce.number().refine(isFdiTooth, { message: 'Unknown tooth number.' }),
+            productId: optionalUuid,
+            technique,
+            spares: z.array(z.string().uuid({ message: 'Choose an implant from the catalog.' })).default([]),
+          })
+          .superRefine(checkSpares),
       )
       .default([]),
     overrideReason: text(300),

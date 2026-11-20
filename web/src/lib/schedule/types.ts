@@ -41,12 +41,18 @@ export type SlotRow = {
   /** Where a clinic booking happens (0122). */
   setting: Setting | null;
   implants: { tooth: number; product: Product | null; site: { id: string; technique: Technique | null } | null }[];
+  /** Each tooth's spare implants (0125), in `position` order within a tooth. */
+  spares: BookingSpare[];
   checklists: { id: string; items: { done_at: string | null }[] }[];
 };
+
+export type BookingSpare = { tooth: number; position: number; product: Product | null };
 
 export type PullRow = Pick<Product, 'type' | 'brand' | 'system' | 'platform' | 'diameter_mm' | 'length_mm' | 'description'> & {
   product_id: string | null;
   needed: number;
+  /** Spares for that day's bookings (0125), counted apart from `needed`; a spare-only product has needed 0. */
+  spares: number;
   available: number;
 };
 

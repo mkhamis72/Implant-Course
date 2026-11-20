@@ -14,6 +14,7 @@ import { bookingTechnique, TECHNIQUE_SHORT, type BookingTechnique } from '@/lib/
 import { featureOn, teachingOn } from '@/lib/modules/modules';
 import { CancelBooking } from './cancel-booking';
 import { BookingStatus } from './booking-status';
+import { BookingSpares } from './booking-spares';
 import { BookingLink, SurgerySessions, type DaySession } from './surgery-sessions';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
 import { whereLine } from '@/lib/schedule/labels';
@@ -187,6 +188,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pag
                       })}
                     </div>
                   )}
+                  <BookingSpares spares={b.spares} />
                   {b.supervisor && <div>Supervisor: {b.supervisor.full_name}</div>}
                   {b.doctor && <div>Doctor: {b.doctor.name}</div>}
                   {where && <div>{where}</div>}

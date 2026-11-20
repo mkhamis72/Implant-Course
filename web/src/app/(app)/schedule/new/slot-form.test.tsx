@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { Product } from '@/lib/inventory/types';
 import { SlotForm } from './slot-form';
 import { bookSurgery, updateBooking } from '../actions';
 
@@ -65,6 +66,30 @@ describe('SlotForm', () => {
     expect(screen.getByRole('combobox', { name: 'Technique 1' })).toHaveValue('');
     expect(screen.getByRole('option', { name: 'Guided' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Free hand' })).toBeInTheDocument();
+  });
+
+  it('payload carries spares per tooth', async () => {
+    const implant = (id: string, d: number) =>
+      ({ id, type: 'implant', brand: 'Oxy', system: 'PSK', platform: '', diameter_mm: d, length_mm: 10, description: '' }) as Product;
+    render(<SlotForm {...props} sessions={[]} implants={[implant('p1', 4), implant('p2', 4.5), implant('p3', 5)]} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Tooth 1' }), { target: { value: '14' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Implant 1' }), { target: { value: 'p1' } });
+    fireEvent.click(screen.getByRole('button', { name: '+ Add spare' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add spare' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Spare 1 for tooth 14' }), { target: { value: 'p2' } });
+    // The second spare stays unchosen: it is not sent.
+    fireEvent.click(screen.getByRole('button', { name: '+ Add another implant' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Tooth 2' }), { target: { value: '15' } });
+    fireEvent.click(screen.getAllByRole('button', { name: '+ Add spare' })[1]);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Spare 1 for tooth 15' }), { target: { value: 'p3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Book surgery' }));
+    await waitFor(() => expect(bookSurgery).toHaveBeenCalled());
+    expect(vi.mocked(bookSurgery).mock.calls.at(-1)![0]).toMatchObject({
+      implants: [
+        { tooth: '14', productId: 'p1', technique: '', spares: ['p2'] },
+        { tooth: '15', productId: '', technique: '', spares: ['p3'] },
+      ],
+    });
   });
 
   it('edits a booking with its day and patient fixed and its people prefilled', () => {
