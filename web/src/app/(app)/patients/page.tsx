@@ -132,7 +132,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
                 ))}
               </tbody>
             </table>
-            <Pager page={page} last={last} filters={{ q, archived, stages, course, supervisor }} />
+            <Pager page={page} last={last} filters={{ q, archived: archived === '1' ? '1' : '', stages, course, supervisor }} />
           </>
         )}
       </div>

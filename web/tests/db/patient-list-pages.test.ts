@@ -114,10 +114,11 @@ describe('patient list pages (0124)', () => {
            has_function_privilege('anon', p.oid, 'execute') as anon,
            has_function_privilege('authenticated', p.oid, 'execute') as auth
          from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-         where n.nspname = 'public' and p.proname in ('search_patients_v2', 'search_patients_count')
+         where n.nspname = 'public' and p.proname in ('patient_list_matches', 'search_patients_v2', 'search_patients_count')
          order by p.proname`,
       );
       expect(rows).toEqual([
+        { proname: 'patient_list_matches', prosecdef: false, pronargdefaults: 0, anon: false, auth: true },
         { proname: 'search_patients_count', prosecdef: false, pronargdefaults: 0, anon: false, auth: true },
         { proname: 'search_patients_v2', prosecdef: false, pronargdefaults: 0, anon: false, auth: true },
       ]);

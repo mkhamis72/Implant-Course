@@ -4,7 +4,8 @@ export const PAGE_SIZE = 50;
 /** The page asked for in the URL; anything but a whole number of 1 or more means page 1. */
 export function parsePage(value: string | string[] | undefined): number {
   const v = Array.isArray(value) ? value[0] : value;
-  if (!v || !/^[1-9]\d{0,8}$/.test(v)) return 1;
+  // At most 7 digits, so the row offset stays well inside Postgres's int range.
+  if (!v || !/^[1-9]\d{0,6}$/.test(v)) return 1;
   return Number(v);
 }
 

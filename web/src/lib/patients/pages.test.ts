@@ -8,7 +8,7 @@ describe('parsePage', () => {
   });
 
   it('falls back to 1 for missing, out-of-range or garbage values', () => {
-    for (const v of [undefined, '', '0', '-2', 'abc', '2.5', '1e3', ' 4', '99999999999999999999']) {
+    for (const v of [undefined, '', '0', '-2', 'abc', '2.5', '1e3', ' 4', '99999999', '99999999999999999999']) {
       expect(parsePage(v), String(v)).toBe(1);
     }
   });
