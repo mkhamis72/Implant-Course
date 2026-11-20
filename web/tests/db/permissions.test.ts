@@ -288,6 +288,9 @@ describe('permissions: guard rails', () => {
         // Modules release 3 (0118): admin user tools; admin-only, no area (work in every plan).
         'admin_change_email', 'admin_end_sessions', 'admin_record_event', 'admin_require_mfa_setup', 'admin_set_name',
         'admin_user_history',
+        // Clinic workflow (0123): login invites with a doctor and the doctor's login link; admin-only, no area
+        // (as create_pending_login / add_existing_member, 0088, and the admin tools, 0118).
+        'create_pending_login_v2', 'add_existing_member_v2', 'set_doctor_login',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
