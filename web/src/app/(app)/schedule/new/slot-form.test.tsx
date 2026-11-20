@@ -15,6 +15,9 @@ const props = {
   chairs: [], canOpenFile: true, enrolled: {}, implants: [], supervisors: [], me: '', teaching: true, doctors: [],
   initial: { sessionId: '', chairId: '', start: '09:00' },
 };
+const amal = { id: 'pt1', file_no: 'P00012', full_name: 'Amal Hassan', dob: null, phone: null };
+const implant = (id: string, d: number) =>
+  ({ id, type: 'implant', brand: 'Oxy', system: 'PSK', platform: '', diameter_mm: d, length_mm: 10, description: '' }) as Product;
 
 describe('SlotForm', () => {
   it('explains where to add a session when there are no upcoming surgery sessions', () => {
@@ -69,8 +72,6 @@ describe('SlotForm', () => {
   });
 
   it('payload carries spares per tooth', async () => {
-    const implant = (id: string, d: number) =>
-      ({ id, type: 'implant', brand: 'Oxy', system: 'PSK', platform: '', diameter_mm: d, length_mm: 10, description: '' }) as Product;
     render(<SlotForm {...props} sessions={[]} implants={[implant('p1', 4), implant('p2', 4.5), implant('p3', 5)]} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'Tooth 1' }), { target: { value: '14' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Implant 1' }), { target: { value: 'p1' } });
@@ -101,13 +102,14 @@ describe('SlotForm', () => {
         supervisors={[{ id: 'sup1', label: 'Prof. Laila Samir' }]}
         enrolled={{ c1: [{ id: 'd1', label: 'Dr One' }, { id: 'd2', label: 'Dr Two' }] }}
         edit={{
-          slotId: 'slot1', sessionId: 's1', sessionLabel: '05 Oct 2026 · Course · Day 1', patientLabel: 'Amal Hassan (P00012)',
+          slotId: 'slot1', sessionId: 's1', sessionLabel: '05 Oct 2026 · Course · Day 1', patient: amal,
           chairId: 'ch1', supervisorId: 'sup1', start: '09:00', end: '10:00', roles: { d1: 'placing', d2: 'assisting' },
-          implants: [{ siteId: 'site1', tooth: 36, label: 'Oxy 4.0 × 10', technique: 'guided' }], notes: 'Bring guide', placingDoctorId: '',
+          implants: [{ tooth: '36', productId: '', technique: 'guided', spares: [], placed: false }], notes: 'Bring guide', placingDoctorId: '',
         }}
       />,
     );
-    expect(screen.getByText('Amal Hassan (P00012)')).toBeInTheDocument();
+    expect(screen.getByText(/P00012 · Amal Hassan/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Change' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Surgery session' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Patient' })).not.toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Role of Dr One' })).toHaveValue('placing');
@@ -115,6 +117,82 @@ describe('SlotForm', () => {
     expect(screen.getByRole('combobox', { name: 'Technique 1' })).toHaveValue('guided');
     expect(screen.getByLabelText('End')).toHaveValue('10:00');
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument();
+  });
+});
+
+describe('SlotForm: editing the implants', () => {
+  const products = [implant('p1', 4), implant('p2', 4.5), implant('p3', 5)];
+  const base = {
+    slotId: 'slot1', sessionId: 's1', sessionLabel: 'Day 1', patient: amal, chairId: 'ch1', supervisorId: '',
+    start: '09:00', end: '10:00', roles: {}, notes: '', placingDoctorId: 'doc1',
+  };
+  const planned = { tooth: '36', productId: 'p1', technique: 'guided' as const, spares: ['p2'], placed: false };
+  // An older row: placed with no technique recorded.
+  const placed = { tooth: '46', productId: 'p3', technique: '' as const, spares: [], placed: true };
+  const renderEdit = (implants: (typeof planned | typeof placed)[]) =>
+    render(
+      <SlotForm
+        {...props}
+        sessions={[{ id: 's1', label: '', courseId: 'c1' }]}
+        doctors={[{ id: 'doc1', label: 'Dr Hany Fouad' }]}
+        implants={products}
+        edit={{ ...base, implants }}
+      />,
+    );
+  const sent = () => vi.mocked(updateBooking).mock.calls.at(-1)![0];
+
+  it('edit rows are editable and pre-filled', () => {
+    renderEdit([planned]);
+    expect(screen.getByRole('textbox', { name: 'Tooth 1' })).toHaveValue('36');
+    expect(screen.getByRole('combobox', { name: 'Implant 1' })).toHaveValue('p1');
+    expect(screen.getByRole('combobox', { name: 'Technique 1' })).toHaveValue('guided');
+    expect(screen.getByRole('combobox', { name: 'Spare 1 for tooth 36' })).toHaveValue('p2');
+  });
+
+  it('placed row is read-only with the Corrections note', () => {
+    renderEdit([placed]);
+    expect(screen.queryByRole('textbox', { name: 'Tooth 1' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Implant 1' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Technique 1' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove tooth 1' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Tooth 46 · Oxy/)).toBeInTheDocument();
+    expect(screen.getByText('Placed — change it in Corrections')).toBeInTheDocument();
+    // Its spares stay editable.
+    fireEvent.click(screen.getByRole('button', { name: '+ Add spare' }));
+    expect(screen.getByRole('combobox', { name: 'Spare 1 for tooth 46' })).toBeInTheDocument();
+  });
+
+  it('can add and remove a tooth', async () => {
+    renderEdit([planned, { ...planned, tooth: '37', spares: [] }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove tooth 1' }));
+    expect(screen.getByRole('textbox', { name: 'Tooth 1' })).toHaveValue('37');
+    fireEvent.click(screen.getByRole('button', { name: '+ Add another implant' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Tooth 2' }), { target: { value: '35' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Implant 2' }), { target: { value: 'p2' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Technique 2' }), { target: { value: 'free_hand' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(updateBooking).toHaveBeenCalled());
+    expect(sent().implants).toEqual([
+      { tooth: '37', productId: 'p1', technique: 'guided', spares: [], placed: false },
+      { tooth: '35', productId: 'p2', technique: 'free_hand', spares: [], placed: false },
+    ]);
+  });
+
+  it('payload is the full set including placed rows unchanged', async () => {
+    vi.mocked(updateBooking).mockClear();
+    renderEdit([planned, placed]);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Technique 1' }), { target: { value: 'free_hand' } });
+    fireEvent.click(screen.getAllByRole('button', { name: '+ Add spare' })[1]);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Spare 1 for tooth 46' }), { target: { value: 'p1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(updateBooking).toHaveBeenCalled());
+    expect(sent()).toMatchObject({
+      slotId: 'slot1',
+      implants: [
+        { tooth: '36', productId: 'p1', technique: 'free_hand', spares: ['p2'], placed: false },
+        { tooth: '46', productId: 'p3', technique: '', spares: ['p1'], placed: true },
+      ],
+    });
   });
 });
 
@@ -162,7 +240,7 @@ describe('SlotForm: placed by', () => {
       <SlotForm
         {...people}
         edit={{
-          slotId: 'slot1', sessionId: 's1', sessionLabel: 'Day 1', patientLabel: 'Amal', chairId: '', supervisorId: 'sup1',
+          slotId: 'slot1', sessionId: 's1', sessionLabel: 'Day 1', patient: amal, chairId: '', supervisorId: 'sup1',
           start: '09:00', end: '10:00', roles: {}, implants: [], notes: '', placingDoctorId: 'doc1',
         }}
       />,
@@ -204,7 +282,7 @@ describe('SlotForm: clinic', () => {
       <SlotForm
         {...clinic}
         edit={{
-          slotId: 'slot1', sessionId: 's1', sessionLabel: '05 Oct 2026 · Day 1', patientLabel: 'Amal', chairId: '', supervisorId: '',
+          slotId: 'slot1', sessionId: 's1', sessionLabel: '05 Oct 2026 · Day 1', patient: amal, chairId: '', supervisorId: '',
           start: '09:00', end: '10:00', roles: {}, implants: [], notes: '', placingDoctorId: '', placedByRecorded: true,
         }}
       />,
@@ -236,7 +314,7 @@ describe('SlotForm: clinic', () => {
       <SlotForm
         {...clinic}
         edit={{
-          slotId: 'slot1', sessionId: 's1', sessionLabel: '05 Oct 2026 · Clinic day', patientLabel: 'Amal', chairId: '', supervisorId: '',
+          slotId: 'slot1', sessionId: 's1', sessionLabel: '05 Oct 2026 · Clinic day', patient: amal, chairId: '', supervisorId: '',
           start: '09:00', end: '10:00', roles: {}, implants: [], notes: '', placingDoctorId: 'doc1', date: '2030-03-02', setting: 'clinic',
         }}
       />,

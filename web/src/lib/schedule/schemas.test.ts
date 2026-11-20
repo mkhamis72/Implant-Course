@@ -69,10 +69,16 @@ describe('slotSchema', () => {
 describe('updateSlotSchema', () => {
   const edit = {
     slotId: id, chairId: id, start: '11:00', end: '12:00', supervisorId: id, placing: [id], assisting: [],
-    implants: [{ siteId: id, technique: 'free_hand' }], overrideReason: '', notes: ' moved ',
+    implants: [{ tooth: '36', productId: id, technique: 'free_hand', spares: [], placed: false }], overrideReason: '', notes: ' moved ',
   };
   it('normalizes the edit', () => {
-    expect(updateSlotSchema.parse(edit)).toMatchObject({ notes: 'moved', implants: [{ siteId: id, technique: 'free_hand' }] });
+    expect(updateSlotSchema.parse(edit)).toMatchObject({ notes: 'moved', implants: [{ tooth: 36, productId: id, technique: 'free_hand', spares: [], placed: false }] });
+  });
+  it('a placed tooth may go back with no technique; a tooth still to be placed needs one', () => {
+    const row = edit.implants[0];
+    expect(updateSlotSchema.parse({ ...edit, implants: [{ ...row, technique: '', placed: true }] }).implants[0].technique).toBeNull();
+    expect(err(updateSlotSchema.safeParse({ ...edit, implants: [{ ...row, technique: '' }] })))
+      .toBe('Choose Guided or Free hand for each implant.');
   });
   it('explains what is wrong', () => {
     expect(err(updateSlotSchema.safeParse({ ...edit, end: '10:00' }))).toBe('The end time must be after the start time.');

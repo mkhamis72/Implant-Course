@@ -118,6 +118,9 @@ function onlyChosen<T extends PlacedBy>(p: T): T {
 /** A booking form's implant row: the tooth as typed, '' = not chosen, and its spares ('' = a spare not chosen yet, not sent). */
 export type ImplantRow = { tooth: string; productId: string; technique: Technique | ''; spares: string[] };
 
+/** Editing a booking (0126): a row already placed is sent back exactly as recorded, an empty technique included. */
+export type EditImplantRow = ImplantRow & { placed: boolean };
+
 export const MAX_SPARES = 5;
 
 /**
@@ -175,7 +178,24 @@ export const updateSlotSchema = z
     ...placedByFields,
     placedBy: z.enum(['delegate', 'doctor', 'recorded']).default('delegate'),
     ...clinicFields,
-    implants: z.array(z.object({ siteId: requiredId('Implant not found.'), technique })).default([]),
+    // The whole set (set_booking_implants, 0126). A placed tooth goes back as recorded, so it may have no technique
+    // (older rows); the database refuses any change to it.
+    implants: z
+      .array(
+        z
+          .object({
+            tooth: z.coerce.number().refine(isFdiTooth, { message: 'Unknown tooth number.' }),
+            productId: optionalUuid,
+            placed: z.boolean().default(false),
+            technique: z.preprocess(blankToNull, technique.nullable()),
+            spares: z.array(z.string().uuid({ message: 'Choose an implant from the catalog.' })).default([]),
+          })
+          .superRefine((i, ctx) => {
+            if (!i.placed && !i.technique) ctx.addIssue({ code: 'custom', message: 'Choose Guided or Free hand for each implant.' });
+            checkSpares(i, ctx);
+          }),
+      )
+      .default([]),
     overrideReason: text(300),
     notes: text(1000),
   })

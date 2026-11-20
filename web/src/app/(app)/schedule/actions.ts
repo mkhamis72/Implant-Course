@@ -141,16 +141,22 @@ export async function updateBooking(input: Record<string, unknown>): Promise<Boo
     if (clashes?.length) return { warnings: (clashes as { message: string }[]).map((c) => c.message) };
   }
 
+  // The whole set of implants first (0126): if it is refused, nothing is saved.
+  const { error: implantsError } = await supabase.rpc('set_booking_implants', {
+    p_slot: s.slotId,
+    p_implants: s.implants.map((i) => ({ tooth: i.tooth, product_id: i.productId, technique: i.technique, spares: i.spares })),
+  });
+  if (implantsError) return { error: userMessage(implantsError)! };
+
   // A clinic always sends the setting (null clears it) and the date; a course organizer sends neither.
   const { error } = await supabase.rpc('update_surgery_slot_v3', {
     p_slot: s.slotId, p_chair: s.chairId, p_start: s.start, p_end: s.end, p_supervisor: s.supervisorId,
     p_placing: s.placing, p_assisting: s.assisting, p_override_reason: s.overrideReason, p_notes: s.notes,
     p_placing_doctor: s.placingDoctorId, p_setting: s.setting, p_date: s.date,
   });
-  if (error) return { error: userMessage(error)! };
-  for (const i of s.implants) {
-    const { error: techError } = await supabase.rpc('set_implant_technique', { p_site: i.siteId, p_technique: i.technique });
-    if (techError) return { error: userMessage(techError)! };
+  if (error) {
+    revalidatePath('/schedule');
+    return { error: `The implants were saved, but the other changes were not: ${userMessage(error)}` };
   }
   revalidatePath('/schedule');
   revalidatePath(`/patients/${slot.patient_id}`, 'layout');

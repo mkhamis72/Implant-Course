@@ -8,19 +8,19 @@ import { TECHNIQUES, TECHNIQUE_LABELS, type Option, type Product, type Technique
 import { PlacedByChoice, type PlacedBy } from '@/components/placed-by-choice';
 import { SETTINGS, SETTING_LABELS, type BookingPatient, type Setting } from '@/lib/schedule/types';
 import { bookSurgery, updateBooking } from '../actions';
-import { PatientPicker } from './patient-picker';
+import { PatientCard, PatientPicker } from './patient-picker';
 import { SparesEditor } from './spares-editor';
-import type { ImplantRow } from '@/lib/schedule/schemas';
+import type { EditImplantRow } from '@/lib/schedule/schemas';
 
 export type SessionOption = { id: string; label: string; courseId: string };
 type Role = '' | 'placing' | 'assisting';
 
-/** An existing booking being edited: the patient is fixed, and the session (day) too except in a clinic. */
+/** An existing booking being edited: the patient is fixed, and the session (day) too except in a clinic. Its implants can change until placed. */
 export type EditedBooking = {
   slotId: string;
   sessionId: string;
   sessionLabel: string;
-  patientLabel: string;
+  patient: BookingPatient | null;
   chairId: string;
   supervisorId: string;
   start: string;
@@ -30,7 +30,8 @@ export type EditedBooking = {
   placingDoctorId: string;
   /** A clinic editing a booking made before the switch whose (hidden) delegates place the implants: no doctor is asked. */
   placedByRecorded?: boolean;
-  implants: { siteId: string; tooth: number; label: string; technique: Technique | '' }[];
+  /** Every tooth of the booking, by tooth; a placed one is shown read-only and sent back as recorded (0126). */
+  implants: EditImplantRow[];
   notes: string;
   /** A clinic edits the date and where (always sent back: an empty Where clears it). */
   date?: string;
@@ -66,7 +67,7 @@ function TechniqueSelect({ label, value, onChange }: { label: string; value: str
   );
 }
 
-const emptyRow = (): ImplantRow => ({ tooth: '', productId: '', technique: '', spares: [] });
+const emptyRow = (): EditImplantRow => ({ tooth: '', productId: '', technique: '', spares: [], placed: false });
 
 export function SlotForm(p: Props) {
   const router = useRouter();
@@ -85,8 +86,7 @@ export function SlotForm(p: Props) {
     edit ? edit.supervisorId : by === 'delegate' && p.supervisors.some((s) => s.id === p.me) ? p.me : '';
   const [supervisorId, setSupervisorId] = useState(defaultSupervisor(placedBy));
   const [roles, setRoles] = useState<Record<string, Role>>(edit?.roles ?? {});
-  const [implants, setImplants] = useState<ImplantRow[]>([emptyRow()]);
-  const [bookedImplants, setBookedImplants] = useState(edit?.implants ?? []);
+  const [implants, setImplants] = useState<EditImplantRow[]>(edit ? edit.implants : [emptyRow()]);
   const [notes, setNotes] = useState(edit?.notes ?? '');
   const [checked, setChecked] = useState<{ key: string; warnings: string[] } | null>(null);
   const [override, setOverride] = useState('');
@@ -94,6 +94,10 @@ export function SlotForm(p: Props) {
   const [pending, start_] = useTransition();
 
   const byDoctor = placedBy === 'doctor';
+  const productName = (id: string) => {
+    const product = p.implants.find((pr) => pr.id === id);
+    return product ? productLabel(product) : id ? 'Implant' : 'Implant not chosen yet';
+  };
   /** Switching who places swaps the supervisor default, unless one was chosen by hand. */
   function choosePlacedBy(by: PlacedBy) {
     if (supervisorId === defaultSupervisor(placedBy)) setSupervisorId(defaultSupervisor(by));
@@ -123,22 +127,17 @@ export function SlotForm(p: Props) {
       // A clinic books by date; a course organizer by session.
       ...(p.teaching ? {} : { date, setting }),
     };
+    const rows = implants
+      .filter((i) => i.tooth.trim() !== '')
+      // A spare still unchosen is not sent.
+      .map((i) => ({ ...i, spares: i.spares.filter(Boolean) }));
     start_(async () => {
       const result = edit
-        ? await updateBooking({
-          ...people,
-          slotId: edit.slotId,
-          // Only changed techniques are saved, so the history shows real changes.
-          implants: bookedImplants
-            .filter((i, n) => i.technique !== edit.implants[n].technique)
-            .map((i) => ({ siteId: i.siteId, technique: i.technique })),
-        })
+        // The whole set, placed teeth as recorded (set_booking_implants, 0126).
+        ? await updateBooking({ ...people, slotId: edit.slotId, implants: rows })
         : await bookSurgery({
           ...people, sessionId, patientId: patient?.id ?? '',
-          implants: implants
-            .filter((i) => i.tooth.trim() !== '')
-            // A spare still unchosen is not sent.
-            .map((i) => ({ ...i, spares: i.spares.filter(Boolean) })),
+          implants: rows.map(({ placed: _placed, ...i }) => i),
         });
       if (result.error) setError(result.error);
       else if (result.warnings) setChecked({ key: inputKey, warnings: result.warnings });
@@ -152,7 +151,7 @@ export function SlotForm(p: Props) {
         {edit ? (
           <div className="space-y-1 text-sm sm:col-span-2">
             {p.teaching && <p><span className="text-muted">Session:</span> {edit.sessionLabel}</p>}
-            <p><span className="text-muted">Patient:</span> {edit.patientLabel}</p>
+            {edit.patient && <PatientCard canOpenFile={p.canOpenFile} value={edit.patient} />}
             {p.teaching && <p className="text-muted">To move the surgery to another day, cancel it and book again.</p>}
           </div>
         ) : p.teaching && (
@@ -259,67 +258,64 @@ export function SlotForm(p: Props) {
       </fieldset>
       )}
 
-      {edit ? (
-        bookedImplants.length > 0 && (
-          <fieldset className="space-y-2">
-            <legend className="label">Implants</legend>
-            {bookedImplants.map((row, i) => (
-              <div key={row.siteId} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="w-56">Tooth {row.tooth} · {row.label}</span>
-                <TechniqueSelect
-                  label={`Technique ${i + 1}`}
-                  value={row.technique}
-                  onChange={(t) => setBookedImplants((all) => all.map((r, j) => (j === i ? { ...r, technique: t } : r)))}
-                />
-              </div>
-            ))}
-          </fieldset>
-        )
-      ) : (
-        <fieldset className="space-y-2">
-          <legend className="label">Implants needed</legend>
-          {implants.map((row, i) => (
+      <fieldset className="space-y-2">
+        <legend className="label">{edit ? 'Implants' : 'Implants needed'}</legend>
+        {implants.map((row, i) => {
+          const set = (patch: Partial<EditImplantRow>) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+          return (
             <div key={i} className="space-y-1">
-              <div className="flex flex-wrap gap-2">
-                <input
-                  className="input w-24"
-                  aria-label={`Tooth ${i + 1}`}
-                  placeholder="Tooth"
-                  value={row.tooth}
-                  onChange={(e) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, tooth: e.target.value } : r)))}
-                />
-                <select
-                  className="input flex-1"
-                  aria-label={`Implant ${i + 1}`}
-                  value={row.productId}
-                  onChange={(e) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, productId: e.target.value } : r)))}
-                >
-                  <option value="">Implant not chosen yet</option>
-                  {p.implants.map((pr) => <option key={pr.id} value={pr.id}>{productLabel(pr)}</option>)}
-                </select>
-                <TechniqueSelect
-                  label={`Technique ${i + 1}`}
-                  value={row.technique}
-                  onChange={(t) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, technique: t } : r)))}
-                />
-              </div>
-              <SparesEditor
-                tooth={row.tooth}
-                value={row.spares}
-                products={p.implants}
-                onChange={(spares) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, spares } : r)))}
-              />
+              {row.placed ? (
+                // Placed: only its spares change here; the rest goes through Corrections.
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                  <span>
+                    Tooth {row.tooth} · {productName(row.productId)}
+                    {row.technique && ` · ${TECHNIQUE_LABELS[row.technique]}`}
+                  </span>
+                  <span className="text-muted">Placed — change it in Corrections</span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    className="input w-24"
+                    aria-label={`Tooth ${i + 1}`}
+                    placeholder="Tooth"
+                    value={row.tooth}
+                    onChange={(e) => set({ tooth: e.target.value })}
+                  />
+                  <select
+                    className="input flex-1"
+                    aria-label={`Implant ${i + 1}`}
+                    value={row.productId}
+                    onChange={(e) => set({ productId: e.target.value })}
+                  >
+                    <option value="">Implant not chosen yet</option>
+                    {p.implants.map((pr) => <option key={pr.id} value={pr.id}>{productLabel(pr)}</option>)}
+                  </select>
+                  <TechniqueSelect label={`Technique ${i + 1}`} value={row.technique} onChange={(t) => set({ technique: t })} />
+                  {(edit || implants.length > 1) && (
+                    <button
+                      type="button"
+                      className="px-2 text-muted hover:text-bad"
+                      aria-label={`Remove tooth ${i + 1}`}
+                      onClick={() => setImplants((all) => all.filter((_, j) => j !== i))}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              )}
+              <SparesEditor tooth={row.tooth} value={row.spares} products={p.implants} onChange={(spares) => set({ spares })} />
             </div>
-          ))}
-          <button
-            type="button"
-            className="text-sm text-accent hover:underline"
-            onClick={() => setImplants((all) => [...all, emptyRow()])}
-          >
-            + Add another implant
-          </button>
-        </fieldset>
-      )}
+          );
+        })}
+        <button
+          type="button"
+          className="text-sm text-accent hover:underline"
+          onClick={() => setImplants((all) => [...all, emptyRow()])}
+        >
+          + Add another implant
+        </button>
+      </fieldset>
 
       <label className="block">
         <span className="label">Notes (optional)</span>

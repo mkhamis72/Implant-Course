@@ -17,6 +17,26 @@ const joined = (parts: (string | number | null)[]) => parts.filter((v) => v !== 
 /** Age today (Cairo). */
 const ageOf = (p: BookingPatient) => ageOn(p.dob, new Date(`${todayIso()}T00:00:00`));
 
+/** The chosen patient, with Open file (Patients view only); Change only when `onChange` is given (not when editing). */
+export function PatientCard({ canOpenFile, value, onChange }: { canOpenFile: boolean; value: BookingPatient; onChange?: () => void }) {
+  return (
+    <div className="sm:col-span-2">
+      <span className="label">Patient</span>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded border border-line bg-sunken px-3 py-2 text-sm">
+        <span className="font-medium">{joined([value.file_no, value.full_name, ageOf(value), value.phone])}</span>
+        {canOpenFile ? (
+          <a href={`/patients/${value.id}`} target="_blank" rel="noopener" className="text-accent hover:underline">
+            Open file<span className="sr-only"> (opens in a new tab)</span>
+          </a>
+        ) : (
+          <span className="text-muted">File: no access</span>
+        )}
+        {onChange && <button type="button" className="btn-secondary btn ml-auto py-1" onClick={onChange}>Change</button>}
+      </div>
+    </div>
+  );
+}
+
 /**
  * The booking form's patient: a combobox searching non-archived patients (2+ characters, at most 10 matches); the
  * chosen patient shows as a card with Open file (Patients view only) and Change.
@@ -74,24 +94,7 @@ export function PatientPicker({ canOpenFile, value, onChange }: Props) {
     onChange(null);
   }
 
-  if (value) {
-    return (
-      <div className="sm:col-span-2">
-        <span className="label">Patient</span>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded border border-line bg-sunken px-3 py-2 text-sm">
-          <span className="font-medium">{joined([value.file_no, value.full_name, ageOf(value), value.phone])}</span>
-          {canOpenFile ? (
-            <a href={`/patients/${value.id}`} target="_blank" rel="noopener" className="text-accent hover:underline">
-              Open file<span className="sr-only"> (opens in a new tab)</span>
-            </a>
-          ) : (
-            <span className="text-muted">File: no access</span>
-          )}
-          <button type="button" className="btn-secondary btn ml-auto py-1" onClick={change}>Change</button>
-        </div>
-      </div>
-    );
-  }
+  if (value) return <PatientCard canOpenFile={canOpenFile} value={value} onChange={change} />;
 
   const listId = `${id}-list`;
   const optionId = (i: number) => `${id}-option-${i}`;

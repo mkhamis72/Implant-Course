@@ -108,6 +108,63 @@ describe('updateBooking for a course organizer', () => {
   });
 });
 
+describe('updateBooking: the implants', () => {
+  const people = { supervisorId: uuid(5), placedBy: 'delegate', placing: [uuid(6)], placingDoctorId: '' };
+  const implants = [
+    { tooth: '36', productId: uuid(10), technique: 'guided', spares: [uuid(11)], placed: false },
+    // Placed, an older row with no technique: sent back as recorded.
+    { tooth: '46', productId: uuid(12), technique: '', spares: [], placed: true },
+  ];
+  const order = () => rpc.mock.calls.map((c) => c[0]);
+
+  it('updateBooking calls set_booking_implants then update_surgery_slot_v3', async () => {
+    recorded(uuid(5), null);
+    expect(await updateBooking({ ...edit, ...people, implants })).toEqual({ slotId: uuid(1), date: '2030-03-02' });
+    expect(order()).toEqual(['slot_conflicts_v2', 'set_booking_implants', 'update_surgery_slot_v3']);
+    expect(calls('set_booking_implants')[0]).toEqual({
+      p_slot: uuid(1),
+      p_implants: [
+        { tooth: 36, product_id: uuid(10), technique: 'guided', spares: [uuid(11)] },
+        { tooth: 46, product_id: uuid(12), technique: null, spares: [] },
+      ],
+    });
+    expect(calls('set_implant_technique')).toHaveLength(0);
+  });
+
+  it('a tooth still to be placed needs its technique', async () => {
+    recorded(uuid(5), null);
+    expect(await updateBooking({ ...edit, ...people, implants: [{ ...implants[0], technique: '' }] }))
+      .toEqual({ error: 'Choose Guided or Free hand for each implant.' });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('implants refused → no second call', async () => {
+    recorded(uuid(5), null);
+    rpc.mockImplementation(async (name: unknown) => (name === 'set_booking_implants'
+      ? { data: null, error: { message: 'Tooth 46 is already placed; change it in Corrections.', hint: 'user' } }
+      : { data: [], error: null }) as never);
+    try {
+      expect(await updateBooking({ ...edit, ...people, implants })).toEqual({ error: 'Tooth 46 is already placed; change it in Corrections.' });
+      expect(calls('update_surgery_slot_v3')).toHaveLength(0);
+    } finally {
+      rpc.mockImplementation(async () => ({ data: [], error: null }));
+    }
+  });
+
+  it('the rest refused after the implants were saved says so', async () => {
+    recorded(uuid(5), null);
+    rpc.mockImplementation(async (name: unknown) => (name === 'update_surgery_slot_v3'
+      ? { data: null, error: { message: 'This chair is booked.', hint: 'user' } }
+      : { data: [], error: null }) as never);
+    try {
+      expect(await updateBooking({ ...edit, ...people, implants }))
+        .toEqual({ error: 'The implants were saved, but the other changes were not: This chair is booked.' });
+    } finally {
+      rpc.mockImplementation(async () => ({ data: [], error: null }));
+    }
+  });
+});
+
 describe('addSurgeryDay', () => {
   const day = (o: Record<string, string>) => {
     const f = new FormData();
