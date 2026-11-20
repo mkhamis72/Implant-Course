@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
+import { canView } from '@/lib/auth/permissions';
 import { isRealDate, todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
 import { productLabel } from '@/lib/inventory/labels';
@@ -15,7 +16,7 @@ export default async function NewBookingPage({
 }: {
   searchParams: PageSearchParams;
 }) {
-  const q = await readParams(searchParams, 'date', 'chair', 'time', 'session', 'patient');
+  const q = await readParams(searchParams, 'date', 'chair', 'time', 'session');
   const supabase = await createClient();
   const me = await requirePermission('schedule', 'edit');
   const teaching = teachingOn(me.features);
@@ -27,7 +28,6 @@ export default async function NewBookingPage({
         .gte('date', todayIso()).order('date')
       : none,
     supabase.from('chairs').select('id, name').eq('active', true).order('name'),
-    supabase.from('patients').select('file_no, full_name').eq('archived', false).order('full_name').limit(2000),
     // A clinic has no delegates or supervisors.
     teaching ? supabase.from('enrollments').select('course_id, delegate:delegates(id, full_name, active)') : none,
     supabase.from('products').select('*').eq('type', 'implant').eq('active', true),
@@ -36,7 +36,7 @@ export default async function NewBookingPage({
   ]);
   // A failed query must not look like an empty list (e.g. "no sessions").
   if (results.some((r) => r.error)) throw new Error('Could not load the booking form');
-  const [{ data: sessions }, { data: chairs }, { data: patients }, { data: enrollments }, { data: implants }, { data: supervisors }, { data: doctors }] = results;
+  const [{ data: sessions }, { data: chairs }, { data: enrollments }, { data: implants }, { data: supervisors }, { data: doctors }] = results;
 
   const sessionOptions: SessionOption[] = ((sessions ?? []) as unknown as {
     id: string; title: string; date: string; course_id: string | null; course: { name: string } | null;
@@ -57,7 +57,7 @@ export default async function NewBookingPage({
       <SlotForm
         sessions={sessionOptions}
         chairs={(chairs ?? []).map((c) => ({ id: c.id as string, label: c.name as string }))}
-        patients={(patients ?? []) as { file_no: string; full_name: string }[]}
+        canOpenFile={canView(me, 'patients')}
         enrolled={enrolled}
         implants={((implants ?? []) as Product[]).sort((a, b) => productLabel(a).localeCompare(productLabel(b), undefined, { numeric: true }))}
         supervisors={(supervisors ?? []).map((s) => ({ id: s.id as string, label: s.full_name as string }))}
@@ -65,7 +65,7 @@ export default async function NewBookingPage({
         myDoctorId={defaultDoctorId((doctors ?? []) as { id: string; user_id: string | null; active: boolean }[], me?.user_id ?? '')}
         teaching={teaching}
         me={me?.user_id ?? ''}
-        initial={{ sessionId: initialSession, chairId: q.chair, start: q.time || '09:00', fileNo: q.patient, date: q.date && isRealDate(q.date) ? q.date : teaching ? undefined : todayIso() }}
+        initial={{ sessionId: initialSession, chairId: q.chair, start: q.time || '09:00', date: q.date && isRealDate(q.date) ? q.date : teaching ? undefined : todayIso() }}
       />
     </div>
   );

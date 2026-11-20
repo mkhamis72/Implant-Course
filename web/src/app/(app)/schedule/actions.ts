@@ -6,7 +6,7 @@ import { requirePermission } from '@/lib/auth/session';
 import { cancelSlotSchema, slotSchema, slotStatusSchema, surgeryDaySchema, updateSlotSchema } from '@/lib/schedule/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
-import { escapeLike } from '@/lib/like';
+import type { BookingPatient } from '@/lib/schedule/types';
 import { teachingOn } from '@/lib/modules/modules';
 import { placedByRecordedDelegates, type RecordedPeople } from '@/lib/schedule/recorded';
 
@@ -55,6 +55,21 @@ function forClinicEdit(input: Record<string, unknown>, slot: RecordedPeople): Re
   };
 }
 
+/** The booking form's patient picker: at most 10 non-archived matches, from 2 characters on. */
+export async function searchBookingPatients(q: string): Promise<BookingPatient[]> {
+  await requirePermission('schedule', 'edit');
+  if (typeof q !== 'string' || q.trim().length < 2) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('search_patients_v2', {
+    q, include_archived: false, stages: [], course: null, supervisor: null, p_offset: 0, p_limit: 10,
+  });
+  if (error) {
+    console.error('searchBookingPatients failed', error.code);
+    return [];
+  }
+  return ((data ?? []) as BookingPatient[]).map(({ id, file_no, full_name, dob, phone }) => ({ id, file_no, full_name, dob, phone }));
+}
+
 export async function bookSurgery(input: Record<string, unknown>): Promise<BookResult> {
   const profile = await requirePermission('schedule', 'edit');
   const parsed = slotSchema.safeParse(forPlan(input, teachingOn(profile.features)));
@@ -62,10 +77,10 @@ export async function bookSurgery(input: Record<string, unknown>): Promise<BookR
   const s = parsed.data;
   const supabase = await createClient();
 
-  // File numbers are matched without regard to case; an exact match wins if two differ only by case.
-  const { data: matches } = await supabase.from('patients').select('id, file_no').ilike('file_no', escapeLike(s.patientFileNo)).limit(2);
-  const patient = matches?.find((m) => m.file_no === s.patientFileNo) ?? (matches?.length === 1 ? matches[0] : null);
-  if (!patient) return { error: `No patient has file number ${s.patientFileNo}. Choose a patient from the list.` };
+  // The id comes from the picker; re-read it through the user's client (RLS keeps it to the company), not archived.
+  const { data: patient } = await supabase
+    .from('patients').select('id').eq('id', s.patientId).eq('archived', false).maybeSingle();
+  if (!patient) return { error: 'Choose the patient.' };
   // A clinic books by date: the database finds or makes that date's clinic day.
   let date = s.date;
   if (s.sessionId) {

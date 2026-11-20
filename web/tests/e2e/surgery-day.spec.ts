@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
-import { login } from './helpers';
+import { choosePatient, login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
 import { apiAs, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate } from './api';
 
@@ -40,7 +40,7 @@ test('adds a surgery day from the Schedule page and books a surgery into it', as
   await page.getByLabel('Chair').selectOption({ label: chair });
   await page.getByLabel('Start').fill('09:00');
   await page.getByLabel('End').fill('10:00');
-  await page.getByLabel('Patient (file number)').fill(fileNo);
+  await choosePatient(page, fileNo);
   await page.getByLabel(`Role of ${placing}`).selectOption('placing');
   await page.getByLabel('Tooth 1').fill('46');
   await page.getByRole('combobox', { name: 'Technique 1' }).selectOption({ label: 'Guided' });

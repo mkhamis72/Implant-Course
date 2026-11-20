@@ -59,3 +59,6 @@ export type ReportRow = {
 };
 /** user_id: the staff login linked to the doctor (0123), whose Placed by starts on them. */
 export type Doctor = { id: string; name: string; active: boolean; user_id: string | null };
+
+/** A patient as the booking form's picker shows it (search_patients_v2, archived excluded). */
+export type BookingPatient = { id: string; file_no: string; full_name: string; dob: string | null; phone: string | null };

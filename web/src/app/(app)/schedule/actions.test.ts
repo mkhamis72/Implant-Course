@@ -24,7 +24,8 @@ const { rpc, from, tables, features, queries } = vi.hoisted(() => {
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc, from }) }));
 vi.mock('@/lib/auth/session', () => ({ requirePermission: vi.fn(async () => ({ features: features.list })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-import { addSurgeryDay, bookSurgery, updateBooking } from './actions';
+import { requirePermission } from '@/lib/auth/session';
+import { addSurgeryDay, bookSurgery, searchBookingPatients, updateBooking } from './actions';
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const edit = {
@@ -129,11 +130,11 @@ describe('addSurgeryDay', () => {
 
 describe('bookSurgery', () => {
   const book = {
-    chairId: uuid(2), start: '09:00', end: '10:00', patientFileNo: 'P1', placedBy: 'doctor', placingDoctorId: uuid(8),
+    chairId: uuid(2), start: '09:00', end: '10:00', patientId: uuid(3), placedBy: 'doctor', placingDoctorId: uuid(8),
     implants: [], overrideReason: '', notes: '',
   };
   const ok = () => {
-    tables.patients = { data: [{ id: uuid(3), file_no: 'P1' }], error: null };
+    tables.patients = { data: { id: uuid(3) }, error: null };
     rpc.mockImplementation(async (name: unknown) => ({ data: name === 'create_surgery_slot_v3' ? uuid(1) : [], error: null }));
   };
 
@@ -194,5 +195,58 @@ describe('bookSurgery', () => {
   it('a course organizer needs a session', async () => {
     ok();
     expect(await bookSurgery({ ...book })).toEqual({ error: 'Choose a surgery session.' });
+  });
+
+  it('bookSurgery sends p_patient from patientId', async () => {
+    ok();
+    tables.sessions = { data: { date: '2030-03-04' }, error: null };
+    await bookSurgery({ ...book, sessionId: uuid(4) });
+    expect(calls('create_surgery_slot_v3')[0]).toMatchObject({ p_patient: uuid(3) });
+    expect(calls('slot_conflicts_v2')[0]).toMatchObject({ p_patient: uuid(3) });
+  });
+
+  it('a patient id that is not a uuid is refused before the database', async () => {
+    ok();
+    expect(await bookSurgery({ ...book, sessionId: uuid(4), patientId: 'P1' })).toEqual({ error: 'Choose the patient.' });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  // Unknown, archived and other-company ids all come back empty from the re-read (by id, not archived, through the
+  // user's client, so RLS keeps it to the company): each is refused before any RPC.
+  it.each(['unknown', 'archived', 'other-company'])('forged patient id refused (%s)', async () => {
+    ok();
+    tables.patients = { data: null, error: null };
+    tables.sessions = { data: { date: '2030-03-04' }, error: null };
+    expect(await bookSurgery({ ...book, sessionId: uuid(4), patientId: uuid(99) })).toEqual({ error: 'Choose the patient.' });
+    const q = queries.filter((x) => x.table === 'patients');
+    expect(q).toContainEqual({ table: 'patients', method: 'eq', args: ['id', uuid(99)] });
+    expect(q).toContainEqual({ table: 'patients', method: 'eq', args: ['archived', false] });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('searchBookingPatients', () => {
+  const row = { id: uuid(3), file_no: 'P1', full_name: 'Amal', dob: '1980-01-01', phone: '0100', archived: false, notes: 'x' };
+
+  it('searchBookingPatients needs schedule edit', async () => {
+    vi.mocked(requirePermission).mockRejectedValueOnce(new Error('NEXT_REDIRECT'));
+    await expect(searchBookingPatients('Amal')).rejects.toThrow('NEXT_REDIRECT');
+    expect(requirePermission).toHaveBeenLastCalledWith('schedule', 'edit');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('short query returns nothing', async () => {
+    expect(await searchBookingPatients(' a ')).toEqual([]);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('searches non-archived patients, 10 at most, and returns only the picker fields', async () => {
+    rpc.mockImplementation(async () => ({ data: [row], error: null }));
+    expect(await searchBookingPatients('Amal')).toEqual([
+      { id: uuid(3), file_no: 'P1', full_name: 'Amal', dob: '1980-01-01', phone: '0100' },
+    ]);
+    expect(rpc).toHaveBeenCalledWith('search_patients_v2', {
+      q: 'Amal', include_archived: false, stages: [], course: null, supervisor: null, p_offset: 0, p_limit: 10,
+    });
   });
 });

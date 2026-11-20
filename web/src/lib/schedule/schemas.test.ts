@@ -39,16 +39,17 @@ describe('course and session schemas', () => {
 
 describe('slotSchema', () => {
   const slot = {
-    sessionId: id, chairId: id, start: '09:00', end: '10:30', patientFileNo: ' P00012 ', supervisorId: id,
+    sessionId: id, chairId: id, start: '09:00', end: '10:30', patientId: id, supervisorId: id,
     placing: [id], assisting: [], implants: [{ tooth: '36', productId: '', technique: 'guided' }], overrideReason: '', notes: '',
   };
   it('normalizes the booking', () => {
-    expect(slotSchema.parse(slot)).toMatchObject({ patientFileNo: 'P00012', implants: [{ tooth: 36, productId: null, technique: 'guided' }] });
+    expect(slotSchema.parse(slot)).toMatchObject({ patientId: id, implants: [{ tooth: 36, productId: null, technique: 'guided' }] });
   });
   it('explains what is missing', () => {
     expect(err(slotSchema.safeParse({ ...slot, end: '08:00' }))).toBe('The end time must be after the start time.');
     expect(err(slotSchema.safeParse({ ...slot, placing: [] }))).toBe('Choose at least one placing delegate.');
-    expect(err(slotSchema.safeParse({ ...slot, patientFileNo: '' }))).toBe('Choose the patient.');
+    expect(err(slotSchema.safeParse({ ...slot, patientId: '' }))).toBe('Choose the patient.');
+    expect(err(slotSchema.safeParse({ ...slot, patientId: 'P00012' }))).toBe('Choose the patient.');
     expect(err(slotSchema.safeParse({ ...slot, implants: [{ tooth: '19', productId: '', technique: 'guided' }] }))).toBe('Unknown tooth number.');
     expect(err(slotSchema.safeParse({ ...slot, implants: [{ tooth: '36', productId: '' }] }))).toBe(
       'Choose Guided or Free hand for each implant.',

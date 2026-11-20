@@ -75,14 +75,14 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
       <SlotForm
         sessions={[{ id: s.id, courseId: s.course_id ?? '', label: '' }]}
         chairs={(chairs ?? []).map((c) => ({ id: c.id as string, label: c.name as string }))}
-        patients={[]}
+        canOpenFile={false}
         enrolled={s.course_id ? { [s.course_id]: delegates } : {}}
         implants={[]}
         supervisors={(supervisors ?? []).map((o) => ({ id: o.id as string, label: o.full_name as string }))}
         doctors={(doctors ?? []).map((d) => ({ id: d.id as string, label: d.name as string }))}
         teaching={teaching}
         me={me.user_id}
-        initial={{ sessionId: s.id, chairId: slot.chair_id, start: formatTime(slot.starts_at), fileNo: '' }}
+        initial={{ sessionId: s.id, chairId: slot.chair_id, start: formatTime(slot.starts_at) }}
         edit={{
           slotId: slot.id,
           sessionId: s.id,

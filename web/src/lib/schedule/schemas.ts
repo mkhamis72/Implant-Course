@@ -122,7 +122,7 @@ export const slotSchema = z
     chairId: requiredId('Choose a chair.'),
     start: time('Enter the start time (HH:MM).'),
     end: time('Enter the end time (HH:MM).'),
-    patientFileNo: z.string().trim().min(1, { message: 'Choose the patient.' }),
+    patientId: requiredId('Choose the patient.'),
     ...placedByFields,
     implants: z
       .array(

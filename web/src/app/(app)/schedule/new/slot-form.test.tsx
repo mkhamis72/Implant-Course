@@ -3,12 +3,16 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SlotForm } from './slot-form';
 import { bookSurgery, updateBooking } from '../actions';
 
-vi.mock('../actions', () => ({ bookSurgery: vi.fn(async () => ({ error: 'stop' })), updateBooking: vi.fn(async () => ({ error: 'stop' })) }));
+vi.mock('../actions', () => ({
+  bookSurgery: vi.fn(async () => ({ error: 'stop' })),
+  updateBooking: vi.fn(async () => ({ error: 'stop' })),
+  searchBookingPatients: vi.fn(async () => [{ id: 'pt1', file_no: 'P00012', full_name: 'Amal Hassan', dob: null, phone: null }]),
+}));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const props = {
-  chairs: [], patients: [], enrolled: {}, implants: [], supervisors: [], me: '', teaching: true, doctors: [],
-  initial: { sessionId: '', chairId: '', start: '09:00', fileNo: '' },
+  chairs: [], canOpenFile: true, enrolled: {}, implants: [], supervisors: [], me: '', teaching: true, doctors: [],
+  initial: { sessionId: '', chairId: '', start: '09:00' },
 };
 
 describe('SlotForm', () => {
@@ -40,6 +44,17 @@ describe('SlotForm', () => {
     expect(screen.getByRole('combobox', { name: 'Supervisor' })).toHaveValue('sup1');
   });
 
+  it('submitting sends patientId', async () => {
+    render(<SlotForm {...props} sessions={[]} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Patient' }), { target: { value: 'Amal' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Amal Hassan/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Book surgery' }));
+    await waitFor(() => expect(bookSurgery).toHaveBeenCalled());
+    const sent = vi.mocked(bookSurgery).mock.calls.at(-1)![0];
+    expect(sent).toMatchObject({ patientId: 'pt1' });
+    expect(sent).not.toHaveProperty('patientFileNo');
+  });
+
   it('points to Admin → Supervisors when the list is empty', () => {
     render(<SlotForm {...props} sessions={[]} />);
     expect(screen.getByText(/No supervisors yet/)).toBeInTheDocument();
@@ -69,7 +84,7 @@ describe('SlotForm', () => {
     );
     expect(screen.getByText('Amal Hassan (P00012)')).toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Surgery session' })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Patient (file number)')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Patient' })).not.toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Role of Dr One' })).toHaveValue('placing');
     expect(screen.getByRole('combobox', { name: 'Role of Dr Two' })).toHaveValue('assisting');
     expect(screen.getByRole('combobox', { name: 'Technique 1' })).toHaveValue('guided');

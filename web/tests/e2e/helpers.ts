@@ -20,3 +20,12 @@ export async function chooseImplant(page: Page, brand: string, size: string) {
   const value = await sizes.locator('option', { hasText: size }).getAttribute('value');
   await sizes.selectOption(value!);
 }
+
+/** The booking form's patient picker: search by file number, choose that exact file, wait for its card. */
+export async function choosePatient(page: Page, fileNo: string) {
+  await page.getByRole('combobox', { name: 'Patient' }).fill(fileNo);
+  // The match line starts with the file number; another file number may contain this one.
+  const escaped = fileNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await page.getByRole('option').filter({ has: page.getByText(new RegExp(`^${escaped}( ·|$)`)) }).click();
+  await expect(page.getByRole('button', { name: 'Change' })).toBeVisible();
+}

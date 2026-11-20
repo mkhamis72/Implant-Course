@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { productLabel } from '@/lib/inventory/labels';
 import { TECHNIQUES, TECHNIQUE_LABELS, type Option, type Product, type Technique } from '@/lib/inventory/types';
 import { PlacedByChoice, type PlacedBy } from '@/components/placed-by-choice';
-import { SETTINGS, SETTING_LABELS, type Setting } from '@/lib/schedule/types';
+import { SETTINGS, SETTING_LABELS, type BookingPatient, type Setting } from '@/lib/schedule/types';
 import { bookSurgery, updateBooking } from '../actions';
+import { PatientPicker } from './patient-picker';
 
 export type SessionOption = { id: string; label: string; courseId: string };
 type Role = '' | 'placing' | 'assisting';
@@ -37,7 +38,8 @@ export type EditedBooking = {
 type Props = {
   sessions: SessionOption[];
   chairs: Option[];
-  patients: { file_no: string; full_name: string }[];
+  /** Patients view: the chosen patient's card links to their file. */
+  canOpenFile: boolean;
   enrolled: Record<string, Option[]>;
   implants: Product[];
   supervisors: Option[];
@@ -49,7 +51,7 @@ type Props = {
   teaching: boolean;
   me: string;
   /** `date`: the Schedule page's day; a clinic's booking date starts on it. */
-  initial: { sessionId: string; chairId: string; start: string; fileNo: string; date?: string };
+  initial: { sessionId: string; chairId: string; start: string; date?: string };
   edit?: EditedBooking;
 };
 
@@ -69,7 +71,7 @@ export function SlotForm(p: Props) {
   const [chairId, setChairId] = useState(edit?.chairId ?? p.initial.chairId);
   const [start, setStart] = useState(edit?.start ?? p.initial.start);
   const [end, setEnd] = useState(edit?.end ?? '');
-  const [fileNo, setFileNo] = useState(p.initial.fileNo);
+  const [patient, setPatient] = useState<BookingPatient | null>(null);
   const [date, setDate] = useState(edit?.date ?? p.initial.date ?? '');
   const [setting, setSetting] = useState<Setting | ''>(edit?.setting ?? '');
   const [placedBy, setPlacedBy] = useState<PlacedBy>(!p.teaching || (edit?.placingDoctorId && !Object.values(edit.roles).includes('placing')) ? 'doctor' : 'delegate');
@@ -102,7 +104,7 @@ export function SlotForm(p: Props) {
   const delegates = useMemo(() => p.enrolled[courseId] ?? [], [p.enrolled, courseId]);
 
   // Clash warnings belong to the inputs they were checked for; any change hides them.
-  const inputKey = JSON.stringify([sessionId, date, chairId, supervisorId, start, end, fileNo, roles, placedBy, doctorId]);
+  const inputKey = JSON.stringify([sessionId, date, chairId, supervisorId, start, end, patient?.id, roles, placedBy, doctorId]);
   const warnings = checked?.key === inputKey ? checked.warnings : null;
 
   function submit(withOverride: boolean) {
@@ -129,7 +131,7 @@ export function SlotForm(p: Props) {
             .filter((i, n) => i.technique !== edit.implants[n].technique)
             .map((i) => ({ siteId: i.siteId, technique: i.technique })),
         })
-        : await bookSurgery({ ...people, sessionId, patientFileNo: fileNo, implants: implants.filter((i) => i.tooth.trim() !== '') });
+        : await bookSurgery({ ...people, sessionId, patientId: patient?.id ?? '', implants: implants.filter((i) => i.tooth.trim() !== '') });
       if (result.error) setError(result.error);
       else if (result.warnings) setChecked({ key: inputKey, warnings: result.warnings });
       else router.push(`/schedule?date=${result.date}`);
@@ -209,18 +211,7 @@ export function SlotForm(p: Props) {
           <span className="label">End</span>
           <input className="input" type="time" step={900} value={end} onChange={(e) => setEnd(e.target.value)} />
         </label>
-        {!edit && (
-          <>
-            <label className="block sm:col-span-2">
-              <span className="label">Patient (file number)</span>
-              <input className="input" list="patients" value={fileNo} onChange={(e) => setFileNo(e.target.value)} />
-            </label>
-            {/* Outside the <label> so its accessible name is just "Patient (file number)". */}
-            <datalist id="patients">
-              {p.patients.map((pt) => <option key={pt.file_no} value={pt.file_no}>{pt.full_name}</option>)}
-            </datalist>
-          </>
-        )}
+        {!edit && <PatientPicker canOpenFile={p.canOpenFile} value={patient} onChange={setPatient} />}
       </div>
 
       {p.teaching && <PlacedByChoice value={placedBy} onChange={choosePlacedBy} />}
