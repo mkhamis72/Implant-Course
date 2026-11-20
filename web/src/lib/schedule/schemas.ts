@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { isRealDate } from '@/lib/dates';
 import { isFdiTooth } from '@/lib/patients/fdi';
 import { TECHNIQUES } from '@/lib/inventory/types';
-import { SESSION_TYPES } from './types';
-import { optionalUuid } from '@/lib/form-values';
+import { SESSION_TYPES, SETTINGS } from './types';
+import { blankToNull, optionalUuid } from '@/lib/form-values';
 
 const requiredId = (message: string) => z.string({ message }).uuid({ message });
 const text = (max: number) => z.string().trim().max(max).default('');
@@ -99,6 +99,21 @@ function checkPlacedBy(p: PlacedBy, ctx: z.RefinementCtx) {
   need(p.placing.length > 0, 'Choose at least one placing delegate.');
 }
 
+/**
+ * A clinic books by date (0122): no session, and where the surgery happens (empty = not set). A course organizer books
+ * into a session and sends no date or setting. `clinic` is set only by the action, from the company's plan.
+ */
+const clinicFields = {
+  clinic: z.boolean().default(false),
+  date: z.preprocess(blankToNull, z.string().refine(isRealDate, { message: 'Choose a date.' }).nullable()),
+  setting: z.preprocess(blankToNull, z.enum(SETTINGS, { message: 'Choose where the surgery happens.' }).nullable()),
+};
+type ByDate = { clinic: boolean; date: string | null };
+
+function checkDate(s: ByDate, ctx: z.RefinementCtx) {
+  if (s.clinic && !s.date) ctx.addIssue({ code: 'custom', message: 'Choose a date.' });
+}
+
 /** Only the chosen kind of person is sent. */
 function onlyChosen<T extends PlacedBy>(p: T): T {
   if (p.placedBy === 'recorded') return { ...p, placing: [], placingDoctorId: null };
@@ -107,7 +122,8 @@ function onlyChosen<T extends PlacedBy>(p: T): T {
 
 export const slotSchema = z
   .object({
-    sessionId: requiredId('Choose a surgery session.'),
+    sessionId: optionalUuid,
+    ...clinicFields,
     chairId: requiredId('Choose a chair.'),
     start: time('Enter the start time (HH:MM).'),
     end: time('Enter the end time (HH:MM).'),
@@ -126,8 +142,12 @@ export const slotSchema = z
     notes: text(1000),
   })
   .refine((s) => s.end > s.start, { message: 'The end time must be after the start time.' })
+  .superRefine((s, ctx) => {
+    if (!s.clinic && !s.sessionId) ctx.addIssue({ code: 'custom', message: 'Choose a surgery session.' });
+    checkDate(s, ctx);
+  })
   .superRefine(checkPlacedBy)
-  .transform(onlyChosen);
+  .transform((s) => onlyChosen(s.clinic ? { ...s, sessionId: null } : { ...s, date: null, setting: null }));
 
 /**
  * Editing a booking: `recorded` is set only by the action, in a clinic, for a booking made before the switch whose
@@ -141,13 +161,15 @@ export const updateSlotSchema = z
     end: time('Enter the end time (HH:MM).'),
     ...placedByFields,
     placedBy: z.enum(['delegate', 'doctor', 'recorded']).default('delegate'),
+    ...clinicFields,
     implants: z.array(z.object({ siteId: requiredId('Implant not found.'), technique })).default([]),
     overrideReason: text(300),
     notes: text(1000),
   })
   .refine((s) => s.end > s.start, { message: 'The end time must be after the start time.' })
+  .superRefine(checkDate)
   .superRefine(checkPlacedBy)
-  .transform(onlyChosen);
+  .transform((s) => onlyChosen(s.clinic ? s : { ...s, date: null, setting: null }));
 
 export const slotStatusSchema = z.object({
   slotId: requiredId('Booking not found.'),

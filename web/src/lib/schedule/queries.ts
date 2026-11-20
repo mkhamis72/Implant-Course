@@ -1,5 +1,5 @@
 export const SLOT_SELECT = `
-  id, starts_at, ends_at, status, override_reason, cancel_reason, chair_id, notes, supervisor_id, session_id, placing_doctor_id,
+  id, starts_at, ends_at, status, override_reason, cancel_reason, chair_id, notes, supervisor_id, session_id, placing_doctor_id, setting,
   chair:chairs(name),
   patient:patients(id, full_name, file_no),
   supervisor:supervisors!surgery_slots_supervisor_ref_fkey(full_name),

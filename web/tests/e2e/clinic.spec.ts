@@ -15,7 +15,9 @@ const TEACHING = /courses|delegates|supervisor|lecture|workshop/i;
 test.describe.configure({ mode: 'serial' });
 
 const doctor = uniqueName('Dr Clinic');
-const dayTitle = uniqueName('Clinic day');
+// The clinic day the booking went to: made by the database, unless today already had one (`dayExisted`).
+let daySession = '';
+let dayExisted = false;
 let brand = '';
 let chair = '';
 let defaultItem = '';
@@ -72,12 +74,12 @@ test.afterAll(async () => {
   await step('patients, implants, slots', deleteE2ePatients);
   await withPg(async (pg) => {
     await step('clinic day', async () => {
-      const ids = (await pg.query('select id from public.sessions where title = $1', [dayTitle])).rows.map((r) => r.id);
-      if (ids.length) {
-        await pg.query('delete from public.checklists where session_id = any($1)', [ids]);
-        await pg.query('delete from public.surgery_slots where session_id = any($1)', [ids]);
-        await pg.query('delete from public.sessions where id = any($1)', [ids]);
-      }
+      // Only when nothing else is booked on it (the patients' bookings went with them).
+      if (!daySession || dayExisted) return;
+      const { rows } = await pg.query('select 1 from public.surgery_slots where session_id = $1 limit 1', [daySession]);
+      if (rows.length) return;
+      await pg.query('delete from public.checklists where session_id = $1', [daySession]);
+      await pg.query('delete from public.sessions where id = $1 and course_id is null', [daySession]);
     });
     await step('template', async () => {
       await pg.query('delete from public.checklist_templates where name = $1', [templateName]);
@@ -120,7 +122,8 @@ test('a clinic sees nothing about teaching', async ({ page }) => {
   expect(patientId).toBeTruthy();
 
   await page.goto('/schedule');
-  await expect(page.getByRole('button', { name: 'Add clinic day' }).or(page.getByText('Add clinic day', { exact: true })).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Book surgery' })).toBeVisible();
+  await expect(page.getByText('Add clinic day')).toHaveCount(0);
   await expect(page.getByRole('main')).not.toContainText(TEACHING);
 
   const redirects: Record<string, string> = {
@@ -137,25 +140,27 @@ test('a clinic sees nothing about teaching', async ({ page }) => {
   await expect(page.getByText('Courses and delegates')).toHaveCount(0);
 });
 
-test('clinic day to placement', async ({ page }) => {
+test('clinic booking to placement', async ({ page }) => {
   test.setTimeout(180_000);
   await login(page, TEST_USERS.organizer.email);
-  await page.goto('/schedule');
-  // The form is open when the day has no session yet.
-  const summary = page.locator('summary', { hasText: 'Add clinic day' });
-  await summary.waitFor();
-  if (!(await page.getByLabel('Session title').isVisible())) await summary.click();
-  await page.getByLabel('Session title').fill(dayTitle);
-  await page.getByRole('button', { name: 'Add clinic day' }).click();
-  await expect(page.getByText(dayTitle)).toBeVisible();
 
   const name = uniqueName('Clinic patient');
   const patientId = await createPatientViaUi(page, { full_name: name });
   const fileNo = await withPg(async (pg) => (await pg.query('select file_no from public.patients where id = $1', [patientId])).rows[0].file_no as string);
 
-  await page.goto('/schedule/new');
-  const sessionValue = await page.getByRole('combobox', { name: 'Surgery session' }).locator('option', { hasText: dayTitle }).first().getAttribute('value');
-  await page.getByRole('combobox', { name: 'Surgery session' }).selectOption(sessionValue!);
+  dayExisted = await withPg(async (pg) =>
+    (await pg.query(
+      `select 1 from public.sessions where company_id = $1 and type = 'surgery' and course_id is null
+       and date = (now() at time zone 'Africa/Cairo')::date`,
+      [ACADEMY],
+    )).rows.length > 0);
+
+  // Booked directly from the Schedule page, on its day (today): no surgery day to add first.
+  await page.goto('/schedule');
+  await page.getByRole('link', { name: 'Book surgery' }).click();
+  await expect(page.getByLabel('Date')).not.toHaveValue('');
+  await expect(page.getByRole('combobox', { name: 'Surgery session' })).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Where' }).selectOption({ label: 'GA in hospital' });
   await page.getByRole('combobox', { name: 'Chair' }).selectOption({ label: chair });
   await page.getByRole('combobox', { name: 'Doctor' }).selectOption({ label: doctor });
   await page.getByLabel('Start', { exact: true }).fill('10:00');
@@ -169,6 +174,16 @@ test('clinic day to placement', async ({ page }) => {
   await expect(page).toHaveURL(/\/schedule\?date=/);
   const card = page.getByTestId(`booking-${fileNo}`);
   await expect(card).toContainText(`Doctor: ${doctor}`);
+  await expect(card).toContainText('Where: GA in hospital');
+  daySession = await withPg(async (pg) =>
+    (await pg.query('select s.session_id from public.surgery_slots s join public.patients p on p.id = s.patient_id where p.file_no = $1', [fileNo])).rows[0].session_id as string);
+
+  // Editing keeps Where unless it is changed.
+  await card.getByRole('link', { name: 'Edit booking' }).click();
+  await expect(page.getByRole('combobox', { name: 'Where' })).toHaveValue('hospital_ga');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page).toHaveURL(/\/schedule\?date=/);
+  await expect(page.getByTestId(`booking-${fileNo}`)).toContainText('Where: GA in hospital');
 
   await page.goto(`/patients/${patientId}?tooth=36`);
   const panel = page.getByRole('complementary', { name: 'Tooth details' });
@@ -187,14 +202,17 @@ test('clinic day to placement', async ({ page }) => {
 
 test('checklist on a clinic day', async ({ page }) => {
   test.setTimeout(180_000);
-  const id = await withPg(async (pg) =>
+  expect(daySession, 'the clinic booking test ran first').toBeTruthy();
+  test.skip(dayExisted, 'today already had a clinic day, made before this run’s default checklist');
+  const { id, title } = await withPg(async (pg) =>
     (await pg.query(
-      `select c.id from public.checklists c join public.sessions s on s.id = c.session_id where s.title = $1 limit 1`,
-      [dayTitle],
-    )).rows[0]?.id as string | undefined);
+      `select c.id, s.title from public.checklists c join public.sessions s on s.id = c.session_id
+       join public.checklist_items i on i.checklist_id = c.id where s.id = $1 and i.text = $2 limit 1`,
+      [daySession, defaultItem],
+    )).rows[0] ?? {}) as { id?: string; title?: string };
   expect(id, 'the default checklist attached to the clinic day').toBeTruthy();
   await login(page, TEST_USERS.organizer.email);
   await page.goto(`/checklists/${id}`);
   await expect(page.getByRole('checkbox', { name: defaultItem })).toBeVisible();
-  await expect(page.getByRole('link', { name: new RegExp(`Session · ${dayTitle}`) })).toHaveAttribute('href', /^\/schedule\?date=\d{4}-\d{2}-\d{2}$/);
+  await expect(page.getByRole('link', { name: new RegExp(`Session · ${title}`) })).toHaveAttribute('href', /^\/schedule\?date=\d{4}-\d{2}-\d{2}$/);
 });

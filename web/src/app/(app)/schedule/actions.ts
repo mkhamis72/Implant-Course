@@ -18,8 +18,21 @@ type BookResult = { error?: string; warnings?: string[]; slotId?: string; date?:
  */
 function forPlan(input: Record<string, unknown>, teaching: boolean): Record<string, unknown> {
   return teaching
-    ? { ...input, placedBy: input.placedBy === 'doctor' ? 'doctor' : 'delegate' }
-    : { ...input, placedBy: 'doctor', supervisorId: null, placing: [], assisting: [] };
+    ? { ...input, clinic: false, placedBy: input.placedBy === 'doctor' ? 'doctor' : 'delegate' }
+    : { ...input, clinic: true, placedBy: 'doctor', supervisorId: null, placing: [], assisting: [] };
+}
+
+type Client = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * The clinic day a clinic booking on this date goes to, if there is one yet: the earliest course-less surgery session
+ * that day, as app_private.clinic_day picks it (0122). Only for the clash pre-check; the database makes the day.
+ */
+async function clinicDayOn(supabase: Client, date: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('sessions').select('id').eq('type', 'surgery').eq('date', date).is('course_id', null)
+    .order('start_time').order('created_at').order('id').limit(1).maybeSingle();
+  return (data?.id as string | undefined) ?? null;
 }
 
 /**
@@ -31,6 +44,7 @@ function forClinicEdit(input: Record<string, unknown>, slot: RecordedPeople): Re
   const recorded = placedByRecordedDelegates(slot);
   return {
     ...input,
+    clinic: true,
     placedBy: recorded ? 'recorded' : 'doctor',
     placingDoctorId: recorded ? null : input.placingDoctorId,
     supervisorId: slot.supervisor_id,
@@ -50,28 +64,36 @@ export async function bookSurgery(input: Record<string, unknown>): Promise<BookR
   const { data: matches } = await supabase.from('patients').select('id, file_no').ilike('file_no', escapeLike(s.patientFileNo)).limit(2);
   const patient = matches?.find((m) => m.file_no === s.patientFileNo) ?? (matches?.length === 1 ? matches[0] : null);
   if (!patient) return { error: `No patient has file number ${s.patientFileNo}. Choose a patient from the list.` };
-  const { data: session } = await supabase.from('sessions').select('date').eq('id', s.sessionId).maybeSingle();
-  if (!session) return { error: 'Choose a surgery session.' };
+  // A clinic books by date: the database finds or makes that date's clinic day.
+  let date = s.date;
+  if (s.sessionId) {
+    const { data: session } = await supabase.from('sessions').select('date').eq('id', s.sessionId).maybeSingle();
+    if (!session) return { error: 'Choose a surgery session.' };
+    date = session.date as string;
+  }
+  // Clashes are checked against the session; a date with no clinic day yet has nothing to clash with.
+  const clashSession = s.sessionId ?? (await clinicDayOn(supabase, date!));
 
-  if (s.overrideReason.length < 3) {
+  if (s.overrideReason.length < 3 && clashSession) {
     const { data: clashes, error } = await supabase.rpc('slot_conflicts_v2', {
-      p_session: s.sessionId, p_chair: s.chairId, p_start: s.start, p_end: s.end, p_patient: patient.id,
+      p_session: clashSession, p_chair: s.chairId, p_start: s.start, p_end: s.end, p_patient: patient.id,
       p_supervisor: s.supervisorId, p_delegates: [...s.placing, ...s.assisting], p_doctor: s.placingDoctorId, p_exclude: null,
     });
     if (error) return { error: userMessage(error)! };
     if (clashes?.length) return { warnings: (clashes as { message: string }[]).map((c) => c.message) };
   }
 
-  const { data: slotId, error } = await supabase.rpc('create_surgery_slot_v2', {
+  const { data: slotId, error } = await supabase.rpc('create_surgery_slot_v3', {
     p_session: s.sessionId, p_chair: s.chairId, p_start: s.start, p_end: s.end, p_patient: patient.id,
     p_supervisor: s.supervisorId, p_placing: s.placing, p_assisting: s.assisting,
     p_implants: s.implants.map((i) => ({ tooth: i.tooth, product_id: i.productId, technique: i.technique })),
     p_override_reason: s.overrideReason, p_notes: s.notes, p_placing_doctor: s.placingDoctorId,
+    p_setting: s.setting, p_date: s.date,
   });
   if (error) return { error: userMessage(error)! };
   revalidatePath('/schedule');
   revalidatePath(`/patients/${patient.id}`, 'layout');
-  return { slotId: slotId as string, date: session.date as string };
+  return { slotId: slotId as string, date: date! };
 }
 
 export async function updateBooking(input: Record<string, unknown>): Promise<BookResult> {
@@ -86,21 +108,26 @@ export async function updateBooking(input: Record<string, unknown>): Promise<Boo
   const parsed = updateSlotSchema.safeParse(teaching ? forPlan(input, true) : forClinicEdit(input, slot as RecordedPeople));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const s = parsed.data;
-  const date = (slot.session as unknown as { date: string } | null)?.date;
+  const recordedDate = (slot.session as unknown as { date: string } | null)?.date;
+  // A clinic may move the booking to another date: it then goes to that date's clinic day.
+  const moved = s.date !== null && s.date !== recordedDate;
+  const date = moved ? s.date! : recordedDate;
+  const clashSession = moved ? await clinicDayOn(supabase, s.date!) : (slot.session_id as string);
 
-  if (s.overrideReason.length < 3) {
+  if (s.overrideReason.length < 3 && clashSession) {
     const { data: clashes, error } = await supabase.rpc('slot_conflicts_v2', {
-      p_session: slot.session_id, p_chair: s.chairId, p_start: s.start, p_end: s.end, p_patient: slot.patient_id,
+      p_session: clashSession, p_chair: s.chairId, p_start: s.start, p_end: s.end, p_patient: slot.patient_id,
       p_supervisor: s.supervisorId, p_delegates: [...s.placing, ...s.assisting], p_doctor: s.placingDoctorId, p_exclude: s.slotId,
     });
     if (error) return { error: userMessage(error)! };
     if (clashes?.length) return { warnings: (clashes as { message: string }[]).map((c) => c.message) };
   }
 
-  const { error } = await supabase.rpc('update_surgery_slot_v2', {
+  // A clinic always sends the setting (null clears it) and the date; a course organizer sends neither.
+  const { error } = await supabase.rpc('update_surgery_slot_v3', {
     p_slot: s.slotId, p_chair: s.chairId, p_start: s.start, p_end: s.end, p_supervisor: s.supervisorId,
     p_placing: s.placing, p_assisting: s.assisting, p_override_reason: s.overrideReason, p_notes: s.notes,
-    p_placing_doctor: s.placingDoctorId,
+    p_placing_doctor: s.placingDoctorId, p_setting: s.setting, p_date: s.date,
   });
   if (error) return { error: userMessage(error)! };
   for (const i of s.implants) {

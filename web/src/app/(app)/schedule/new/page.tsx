@@ -20,8 +20,11 @@ export default async function NewBookingPage({
   const teaching = teachingOn(me.features);
   const none = Promise.resolve({ data: [], error: null });
   const results = await Promise.all([
-    supabase.from('sessions').select('id, title, date, start_time, course_id, course:courses(name)').eq('type', 'surgery')
-      .gte('date', todayIso()).order('date'),
+    // A clinic books by date, not into a session.
+    teaching
+      ? supabase.from('sessions').select('id, title, date, start_time, course_id, course:courses(name)').eq('type', 'surgery')
+        .gte('date', todayIso()).order('date')
+      : none,
     supabase.from('chairs').select('id, name').eq('active', true).order('name'),
     supabase.from('patients').select('file_no, full_name').eq('archived', false).order('full_name').limit(2000),
     // A clinic has no delegates or supervisors.
@@ -60,7 +63,7 @@ export default async function NewBookingPage({
         doctors={(doctors ?? []).map((d) => ({ id: d.id as string, label: d.name as string }))}
         teaching={teaching}
         me={me?.user_id ?? ''}
-        initial={{ sessionId: initialSession, chairId: q.chair, start: q.time || '09:00', fileNo: q.patient, date: q.date && isRealDate(q.date) ? q.date : undefined }}
+        initial={{ sessionId: initialSession, chairId: q.chair, start: q.time || '09:00', fileNo: q.patient, date: q.date && isRealDate(q.date) ? q.date : teaching ? undefined : todayIso() }}
       />
     </div>
   );
