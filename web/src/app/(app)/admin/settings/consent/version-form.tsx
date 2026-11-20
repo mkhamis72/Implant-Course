@@ -12,7 +12,8 @@ export type ConsentVersion = {
 const LOCKED = "This form version has been signed by patients and can't be changed. Add a new version instead.";
 
 /**
- * Edits one form version, or adds a new one (no `version`; `start` prefills the texts, and a template also the label).
+ * Edits one form version, or adds a new one (no `version`; `start` prefills the texts, and a template also the label;
+ * an add from the template returns to the plain page once saved).
  * While the label is the clinic template's draft label the review banner shows. A version patients have
  * signed is shown read-only with the database's lock message.
  */
@@ -35,6 +36,7 @@ export function VersionForm({ version, start }: {
   return (
     <form key={added.current.count} action={action} className="space-y-3">
       {version && <input type="hidden" name="id" value={version.id} />}
+      {!version && start?.label && <input type="hidden" name="from_template" value="clinic" />}
       {locked && <p className="rounded-md border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{LOCKED}</p>}
       {label === CLINIC_CONSENT_TEMPLATE.label && (
         <p className="rounded-md border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">{CLINIC_TEMPLATE_REVIEW}</p>

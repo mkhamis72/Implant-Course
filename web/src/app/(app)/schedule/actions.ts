@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
-import { cancelSlotSchema, clinicDaySchema, slotSchema, slotStatusSchema, surgeryDaySchema, updateSlotSchema } from '@/lib/schedule/schemas';
+import { cancelSlotSchema, slotSchema, slotStatusSchema, surgeryDaySchema, updateSlotSchema } from '@/lib/schedule/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
 import { escapeLike } from '@/lib/like';
@@ -25,13 +25,15 @@ function forPlan(input: Record<string, unknown>, teaching: boolean): Record<stri
 type Client = Awaited<ReturnType<typeof createClient>>;
 
 /**
- * The clinic day a clinic booking on this date goes to, if there is one yet: the earliest course-less surgery session
- * that day, as app_private.clinic_day picks it (0122). Only for the clash pre-check; the database makes the day.
+ * A session on this date for the clash pre-check of a clinic booking: slot_conflicts_v2 takes only the session's date
+ * and compares across all the company's slots, so any session that day will do; the course-less one (the clinic day
+ * app_private.clinic_day reuses, 0122) comes first. Null only when the date has no session at all: nothing is booked
+ * that day to clash with. The database makes the clinic day.
  */
-async function clinicDayOn(supabase: Client, date: string): Promise<string | null> {
+async function clashSessionOn(supabase: Client, date: string): Promise<string | null> {
   const { data } = await supabase
-    .from('sessions').select('id').eq('type', 'surgery').eq('date', date).is('course_id', null)
-    .order('start_time').order('created_at').order('id').limit(1).maybeSingle();
+    .from('sessions').select('id').eq('date', date)
+    .order('course_id', { nullsFirst: true }).order('start_time').order('created_at').order('id').limit(1).maybeSingle();
   return (data?.id as string | undefined) ?? null;
 }
 
@@ -71,8 +73,8 @@ export async function bookSurgery(input: Record<string, unknown>): Promise<BookR
     if (!session) return { error: 'Choose a surgery session.' };
     date = session.date as string;
   }
-  // Clashes are checked against the session; a date with no clinic day yet has nothing to clash with.
-  const clashSession = s.sessionId ?? (await clinicDayOn(supabase, date!));
+  // Clashes are checked against the session; a date with no session at all has nothing to clash with.
+  const clashSession = s.sessionId ?? (await clashSessionOn(supabase, date!));
 
   if (s.overrideReason.length < 3 && clashSession) {
     const { data: clashes, error } = await supabase.rpc('slot_conflicts_v2', {
@@ -112,7 +114,7 @@ export async function updateBooking(input: Record<string, unknown>): Promise<Boo
   // A clinic may move the booking to another date: it then goes to that date's clinic day.
   const moved = s.date !== null && s.date !== recordedDate;
   const date = moved ? s.date! : recordedDate;
-  const clashSession = moved ? await clinicDayOn(supabase, s.date!) : (slot.session_id as string);
+  const clashSession = moved ? await clashSessionOn(supabase, s.date!) : (slot.session_id as string);
 
   if (s.overrideReason.length < 3 && clashSession) {
     const { data: clashes, error } = await supabase.rpc('slot_conflicts_v2', {
@@ -163,18 +165,18 @@ export async function cancelBooking(_prev: FormState, formData: FormData): Promi
 
 export async function addSurgeryDay(_prev: FormState, formData: FormData): Promise<FormState> {
   const profile = await requirePermission('schedule', 'edit');
-  // A clinic adds a clinic day: a surgery session with no course.
-  const teaching = teachingOn(profile.features);
-  const parsed = (teaching ? surgeryDaySchema : clinicDaySchema).safeParse(Object.fromEntries(formData));
+  // A clinic books surgery directly (its clinic days are made by the database, 0122): no days to add.
+  if (!teachingOn(profile.features)) return failed('A clinic books surgery directly; there are no surgery days to add.', formData);
+  const parsed = surgeryDaySchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const d = parsed.data;
-  const course = 'course_id' in d ? d.course_id : null;
+  const course = d.course_id;
   const supabase = await createClient();
   const { error } = await supabase.rpc('add_surgery_session', {
     p_course: course, p_date: d.date, p_title: d.title, p_start: d.start_time, p_end: d.end_time, p_room: d.room,
   });
   if (error) return failed(userMessage(error)!, formData);
   revalidatePath('/schedule');
-  if (course) revalidatePath(`/courses/${course}`);
-  return { ok: teaching ? 'Surgery day added.' : 'Clinic day added.' };
+  revalidatePath(`/courses/${course}`);
+  return { ok: 'Surgery day added.' };
 }

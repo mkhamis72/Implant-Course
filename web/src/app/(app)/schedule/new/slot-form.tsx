@@ -169,7 +169,7 @@ export function SlotForm(p: Props) {
           <>
             <label className="block">
               <span className="label">Date</span>
-              <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              <input className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
             </label>
             <label className="block">
               <span className="label">Where</span>

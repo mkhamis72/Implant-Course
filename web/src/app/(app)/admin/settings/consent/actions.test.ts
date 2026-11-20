@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { rpc, requireAdmin } = vi.hoisted(() => ({ rpc: vi.fn(), requireAdmin: vi.fn() }));
+const { rpc, requireAdmin, redirect } = vi.hoisted(() => ({
+  rpc: vi.fn(), requireAdmin: vi.fn(), redirect: vi.fn(() => { throw new Error('NEXT_REDIRECT'); }),
+}));
+vi.mock('next/navigation', () => ({ redirect }));
 vi.mock('@/lib/auth/session', () => ({ requireAdmin }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
@@ -26,6 +29,20 @@ describe('saveConsentVersion', () => {
     expect(rpc).toHaveBeenCalledWith('save_consent_version', {
       p_id: null, p_label: 'v2', p_effective_on: '2026-11-01', p_text_en: 'English', p_text_ar: 'عربي',
     });
+  });
+
+  it('after adding from the clinic template, returns to the plain consent page (no template prefill)', async () => {
+    rpc.mockResolvedValue({ data: id, error: null });
+    await expect(saveConsentVersion({}, form({ ...fields, from_template: 'clinic' }))).rejects.toThrow('NEXT_REDIRECT');
+    expect(rpc).toHaveBeenCalledWith('save_consent_version', expect.objectContaining({ p_id: null }));
+    expect(redirect).toHaveBeenCalledWith('/admin/settings/consent');
+  });
+
+  it('a refused add from the template stays on the template page with what was typed', async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: 'A form version with this label already exists.', hint: 'user' } });
+    const r = await saveConsentVersion({}, form({ ...fields, from_template: 'clinic' }));
+    expect(r.error).toBe('A form version with this label already exists.');
+    expect(redirect).not.toHaveBeenCalled();
   });
 
   it('edits a version by id', async () => {

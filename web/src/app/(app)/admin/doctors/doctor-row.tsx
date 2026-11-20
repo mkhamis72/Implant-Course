@@ -27,7 +27,8 @@ function DoctorLogin({ doctor, login, logins }: { doctor: Doctor; login: Omit<Lo
           <span className="text-muted">No login</span>
           {logins.length > 0 && (
             <>
-              <select className="input max-w-xs py-1" name="user_id" aria-label={`Login for ${doctor.name}`} defaultValue="">                <option value="">Choose a login…</option>
+              <select className="input max-w-xs py-1" name="user_id" aria-label={`Login for ${doctor.name}`} defaultValue="" required>
+                <option value="">Choose a login…</option>
                 {logins.map((l) => <option key={l.user_id} value={l.user_id}>{l.full_name || l.email} ({l.email})</option>)}
               </select>
               <button className="btn-secondary btn py-1" disabled={pending}>

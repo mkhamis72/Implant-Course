@@ -24,11 +24,4 @@ describe('SurgeryDayForm', () => {
     render(<SurgeryDayForm date="2030-03-02" courses={courses} />);
     expect(screen.queryByRole('combobox', { name: /type/i })).not.toBeInTheDocument();
   });
-
-  it('in a clinic adds a clinic day: no course', () => {
-    render(<SurgeryDayForm date="2030-03-02" courses={[]} clinic />);
-    expect(screen.queryByRole('combobox', { name: 'Course' })).not.toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Session title' })).toHaveValue('Clinic day');
-    expect(screen.getByRole('button', { name: 'Add clinic day' })).toBeInTheDocument();
-  });
 });

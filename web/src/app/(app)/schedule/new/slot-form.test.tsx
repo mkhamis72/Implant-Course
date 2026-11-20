@@ -137,6 +137,8 @@ describe('SlotForm: clinic', () => {
   const clinic = {
     ...props,
     teaching: false,
+    // The Schedule page always passes its day; a clinic's booking date starts on it.
+    initial: { ...props.initial, date: '2030-03-02' },
     sessions: [{ id: 's1', label: '05 Oct 2026 · Clinic day', courseId: '' }],
     doctors: [{ id: 'doc1', label: 'Dr Hany Fouad' }],
   };
@@ -176,6 +178,8 @@ describe('SlotForm: clinic', () => {
     expect(screen.queryByRole('combobox', { name: 'Surgery session' })).not.toBeInTheDocument();
     expect(screen.queryByText(/No upcoming surgery sessions/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('Date')).toHaveValue('2030-03-02');
+    expect(screen.getByLabelText('Date')).toBeRequired();
+    expect(screen.getByLabelText('Date')).not.toHaveAttribute('min');
     const where = screen.getByRole('combobox', { name: 'Where' });
     expect(where).toHaveValue('');
     expect([...(where as HTMLSelectElement).options].map((o) => o.text)).toEqual(['', 'In clinic', 'GA in hospital']);

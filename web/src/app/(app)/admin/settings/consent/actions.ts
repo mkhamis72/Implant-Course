@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdmin } from '@/lib/auth/session';
@@ -32,5 +33,8 @@ export async function saveConsentVersion(_prev: FormState, formData: FormData): 
   });
   if (error) return failed(userMessage(error) ?? 'Could not save the form version.', formData);
   revalidatePath('/admin/settings/consent');
+  // Added from the clinic template (?template=clinic): back to the plain page, so the form no longer starts from the
+  // template and a second submit isn't refused on the template's label.
+  if (!v.id && field('from_template') === 'clinic') redirect('/admin/settings/consent');
   return { ok: v.id ? 'Form version saved.' : 'Form version added.' };
 }

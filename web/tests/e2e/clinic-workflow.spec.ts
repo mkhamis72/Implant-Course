@@ -192,7 +192,9 @@ test('clinic consent form from the template', async ({ page }) => {
   await add.getByLabel('Label').fill(consentLabel);
   await add.getByLabel('Effective from').fill(today);
   await add.getByRole('button', { name: 'Add version' }).click();
-  await expect(add.getByRole('status')).toBeVisible();
+  // Saved from the template: back on the plain page (no template prefill), the new version listed.
+  await expect(page).not.toHaveURL(/template=clinic/);
+  await expect(page.getByRole('region', { name: 'Versions' }).locator('summary', { hasText: consentLabel })).toBeVisible();
 
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Flow consent patient') });
   await page.goto(`/patients/${patientId}/consent`);

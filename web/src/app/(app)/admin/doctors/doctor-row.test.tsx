@@ -29,6 +29,11 @@ describe('DoctorRow login', () => {
     expect(sent()).toEqual({ id: 'doc1', user_id: 'u2' });
   });
 
+  it('needs a login chosen before linking', () => {
+    render(<DoctorRow doctor={doctor} login={null} logins={logins} />);
+    expect(screen.getByRole('combobox', { name: 'Login for Dr Nabil' })).toBeRequired();
+  });
+
   it('offers no link without a free login', () => {
     render(<DoctorRow doctor={doctor} login={null} logins={[]} />);
     expect(screen.queryByRole('button', { name: 'Link login' })).not.toBeInTheDocument();

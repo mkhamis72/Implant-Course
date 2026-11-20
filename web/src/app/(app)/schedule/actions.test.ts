@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Each table answers with what `tables` holds, whether awaited directly or through maybeSingle().
-const { rpc, from, tables, features } = vi.hoisted(() => {
+const { rpc, from, tables, features, queries } = vi.hoisted(() => {
   const tables: Record<string, unknown> = {};
+  const queries: { table: string; method: string; args: unknown[] }[] = [];
   const chainFor = (table: string) => {
     const chain: Record<string, unknown> = {};
-    for (const m of ['select', 'eq', 'is', 'ilike', 'order', 'limit']) chain[m] = () => chain;
+    for (const m of ['select', 'eq', 'is', 'ilike', 'order', 'limit']) {
+      chain[m] = (...args: unknown[]) => { queries.push({ table, method: m, args }); return chain; };
+    }
     chain.maybeSingle = async () => tables[table] ?? { data: null, error: null };
     chain.then = (resolve: (v: unknown) => unknown) => resolve(tables[table] ?? { data: [], error: null });
     return chain;
@@ -14,13 +17,14 @@ const { rpc, from, tables, features } = vi.hoisted(() => {
     rpc: vi.fn(async (..._args: unknown[]) => ({ data: [] as unknown, error: null })),
     from: vi.fn(chainFor),
     tables,
+    queries,
     features: { list: ['teaching'] as string[] },
   };
 });
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc, from }) }));
 vi.mock('@/lib/auth/session', () => ({ requirePermission: vi.fn(async () => ({ features: features.list })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-import { bookSurgery, updateBooking } from './actions';
+import { addSurgeryDay, bookSurgery, updateBooking } from './actions';
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const edit = {
@@ -37,6 +41,7 @@ const calls = (name: string) => rpc.mock.calls.filter((c) => c[0] === name).map(
 
 beforeEach(() => {
   rpc.mockClear();
+  queries.length = 0;
   for (const k of Object.keys(tables)) delete tables[k];
   features.list = ['teaching'];
 });
@@ -102,6 +107,26 @@ describe('updateBooking for a course organizer', () => {
   });
 });
 
+describe('addSurgeryDay', () => {
+  const day = (o: Record<string, string>) => {
+    const f = new FormData();
+    for (const [k, v] of Object.entries({ date: '2030-03-02', title: 'Surgery day', start_time: '08:00', end_time: '17:00', room: '', ...o })) f.set(k, v);
+    return f;
+  };
+
+  it('a course organizer adds a surgery day for a course', async () => {
+    expect(await addSurgeryDay({}, day({ course_id: uuid(4) }))).toEqual({ ok: 'Surgery day added.' });
+    expect(calls('add_surgery_session')[0]).toMatchObject({ p_course: uuid(4), p_date: '2030-03-02' });
+  });
+
+  it('a clinic has no surgery days to add: refused before the database (it books surgery directly)', async () => {
+    features.list = [];
+    const r = await addSurgeryDay({}, day({}));
+    expect(r.error).toBe('A clinic books surgery directly; there are no surgery days to add.');
+    expect(calls('add_surgery_session')).toHaveLength(0);
+  });
+});
+
 describe('bookSurgery', () => {
   const book = {
     chairId: uuid(2), start: '09:00', end: '10:00', patientFileNo: 'P1', placedBy: 'doctor', placingDoctorId: uuid(8),
@@ -123,6 +148,18 @@ describe('bookSurgery', () => {
     });
   });
 
+  it('a clinic checks clashes through any session on that date, the course-less one first (clashes span all slots)', async () => {
+    features.list = [];
+    ok();
+    tables.sessions = { data: { id: uuid(7) }, error: null };
+    await bookSurgery({ ...book, date: '2030-03-02' });
+    const q = queries.filter((x) => x.table === 'sessions');
+    expect(q).toContainEqual({ table: 'sessions', method: 'eq', args: ['date', '2030-03-02'] });
+    expect(q.filter((x) => x.method === 'is' || (x.method === 'eq' && x.args[0] === 'type'))).toEqual([]);
+    expect(q.find((x) => x.method === 'order')).toEqual({ table: 'sessions', method: 'order', args: ['course_id', { nullsFirst: true }] });
+    expect(calls('slot_conflicts_v2')[0]).toMatchObject({ p_session: uuid(7) });
+  });
+
   it('a clinic checks clashes on that date’s clinic day when there is one', async () => {
     features.list = [];
     ok();
@@ -132,7 +169,7 @@ describe('bookSurgery', () => {
     expect(calls('create_surgery_slot_v3')[0]).toMatchObject({ p_setting: null });
   });
 
-  it('a clinic skips the clash check on a date with no clinic day yet (the database still refuses clashes)', async () => {
+  it('a clinic skips the clash check only on a date with no session at all (the database still refuses clashes)', async () => {
     features.list = [];
     ok();
     await bookSurgery({ ...book, date: '2030-03-02' });

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { insert, update, selectAfterUpdate, rpc } = vi.hoisted(() => ({ insert: vi.fn(), update: vi.fn(), selectAfterUpdate: vi.fn(), rpc: vi.fn() }));
+const { insert, update, selectAfterUpdate, rpc, linked } = vi.hoisted(() => ({
+  insert: vi.fn(), update: vi.fn(), selectAfterUpdate: vi.fn(), rpc: vi.fn(), linked: { user_id: null as string | null },
+}));
 vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: 'me' })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({
@@ -8,6 +10,7 @@ vi.mock('@/lib/supabase/server', () => ({
     rpc,
     from: (table: string) => ({
       insert: async (row: unknown) => insert(table, row),
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { user_id: linked.user_id }, error: null }) }) }),
       update: (row: unknown) => {
         update(table, row);
         return { eq: () => ({ select: async () => selectAfterUpdate() }) };
@@ -27,6 +30,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   insert.mockResolvedValue({ error: null });
   selectAfterUpdate.mockResolvedValue({ data: [{ id: 'd1' }], error: null });
+  linked.user_id = null;
 });
 
 describe('addDoctor', () => {
@@ -70,9 +74,15 @@ describe('setDoctorLogin', () => {
   });
   it('unlinks with an empty login', async () => {
     rpc.mockResolvedValue({ error: null });
+    linked.user_id = user;
     const r = await setDoctorLogin({}, form({ id: doc, user_id: '' }));
     expect(rpc).toHaveBeenCalledWith('set_doctor_login', { p_doctor: doc, p_user: null });
     expect(r.ok).toBe('Login unlinked.');
+  });
+  it('refuses an empty choice for a doctor with no login (nothing to unlink)', async () => {
+    const r = await setDoctorLogin({}, form({ id: doc, user_id: '' }));
+    expect(r.error).toBe('Choose a login.');
+    expect(rpc).not.toHaveBeenCalled();
   });
   it('shows the database message', async () => {
     rpc.mockResolvedValue({ error: { message: 'That login is already linked to a doctor.', code: 'P0001', hint: 'user' } });

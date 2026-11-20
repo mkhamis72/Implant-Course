@@ -48,11 +48,6 @@ export const surgeryDaySchema = z
   .object({ course_id: requiredId('Choose a course.'), ...sessionFields })
   .refine((s) => s.end_time > s.start_time, sessionEndsAfterStart);
 
-/** "Add clinic day" in a clinic: a surgery session with no course. */
-export const clinicDaySchema = z
-  .object(sessionFields)
-  .refine((s) => s.end_time > s.start_time, sessionEndsAfterStart);
-
 export const chairSchema = z.object({ name: z.string().trim().min(1, { message: 'Enter the chair name.' }).max(40) });
 export const supervisorSchema = z.object({
   full_name: z.string().trim().min(2, { message: 'Enter the supervisor’s name.' }).max(120, { message: 'Keep the name under 120 characters.' }),
