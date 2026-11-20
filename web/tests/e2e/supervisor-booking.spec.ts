@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
-import { login } from './helpers';
+import { choosePatient, login } from './helpers';
 import { uniqueName } from './patients';
 import { apiAs, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate, seedSession } from './api';
 
@@ -25,7 +25,7 @@ test('an organizer books a surgery with a name-only supervisor', async ({ page }
   await page.getByRole('combobox', { name: 'Chair' }).selectOption({ label: chair });
   await page.getByRole('combobox', { name: 'Supervisor' }).selectOption({ label: prof });
   await page.getByLabel('End').fill('10:00');
-  await page.getByLabel('Patient (file number)').fill(patient.data!.file_no);
+  await choosePatient(page, patient.data!.file_no);
   await page.getByRole('combobox', { name: `Role of ${delegate}` }).selectOption('placing');
   await page.getByRole('button', { name: 'Book surgery' }).click();
   await expect(page).toHaveURL(new RegExp(`/schedule\\?date=${date}`));

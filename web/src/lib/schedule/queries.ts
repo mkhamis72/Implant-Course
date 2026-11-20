@@ -7,5 +7,6 @@ export const SLOT_SELECT = `
   session:sessions(title, course:courses(name)),
   delegates:slot_delegates(role, delegate:delegates(full_name)),
   implants:slot_planned_implants(tooth, product:products(*), site:implant_sites(id, technique)),
+  spares:slot_spare_implants(tooth, position, product:products(*)),
   checklists(id, items:checklist_items(done_at))
 `;

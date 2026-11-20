@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
-import { login } from './helpers';
+import { choosePatient, login } from './helpers';
 import { createPatientViaUi, deleteE2ePatients, uniqueName } from './patients';
 import { apiAs, seedChair, seedImplantStock } from './api';
 import { ACADEMY, withPg } from './companies';
@@ -165,7 +165,7 @@ test('clinic booking to placement', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Doctor' }).selectOption({ label: doctor });
   await page.getByLabel('Start', { exact: true }).fill('10:00');
   await page.getByLabel('End', { exact: true }).fill('11:00');
-  await page.getByLabel('Patient (file number)').fill(fileNo);
+  await choosePatient(page, fileNo);
   await page.getByLabel('Tooth 1').fill('36');
   const sizeValue = await page.getByRole('combobox', { name: 'Implant 1' }).locator('option', { hasText: brand }).first().getAttribute('value');
   await page.getByRole('combobox', { name: 'Implant 1' }).selectOption(sizeValue!);

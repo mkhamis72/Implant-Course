@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
-import { login } from './helpers';
+import { choosePatient, login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
 import { apiAs, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate, seedSession } from './api';
 
@@ -31,7 +31,7 @@ async function fillBooking(
   await page.getByLabel('Chair').selectOption({ label: w.chair });
   await page.getByLabel('Start').fill(start);
   await page.getByLabel('End').fill(end);
-  await page.getByLabel('Patient (file number)').fill(fileNo);
+  await choosePatient(page, fileNo);
   await page.getByLabel(`Role of ${w.placing}`).selectOption('placing');
   await page.getByLabel('Tooth 1').fill('36');
   await page.getByRole('combobox', { name: 'Technique 1' }).selectOption({ label: technique === 'guided' ? 'Guided' : 'Free hand' });
@@ -65,7 +65,7 @@ test('warns about a clash and books only with a reason', async ({ page }) => {
 
   await createPatientViaUi(page, { full_name: uniqueName('Second'), file_no: `E2E-S${Date.now()}` });
   const second = (await page.getByTestId('patient-header').innerText()).match(/File (\S+)/)![1];
-  await fillBooking(page, w, second.toLowerCase(), '09:30', '10:30');
+  await fillBooking(page, w, second, '09:30', '10:30');
   await page.getByRole('button', { name: 'Book surgery' }).click();
   const warnings = page.getByTestId('clash-warnings');
   await expect(warnings).toBeVisible();
