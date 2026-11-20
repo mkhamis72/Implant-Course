@@ -14,7 +14,7 @@ const record = (over: Partial<ConsentRecord>): ConsentRecord => ({
 
 describe('ConsentList', () => {
   it('shows the current answers and links its scan to the file route in a new tab', () => {
-    render(<ConsentList patientId="p1" editable={false} records={[record({ is_current: true })]} />);
+    render(<ConsentList teaching patientId="p1" editable={false} records={[record({ is_current: true })]} />);
     const card = screen.getByTestId('current-consent');
     expect(within(card).getAllByText('Yes')).toHaveLength(3);
     expect(within(card).getByText('No')).toHaveClass('badge', 'badge-warn');
@@ -25,7 +25,7 @@ describe('ConsentList', () => {
   });
 
   it('strikes through voided records in the history', () => {
-    render(<ConsentList patientId="p1" editable records={[
+    render(<ConsentList teaching patientId="p1" editable records={[
       record({ id: 'c2', is_current: true, file_id: 'f2' }),
       record({ id: 'c1', voided_at: '2026-10-21T10:00:00Z', voided_reason: 'Wrong patient' }),
     ]} />);
@@ -36,16 +36,26 @@ describe('ConsentList', () => {
   });
 
   it('says when there is no current record', () => {
-    render(<ConsentList patientId="p1" editable records={[]} />);
+    render(<ConsentList teaching patientId="p1" editable records={[]} />);
     expect(screen.getByText('No current consent record.')).toBeInTheDocument();
   });
 
   it('asks for a reason before voiding', () => {
-    render(<ConsentList patientId="p1" editable records={[record({ is_current: true })]} />);
+    render(<ConsentList teaching patientId="p1" editable records={[record({ is_current: true })]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Void' }));
     fireEvent.change(screen.getByLabelText('Reason for voiding'), { target: { value: '   ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Void record' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Enter a reason for voiding.');
     expect(voidConsent).not.toHaveBeenCalled();
+  });
+
+  it('a clinic shows the clinic labels', () => {
+    render(<ConsentList teaching={false} patientId="p1" editable={false} records={[
+      record({ id: 'c2', is_current: true }), record({ id: 'c1' }),
+    ]} />);
+    const card = screen.getByTestId('current-consent');
+    expect(within(card).getByText("Treatment by the clinic's dentists")).toBeInTheDocument();
+    expect(within(card).getByText('Photos and X-rays for the clinical record and for publication (no face or name)')).toBeInTheDocument();
+    expect(screen.queryByText(/delegates|teaching|Teaching/)).toBeNull();
   });
 });

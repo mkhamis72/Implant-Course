@@ -2,10 +2,16 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdmin } from '@/lib/auth/session';
 import { formatDate } from '@/lib/format';
+import { teachingOn } from '@/lib/modules/modules';
+import { readParams, type PageSearchParams } from '@/lib/search-params';
+import { CLINIC_CONSENT_TEMPLATE } from '@/lib/consent/clinic-template';
 import { VersionForm, type ConsentVersion } from './version-form';
 
-export default async function ConsentSettingsPage() {
-  await requireAdmin();
+export default async function ConsentSettingsPage({ searchParams }: { searchParams: PageSearchParams }) {
+  const profile = await requireAdmin();
+  // A clinic (no Teaching) can start a new version from the clinic template (?template=clinic).
+  const clinic = !teachingOn(profile.features);
+  const fromTemplate = clinic && (await readParams(searchParams, 'template')).template === 'clinic';
   const supabase = await createClient();
   const [versions, current] = await Promise.all([
     supabase.rpc('consent_versions'),
@@ -22,7 +28,7 @@ export default async function ConsentSettingsPage() {
         <h1>Consent form</h1>
         <p className="text-sm text-muted">
           The form patients sign, in English and Arabic. The current version (latest effective date on or before today) is
-          the one that prints. Text placeholders: {'{company_name}'}, {'{patient_name}'}, {'{file_no}'}, {'{course_name}'},
+          the one that prints. Text placeholders: {'{company_name}'}, {'{patient_name}'}, {'{file_no}'},{clinic ? '' : ' {course_name},'}
           {' '}{'{date}'}, {'{version}'}, {'{effective_date}'}; formatting: ### heading, **bold**, - list item.
         </p>
       </div>
@@ -54,8 +60,21 @@ export default async function ConsentSettingsPage() {
 
       <section className="card space-y-3" aria-labelledby="add-heading">
         <h2 id="add-heading" className="text-lg font-semibold">Add a new version</h2>
-        <p className="text-sm text-muted">Starts from the current text. Patients sign the new version once its effective date arrives.</p>
-        <VersionForm start={start ? { text_en: start.text_en, text_ar: start.text_ar } : undefined} />
+        <p className="text-sm text-muted">
+          {fromTemplate ? 'Starts from the clinic template.' : 'Starts from the current text.'} Patients sign the new
+          version once its effective date arrives.
+        </p>
+        {clinic && !fromTemplate && (
+          <p className="text-sm">
+            <Link href="/admin/settings/consent?template=clinic" className="text-accent hover:underline">
+              New version from the clinic template
+            </Link>
+          </p>
+        )}
+        <VersionForm
+          key={fromTemplate ? 'template' : 'current'}
+          start={fromTemplate ? CLINIC_CONSENT_TEMPLATE : start ? { text_en: start.text_en, text_ar: start.text_ar } : undefined}
+        />
       </section>
     </div>
   );

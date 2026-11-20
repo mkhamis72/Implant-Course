@@ -1,6 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
+import { CLINIC_CONSENT_TEMPLATE } from '../../src/lib/consent/clinic-template';
 import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeSession, place, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
@@ -143,6 +144,30 @@ describe('consent form versions', () => {
       const v = await c.query('select in_use from public.consent_versions() where id = $1', [early]);
       expect(v.rows[0].in_use).toBe(true);
       await refused(c, () => saveVersion(c, early, 'Zz early', '2020-01-01', 'Changed'), /signed by patients and can't be changed/);
+    });
+  });
+
+  it('template version is editable then locks', async () => {
+    await withTx(async (c) => {
+      const T = CLINIC_CONSENT_TEMPLATE;
+      await actAs(c, users.admin);
+      const v = await saveVersion(c, null, T.label, '2020-01-01', T.text_en, T.text_ar);
+      const stored = async () => (await c.query(
+        'select label, text_en, text_ar, in_use from public.consent_versions() where id = $1', [v])).rows[0];
+      expect(await stored()).toEqual({ label: T.label, text_en: T.text_en.trim(), text_ar: T.text_ar.trim(), in_use: false });
+
+      // Before anyone signs: every field can change, including the draft label.
+      expect(await saveVersion(c, v, 'Clinic v1', '2020-01-02', T.text_en + '\n\nReviewed.', T.text_ar + '\n\nتمت المراجعة.')).toBe(v);
+      expect(await stored()).toMatchObject({ label: 'Clinic v1', in_use: false });
+      expect((await stored()).text_ar).toContain('تمت المراجعة.');
+
+      await actAs(c, users.organizer);
+      const patient = await makePatient(c, 'Zz Consent Template');
+      await record(c, { patient, version: v, signedOn: '2020-01-02', language: 'ar' });
+
+      await actAs(c, users.admin);
+      expect((await stored()).in_use).toBe(true);
+      await refused(c, () => saveVersion(c, v, 'Clinic v1', '2020-01-02', 'Changed', 'تغيير'), /signed by patients and can't be changed/);
     });
   });
 });

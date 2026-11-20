@@ -5,14 +5,15 @@ import { todayIso } from '@/lib/dates';
 import { formatDate } from '@/lib/format';
 import { MAX_CONSENT_BYTES } from '@/lib/consent/files';
 import { prepareScan } from '@/lib/consent/prepare-scan';
-import { CONSENT_ITEMS, CONSENT_LANGUAGES, CONSENT_LANGUAGE_LABELS, type ConsentVersionOption } from '@/lib/consent/labels';
+import { consentItems, CONSENT_LANGUAGES, CONSENT_LANGUAGE_LABELS, type ConsentVersionOption } from '@/lib/consent/labels';
 import { Field } from '../implant-forms';
 import { recordConsent } from './actions';
 
 /** Records a signed consent form: version, language, date, the four answers (no default) and the scan. */
-export function ConsentForm({ patientId, versions, currentVersionId }: {
-  patientId: string; versions: ConsentVersionOption[]; currentVersionId: string | null;
+export function ConsentForm({ patientId, versions, currentVersionId, teaching }: {
+  patientId: string; versions: ConsentVersionOption[]; currentVersionId: string | null; teaching: boolean;
 }) {
+  const items = consentItems(teaching);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, start] = useTransition();
@@ -24,7 +25,7 @@ export function ConsentForm({ patientId, versions, currentVersionId }: {
     const fd = new FormData(e.currentTarget);
     setError(null);
     setSaved(false);
-    if (CONSENT_ITEMS.some((item) => !fd.get(item.key))) {
+    if (items.some((item) => !fd.get(item.key))) {
       setError('Answer all four items (yes or no).');
       return;
     }
@@ -81,7 +82,7 @@ export function ConsentForm({ patientId, versions, currentVersionId }: {
         </Field>
       </div>
 
-      {CONSENT_ITEMS.map((item) => (
+      {items.map((item) => (
         <fieldset key={item.key} data-testid={`consent-item-${item.key}`} className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <legend className="label">
             {item.label}

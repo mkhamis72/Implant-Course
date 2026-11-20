@@ -6,6 +6,20 @@ export const CONSENT_ITEMS = [
   { key: 'follow_up', short: 'Follow-up', label: 'Follow-up visits and phone contact' },
 ] as const;
 
+export type ConsentItem = { key: (typeof CONSENT_ITEMS)[number]['key']; short: string; label: string };
+
+/** The same four items worded for a clinic (no Teaching): no course, delegates or teaching. */
+const CLINIC_CONSENT_ITEMS: readonly ConsentItem[] = [
+  { key: 'treatment', short: 'Treatment', label: "Treatment by the clinic's dentists" },
+  { key: 'research', short: 'Research', label: 'Research use of anonymised data' },
+  { key: 'teaching_images', short: 'Photos and X-rays', label: 'Photos and X-rays for the clinical record and for publication (no face or name)' },
+  { key: 'follow_up', short: 'Follow-up', label: 'Follow-up visits and phone contact' },
+];
+
+/** The consent items as the company words them: `teaching` false (a clinic) gives the clinic labels. */
+export function consentItems(teaching: boolean): readonly ConsentItem[] {
+  return teaching ? CONSENT_ITEMS : CLINIC_CONSENT_ITEMS;
+}
 
 export const CONSENT_LANGUAGES = ['en', 'ar'] as const;
 export type ConsentLanguage = (typeof CONSENT_LANGUAGES)[number];
