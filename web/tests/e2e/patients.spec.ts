@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
+import { apiAs } from './api';
 import { createPatientViaUi, uniqueName } from './patients';
 
 test.beforeEach(async ({ page }) => {
@@ -48,4 +49,26 @@ test('duplicate file number', async ({ page }) => {
   await page.getByLabel('File number').fill(fileNo);
   await page.getByRole('button', { name: 'Save patient' }).click();
   await expect(page.getByRole('main').getByRole('alert')).toHaveText(`File number ${fileNo} is already used by another patient.`);
+});
+
+test('lists patients in pages of 50 with a total, keeping the search', async ({ page }) => {
+  const base = uniqueName('Paging');
+  const api = await apiAs(TEST_USERS.organizer.email);
+  const names = Array.from({ length: 53 }, (_, i) => `${base} ${String(i).padStart(2, '0')}`);
+  const { error } = await api.from('patients').insert(names.map((full_name) => ({ full_name })));
+  expect(error).toBeNull();
+  await page.goto(`/patients?q=${encodeURIComponent(base)}`);
+  await expect(page.getByTestId('patient-count')).toHaveText('Patients 1–50 of 53');
+  await expect(page.getByRole('link', { name: names[49], exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: names[50], exact: true })).toHaveCount(0);
+  const pager = page.getByRole('navigation', { name: 'Pages' });
+  await expect(pager.locator('[aria-current="page"]')).toHaveText('1');
+  await pager.getByRole('link', { name: 'Next ›' }).click();
+  await expect(page).toHaveURL(/[?&]page=2/);
+  await expect(page.getByTestId('patient-count')).toHaveText('Patients 51–53 of 53');
+  for (const n of names.slice(50)) await expect(page.getByRole('link', { name: n, exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: names[0], exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Search patients')).toHaveValue(base);
+  await pager.getByRole('link', { name: 'Page 1' }).click();
+  await expect(page.getByTestId('patient-count')).toHaveText('Patients 1–50 of 53');
 });
