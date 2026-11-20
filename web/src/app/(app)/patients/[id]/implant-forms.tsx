@@ -15,6 +15,7 @@ import {
 } from '@/lib/inventory/types';
 import { fitComponent, placeImplant, planImplant, receiveStockForPlacement } from './implant-actions';
 import { ImplantPicker } from './implant-picker';
+import { defaultDoctorId } from '@/lib/doctors/default';
 
 type Result = { error?: string };
 
@@ -326,7 +327,8 @@ export function PlaceForm({
   const [v, setV] = useState({
     productId: plannedProductId ?? '', technique: plannedTechnique ?? '', lotId: '', placedOn: data.today,
     courseId: plannedCourseId ?? '',
-    placingDelegateId: placingFromSlot, assistingDelegateId: assistingFromSlot, placingDoctorId: doctorFromSlot,
+    // The booking's doctor, else the doctor linked to my login (a course organizer sends it only with Doctor chosen).
+    placingDelegateId: placingFromSlot, assistingDelegateId: assistingFromSlot, placingDoctorId: doctorFromSlot || defaultDoctorId(data.doctors, data.me),
     supervisorId: defaultSupervisor(placedBy), graft: '', notes: '',
   });
   const set = (key: keyof typeof v) => (value: string) =>

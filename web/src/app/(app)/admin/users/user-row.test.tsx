@@ -97,3 +97,26 @@ describe('UserRow in a clinic', () => {
     expect(screen.queryByRole('option', { name: 'Delegate' })).not.toBeInTheDocument();
   });
 });
+
+describe('UserRow, role labels', () => {
+  const row = (features: ('inventory' | 'teaching')[], isSelf = false) => render(
+    <table><tbody>
+      <UserRow user={user} isSelf={isSelf} account={account()} emailOn features={features} />
+    </tbody></table>,
+  );
+  it('a clinic calls an organizer Doctor, not Organizer', () => {
+    row(['inventory']);
+    expect(screen.getByRole('option', { name: 'Doctor' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Admin' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Organizer' })).not.toBeInTheDocument();
+  });
+  it('a clinic shows Doctor on your own row too', () => {
+    row(['inventory'], true);
+    expect(screen.getByRole('cell', { name: 'Doctor' })).toBeInTheDocument();
+  });
+  it('a course organizer keeps Organizer', () => {
+    row(['teaching']);
+    expect(screen.getByRole('option', { name: 'Organizer' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Doctor' })).not.toBeInTheDocument();
+  });
+});

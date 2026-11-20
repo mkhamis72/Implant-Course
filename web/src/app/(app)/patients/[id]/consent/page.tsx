@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { canEdit } from '@/lib/auth/permissions';
+import { teachingOn } from '@/lib/modules/modules';
 import { todayIso } from '@/lib/dates';
 import type { ConsentRecord, ConsentVersionOption } from '@/lib/consent/labels';
 import { ConsentList } from './consent-list';
@@ -11,6 +12,7 @@ export default async function ConsentPage({ params }: { params: Promise<{ id: st
   const profile = await requirePermission('patients');
   const { id } = await params;
   const editable = canEdit(profile, 'patients');
+  const teaching = teachingOn(profile.features);
   const supabase = await createClient();
   const [records, versions, current] = await Promise.all([
     supabase.rpc('patient_consents_for', { p_patient: id }),
@@ -30,11 +32,11 @@ export default async function ConsentPage({ params }: { params: Promise<{ id: st
         <Link href={`/patients/${id}/consent/print?lang=en`} aria-label="Print the form in English" className="text-sm text-accent hover:underline">English</Link>
         <Link href={`/patients/${id}/consent/print?lang=ar`} aria-label="Print the form in Arabic" className="text-sm text-accent hover:underline">Arabic</Link>
       </div>
-      <ConsentList patientId={id} records={(records.data ?? []) as ConsentRecord[]} editable={editable} />
+      <ConsentList patientId={id} records={(records.data ?? []) as ConsentRecord[]} editable={editable} teaching={teaching} />
       {editable && (
         <div className="space-y-2">
           <h3 className="font-semibold">Record signed consent</h3>
-          <ConsentForm patientId={id} versions={signable} currentVersionId={current.data?.id ?? null} />
+          <ConsentForm patientId={id} versions={signable} currentVersionId={current.data?.id ?? null} teaching={teaching} />
         </div>
       )}
     </section>

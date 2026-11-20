@@ -42,4 +42,24 @@ describe('VersionForm', () => {
     await screen.findByRole('status');
     await waitFor(() => expect(container.querySelector('form')).not.toBe(before));
   });
+
+  it('marks an add started from a template, so the action can leave the template page', () => {
+    const { container, unmount } = render(<VersionForm start={{ label: 'Draft — needs review', text_en: 'E', text_ar: 'ع' }} />);
+    expect(container.querySelector('input[name="from_template"]')).toHaveValue('clinic');
+    unmount();
+    const plain = render(<VersionForm start={{ text_en: 'E', text_ar: 'ع' }} />);
+    expect(plain.container.querySelector('input[name="from_template"]')).toBeNull();
+  });
+
+  it('shows the review banner while the label is the draft label, and not otherwise', () => {
+    const banner = 'Draft text: have it reviewed by your legal adviser and a native Arabic speaker before patients sign it.';
+    const { unmount } = render(<VersionForm start={{ label: 'Draft — needs review', text_en: 'English', text_ar: 'عربي' }} />);
+    expect(screen.getByRole('textbox', { name: 'Label' })).toHaveValue('Draft — needs review');
+    expect(screen.getByText(banner)).toBeInTheDocument();
+    unmount();
+    render(<VersionForm version={{ ...v, label: 'Draft — needs review', in_use: false }} />);
+    expect(screen.getByText(banner)).toBeInTheDocument();
+    render(<VersionForm version={{ ...v, in_use: false }} />);
+    expect(screen.getAllByText(banner)).toHaveLength(1);
+  });
 });

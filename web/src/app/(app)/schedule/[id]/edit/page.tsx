@@ -105,6 +105,8 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
               technique: i.site!.technique ?? '',
             })),
           notes: slot.notes,
+          date: s.date,
+          setting: slot.setting ?? '',
         }}
       />
     </div>

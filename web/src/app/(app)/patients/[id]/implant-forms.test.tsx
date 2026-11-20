@@ -339,6 +339,21 @@ describe('<PlaceForm> placed by', () => {
   });
 });
 
+describe('<PlaceForm> Placed by defaults to me', () => {
+  const doctors = [{ id: 'doc1', name: 'Dr Nabil', user_id: 'other', active: true }, { id: 'doc2', name: 'Dr Me', user_id: 'u1', active: true }];
+  it('a clinic starts the doctor select on the doctor linked to my login', () => {
+    const clinic = { ...data, me: 'u1', teachingOn: false, doctors, delegates: [], supervisors: [], courses: [], enrollments: [] } as unknown as ChartData;
+    render(<PlaceForm patientId="pt" tooth={36} data={clinic} onDone={() => {}} plannedProductId="p1" />);
+    expect(screen.getByRole('combobox', { name: /Placed by/ })).toHaveValue('doc2');
+  });
+  it('a course organizer gets it once Doctor is chosen', () => {
+    render(<PlaceForm patientId="pt" tooth={36} data={{ ...data, me: 'u1', doctors } as unknown as ChartData} onDone={() => {}} plannedProductId="p1" />);
+    expect(screen.getByRole('radio', { name: 'Delegate' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: 'Doctor' }));
+    expect(screen.getByRole('combobox', { name: /^Doctor/ })).toHaveValue('doc2');
+  });
+});
+
 describe('<ComponentForm> in a clinic', () => {
   it('has no course and no fitted-by-delegate field', () => {
     const site = { id: 's1', tooth: 36, state: 'placed', course_id: null, components: [] } as unknown as Parameters<typeof ComponentForm>[0]['site'];

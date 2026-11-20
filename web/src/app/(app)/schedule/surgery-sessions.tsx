@@ -11,13 +11,19 @@ export type DaySession = {
   course: { id: string; name: string } | null;
 };
 
+/** The Schedule page's booking button: a clinic books a surgery directly on that date (0122). */
+export function BookingLink({ date, teaching }: { date: string; teaching: boolean }) {
+  return <Link href={`/schedule/new?date=${date}`} className="btn">{teaching ? 'New booking' : 'Book surgery'}</Link>;
+}
+
 /**
- * The day's surgery sessions (bookings need one). Schedule editors can book into them and add a surgery
- * day for a course running that day; in a clinic (no `teaching`) a clinic day, on any day, and no course is named.
+ * The day's surgery sessions (course bookings need one). Schedule editors can book into them and add a surgery day
+ * for a course running that day. A clinic has no list: it books by date, and the database keeps its hidden clinic days.
  */
 export function SurgerySessions(p: {
   date: string; sessions: DaySession[]; courses: Option[]; editable: boolean; coursesVisible: boolean; teaching: boolean;
 }) {
+  if (!p.teaching) return null;
   return (
     <section className="card space-y-2 text-sm" aria-labelledby="surgery-sessions">
       <h2 id="surgery-sessions" className="font-semibold">Surgery sessions</h2>
@@ -30,7 +36,7 @@ export function SurgerySessions(p: {
               <span>
                 <span className="font-medium">{s.title}</span> · {s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)}
                 {s.room && ` · ${s.room}`}
-                {p.teaching && s.course && (
+                {s.course && (
                   <>
                     {' · '}
                     {p.coursesVisible ? (
@@ -48,15 +54,7 @@ export function SurgerySessions(p: {
           ))}
         </ul>
       )}
-      {p.editable && !p.teaching && (
-        <details open={p.sessions.length === 0}>
-          <summary className="cursor-pointer text-accent">Add clinic day</summary>
-          <div className="pt-3">
-            <SurgeryDayForm date={p.date} courses={[]} clinic />
-          </div>
-        </details>
-      )}
-      {p.editable && p.teaching &&
+      {p.editable &&
         (p.courses.length > 0 ? (
           <details open={p.sessions.length === 0}>
             <summary className="cursor-pointer text-accent">Add surgery day</summary>

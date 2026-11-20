@@ -4,6 +4,11 @@ export const SESSION_TYPES = ['lecture', 'workshop', 'surgery'] as const;
 export type SessionType = (typeof SESSION_TYPES)[number];
 export const SESSION_TYPE_LABELS: Record<SessionType, string> = { lecture: 'Lecture', workshop: 'Workshop', surgery: 'Surgery' };
 
+/** Where a clinic booking happens (0122); null on course bookings and older rows. */
+export const SETTINGS = ['clinic', 'hospital_ga'] as const;
+export type Setting = (typeof SETTINGS)[number];
+export const SETTING_LABELS: Record<Setting, string> = { clinic: 'In clinic', hospital_ga: 'GA in hospital' };
+
 export type Course = { id: string; name: string; start_date: string; end_date: string; venue: string; notes: string };
 export type Session = {
   id: string; course_id: string; type: SessionType; title: string; date: string;
@@ -33,6 +38,8 @@ export type SlotRow = {
   supervisor_id: string | null;
   session_id: string;
   placing_doctor_id: string | null;
+  /** Where a clinic booking happens (0122). */
+  setting: Setting | null;
   implants: { tooth: number; product: Product | null; site: { id: string; technique: Technique | null } | null }[];
   checklists: { id: string; items: { done_at: string | null }[] }[];
 };
@@ -50,4 +57,5 @@ export type ReportRow = {
   diameter_mm: number | null; length_mm: number | null; description: string | null; lot_no: string | null;
   last_outcome: string | null; technique: Technique | null;
 };
-export type Doctor = { id: string; name: string; active: boolean };
+/** user_id: the staff login linked to the doctor (0123), whose Placed by starts on them. */
+export type Doctor = { id: string; name: string; active: boolean; user_id: string | null };

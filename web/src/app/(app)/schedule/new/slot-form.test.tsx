@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SlotForm } from './slot-form';
-import { bookSurgery } from '../actions';
+import { bookSurgery, updateBooking } from '../actions';
 
-vi.mock('../actions', () => ({ bookSurgery: vi.fn(async () => ({ error: 'stop' })), updateBooking: vi.fn() }));
+vi.mock('../actions', () => ({ bookSurgery: vi.fn(async () => ({ error: 'stop' })), updateBooking: vi.fn(async () => ({ error: 'stop' })) }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const props = {
@@ -96,6 +96,8 @@ describe('SlotForm: placed by', () => {
     expect(screen.queryByRole('combobox', { name: 'Doctor' })).not.toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Supervisor' })).toHaveValue('sup1');
     expect(screen.getAllByRole('option', { name: 'Placing' })).toHaveLength(2);
+    expect(screen.queryByLabelText('Date')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Where' })).not.toBeInTheDocument();
   });
 
   it('with a doctor: no placing delegates, the supervisor optional, and the doctor submitted', async () => {
@@ -111,6 +113,8 @@ describe('SlotForm: placed by', () => {
     expect(vi.mocked(bookSurgery).mock.calls.at(-1)![0]).toMatchObject({
       placedBy: 'doctor', placingDoctorId: 'doc1', placing: [], assisting: ['d2'], supervisorId: '',
     });
+    expect(vi.mocked(bookSurgery).mock.calls.at(-1)![0]).not.toHaveProperty('date');
+    expect(vi.mocked(bookSurgery).mock.calls.at(-1)![0]).not.toHaveProperty('setting');
   });
 
   it('edits a doctor booking with the doctor chosen and its supervisor kept', () => {
@@ -133,6 +137,8 @@ describe('SlotForm: clinic', () => {
   const clinic = {
     ...props,
     teaching: false,
+    // The Schedule page always passes its day; a clinic's booking date starts on it.
+    initial: { ...props.initial, date: '2030-03-02' },
     sessions: [{ id: 's1', label: '05 Oct 2026 · Clinic day', courseId: '' }],
     doctors: [{ id: 'doc1', label: 'Dr Hany Fouad' }],
   };
@@ -146,6 +152,11 @@ describe('SlotForm: clinic', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Book surgery' }));
     await waitFor(() => expect(bookSurgery).toHaveBeenCalled());
     expect(vi.mocked(bookSurgery).mock.calls.at(-1)![0]).toMatchObject({ placedBy: 'doctor', placingDoctorId: 'doc1', placing: [], assisting: [] });
+  });
+
+  it('starts the doctor select on the doctor linked to my login', () => {
+    render(<SlotForm {...clinic} doctors={[...clinic.doctors, { id: 'doc2', label: 'Dr Me' }]} myDoctorId="doc2" />);
+    expect(screen.getByRole('combobox', { name: 'Doctor' })).toHaveValue('doc2');
   });
 
   it('edits a booking placed by its recorded delegates without asking for a doctor or naming anyone', () => {
@@ -162,9 +173,40 @@ describe('SlotForm: clinic', () => {
     expect(container.textContent).not.toMatch(/supervisor|delegate/i);
   });
 
-  it('points to Add clinic day, not Courses, when there are no sessions', () => {
-    render(<SlotForm {...clinic} sessions={[]} />);
-    expect(screen.getByRole('link', { name: 'Add clinic day' })).toHaveAttribute('href', '/schedule');
-    expect(screen.queryByRole('link', { name: 'Courses' })).not.toBeInTheDocument();
+  it('books by date and where, with no surgery session', async () => {
+    render(<SlotForm {...clinic} initial={{ ...clinic.initial, date: '2030-03-02' }} />);
+    expect(screen.queryByRole('combobox', { name: 'Surgery session' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/No upcoming surgery sessions/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Date')).toHaveValue('2030-03-02');
+    expect(screen.getByLabelText('Date')).toBeRequired();
+    expect(screen.getByLabelText('Date')).not.toHaveAttribute('min');
+    const where = screen.getByRole('combobox', { name: 'Where' });
+    expect(where).toHaveValue('');
+    expect([...(where as HTMLSelectElement).options].map((o) => o.text)).toEqual(['', 'In clinic', 'GA in hospital']);
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2030-03-05' } });
+    fireEvent.change(where, { target: { value: 'hospital_ga' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Doctor' }), { target: { value: 'doc1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Book surgery' }));
+    await waitFor(() => expect(bookSurgery).toHaveBeenCalled());
+    expect(vi.mocked(bookSurgery).mock.calls.at(-1)![0]).toMatchObject({ date: '2030-03-05', setting: 'hospital_ga' });
+  });
+
+  it('edits the date and where, pre-filled from the booking, and sends both', async () => {
+    render(
+      <SlotForm
+        {...clinic}
+        edit={{
+          slotId: 'slot1', sessionId: 's1', sessionLabel: '05 Oct 2026 · Clinic day', patientLabel: 'Amal', chairId: '', supervisorId: '',
+          start: '09:00', end: '10:00', roles: {}, implants: [], notes: '', placingDoctorId: 'doc1', date: '2030-03-02', setting: 'clinic',
+        }}
+      />,
+    );
+    expect(screen.getByLabelText('Date')).toHaveValue('2030-03-02');
+    expect(screen.getByRole('combobox', { name: 'Where' })).toHaveValue('clinic');
+    expect(screen.queryByText(/cancel it and book again/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2030-03-04' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(updateBooking).toHaveBeenCalled());
+    expect(vi.mocked(updateBooking).mock.calls.at(-1)![0]).toMatchObject({ date: '2030-03-04', setting: 'clinic' });
   });
 });

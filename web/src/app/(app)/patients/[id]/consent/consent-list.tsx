@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { CONSENT_ITEMS, CONSENT_LANGUAGE_LABELS, type ConsentRecord } from '@/lib/consent/labels';
+import { consentItems, CONSENT_LANGUAGE_LABELS, type ConsentRecord } from '@/lib/consent/labels';
 import { voidConsent } from './actions';
 
 const fileHref = (patientId: string, r: ConsentRecord) => `/patients/${patientId}/consent/file/${r.file_id}`;
@@ -56,7 +56,10 @@ function VoidConsent({ patientId, id }: { patientId: string; id: string }) {
 }
 
 /** The current consent record, then every earlier one (voided ones struck through). */
-export function ConsentList({ patientId, records, editable }: { patientId: string; records: ConsentRecord[]; editable: boolean }) {
+export function ConsentList({ patientId, records, editable, teaching }: {
+  patientId: string; records: ConsentRecord[]; editable: boolean; teaching: boolean;
+}) {
+  const items = consentItems(teaching);
   const current = records.find((r) => r.is_current) ?? null;
   const earlier = records.filter((r) => !r.is_current);
 
@@ -71,7 +74,7 @@ export function ConsentList({ patientId, records, editable }: { patientId: strin
             <SignedFormLink patientId={patientId} r={current} />
           </div>
           <ul className="space-y-1.5">
-            {CONSENT_ITEMS.map((item) => (
+            {items.map((item) => (
               <li key={item.key} className="flex items-center justify-between gap-3 text-sm">
                 <span>{item.label}</span>
                 <Answer yes={current[item.key]} />
@@ -105,7 +108,7 @@ export function ConsentList({ patientId, records, editable }: { patientId: strin
                     <td data-label="Form" className={struck}>{r.version_label}</td>
                     <td data-label="Language" className={struck}>{CONSENT_LANGUAGE_LABELS[r.language]}</td>
                     <td data-label="Answers" className={struck}>
-                      {CONSENT_ITEMS.map((item) => `${item.short} ${r[item.key] ? 'yes' : 'no'}`).join(', ')}
+                      {items.map((item) => `${item.short} ${r[item.key] ? 'yes' : 'no'}`).join(', ')}
                     </td>
                     <td data-label="Recorded by" className={struck}>{r.recorded_by_name ?? '—'}</td>
                     <td data-label="Scan"><SignedFormLink patientId={patientId} r={r} /></td>

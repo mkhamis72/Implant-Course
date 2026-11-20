@@ -4,9 +4,10 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdmin } from '@/lib/auth/session';
 import {
-  changeEmailSchema, editNameSchema, inviteSchema, permissionsSchema, setActiveSchema, setRoleSchema, type ActionState,
+  changeEmailSchema, editNameSchema, inviteDoctor, inviteSchema, permissionsSchema, setActiveSchema, setRoleSchema, type ActionState,
 } from '@/lib/admin/schemas';
 import { createLogin } from '@/lib/admin/create-login';
+import { teachingOn } from '@/lib/modules/modules';
 import { userMessage } from '@/lib/db-errors';
 import {
   changeAuthEmail, deleteAuthUser, hasVerifiedFactor, listAccounts, resetAuthFactors, sendPasswordLink, setAuthDisabled, setOneTimePassword, unlinkGoogle,
@@ -20,12 +21,18 @@ import { emailEnabled } from '@/lib/flags';
 import type { FormState } from '@/lib/patients/form-state';
 import { z } from 'zod';
 
-/** Email on: an invitation that verifies the address. Email off: a login with a one-time password. */
+/**
+ * Email on: an invitation that verifies the address. Email off: a login with a one-time password.
+ * In a clinic, a Doctor (or an Admin who is also a doctor) is linked to a doctor.
+ */
 export async function inviteUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  await requireAdmin();
+  const me = await requireAdmin();
   const parsed = inviteSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const result = await createLogin(parsed.data);
+  const { email, full_name, role } = parsed.data;
+  // Only a clinic links a doctor to a new login.
+  const clinic = !teachingOn(me.features);
+  const result = await createLogin(clinic ? { email, full_name, role, ...inviteDoctor(parsed.data, true) } : { email, full_name, role });
   if ('error' in result) return result;
   revalidatePath('/admin/users');
   return result;

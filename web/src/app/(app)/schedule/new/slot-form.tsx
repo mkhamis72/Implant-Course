@@ -6,12 +6,13 @@ import Link from 'next/link';
 import { productLabel } from '@/lib/inventory/labels';
 import { TECHNIQUES, TECHNIQUE_LABELS, type Option, type Product, type Technique } from '@/lib/inventory/types';
 import { PlacedByChoice, type PlacedBy } from '@/components/placed-by-choice';
+import { SETTINGS, SETTING_LABELS, type Setting } from '@/lib/schedule/types';
 import { bookSurgery, updateBooking } from '../actions';
 
 export type SessionOption = { id: string; label: string; courseId: string };
 type Role = '' | 'placing' | 'assisting';
 
-/** An existing booking being edited: the session (day) and patient are fixed. */
+/** An existing booking being edited: the patient is fixed, and the session (day) too except in a clinic. */
 export type EditedBooking = {
   slotId: string;
   sessionId: string;
@@ -28,6 +29,9 @@ export type EditedBooking = {
   placedByRecorded?: boolean;
   implants: { siteId: string; tooth: number; label: string; technique: Technique | '' }[];
   notes: string;
+  /** A clinic edits the date and where (always sent back: an empty Where clears it). */
+  date?: string;
+  setting?: Setting | '';
 };
 
 type Props = {
@@ -39,9 +43,12 @@ type Props = {
   supervisors: Option[];
   /** Admin → Doctors (active, plus the booking's own). */
   doctors: Option[];
-  /** A course organizer; a clinic books a doctor only, with no course, delegates or supervisor. */
+  /** The doctor linked to my login: a new booking's doctor starts on it. */
+  myDoctorId?: string;
+  /** A course organizer; a clinic books a doctor only, by date, with no course, delegates or supervisor. */
   teaching: boolean;
   me: string;
+  /** `date`: the Schedule page's day; a clinic's booking date starts on it. */
   initial: { sessionId: string; chairId: string; start: string; fileNo: string; date?: string };
   edit?: EditedBooking;
 };
@@ -63,8 +70,10 @@ export function SlotForm(p: Props) {
   const [start, setStart] = useState(edit?.start ?? p.initial.start);
   const [end, setEnd] = useState(edit?.end ?? '');
   const [fileNo, setFileNo] = useState(p.initial.fileNo);
+  const [date, setDate] = useState(edit?.date ?? p.initial.date ?? '');
+  const [setting, setSetting] = useState<Setting | ''>(edit?.setting ?? '');
   const [placedBy, setPlacedBy] = useState<PlacedBy>(!p.teaching || (edit?.placingDoctorId && !Object.values(edit.roles).includes('placing')) ? 'doctor' : 'delegate');
-  const [doctorId, setDoctorId] = useState(edit?.placingDoctorId ?? '');
+  const [doctorId, setDoctorId] = useState(edit ? edit.placingDoctorId : (p.myDoctorId ?? ''));
   // With a doctor the supervisor is optional, so it starts empty (or the booking's); with delegates, the current user if a supervisor.
   const defaultSupervisor = (by: PlacedBy) =>
     edit ? edit.supervisorId : by === 'delegate' && p.supervisors.some((s) => s.id === p.me) ? p.me : '';
@@ -93,7 +102,7 @@ export function SlotForm(p: Props) {
   const delegates = useMemo(() => p.enrolled[courseId] ?? [], [p.enrolled, courseId]);
 
   // Clash warnings belong to the inputs they were checked for; any change hides them.
-  const inputKey = JSON.stringify([sessionId, chairId, supervisorId, start, end, fileNo, roles, placedBy, doctorId]);
+  const inputKey = JSON.stringify([sessionId, date, chairId, supervisorId, start, end, fileNo, roles, placedBy, doctorId]);
   const warnings = checked?.key === inputKey ? checked.warnings : null;
 
   function submit(withOverride: boolean) {
@@ -107,6 +116,8 @@ export function SlotForm(p: Props) {
       assisting: p.teaching ? delegates.filter((d) => roleOf(d.id) === 'assisting').map((d) => d.id) : [],
       overrideReason: withOverride ? override : '',
       notes,
+      // A clinic books by date; a course organizer by session.
+      ...(p.teaching ? {} : { date, setting }),
     };
     start_(async () => {
       const result = edit
@@ -130,11 +141,11 @@ export function SlotForm(p: Props) {
       <div className="grid gap-4 sm:grid-cols-2">
         {edit ? (
           <div className="space-y-1 text-sm sm:col-span-2">
-            <p><span className="text-muted">Session:</span> {edit.sessionLabel}</p>
+            {p.teaching && <p><span className="text-muted">Session:</span> {edit.sessionLabel}</p>}
             <p><span className="text-muted">Patient:</span> {edit.patientLabel}</p>
-            <p className="text-muted">To move the surgery to another day, cancel it and book again.</p>
+            {p.teaching && <p className="text-muted">To move the surgery to another day, cancel it and book again.</p>}
           </div>
-        ) : (
+        ) : p.teaching && (
           <>
             <label className="block sm:col-span-2">
               <span className="label">Surgery session</span>
@@ -147,11 +158,26 @@ export function SlotForm(p: Props) {
               <p className="-mt-2 text-sm text-warn sm:col-span-2">
                 No upcoming surgery sessions. Sessions dated before today aren’t listed — add one with{' '}
                 <Link href={p.initial.date ? `/schedule?date=${p.initial.date}` : '/schedule'} className="text-accent underline">
-                  {p.teaching ? 'Add surgery day' : 'Add clinic day'}
+                  Add surgery day
                 </Link>{' '}
-                on the Schedule page{p.teaching ? <>, or under <Link href="/courses" className="text-accent underline">Courses</Link></> : null}.
+                on the Schedule page, or under <Link href="/courses" className="text-accent underline">Courses</Link>.
               </p>
             )}
+          </>
+        )}
+        {!p.teaching && (
+          <>
+            <label className="block">
+              <span className="label">Date</span>
+              <input className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+            </label>
+            <label className="block">
+              <span className="label">Where</span>
+              <select className="input" value={setting} onChange={(e) => setSetting(e.target.value as Setting | '')}>
+                <option value="" />
+                {SETTINGS.map((s) => <option key={s} value={s}>{SETTING_LABELS[s]}</option>)}
+              </select>
+            </label>
           </>
         )}
         <label className="block">

@@ -189,6 +189,6 @@ export type ChartData = {
   inventoryOn: boolean;
   /** The plan includes Teaching (a course organizer): false in a clinic, which records no course, delegate or supervisor. */
   teachingOn: boolean;
-  /** Active doctors (Admin → Doctors), for Placed by. */
-  doctors: { id: string; name: string }[];
+  /** Active doctors (Admin → Doctors), for Placed by; user_id: the linked login (Placed by starts on mine). */
+  doctors: { id: string; name: string; user_id: string | null; active: boolean }[];
 };

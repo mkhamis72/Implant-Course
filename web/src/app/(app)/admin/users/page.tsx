@@ -20,14 +20,19 @@ export default async function UsersPage() {
   const me = await requireAdmin();
   const supabase = await createClient();
   const { companyId } = await currentTenant();
-  const [members, perms] = await Promise.all([
+  const clinic = !teachingOn(me.features);
+  const [members, perms, doctors] = await Promise.all([
     supabase
       .from('company_members')
       .select('user_id, role, active, delegate_id, mfa_setup_required, profile:profiles(full_name, email)')
       .eq('company_id', companyId),
     supabase.from('user_permissions').select('user_id, area, level').eq('company_id', companyId),
+    // A clinic's Create login offers the active doctors without a login.
+    clinic
+      ? supabase.from('doctors').select('id, name').eq('active', true).is('user_id', null).order('name')
+      : Promise.resolve({ data: [], error: null }),
   ]);
-  if (members.error || perms.error) throw new Error('Could not load users');
+  if (members.error || perms.error || doctors.error) throw new Error('Could not load users');
   const permRows = (perms.data ?? []) as { user_id: string; area: string; level: string }[];
   const users = ((members.data ?? []) as unknown as MemberRow[])
     .map(({ profile, ...m }): UserListRow => ({
@@ -62,8 +67,8 @@ export default async function UsersPage() {
   return (
     <div className="space-y-6">
       <h1>Users</h1>
-      <InviteForm emailOn={emailEnabled()} />
-      {teachingOn(me.features) && <p className="text-sm text-muted">Delegate logins are created from the delegate’s page.</p>}
+      <InviteForm emailOn={emailEnabled()} clinic={clinic} doctors={(doctors.data ?? []) as { id: string; name: string }[]} />
+      {!clinic && <p className="text-sm text-muted">Delegate logins are created from the delegate’s page.</p>}
       <div className="card overflow-x-auto">
         <table className="table">
           <thead>

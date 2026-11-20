@@ -28,7 +28,7 @@ function fill(skip?: string) {
 
 describe('ConsentForm', () => {
   it('preselects the current version and leaves the four answers unset', () => {
-    render(<ConsentForm patientId="p1" versions={versions} currentVersionId="v2" />);
+    render(<ConsentForm teaching patientId="p1" versions={versions} currentVersionId="v2" />);
     expect((screen.getByRole('combobox', { name: /Form version/ }) as HTMLSelectElement).value).toBe('v2');
     expect(screen.getAllByRole('radio')).toHaveLength(8);
     for (const r of screen.getAllByRole('radio')) {
@@ -38,7 +38,7 @@ describe('ConsentForm', () => {
   });
 
   it('requires all four answers', async () => {
-    render(<ConsentForm patientId="p1" versions={versions} currentVersionId="v2" />);
+    render(<ConsentForm teaching patientId="p1" versions={versions} currentVersionId="v2" />);
     fill('follow_up');
     fireEvent.submit(screen.getByRole('button', { name: 'Record consent' }).closest('form')!);
     expect(await screen.findByRole('alert')).toHaveTextContent('Answer all four items (yes or no).');
@@ -46,7 +46,7 @@ describe('ConsentForm', () => {
   });
 
   it('sends the answers and the PDF untouched', async () => {
-    render(<ConsentForm patientId="p1" versions={versions} currentVersionId="v2" />);
+    render(<ConsentForm teaching patientId="p1" versions={versions} currentVersionId="v2" />);
     fill();
     fireEvent.submit(screen.getByRole('button', { name: 'Record consent' }).closest('form')!);
     await waitFor(() => expect(recordConsent).toHaveBeenCalled());
@@ -62,19 +62,28 @@ describe('ConsentForm', () => {
 
   it('shows the database refusal', async () => {
     vi.mocked(recordConsent).mockResolvedValue({ error: 'The date signed is before this form version took effect.' });
-    render(<ConsentForm patientId="p1" versions={versions} currentVersionId="v2" />);
+    render(<ConsentForm teaching patientId="p1" versions={versions} currentVersionId="v2" />);
     fill();
     fireEvent.submit(screen.getByRole('button', { name: 'Record consent' }).closest('form')!);
     expect(await screen.findByRole('alert')).toHaveTextContent('before this form version took effect');
   });
 
   it('says when the browser cannot process the photo', async () => {
-    render(<ConsentForm patientId="p1" versions={versions} currentVersionId="v2" />);
+    render(<ConsentForm teaching patientId="p1" versions={versions} currentVersionId="v2" />);
     fill();
     const photo = new File([new Uint8Array([0xff, 0xd8, 0xff])], 'scan.jpg', { type: 'image/jpeg' });
     fireEvent.change(screen.getByLabelText(/Signed form/), { target: { files: [photo] } });
     fireEvent.submit(screen.getByRole('button', { name: 'Record consent' }).closest('form')!);
     expect(await screen.findByRole('alert')).toHaveTextContent("This photo couldn't be processed in this browser. Try another browser, or upload a PDF.");
     expect(recordConsent).not.toHaveBeenCalled();
+  });
+
+  it('a clinic shows the clinic labels on the same four items', () => {
+    render(<ConsentForm teaching={false} patientId="p1" versions={versions} currentVersionId="v2" />);
+    expect(within(screen.getByTestId('consent-item-treatment')).getByText("Treatment by the clinic's dentists")).toBeInTheDocument();
+    expect(within(screen.getByTestId('consent-item-teaching_images'))
+      .getByText('Photos and X-rays for the clinical record and for publication (no face or name)')).toBeInTheDocument();
+    expect(screen.queryByText(/course delegates|for teaching/)).toBeNull();
+    expect(screen.getAllByRole('radio')).toHaveLength(8);
   });
 });
