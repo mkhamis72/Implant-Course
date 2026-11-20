@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { insert, update, selectAfterUpdate } = vi.hoisted(() => ({ insert: vi.fn(), update: vi.fn(), selectAfterUpdate: vi.fn() }));
+const { insert, update, selectAfterUpdate, rpc } = vi.hoisted(() => ({ insert: vi.fn(), update: vi.fn(), selectAfterUpdate: vi.fn(), rpc: vi.fn() }));
 vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: 'me' })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
+    rpc,
     from: (table: string) => ({
       insert: async (row: unknown) => insert(table, row),
       update: (row: unknown) => {
@@ -14,7 +15,7 @@ vi.mock('@/lib/supabase/server', () => ({
     }),
   }),
 }));
-import { addDoctor, updateDoctor } from './actions';
+import { addDoctor, setDoctorLogin, updateDoctor } from './actions';
 
 const form = (o: Record<string, string>) => {
   const f = new FormData();
@@ -55,5 +56,32 @@ describe('updateDoctor', () => {
     selectAfterUpdate.mockResolvedValue({ data: [], error: null });
     const r = await updateDoctor({}, form({ id: 'x', name: 'Dr Amr' }));
     expect(r.error).toBe('Doctor not found.');
+  });
+});
+
+describe('setDoctorLogin', () => {
+  const doc = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
+  const user = '9c1d6e2a-3b4f-4a5e-8d7c-1f2e3d4c5b6a';
+  it('links a login through set_doctor_login', async () => {
+    rpc.mockResolvedValue({ error: null });
+    const r = await setDoctorLogin({}, form({ id: doc, user_id: user }));
+    expect(rpc).toHaveBeenCalledWith('set_doctor_login', { p_doctor: doc, p_user: user });
+    expect(r.ok).toBe('Login linked.');
+  });
+  it('unlinks with an empty login', async () => {
+    rpc.mockResolvedValue({ error: null });
+    const r = await setDoctorLogin({}, form({ id: doc, user_id: '' }));
+    expect(rpc).toHaveBeenCalledWith('set_doctor_login', { p_doctor: doc, p_user: null });
+    expect(r.ok).toBe('Login unlinked.');
+  });
+  it('shows the database message', async () => {
+    rpc.mockResolvedValue({ error: { message: 'That login is already linked to a doctor.', code: 'P0001', hint: 'user' } });
+    const r = await setDoctorLogin({}, form({ id: doc, user_id: user }));
+    expect(r.error).toBe('That login is already linked to a doctor.');
+  });
+  it('refuses a malformed request', async () => {
+    const r = await setDoctorLogin({}, form({ id: 'x', user_id: '' }));
+    expect(r.error).toBe('Invalid request.');
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

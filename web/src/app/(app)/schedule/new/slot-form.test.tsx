@@ -152,6 +152,11 @@ describe('SlotForm: clinic', () => {
     expect(vi.mocked(bookSurgery).mock.calls.at(-1)![0]).toMatchObject({ placedBy: 'doctor', placingDoctorId: 'doc1', placing: [], assisting: [] });
   });
 
+  it('starts the doctor select on the doctor linked to my login', () => {
+    render(<SlotForm {...clinic} doctors={[...clinic.doctors, { id: 'doc2', label: 'Dr Me' }]} myDoctorId="doc2" />);
+    expect(screen.getByRole('combobox', { name: 'Doctor' })).toHaveValue('doc2');
+  });
+
   it('edits a booking placed by its recorded delegates without asking for a doctor or naming anyone', () => {
     const { container } = render(
       <SlotForm

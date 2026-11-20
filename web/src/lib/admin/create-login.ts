@@ -17,16 +17,22 @@ export type LoginResult = { ok: string; password?: string } | { error: string };
  * Email on: an invitation, emailed by Self-Auth (it holds the link; it is never returned here).
  * Email off (pilot without SMTP): an account with a one-time password for the admin to hand over.
  */
-export async function createLogin(a: { email: string; full_name: string; role: Role; delegate_id?: string | null }): Promise<LoginResult> {
+export async function createLogin(a: {
+  email: string; full_name: string; role: Role; delegate_id?: string | null;
+  /** The doctor the login links to on sign-up (a clinic's Doctor or Admin who is also a doctor). */
+  doctor_id?: string | null; new_doctor?: boolean;
+}): Promise<LoginResult> {
   const email = a.email.trim().toLowerCase();
   // Through the admin's own session: the definers act on its bound company, and the audit log records who did it.
   const supabase = await createClient();
-  const { error: pendingError } = await supabase.rpc('create_pending_login', {
+  const { error: pendingError } = await supabase.rpc('create_pending_login_v2', {
     p_email: email, p_full_name: a.full_name, p_role: a.role, p_delegate_id: a.delegate_id ?? null,
+    p_doctor: a.doctor_id ?? null, p_new_doctor: a.new_doctor ?? false,
   });
   if (pendingError) return { error: userMessage(pendingError) ?? 'Could not create the login.' };
 
-  // Every failure from here removes the pending row again: a later sign-up of the address mustn't join unasked.
+  // Every failure from here removes the pending row again: a later sign-up of the address mustn't join unasked,
+  // and a doctor made for this invite goes with it.
   const cancel = async (result: { error: string }) => {
     try {
       const { error } = await supabase.rpc('cancel_pending_login', { p_email: email });

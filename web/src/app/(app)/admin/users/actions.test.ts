@@ -8,7 +8,8 @@ const { memberOfMyCompany, profileRemains } = vi.hoisted(() => ({ memberOfMyComp
 vi.mock('@/lib/admin/same-company', () => ({ memberOfMyCompany, profileRemains, USER_NOT_FOUND: 'User not found.' }));
 vi.mock('@/lib/tenant/current', () => ({ currentTenant: vi.fn(async () => ({ slug: 'academy', companyId: 'a7c0de00-0000-4000-8000-000000000001' })) }));
 const { ME } = vi.hoisted(() => ({ ME: '9c1d6e2a-3b4f-4a5e-8d7c-1f2e3d4c5b6a' }));
-vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: ME })) }));
+const { features } = vi.hoisted(() => ({ features: { value: ['teaching'] as string[] } }));
+vi.mock('@/lib/auth/session', () => ({ requireAdmin: vi.fn(async () => ({ user_id: ME, features: features.value })) }));
 vi.mock('@/lib/admin/create-login', () => ({ createLogin }));
 vi.mock('@/lib/admin/auth-accounts', () => ({ deleteAuthUser, sendPasswordLink, setOneTimePassword, setAuthDisabled, changeAuthEmail, resetAuthFactors, listAccounts, hasVerifiedFactor, unlinkGoogle }));
 vi.mock('@/lib/email/send', () => ({ sendEmail }));
@@ -27,6 +28,7 @@ import { changeEmail, editName, inviteUser, removeUser, resendInvite, resetGoogl
 beforeEach(() => {
   vi.clearAllMocks();
   flagged.value = false;
+  features.value = ['teaching'];
   memberOfMyCompany.mockResolvedValue(true);
   setAuthDisabled.mockResolvedValue(null);
   profileRemains.mockResolvedValue(false);
@@ -44,6 +46,15 @@ describe('inviteUser', () => {
     const r = await inviteUser({}, form({ email: 'New@Example.com', full_name: 'Dr New', role: 'organizer' }));
     expect(createLogin).toHaveBeenCalledWith({ email: 'new@example.com', full_name: 'Dr New', role: 'organizer' });
     expect(r).toEqual({ ok: 'Login created for new@example.com.', password: 'Temp-Pass-123' });
+  });
+  it('a clinic passes the doctor choice; a course organizer company never does', async () => {
+    createLogin.mockResolvedValue({ ok: 'Invitation sent to new@example.com.' });
+    const fields = { email: 'new@example.com', full_name: 'Dr New', role: 'organizer', doctor: 'new' };
+    await inviteUser({}, form(fields));
+    expect(createLogin).toHaveBeenLastCalledWith({ email: 'new@example.com', full_name: 'Dr New', role: 'organizer' });
+    features.value = ['inventory'];
+    await inviteUser({}, form(fields));
+    expect(createLogin).toHaveBeenLastCalledWith({ email: 'new@example.com', full_name: 'Dr New', role: 'organizer', doctor_id: null, new_doctor: true });
   });
   it('validates before creating anything', async () => {
     expect(await inviteUser({}, form({ email: 'nope', full_name: 'Dr New', role: 'organizer' }))).toHaveProperty('error');

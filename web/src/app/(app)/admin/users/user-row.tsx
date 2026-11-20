@@ -7,7 +7,7 @@ import { ResetPassword } from './reset-password';
 import type { ActionState } from '@/lib/admin/schemas';
 import type { UserListRow } from './page';
 import { PermissionGrid } from './permission-grid';
-import type { Feature } from '@/lib/modules/modules';
+import { teachingOn, type Feature } from '@/lib/modules/modules';
 import { EditName } from './edit-name';
 import { ChangeEmail } from './change-email';
 import { ResetTwoFactor } from './reset-two-factor';
@@ -17,6 +17,8 @@ import type { HistoryEntry } from '@/lib/admin/history';
 import { formatDateTime } from '@/lib/format';
 
 const ROLE_LABELS = { admin: 'Admin', organizer: 'Organizer', delegate: 'Delegate' } as const;
+/** A clinic's organizers are its doctors. */
+const CLINIC_ROLE_LABELS = { ...ROLE_LABELS, organizer: 'Doctor' } as const;
 
 /** What the page learns about the login from Auth, plus the admin history. */
 export type Account = {
@@ -42,6 +44,7 @@ export function UserRow({ user, isSelf, account, emailOn, features }: { user: Us
   const [inviteState, inviteAction, invitePending] = useActionState<ActionState, FormData>(resendInvite, {});
   const message = roleState.error ?? activeState.error ?? inviteState.error ?? roleState.ok ?? activeState.ok ?? inviteState.ok;
   const isError = Boolean(roleState.error ?? activeState.error ?? inviteState.error);
+  const labels = teachingOn(features) ? ROLE_LABELS : CLINIC_ROLE_LABELS;
 
   return (
     <tr data-testid={`user-row-${user.email}`} className="border-t border-line align-top">
@@ -54,13 +57,13 @@ export function UserRow({ user, isSelf, account, emailOn, features }: { user: Us
       </td>
       <td data-label="Role" className="py-2 pr-4">
         {isSelf || user.role === 'delegate' ? (
-          <span>{ROLE_LABELS[user.role]}</span>
+          <span>{labels[user.role]}</span>
         ) : (
           <form action={roleAction} className="flex gap-2">
             <input type="hidden" name="user_id" value={user.user_id} />
             <select className="input py-1" name="role" defaultValue={user.role} aria-label="Role">
-              <option value="organizer">Organizer</option>
-              <option value="admin">Admin</option>
+              <option value="organizer">{labels.organizer}</option>
+              <option value="admin">{labels.admin}</option>
             </select>
             <button className="btn-secondary btn py-1" disabled={rolePending}>
               Change role

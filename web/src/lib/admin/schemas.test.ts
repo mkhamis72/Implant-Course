@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { inviteSchema, permissionsSchema, settingsSchema, setActiveSchema } from './schemas';
+import { inviteDoctor, inviteSchema, permissionsSchema, settingsSchema, setActiveSchema } from './schemas';
 
 describe('inviteSchema', () => {
   it('normalizes email and name', () => {
@@ -56,5 +56,26 @@ describe('permissionsSchema', () => {
     expect(permissionsSchema.safeParse({ ...grid, perm_patients: 'all' }).success).toBe(false);
     expect(permissionsSchema.safeParse({ ...grid, perm_delegates: undefined }).success).toBe(false);
     expect(permissionsSchema.safeParse({ ...grid, perm_research: undefined }).success).toBe(false);
+  });
+});
+
+describe('inviteDoctor', () => {
+  const doc = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
+  const base = { email: 'a@b.co', full_name: 'Ali' };
+  it('accepts new or a doctor id, and the Also a doctor tick', () => {
+    expect(inviteSchema.parse({ ...base, role: 'admin', doctor: 'new', also_doctor: 'on' })).toMatchObject({ doctor: 'new', also_doctor: 'on' });
+    expect(inviteSchema.safeParse({ ...base, role: 'organizer', doctor: 'nope' }).success).toBe(false);
+  });
+  it('a clinic Doctor always links one: a new doctor by default, or the chosen one', () => {
+    expect(inviteDoctor({ role: 'organizer' }, true)).toEqual({ doctor_id: null, new_doctor: true });
+    expect(inviteDoctor({ role: 'organizer', doctor: 'new' }, true)).toEqual({ doctor_id: null, new_doctor: true });
+    expect(inviteDoctor({ role: 'organizer', doctor: doc }, true)).toEqual({ doctor_id: doc, new_doctor: false });
+  });
+  it('a clinic Admin links one only when also a doctor', () => {
+    expect(inviteDoctor({ role: 'admin', doctor: doc }, true)).toEqual({ doctor_id: null, new_doctor: false });
+    expect(inviteDoctor({ role: 'admin', also_doctor: 'on', doctor: doc }, true)).toEqual({ doctor_id: doc, new_doctor: false });
+  });
+  it('a course organizer company links none', () => {
+    expect(inviteDoctor({ role: 'organizer', doctor: doc, also_doctor: 'on' }, false)).toEqual({ doctor_id: null, new_doctor: false });
   });
 });

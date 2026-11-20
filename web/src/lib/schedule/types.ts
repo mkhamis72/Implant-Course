@@ -57,4 +57,5 @@ export type ReportRow = {
   diameter_mm: number | null; length_mm: number | null; description: string | null; lot_no: string | null;
   last_outcome: string | null; technique: Technique | null;
 };
-export type Doctor = { id: string; name: string; active: boolean };
+/** user_id: the staff login linked to the doctor (0123), whose Placed by starts on them. */
+export type Doctor = { id: string; name: string; active: boolean; user_id: string | null };

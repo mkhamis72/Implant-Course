@@ -6,7 +6,23 @@ export const inviteSchema = z.object({
   email: z.string().trim().toLowerCase().email({ message: 'Enter a valid email address.' }),
   full_name: z.string().trim().min(2, { message: 'Enter the full name (at least 2 characters).' }).max(100),
   role,
+  /** A clinic's doctor choice: 'new' (a doctor named after the user) or an existing doctor's id. */
+  doctor: z.union([z.literal('new'), z.string().uuid()]).optional(),
+  /** A clinic Admin who is also a doctor. */
+  also_doctor: z.literal('on').optional(),
 });
+
+/**
+ * The doctor a new login links to. In a clinic a Doctor always links one (a new doctor unless one is chosen), and an
+ * Admin only when also a doctor; a course organizer company links none.
+ */
+export function inviteDoctor(
+  i: { role: 'admin' | 'organizer'; doctor?: string; also_doctor?: 'on' },
+  clinic: boolean,
+): { doctor_id: string | null; new_doctor: boolean } {
+  if (!clinic || (i.role === 'admin' && i.also_doctor !== 'on')) return { doctor_id: null, new_doctor: false };
+  return !i.doctor || i.doctor === 'new' ? { doctor_id: null, new_doctor: true } : { doctor_id: i.doctor, new_doctor: false };
+}
 
 export const changeEmailSchema = z.object({
   user_id: z.string().uuid(),

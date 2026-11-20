@@ -28,8 +28,10 @@ describe('createLogin', () => {
   it('with email off: the pending row first, then an account with a one-time password in this company', async () => {
     vi.stubEnv('EMAIL_ENABLED', 'false');
     const r = await createLogin({ email: ' D@Example.com ', full_name: 'Dr D', role: 'delegate', delegate_id: 'd1' });
-    expect(rpc).toHaveBeenCalledWith('create_pending_login', { p_email: 'd@example.com', p_full_name: 'Dr D', p_role: 'delegate', p_delegate_id: 'd1' });
-    expect(calls).toEqual(['create_pending_login', 'createUser']);
+    expect(rpc).toHaveBeenCalledWith('create_pending_login_v2', {
+      p_email: 'd@example.com', p_full_name: 'Dr D', p_role: 'delegate', p_delegate_id: 'd1', p_doctor: null, p_new_doctor: false,
+    });
+    expect(calls).toEqual(['create_pending_login_v2', 'createUser']);
     expect(admin.createUser).toHaveBeenCalledWith({ companyId: 'company-a', email: 'd@example.com', password: expect.any(String) });
     expect(admin.invite).not.toHaveBeenCalled();
     expect(r).toMatchObject({ ok: 'Login created for d@example.com.' });
@@ -39,7 +41,7 @@ describe('createLogin', () => {
   it('with email on: the pending row first, then Self-Auth sends the invitation (no password, no link)', async () => {
     vi.stubEnv('EMAIL_ENABLED', 'true');
     const r = await createLogin({ email: 'o@example.com', full_name: 'Org O', role: 'organizer' });
-    expect(calls).toEqual(['create_pending_login', 'invite']);
+    expect(calls).toEqual(['create_pending_login_v2', 'invite']);
     expect(admin.invite).toHaveBeenCalledWith({ companyId: 'company-a', email: 'o@example.com' });
     expect(admin.createUser).not.toHaveBeenCalled();
     expect(r).toEqual({ ok: 'Invitation sent to o@example.com.' });
@@ -58,7 +60,7 @@ describe('createLogin', () => {
     admin.invite.mockRejectedValueOnce(new Error('smtp down'));
     const r = await createLogin({ email: 'o@example.com', full_name: 'Org O', role: 'organizer' });
     expect(r).toEqual({ error: 'Could not create the login.' });
-    expect(calls).toEqual(['create_pending_login', 'cancel_pending_login']);
+    expect(calls).toEqual(['create_pending_login_v2', 'cancel_pending_login']);
     expect(rpc).toHaveBeenLastCalledWith('cancel_pending_login', { p_email: 'o@example.com' });
     expect(JSON.stringify(log.mock.calls)).not.toContain('smtp down');
     log.mockRestore();
@@ -69,14 +71,14 @@ describe('createLogin', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     admin.createUser.mockRejectedValueOnce(new Error('db'));
     expect(await createLogin({ email: 'o@example.com', full_name: 'Org O', role: 'organizer' })).toEqual({ error: 'Could not create the login.' });
-    expect(calls).toEqual(['create_pending_login', 'cancel_pending_login']);
+    expect(calls).toEqual(['create_pending_login_v2', 'cancel_pending_login']);
   });
 
   it('an address that already has an account here says so and removes the pending row', async () => {
     vi.stubEnv('EMAIL_ENABLED', 'true');
     admin.invite.mockRejectedValueOnce(new CodedError('email_taken'));
     expect(await createLogin({ email: 'o@example.com', full_name: 'Org O', role: 'organizer' })).toEqual({ error: 'A user with this email already exists.' });
-    expect(calls).toEqual(['create_pending_login', 'cancel_pending_login']);
+    expect(calls).toEqual(['create_pending_login_v2', 'cancel_pending_login']);
   });
 
   it('a failing cancel only warns', async () => {
@@ -87,5 +89,24 @@ describe('createLogin', () => {
     rpc.mockImplementationOnce(async () => ({ data: null, error: null })).mockResolvedValueOnce({ data: null, error: { message: 'nope' } });
     expect(await createLogin({ email: 'o@example.com', full_name: 'Org O', role: 'organizer' })).toEqual({ error: 'Could not create the login.' });
     expect(warn).toHaveBeenCalled();
+  });
+
+  it('passes the doctor choice to create_pending_login_v2', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    await createLogin({ email: 'n@example.com', full_name: 'Dr N', role: 'organizer', doctor_id: 'doc1', new_doctor: false });
+    expect(rpc).toHaveBeenCalledWith('create_pending_login_v2', {
+      p_email: 'n@example.com', p_full_name: 'Dr N', p_role: 'organizer', p_delegate_id: null, p_doctor: 'doc1', p_new_doctor: false,
+    });
+  });
+
+  it('a failed invite for a new doctor cancels the pending login, so no orphan doctor remains', async () => {
+    vi.stubEnv('EMAIL_ENABLED', 'true');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.invite.mockRejectedValueOnce(new Error('smtp down'));
+    const r = await createLogin({ email: 'n@example.com', full_name: 'Dr N', role: 'organizer', new_doctor: true });
+    expect(r).toEqual({ error: 'Could not create the login.' });
+    expect(rpc).toHaveBeenNthCalledWith(1, 'create_pending_login_v2', expect.objectContaining({ p_doctor: null, p_new_doctor: true }));
+    expect(calls).toEqual(['create_pending_login_v2', 'cancel_pending_login']);
+    expect(rpc).toHaveBeenLastCalledWith('cancel_pending_login', { p_email: 'n@example.com' });
   });
 });

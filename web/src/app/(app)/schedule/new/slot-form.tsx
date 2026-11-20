@@ -43,6 +43,8 @@ type Props = {
   supervisors: Option[];
   /** Admin → Doctors (active, plus the booking's own). */
   doctors: Option[];
+  /** The doctor linked to my login: a new booking's doctor starts on it. */
+  myDoctorId?: string;
   /** A course organizer; a clinic books a doctor only, by date, with no course, delegates or supervisor. */
   teaching: boolean;
   me: string;
@@ -71,7 +73,7 @@ export function SlotForm(p: Props) {
   const [date, setDate] = useState(edit?.date ?? p.initial.date ?? '');
   const [setting, setSetting] = useState<Setting | ''>(edit?.setting ?? '');
   const [placedBy, setPlacedBy] = useState<PlacedBy>(!p.teaching || (edit?.placingDoctorId && !Object.values(edit.roles).includes('placing')) ? 'doctor' : 'delegate');
-  const [doctorId, setDoctorId] = useState(edit?.placingDoctorId ?? '');
+  const [doctorId, setDoctorId] = useState(edit ? edit.placingDoctorId : (p.myDoctorId ?? ''));
   // With a doctor the supervisor is optional, so it starts empty (or the booking's); with delegates, the current user if a supervisor.
   const defaultSupervisor = (by: PlacedBy) =>
     edit ? edit.supervisorId : by === 'delegate' && p.supervisors.some((s) => s.id === p.me) ? p.me : '';

@@ -96,7 +96,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supabase.rpc('course_options'),
     supabase.rpc('radiographs_for', { p_patient: patientId }),
     supabase.from('enrollments').select('course_id, delegate_id'),
-    supabase.from('doctors').select('id, name').eq('active', true).order('name'),
+    supabase.from('doctors').select('id, name, user_id, active').eq('active', true).order('name'),
   ]);
   for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors]) {
     if (r.error) throw new Error('Could not load the chart');
@@ -125,6 +125,6 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     canReceive: me ? canEdit(me, 'inventory') : false,
     inventoryOn: me ? featureOn(me.features, 'inventory') : false,
     teachingOn: me ? teachingOn(me.features) : false,
-    doctors: (doctors.data ?? []) as { id: string; name: string }[],
+    doctors: (doctors.data ?? []) as ChartData['doctors'],
   };
 }
