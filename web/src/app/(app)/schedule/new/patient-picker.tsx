@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type Ref } from 'react';
 import { ageOn } from '@/lib/patients/age';
 import { todayIso } from '@/lib/dates';
 import type { BookingPatient } from '@/lib/schedule/types';
@@ -18,7 +18,9 @@ const joined = (parts: (string | number | null)[]) => parts.filter((v) => v !== 
 const ageOf = (p: BookingPatient) => ageOn(p.dob, new Date(`${todayIso()}T00:00:00`));
 
 /** The chosen patient, with Open file (Patients view only); Change only when `onChange` is given (not when editing). */
-export function PatientCard({ canOpenFile, value, onChange }: { canOpenFile: boolean; value: BookingPatient; onChange?: () => void }) {
+export function PatientCard({ canOpenFile, value, onChange, changeRef }: {
+  canOpenFile: boolean; value: BookingPatient; onChange?: () => void; changeRef?: Ref<HTMLButtonElement>;
+}) {
   return (
     <div className="sm:col-span-2">
       <span className="label">Patient</span>
@@ -31,7 +33,9 @@ export function PatientCard({ canOpenFile, value, onChange }: { canOpenFile: boo
         ) : (
           <span className="text-muted">File: no access</span>
         )}
-        {onChange && <button type="button" className="btn-secondary btn ml-auto py-1" onClick={onChange}>Change</button>}
+        {onChange && (
+          <button ref={changeRef} type="button" className="btn-secondary btn ml-auto py-1" onClick={onChange}>Change</button>
+        )}
       </div>
     </div>
   );
@@ -44,7 +48,9 @@ export function PatientCard({ canOpenFile, value, onChange }: { canOpenFile: boo
 export function PatientPicker({ canOpenFile, value, onChange }: Props) {
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const changeRef = useRef<HTMLButtonElement>(null);
   const focusAfterChange = useRef(false);
+  const focusAfterChoose = useRef(false);
   const latest = useRef(0);
   const [query, setQuery] = useState('');
   const [matches, setMatches] = useState<BookingPatient[]>([]);
@@ -62,7 +68,13 @@ export function PatientPicker({ canOpenFile, value, onChange }: Props) {
       return;
     }
     const timer = setTimeout(async () => {
-      const found = await searchBookingPatients(q);
+      let found: BookingPatient[];
+      try {
+        found = await searchBookingPatients(q);
+      } catch {
+        // A failed search reads as no matches; the server logs the cause.
+        found = [];
+      }
       // A slower, older search must not replace a newer one.
       if (n !== latest.current) return;
       setMatches(found.slice(0, MAX_MATCHES));
@@ -78,11 +90,17 @@ export function PatientPicker({ canOpenFile, value, onChange }: Props) {
       focusAfterChange.current = false;
       inputRef.current?.focus();
     }
+    // After a choice the box is gone: focus Change so focus does not drop to the page and the card is read out.
+    if (value && focusAfterChoose.current) {
+      focusAfterChoose.current = false;
+      changeRef.current?.focus();
+    }
   }, [value]);
 
   function choose(p: BookingPatient) {
     setOpen(false);
     setActive(-1);
+    focusAfterChoose.current = true;
     onChange(p);
   }
 
@@ -94,7 +112,7 @@ export function PatientPicker({ canOpenFile, value, onChange }: Props) {
     onChange(null);
   }
 
-  if (value) return <PatientCard canOpenFile={canOpenFile} value={value} onChange={change} />;
+  if (value) return <PatientCard canOpenFile={canOpenFile} value={value} onChange={change} changeRef={changeRef} />;
 
   const listId = `${id}-list`;
   const optionId = (i: number) => `${id}-option-${i}`;
@@ -112,10 +130,12 @@ export function PatientPicker({ canOpenFile, value, onChange }: Props) {
       setOpen(true);
       setActive((a) => (a <= 0 ? matches.length - 1 : a - 1));
     } else if (e.key === 'Enter') {
-      // Enter chooses the highlighted match instead of submitting the booking.
+      // Enter chooses the highlighted match; with text typed it never submits the booking.
       if (expanded && active >= 0) {
         e.preventDefault();
         choose(matches[active]);
+      } else if (query.trim()) {
+        e.preventDefault();
       }
     } else if (e.key === 'Escape') {
       if (expanded) e.preventDefault();
@@ -167,9 +187,10 @@ export function PatientPicker({ canOpenFile, value, onChange }: Props) {
           </li>
         ))}
       </ul>
-      {open && searched && matches.length === 0 && (
-        <p role="status" className="mt-1 text-sm text-muted">No patients match.</p>
-      )}
+      {/* Always in the DOM so screen readers announce the message when it appears. */}
+      <p role="status" className="text-sm text-muted empty:hidden mt-1">
+        {open && searched && matches.length === 0 ? 'No patients match.' : ''}
+      </p>
     </div>
   );
 }

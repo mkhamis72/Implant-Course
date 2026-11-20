@@ -296,7 +296,7 @@ export function SlotForm(p: Props) {
                     <button
                       type="button"
                       className="px-2 text-muted hover:text-bad"
-                      aria-label={`Remove tooth ${i + 1}`}
+                      aria-label={`Remove implant row ${i + 1}`}
                       onClick={() => setImplants((all) => all.filter((_, j) => j !== i))}
                     >
                       ×

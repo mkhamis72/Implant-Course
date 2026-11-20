@@ -106,6 +106,44 @@ describe('PatientPicker', () => {
     expect(screen.getByText(/^P00013 · Amal Second/)).toBeInTheDocument();
   });
 
+  it('choosing moves focus to Change', async () => {
+    render(<Harness />);
+    type('Amal');
+    fireEvent.click(await screen.findByRole('option', { name: /Amal Hassan/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Change' })).toHaveFocus());
+  });
+
+  it('Enter with text and nothing highlighted does not submit', async () => {
+    const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+    render(<form onSubmit={onSubmit}><Harness /></form>);
+    type('Amal');
+    await screen.findByRole('option', { name: /Amal Hassan/ });
+    const ev = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    box().dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it('a failed search shows no matches, quietly', async () => {
+    vi.mocked(searchBookingPatients).mockRejectedValue(new Error('network'));
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<Harness />);
+    type('Amal');
+    await waitFor(() => expect(searchBookingPatients).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    errors.mockRestore();
+  });
+
+  it('the status region is always there', async () => {
+    vi.mocked(searchBookingPatients).mockResolvedValue([]);
+    render(<Harness />);
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('');
+    type('Nobody');
+    await waitFor(() => expect(status).toHaveTextContent('No patients match.'));
+    expect(screen.getByRole('status')).toBe(status);
+  });
+
   it('Escape closes the list', async () => {
     render(<Harness />);
     type('Amal');

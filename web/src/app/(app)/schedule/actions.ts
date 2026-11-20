@@ -156,6 +156,7 @@ export async function updateBooking(input: Record<string, unknown>): Promise<Boo
   });
   if (error) {
     revalidatePath('/schedule');
+    revalidatePath(`/patients/${slot.patient_id}`, 'layout');
     return { error: `The implants were saved, but the other changes were not: ${userMessage(error)}` };
   }
   revalidatePath('/schedule');

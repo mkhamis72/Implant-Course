@@ -129,7 +129,7 @@ export const MAX_SPARES = 5;
  */
 function checkSpares(i: { tooth: number; productId: string | null; spares: string[] }, ctx: z.RefinementCtx) {
   const ids = i.productId ? [i.productId, ...i.spares] : i.spares;
-  if (i.spares.length > MAX_SPARES) ctx.addIssue({ code: 'custom', message: `Tooth ${i.tooth} has more than 5 spares.` });
+  if (i.spares.length > MAX_SPARES) ctx.addIssue({ code: 'custom', message: `Tooth ${i.tooth} has more than ${MAX_SPARES} spares.` });
   else if (new Set(ids).size !== ids.length) ctx.addIssue({ code: 'custom', message: `Tooth ${i.tooth} lists the same implant twice.` });
 }
 

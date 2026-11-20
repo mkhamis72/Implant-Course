@@ -88,7 +88,7 @@ test('edit: change implant and spares, add then remove a tooth', async ({ page }
 
   // Remove tooth 46 again.
   await card().getByRole('link', { name: 'Edit booking' }).click();
-  await page.getByRole('button', { name: 'Remove tooth 2' }).click();
+  await page.getByRole('button', { name: 'Remove implant row 2' }).click();
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page).toHaveURL((u) => u.pathname === '/schedule' && u.searchParams.get('date') === w.day);
   await expect(card()).toContainText('Tooth 36');

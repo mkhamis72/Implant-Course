@@ -176,6 +176,34 @@ describe('set_booking_implants (0126)', () => {
     });
   });
 
+  it('a recorded product that left the catalogue stays allowed (0127)', async () => {
+    await withTx(async (c) => {
+      const s = await seed(c, 'Inactive');
+      const patient = await newPatient(c, 'Inactive');
+      const [p1, p2, a, b, d] = s.products;
+      const slot = await book(c, s, patient, [{ tooth: 31, product_id: p1, spares: [a] }]);
+      await asCompany(c);
+      await c.query(`update public.products set active = false where id = any ($1::uuid[])`, [[p1, p2, a, b]]);
+      await asAdmin(c);
+      const CATALOG = /Choose an implant from the catalog\./;
+
+      // (a) The kept tooth's recorded product is accepted; a different inactive product is refused.
+      await refused(c, SET, [slot, json([{ tooth: 31, product_id: p2, spares: [a] }])], CATALOG);
+      // (b) The recorded spare is accepted on resend; a new inactive spare is refused.
+      await refused(c, SET, [slot, json([{ tooth: 31, product_id: p1, spares: [a, b] }])], CATALOG);
+      await setImplants(c, slot, [{ tooth: 31, product_id: p1, spares: [a, d] }]);
+      const st = await stateOf(c, slot);
+      expect(st.planned.map((r) => r.product_id)).toEqual([p1]);
+      expect(st.spares).toEqual([
+        { tooth: 31, product_id: a, position: 1 },
+        { tooth: 31, product_id: d, position: 2 },
+      ]);
+      // A recorded spare counts only for its own tooth.
+      await refused(c, SET, [slot, json([{ tooth: 31, product_id: p1 }, { tooth: 32, product_id: d, spares: [a] }])],
+        CATALOG);
+    });
+  });
+
   it('placed tooth is locked, spares still editable', async () => {
     await withTx(async (c) => {
       const s = await seed(c, 'Placed');

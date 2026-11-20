@@ -154,7 +154,7 @@ describe('SlotForm: editing the implants', () => {
     expect(screen.queryByRole('textbox', { name: 'Tooth 1' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Implant 1' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Technique 1' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remove tooth 1' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove implant row 1' })).not.toBeInTheDocument();
     expect(screen.getByText(/Tooth 46 · Oxy/)).toBeInTheDocument();
     expect(screen.getByText('Placed — change it in Corrections')).toBeInTheDocument();
     // Its spares stay editable.
@@ -164,7 +164,7 @@ describe('SlotForm: editing the implants', () => {
 
   it('can add and remove a tooth', async () => {
     renderEdit([planned, { ...planned, tooth: '37', spares: [] }]);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove tooth 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove implant row 1' }));
     expect(screen.getByRole('textbox', { name: 'Tooth 1' })).toHaveValue('37');
     fireEvent.click(screen.getByRole('button', { name: '+ Add another implant' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Tooth 2' }), { target: { value: '35' } });

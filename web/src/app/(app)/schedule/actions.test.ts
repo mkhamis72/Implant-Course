@@ -24,6 +24,7 @@ const { rpc, from, tables, features, queries } = vi.hoisted(() => {
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc, from }) }));
 vi.mock('@/lib/auth/session', () => ({ requirePermission: vi.fn(async () => ({ features: features.list })) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth/session';
 import { addSurgeryDay, bookSurgery, searchBookingPatients, updateBooking } from './actions';
 
@@ -153,12 +154,15 @@ describe('updateBooking: the implants', () => {
 
   it('the rest refused after the implants were saved says so', async () => {
     recorded(uuid(5), null);
+    vi.mocked(revalidatePath).mockClear();
     rpc.mockImplementation(async (name: unknown) => (name === 'update_surgery_slot_v3'
       ? { data: null, error: { message: 'This chair is booked.', hint: 'user' } }
       : { data: [], error: null }) as never);
     try {
       expect(await updateBooking({ ...edit, ...people, implants }))
         .toEqual({ error: 'The implants were saved, but the other changes were not: This chair is booked.' });
+      expect(revalidatePath).toHaveBeenCalledWith('/schedule');
+      expect(revalidatePath).toHaveBeenCalledWith(`/patients/${uuid(3)}`, 'layout');
     } finally {
       rpc.mockImplementation(async () => ({ data: [], error: null }));
     }
