@@ -109,6 +109,8 @@ async function seedCompany(c: Client, key: 'A' | 'B'): Promise<Company> {
     session: r.sessions, chair: r.chairs, patient: r.patients, supervisor: r.supervisors, placing: [r.delegates],
     implants: [{ tooth: 12 }],
   });
+  await c.query(`insert into public.slot_spare_implants (slot_id, tooth, product_id, position) values ($1, 12, $2, 1)`,
+    [r.surgery_slots, r.products]);
   r.talks = await addTalk(c, { session: lectureSession, lecturer: r.lecturers });
 
   const site = r.implant_sites;

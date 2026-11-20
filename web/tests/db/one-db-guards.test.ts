@@ -32,6 +32,7 @@ const PARENT_SCOPED_UNIQUES = new Set<string>([
   'site_components_one_current', // within one implant
   'slot_delegates_slot_id_delegate_id_key', // within one booking
   'slot_planned_implants_slot_id_tooth_key', // within one booking
+  'slot_spare_implants_slot_id_tooth_product_id_key', // within one booking
   'studies_letter_file_id_key', // one study per stored file
   'study_courses_pkey', // within one study
   'template_items_template_id_position_key', // within one template
