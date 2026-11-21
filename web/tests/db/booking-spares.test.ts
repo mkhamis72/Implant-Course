@@ -43,7 +43,6 @@ const call = (fn: string) => `select public.${fn}(
   p_placing => '{}'::uuid[], p_assisting => '{}'::uuid[], p_implants => $5::jsonb, p_override_reason => 'Zz test',
   p_notes => '', p_placing_doctor => $4, p_setting => null, p_date => null) as id`;
 const V4 = call('create_surgery_slot_v4');
-const V3 = call('create_surgery_slot_v3');
 
 const book = async (c: Client, s: Seed, patient: string, implants: Item[], sql = V4) =>
   (await one(c, sql, params(s, patient, implants))) as string;
@@ -114,31 +113,6 @@ describe('booking spares (0125)', () => {
       await refused(c, V4, params(s, patient, [{ tooth: 41, product_id: planned, spares: [a] }]), CATALOG);
       await refused(c, V4, params(s, patient, [{ tooth: 41, product_id: planned, spares: [abutment] }]), CATALOG);
       await refused(c, V4, params(s, patient, [{ tooth: 41, product_id: planned, spares: [crypto.randomUUID()] }]), CATALOG);
-    });
-  });
-
-  it('v4 without spares behaves like v3', async () => {
-    await withTx(async (c) => {
-      const s = await seed(c, 'Like');
-      const p3 = await newPatient(c, 'Like v3');
-      const p4 = await newPatient(c, 'Like v4');
-      const implants: Item[] = [{ tooth: 14, product_id: s.products[0] }, { tooth: 15, technique: 'free_hand' }];
-      const slot3 = await book(c, s, p3, implants, V3);
-      const slot4 = await book(c, s, p4, implants);
-
-      const rowsOf = async (slot: string) => ({
-        sites: (await c.query(
-          `select tooth::int as tooth, state, product_id, technique, course_id, session_id from public.implant_sites
-           where slot_id = $1 order by tooth`, [slot])).rows,
-        planned: (await c.query(
-          `select spi.tooth::int as tooth, spi.product_id, s.tooth::int as site_tooth from public.slot_planned_implants spi
-           join public.implant_sites s on s.id = spi.implant_site_id where spi.slot_id = $1 order by spi.tooth`, [slot])).rows,
-        spares: Number(await one(c, `select count(*) from public.slot_spare_implants where slot_id = $1`, [slot])),
-      });
-      const a = await rowsOf(slot3);
-      expect(a.sites).toHaveLength(2);
-      expect(await rowsOf(slot4)).toEqual(a);
-      expect(a.spares).toBe(0);
     });
   });
 
@@ -214,13 +188,6 @@ describe('booking spares (0125)', () => {
         { proname: 'pull_list_v2', prosecdef: false, pronargdefaults: 0, owner: 'postgres',
           authenticated: true, anon: false, public: false },
       ]);
-      // v4 takes v3's parameters, in the same order and types.
-      const args = await c.query(
-        `select proname, pg_get_function_identity_arguments(p.oid) as args from pg_proc p
-         join pg_namespace n on n.oid = p.pronamespace
-         where n.nspname = 'public' and proname in ('create_surgery_slot_v3', 'create_surgery_slot_v4')`);
-      const [a, b] = args.rows.map((r) => r.args);
-      expect(a).toBe(b);
     });
   });
 

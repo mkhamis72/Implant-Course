@@ -28,17 +28,17 @@ type Setup = Awaited<ReturnType<typeof setup>>;
 
 const placeAs = (c: Client, s: Setup, placing: string, assisting: string | null, tooth = 36) =>
   c.query(
-    `select public.place_implant_v3(
+    `select public.place_implant_v4(
        p_patient => $1, p_tooth => $2::smallint, p_product => $3, p_lot => $4, p_placed_on => public.cairo_today(),
        p_placing_delegate => $5, p_supervisor => $6, p_assisting_delegate => $7, p_graft => '', p_notes => '',
-       p_slot => null, p_technique => null, p_course => $8) as id`,
+       p_slot => null, p_technique => null, p_course => $8, p_placing_doctor => null) as id`,
     [s.patient, tooth, s.implant, s.lot, placing, users.organizer, assisting, s.course],
   ).then((r) => r.rows[0].id as string);
 
 const correct = (c: Client, site: string, a: { placing: string; assisting?: string | null; course: string; notes?: string }) =>
   c.query(
-    `select public.correct_placement_v2(p_site => $1, p_placed_on => placed_on, p_placing_delegate => $2,
-       p_assisting_delegate => $3, p_supervisor => supervisor_id, p_course => $4, p_graft => '', p_notes => $5)
+    `select public.correct_placement_v3(p_site => $1, p_placed_on => placed_on, p_placing_delegate => $2,
+       p_assisting_delegate => $3, p_supervisor => supervisor_id, p_course => $4, p_graft => '', p_notes => $5, p_placing_doctor => null)
      from public.implant_sites where id = $1`,
     [site, a.placing, a.assisting ?? null, a.course, a.notes ?? ''],
   );
@@ -74,7 +74,7 @@ const makeHistoric = async (c: Client, table: string, column: string, id: string
   await actAs(c, users.organizer);
 };
 
-describe('place_implant_v3 enrollment (0081)', () => {
+describe('place_implant_v4 enrollment (0081)', () => {
   it('accepts enrolled delegates and refuses others in either role', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
@@ -85,7 +85,7 @@ describe('place_implant_v3 enrollment (0081)', () => {
   });
 });
 
-describe('correct_placement_v2 enrollment (0081)', () => {
+describe('correct_placement_v3 enrollment (0081)', () => {
   it('checks a delegate or course that changes, and leaves an old record editable', async () => {
     await withTx(async (c) => {
       const s = await setup(c);

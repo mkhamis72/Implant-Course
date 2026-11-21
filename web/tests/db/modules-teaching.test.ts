@@ -127,10 +127,10 @@ describe('modules: teaching hidden in a clinic (0117)', () => {
         `insert into public.delegates (company_id, full_name) values ($1, 'Zz Login Delegate') returning id`, [ACADEMY]);
       await clinic(c);
       await asAdmin(c);
-      await refused(c, `select public.create_pending_login('zz-clinic-d@example.com', 'Zz', 'delegate', $1)`, [delegate], NO_DELEGATE_LOGINS);
+      await refused(c, `select public.create_pending_login_v2('zz-clinic-d@example.com', 'Zz', 'delegate', $1, null, false)`, [delegate], NO_DELEGATE_LOGINS);
       await refused(c, `select public.add_existing_member('zz-clinic-d@example.com', 'delegate', $1)`, [delegate], NO_DELEGATE_LOGINS);
       await refused(c, `select public.set_member_role($1, 'delegate')`, [users.organizer], NO_DELEGATE_LOGINS);
-      await c.query(`select public.create_pending_login('zz-clinic-o@example.com', 'Zz', 'organizer', null)`);
+      await c.query(`select public.create_pending_login_v2('zz-clinic-o@example.com', 'Zz', 'organizer', null, null, false)`);
     });
   });
 

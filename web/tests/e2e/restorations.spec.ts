@@ -8,7 +8,7 @@ function panel(page: Page) {
   return page.getByRole('complementary', { name: 'Tooth details' });
 }
 
-/** A patient with implants placed through the API (place_implant_v3) on the given teeth, today, in a running course. */
+/** A patient with implants placed through the API (place_implant_v4) on the given teeth, today, in a running course. */
 async function setup(page: Page, teeth: number[]) {
   const api = await apiAs(TEST_USERS.organizer.email);
   const me = (await api.auth.getUser()).data.user!.id;
@@ -22,10 +22,10 @@ async function setup(page: Page, teeth: number[]) {
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Resto patient') });
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date());
   for (const tooth of teeth) {
-    const { error } = await api.rpc('place_implant_v3', {
+    const { error } = await api.rpc('place_implant_v4', {
       p_patient: patientId, p_tooth: tooth, p_product: stock.productId, p_lot: stock.lotId, p_placed_on: today,
       p_placing_delegate: delegateId, p_supervisor: me, p_assisting_delegate: null, p_graft: null, p_notes: null,
-      p_slot: null, p_technique: 'free_hand', p_course: courseId,
+      p_slot: null, p_technique: 'free_hand', p_course: courseId, p_placing_doctor: null,
     });
     expect(error).toBeNull();
   }

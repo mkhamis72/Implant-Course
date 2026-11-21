@@ -44,7 +44,7 @@ type V3 = {
   session?: string | null; chair: string; patient: string; doctor: string; start?: string; end?: string;
   setting?: string | null; date?: string | null; override?: string; supervisor?: string | null;
 };
-const CREATE_SQL = `select public.create_surgery_slot_v3(
+const CREATE_SQL = `select public.create_surgery_slot_v4(
   p_session => $1, p_chair => $2, p_start => $3::time, p_end => $4::time, p_patient => $5, p_supervisor => $6,
   p_placing => '{}'::uuid[], p_assisting => '{}'::uuid[], p_implants => '[]'::jsonb, p_override_reason => $7,
   p_notes => '', p_placing_doctor => $8, p_setting => $9, p_date => $10::date) as id`;

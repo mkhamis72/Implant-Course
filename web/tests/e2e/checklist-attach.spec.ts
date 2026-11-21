@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
-import { apiAs, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate, seedSession } from './api';
+import { apiAs, bookSlot, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate, seedSession } from './api';
 
 test('default templates attach to new sessions and bookings', async ({ page }) => {
   test.setTimeout(120_000); // many setup steps and page loads
@@ -26,7 +26,7 @@ test('default templates attach to new sessions and bookings', async ({ page }) =
   await login(page, TEST_USERS.organizer.email);
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Attach patient') });
   const me = (await api.auth.getUser()).data.user!.id;
-  const { error } = await api.rpc('create_surgery_slot', {
+  const { error } = await bookSlot(api, {
     p_session: sessionId, p_chair: chairId, p_start: '08:00', p_end: '09:00', p_patient: patientId, p_supervisor: me,
     p_placing: [delegate], p_override_reason: 'E2E',
   });

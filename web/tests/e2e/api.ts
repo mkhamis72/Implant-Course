@@ -110,7 +110,7 @@ export async function seedRunningCourse(api: SupabaseClient, name: string): Prom
   return seedCourse(api, { name, start: day(-30), end: day(30) });
 }
 
-/** place_implant_v3 with its optional arguments defaulted; without p_course it uses a new course that is running today. */
+/** place_implant_v4 with its optional arguments defaulted; without p_course it uses a new course that is running today. */
 export async function placeImplant(
   api: SupabaseClient,
   a: {
@@ -127,7 +127,20 @@ export async function placeImplant(
       if (error) throw error;
     }
   }
-  return api.rpc('place_implant_v3', {
-    p_assisting_delegate: null, p_graft: '', p_notes: '', p_slot: null, p_technique: null, ...a, p_course: course,
+  return api.rpc('place_implant_v4', {
+    p_assisting_delegate: null, p_graft: '', p_notes: '', p_slot: null, p_technique: null, p_placing_doctor: null, ...a, p_course: course,
+  });
+}
+
+/** A course booking through create_surgery_slot_v4, with its optional arguments defaulted (no doctor, no clinic setting or date). */
+export function bookSlot(
+  api: SupabaseClient,
+  a: {
+    p_session: string; p_chair: string; p_start: string; p_end: string; p_patient: string; p_supervisor: string;
+    p_placing: string[]; p_assisting?: string[]; p_implants?: unknown[]; p_override_reason?: string; p_notes?: string;
+  },
+) {
+  return api.rpc('create_surgery_slot_v4', {
+    p_assisting: [], p_implants: [], p_override_reason: '', p_notes: '', p_placing_doctor: null, p_setting: null, p_date: null, ...a,
   });
 }

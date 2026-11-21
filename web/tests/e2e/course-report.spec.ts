@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { uniqueName } from './patients';
-import { apiAs, enroll, seedChair, seedCourse, seedDelegate, seedImplantStock, seedSession, placeImplant } from './api';
+import { apiAs, bookSlot, enroll, seedChair, seedCourse, seedDelegate, seedImplantStock, seedSession, placeImplant } from './api';
 
 test('course report shows each placed implant, a session summary, and downloads a CSV', async ({ page }) => {
   const admin = await apiAs(TEST_USERS.admin.email);
@@ -22,7 +22,7 @@ test('course report shows each placed implant, a session summary, and downloads 
   const { productId, lotId } = await seedImplantStock(api, { brand: uniqueName('Brand'), qty: 2, lot: `E2E-R${Date.now()}`, expiry: null });
   const patient = uniqueName('Report patient');
   const { data: p } = await api.from('patients').insert({ full_name: patient }).select('id').single();
-  const { data: slot, error: bookError } = await api.rpc('create_surgery_slot', {
+  const { data: slot, error: bookError } = await bookSlot(api, {
     p_session: session, p_chair: chair, p_start: '23:00', p_end: '23:30', p_patient: p!.id, p_supervisor: supervisor,
     p_placing: [d1], p_assisting: [d2], p_implants: [{ tooth: 36, technique: 'guided' }], p_override_reason: 'E2E report',
   });

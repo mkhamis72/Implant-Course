@@ -83,12 +83,12 @@ describe('booking a surgery', () => {
       await book(c, { ...w, placing: [w.d1] });
       const other = await makePatient(c, 'Other Patient');
       const { rows } = await c.query(
-        `select kind from public.slot_conflicts($1, $2, '09:30', '10:30', $3, $4, $5::uuid[]) order by kind`,
+        `select kind from public.slot_conflicts_v2($1, $2, '09:30', '10:30', $3, $4, $5::uuid[], null, null) order by kind`,
         [w.session, w.chair, other, w.supervisor, [w.d1]],
       );
       expect(rows.map((r) => r.kind)).toEqual(['chair', 'delegate', 'supervisor']);
       const none = await c.query(
-        `select kind from public.slot_conflicts($1, $2, '10:00', '11:00', $3, $4, $5::uuid[])`,
+        `select kind from public.slot_conflicts_v2($1, $2, '10:00', '11:00', $3, $4, $5::uuid[], null, null)`,
         [w.session, w.chair, other, w.supervisor, [w.d1]],
       );
       expect(none.rows).toEqual([]);
@@ -118,7 +118,7 @@ describe('booking a surgery', () => {
       const site = await c.query('select state, slot_id from public.implant_sites where patient_id = $1', [w.patient]);
       expect(site.rows).toEqual([{ state: 'planned', slot_id: null }]);
       const clash = await c.query(
-        `select kind from public.slot_conflicts($1, $2, '09:00', '10:00', $3, $4, $5::uuid[])`,
+        `select kind from public.slot_conflicts_v2($1, $2, '09:00', '10:00', $3, $4, $5::uuid[], null, null)`,
         [w.session, w.chair, w.patient, w.supervisor, [w.d1]],
       );
       expect(clash.rows).toEqual([]);

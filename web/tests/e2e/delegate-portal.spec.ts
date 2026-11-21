@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { uniqueName } from './patients';
-import { apiAs, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate, seedLecturer, seedSession } from './api';
+import { apiAs, bookSlot, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate, seedLecturer, seedSession } from './api';
 
 // The test delegate login's link to its delegate record: the membership holds it (profiles has no delegate_id).
 async function delegateLink(admin: Awaited<ReturnType<typeof apiAs>>): Promise<{ delegate_id: string }> {
@@ -33,7 +33,7 @@ test('a delegate sees only their own bookings and their courses’ talks, and th
   const { data: p1 } = await api.from('patients').insert({ full_name: mine }).select('id').single();
   const { data: p2 } = await api.from('patients').insert({ full_name: theirs }).select('id').single();
   for (const [patient, placing, start, end] of [[p1!.id, me, '13:00', '14:00'], [p2!.id, other, '14:00', '15:00']] as const) {
-    const { error } = await api.rpc('create_surgery_slot', {
+    const { error } = await bookSlot(api, {
       p_session: surgery, p_chair: chair, p_start: start, p_end: end, p_patient: patient, p_supervisor: supervisor,
       p_placing: [placing], p_implants: [{ tooth: 36, technique: 'guided' }], p_override_reason: 'E2E delegate portal',
     });

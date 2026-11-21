@@ -84,7 +84,7 @@ describe('admin functions act on the caller\'s company (0090)', () => {
     await withTx(async (c) => {
       await actAs(c, users.admin, { session_id: crypto.randomUUID() });
       await refused(c, () => c.query('select public.delete_user($1)', [users.target]), /Not allowed/);
-      await refused(c, () => c.query(`select public.create_pending_login('zz-company-fns@example.com', 'X', 'organizer', null)`),
+      await refused(c, () => c.query(`select public.create_pending_login_v2('zz-company-fns@example.com', 'X', 'organizer', null, null, false)`),
         /Only admins can do this\./);
     });
   });
@@ -93,7 +93,7 @@ describe('admin functions act on the caller\'s company (0090)', () => {
     await withTx(async (c) => {
       const b = await companyB(c);
       await actAsBound(c, users.admin, b);
-      await c.query(`select public.create_pending_login('zz-company-fns-new@example.com', 'Zz New', 'organizer', null)`);
+      await c.query(`select public.create_pending_login_v2('zz-company-fns-new@example.com', 'Zz New', 'organizer', null, null, false)`);
       await asPostgres(c);
       const id = await insertSelfAuthUser(c, { email: 'zz-company-fns-new@example.com', companyId: b });
       expect((await c.query('select company_id, role, active from public.company_members where user_id = $1', [id])).rows)

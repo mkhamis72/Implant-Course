@@ -47,7 +47,7 @@ describe('createLogin', () => {
     expect(r).toEqual({ ok: 'Invitation sent to o@example.com.' });
   });
 
-  it('returns the error of create_pending_login without any Self-Auth call', async () => {
+  it('returns the error of create_pending_login_v2 without any Self-Auth call', async () => {
     rpc.mockResolvedValueOnce({ data: null, error: { message: 'Only admins can invite.', code: 'P0001' } });
     expect(await createLogin({ email: 'o@example.com', full_name: 'Org O', role: 'organizer' })).toHaveProperty('error');
     expect(admin.invite).not.toHaveBeenCalled();
