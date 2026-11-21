@@ -2,10 +2,12 @@ import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { formatDateTime } from '@/lib/format';
 import { describeChange, isHiddenFromHistory } from '@/lib/patients/history';
+import { teachingOn } from '@/lib/modules/modules';
 import type { HistoryEntry } from '@/lib/patients/types';
 
 export default async function HistoryPage({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermission('patients');
+  const profile = await requirePermission('patients');
+  const teaching = teachingOn(profile.features);
   const { id } = await params;
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('patient_history', { p_patient: id });
@@ -25,7 +27,7 @@ export default async function HistoryPage({ params }: { params: Promise<{ id: st
                 {formatDateTime(entry.at)}
               </time>
               <span className="w-40 shrink-0 text-ink">{entry.actor}</span>
-              <span>{describeChange(entry)}</span>
+              <span>{describeChange(entry, { teaching })}</span>
             </li>
           ))}
         </ol>

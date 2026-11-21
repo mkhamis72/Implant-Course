@@ -26,11 +26,14 @@ const FIELD_LABELS: Record<string, string> = {
   previous_implant_failure: 'previous implant failure',
 };
 
-/** Placement details an implant correction can change (correct_placement, 0042). */
+/** Placement details an implant correction can change (correct_placement, 0042; a doctor and the course since 0114). */
 const PLACEMENT_FIELD_LABELS: Record<string, string> = {
-  placed_on: 'placement date', placing_delegate_id: 'placed by', assisting_delegate_id: 'assisted by',
-  supervisor_id: 'supervisor', graft: 'graft', notes: 'notes',
+  placed_on: 'placement date', placing_delegate_id: 'placed by', placing_doctor_id: 'placed by',
+  assisting_delegate_id: 'assisted by', supervisor_id: 'supervisor', course_id: 'course', graft: 'graft', notes: 'notes',
 };
+
+/** Teaching details: a clinic (no teaching) never shows them, so its History doesn't name them either. */
+const TEACHING_FIELDS = new Set(['placing_delegate_id', 'assisting_delegate_id', 'delegate_id', 'supervisor_id', 'course_id']);
 
 /** Stability values are recorded in Surgical details (save_implant_surgery_v2, 0053); older corrections may name them too. */
 const STABILITY_FIELD_LABELS: Record<string, string> = { torque_ncm: 'torque', isq: 'ISQ', bone_type: 'bone type' };
@@ -69,7 +72,10 @@ export const isHiddenFromHistory = (e: HistoryEntry) =>
   e.table_name === 'restoration_sites'
   || (e.table_name === 'implant_sites' && e.action === 'UPDATE' && !!e.after?.removal_reason && !e.before?.removal_reason);
 
-export function describeChange(e: HistoryEntry): string {
+/** `teaching: false` (a clinic) leaves out the teaching details (delegate, assisted by, supervisor, course). */
+export function describeChange(e: HistoryEntry, { teaching = true }: { teaching?: boolean } = {}): string {
+  const visible = (labels: Record<string, string>) =>
+    teaching ? labels : Object.fromEntries(Object.entries(labels).filter(([key]) => !TEACHING_FIELDS.has(key)));
   const fields = changedFields(e.before, e.after);
   switch (e.table_name) {
     case 'patients': {
@@ -109,8 +115,8 @@ export function describeChange(e: HistoryEntry): string {
         if (corrected.length) return `Implant on tooth ${tooth}: failure details corrected: ${corrected.join(', ')}`;
       }
       if (e.before.state === e.after?.state) {
-        const corrected = changedFields(e.before, e.after, SITE_FIELD_LABELS);
-        if (!changedFields(e.before, e.after, PLACEMENT_FIELD_LABELS).length) {
+        const corrected = changedFields(e.before, e.after, visible(SITE_FIELD_LABELS));
+        if (!changedFields(e.before, e.after, visible(PLACEMENT_FIELD_LABELS)).length) {
           if (changedFields(e.before, e.after, IMPRESSION_FIELD_LABELS).length) {
             if (!e.after?.impression_type) return `Implant on tooth ${tooth}: scan / impression cleared`;
             const summary = impressionSummary({
@@ -172,7 +178,7 @@ export function describeChange(e: HistoryEntry): string {
         return e.after.end_kind === 'remade' ? `Restoration remade on ${on} (${e.after.end_reason})` : `Restoration replaced on ${on}`;
       }
       if (e.before?.end_kind && !e.after?.end_kind) return 'Restoration reopened';
-      const changed = changedFields(e.before, e.after, RESTORATION_FIELD_LABELS);
+      const changed = changedFields(e.before, e.after, visible(RESTORATION_FIELD_LABELS));
       return changed.length ? `Restoration updated: ${changed.join(', ')}` : 'Restoration updated';
     }
     case 'restoration_problems': {
