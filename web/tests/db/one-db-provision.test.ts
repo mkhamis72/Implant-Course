@@ -25,7 +25,7 @@ async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp) {
 }
 
 describe('provision_company (0095)', () => {
-  it("creates the company with its settings, branding, file numbers, academy's catalogue and consent versions", async () => {
+  it("creates the company with its settings, branding, file numbers and consent versions, and no products", async () => {
     await withTx(async (c) => {
       const id = await provision(c, 'canary', 'Canary');
       expect((await c.query(`select id, name from public.companies where slug = 'canary'`)).rows).toEqual([{ id, name: 'Canary' }]);
@@ -33,14 +33,8 @@ describe('provision_company (0095)', () => {
       expect((await c.query('select name from public.branding where company_id = $1', [id])).rows).toEqual([{ name: 'Canary' }]);
       expect((await c.query('select last_no from app_private.file_no_counters where company_id = $1', [id])).rows).toEqual([{ last_no: 0 }]);
 
-      const academyProducts = await count(c, 'public.products where company_id = $1 and active and not is_sample', [ACADEMY_ID]);
-      expect(academyProducts).toBeGreaterThan(0);
-      expect(await count(c, 'public.products where company_id = $1', [id])).toBe(academyProducts);
-      // Same catalogue rows (all columns but the keys and timestamps), new ids.
-      const catalogue = `select type, category, brand, system, platform, diameter_mm, length_mm, ref_code, description,
-        reorder_level, active, is_sample from public.products where company_id = $1`;
-      expect(await count(c, `(${catalogue} and active and not is_sample except all ${catalogue.replace('$1', '$2')}) x`, [ACADEMY_ID, id])).toBe(0);
-      expect(await count(c, 'public.products p where p.company_id = $1 and exists (select 1 from public.products a where a.id = p.id and a.company_id <> $1)', [id])).toBe(0);
+      // Catalogue library (0128): a new company starts with no products; its admin switches them on.
+      expect(await count(c, 'public.products where company_id = $1', [id])).toBe(0);
 
       const consent = 'select label, effective_on, text_en, text_ar from public.consent_form_versions where company_id = $1 order by created_at';
       const academyConsent = (await c.query(consent, [ACADEMY_ID])).rows;
