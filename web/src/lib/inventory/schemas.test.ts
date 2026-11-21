@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { adjustSchema, componentSchema, correctPlacementSchema, delegateSchema, placeSchema, productSchema, receiveSchema } from './schemas';
+import { adjustSchema, componentSchema, correctPlacementSchema, delegateSchema, placeSchema, productSchema, receiveSchema, linkedProductSchema } from './schemas';
 
 const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
 const err = (r: { error?: { issues: { message: string }[] } }) => r.error?.issues[0].message;
@@ -83,5 +83,13 @@ describe('placeSchema / componentSchema', () => {
     expect(componentSchema.safeParse({ ...c, productId: id, lotId: '' }).success).toBe(true);
     expect(err(componentSchema.safeParse({ ...c, byDelegateId: '', byOrganizerId: '' }))).toBe('Choose who fitted the component.');
     expect(componentSchema.parse({ ...c, componentType: 'final_restoration' })).toMatchObject({ productId: null, lotId: null });
+  });
+});
+
+describe('linkedProductSchema (0128)', () => {
+  it('reads only the reorder level of a product from the catalogue library', () => {
+    expect(linkedProductSchema.parse({ reorder_level: '5', brand: '' })).toEqual({ reorder_level: 5 });
+    expect(linkedProductSchema.parse({ reorder_level: '' })).toEqual({ reorder_level: 0 });
+    expect(linkedProductSchema.safeParse({ reorder_level: '20000' }).success).toBe(false);
   });
 });

@@ -11,6 +11,11 @@ const optionalNumber = (min: number, max: number, message: string) =>
   z.preprocess((v) => (blankToNull(v) === null ? null : Number(v)), z.number({ message }).min(min, { message }).max(max, { message }).nullable());
 const checkbox = z.preprocess((v) => v === 'on' || v === 'true' || v === true, z.boolean());
 
+const reorderLevel = z.preprocess(
+  (v) => (blankToNull(v) === null ? 0 : Number(v)),
+  z.number().int().min(0).max(10000, { message: 'Enter a reorder level between 0 and 10000.' }),
+);
+
 export const productSchema = z
   .object({
     type: z.enum(PRODUCT_TYPES, { message: 'Choose the product type.' }),
@@ -21,11 +26,14 @@ export const productSchema = z
     length_mm: optionalNumber(4, 25, 'Enter a length between 4 and 25 mm.'),
     ref_code: text(60),
     description: text(200),
-    reorder_level: z.preprocess((v) => (blankToNull(v) === null ? 0 : Number(v)), z.number().int().min(0).max(10000, { message: 'Enter a reorder level between 0 and 10000.' })),
+    reorder_level: reorderLevel,
   })
   .refine((p) => p.type !== 'implant' || (p.diameter_mm !== null && p.length_mm !== null), {
     message: 'Implants need a diameter and a length.',
   });
+
+/** A product switched on from the catalogue library (0128): only its reorder level is edited here. */
+export const linkedProductSchema = z.object({ reorder_level: reorderLevel });
 
 export const receiveSchema = z.object({
   product_id: requiredId('Choose a product.'),

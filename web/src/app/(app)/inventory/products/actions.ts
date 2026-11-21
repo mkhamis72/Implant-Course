@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
-import { productSchema } from '@/lib/inventory/schemas';
+import { linkedProductSchema, productSchema } from '@/lib/inventory/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
 
@@ -26,7 +26,7 @@ export async function updateProduct(_prev: FormState, formData: FormData): Promi
   // sends no catalogue fields, and the database refuses changing them).
   const { data: current } = await supabase.from('products').select('catalog_item_id').eq('id', id).maybeSingle();
   const parsed = current?.catalog_item_id
-    ? productSchema.pick({ reorder_level: true }).safeParse(Object.fromEntries(formData))
+    ? linkedProductSchema.safeParse(Object.fromEntries(formData))
     : productSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const { data, error } = await supabase
