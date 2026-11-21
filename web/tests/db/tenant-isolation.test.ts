@@ -353,7 +353,7 @@ const EMAIL = Symbol('the company organizer\'s email');
 /** Arguments of particular functions, so the call gets past its input checks to the rows it names. */
 const FN_ARG: Record<string, Record<string, unknown>> = {
   // A delegate login linked to the other company's delegate (and, for add_existing_member, its organizer).
-  create_pending_login: { p_role: 'delegate' },
+  create_pending_login_v2: { p_role: 'delegate' },
   add_existing_member: { p_role: 'delegate', p_email: EMAIL },
   create_checklist: { p_slot: null },
   save_template: { p_applies_to: 'surgery' },
@@ -569,16 +569,16 @@ describe('tenant isolation: nothing of company A is reachable from company B', (
     });
   });
 
-  it("Review Focus 3: with A's ids, place_implant_v3, receive_stock, create_surgery_slot and record_consent give their not-found message, not a permission error", { timeout: TIMEOUT }, async () => {
+  it("Review Focus 3: with A's ids, place_implant_v4, receive_stock, create_surgery_slot_v4 and record_consent give their not-found message, not a permission error", { timeout: TIMEOUT }, async () => {
     await withTx(async (c) => {
       const { a, b, today } = await world(c);
       await actAsBound(c, b.admin, b.id);
       const A = a.rows;
       const B = b.rows;
 
-      const placeSql = `select public.place_implant_v3(p_patient => $1, p_tooth => 21::smallint, p_product => $2, p_lot => $3,
+      const placeSql = `select public.place_implant_v4(p_patient => $1, p_tooth => 21::smallint, p_product => $2, p_lot => $3,
         p_placed_on => $4::date, p_placing_delegate => $5, p_supervisor => $6, p_assisting_delegate => null, p_graft => '',
-        p_notes => '', p_slot => null, p_technique => null, p_course => $7)`;
+        p_notes => '', p_slot => null, p_technique => null, p_course => $7, p_placing_doctor => null)`;
       const place = (p: Record<string, string>) => raised(c, placeSql, [p.patients, p.products, p.stock_lots, today, p.delegates, p.supervisors, p.courses]);
       expect(await place(A)).toBe('Patient not found.');
       expect(await place({ ...B, courses: A.courses })).toBe('Choose the course.');
@@ -588,8 +588,8 @@ describe('tenant isolation: nothing of company A is reachable from company B', (
       expect(await raised(c, `select public.receive_stock(p_product => $1, p_qty => 1, p_lot_no => 'Zz', p_expiry => null)`, [A.products]))
         .toBe('Choose an active product from the catalog.');
 
-      const slotSql = `select public.create_surgery_slot(p_session => $1, p_chair => $2, p_start => '09:00', p_end => '10:00',
-        p_patient => $3, p_supervisor => $4, p_placing => $5::uuid[], p_assisting => '{}', p_implants => '[]', p_override_reason => '')`;
+      const slotSql = `select public.create_surgery_slot_v4(p_session => $1, p_chair => $2, p_start => '09:00', p_end => '10:00',
+        p_patient => $3, p_supervisor => $4, p_placing => $5::uuid[], p_assisting => '{}', p_implants => '[]', p_override_reason => '', p_notes => '', p_placing_doctor => null, p_setting => null, p_date => null)`;
       const slot = (p: Record<string, string>) => raised(c, slotSql, [p.sessions, p.chairs, p.patients, p.supervisors, [p.delegates]]);
       expect(await slot(A)).toBe('Choose a surgery session.');
       expect(await slot({ ...B, chairs: A.chairs })).toBe('Choose an active chair.');

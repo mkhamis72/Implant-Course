@@ -78,7 +78,7 @@ describe('study codes are per company (0094)', () => {
   });
 });
 
-describe('create_pending_login names only its own delegates (0094)', () => {
+describe('create_pending_login_v2 names only its own delegates (0094)', () => {
   it("refuses another company's delegate with Delegate not found., accepts its own", async () => {
     await withTx(async (c) => {
       const b = await companyB(c);
@@ -88,9 +88,9 @@ describe('create_pending_login names only its own delegates (0094)', () => {
       const bDelegate = await makeDelegate(c, 'Zz Refs B Delegate');
 
       await actAsBound(c, users.admin, b);
-      await refused(c, () => c.query(`select public.create_pending_login('zz-refs-a@example.com', 'Zz', 'delegate', $1)`, [academyDelegate]),
+      await refused(c, () => c.query(`select public.create_pending_login_v2('zz-refs-a@example.com', 'Zz', 'delegate', $1, null, false)`, [academyDelegate]),
         /^Delegate not found\.$/);
-      await c.query(`select public.create_pending_login('zz-refs-b@example.com', 'Zz', 'delegate', $1)`, [bDelegate]);
+      await c.query(`select public.create_pending_login_v2('zz-refs-b@example.com', 'Zz', 'delegate', $1, null, false)`, [bDelegate]);
       await asPostgres(c);
       expect((await c.query(`select company_id, delegate_id from app_private.pending_logins where email like 'zz-refs-%'`)).rows)
         .toEqual([{ company_id: b, delegate_id: bDelegate }]);

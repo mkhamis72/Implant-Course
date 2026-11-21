@@ -117,12 +117,12 @@ describe('save_implant_surgery_v2: torque, ISQ and bone type', () => {
     });
   });
 
-  it('correct_placement_v2 leaves stability alone', async () => {
+  it('correct_placement_v3 leaves stability alone', async () => {
     await withTx(async (c) => {
       const { site, delegate } = await placedSite(c, { torque: 40, isq: 70, boneType: 'D3' });
       await c.query(
-        `select public.correct_placement_v2(p_site => $1, p_placed_on => '2026-03-10'::date, p_placing_delegate => $2,
-           p_assisting_delegate => null, p_supervisor => $3, p_course => course_id, p_graft => '', p_notes => '')
+        `select public.correct_placement_v3(p_site => $1, p_placed_on => '2026-03-10'::date, p_placing_delegate => $2,
+           p_assisting_delegate => null, p_supervisor => $3, p_course => course_id, p_graft => '', p_notes => '', p_placing_doctor => null)
          from public.implant_sites where id = $1`,
         [site, delegate, users.organizer],
       );

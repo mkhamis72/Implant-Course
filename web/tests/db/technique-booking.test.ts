@@ -35,9 +35,9 @@ function edit(
   a: { slot: string; chair: string; supervisor: string; placing: string[]; assisting?: string[]; start?: string; end?: string; override?: string; notes?: string },
 ) {
   return c.query(
-    `select public.update_surgery_slot(
+    `select public.update_surgery_slot_v3(
        p_slot => $1, p_chair => $2, p_start => $3::time, p_end => $4::time, p_supervisor => $5,
-       p_placing => $6::uuid[], p_assisting => $7::uuid[], p_override_reason => $8, p_notes => $9)`,
+       p_placing => $6::uuid[], p_assisting => $7::uuid[], p_override_reason => $8, p_notes => $9, p_placing_doctor => null, p_setting => null, p_date => null)`,
     [a.slot, a.chair, a.start ?? '09:00', a.end ?? '10:00', a.supervisor, a.placing, a.assisting ?? [], a.override ?? '', a.notes ?? ''],
   );
 }

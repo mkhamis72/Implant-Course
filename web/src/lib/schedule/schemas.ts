@@ -167,7 +167,7 @@ export const slotSchema = z
 
 /**
  * Editing a booking: `recorded` is set only by the action, in a clinic, for a booking made before the switch whose
- * delegates place the implants: they stay as recorded (update_surgery_slot_v2 keeps them, 0120) and no doctor is asked.
+ * delegates place the implants: they stay as recorded (update_surgery_slot_v3 keeps them, 0120) and no doctor is asked.
  */
 export const updateSlotSchema = z
   .object({

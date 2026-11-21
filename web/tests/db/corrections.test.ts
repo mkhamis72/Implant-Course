@@ -130,8 +130,8 @@ describe('undoing a component', () => {
 describe('correcting the placement details', () => {
   const correct = (c: Client, site: string, f: Record<string, unknown>) =>
     c.query(
-      `select public.correct_placement_v2(p_site => $1, p_placed_on => $2::date, p_placing_delegate => $3,
-         p_assisting_delegate => $4, p_supervisor => $5, p_course => course_id, p_graft => $6, p_notes => $7)
+      `select public.correct_placement_v3(p_site => $1, p_placed_on => $2::date, p_placing_delegate => $3,
+         p_assisting_delegate => $4, p_supervisor => $5, p_course => course_id, p_graft => $6, p_notes => $7, p_placing_doctor => null)
        from public.implant_sites where id = $1`,
       [site, f.placedOn, f.placing, f.assisting ?? null, f.supervisor, f.graft ?? '', f.notes ?? ''],
     );

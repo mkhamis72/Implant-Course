@@ -24,9 +24,9 @@ async function setup(c: Client) {
 
 const placeV3 = (c: Client, s: Awaited<ReturnType<typeof setup>>, f: { tooth: number; course: string | null; slot?: string }) =>
   c.query(
-    `select public.place_implant_v3(p_patient => $1, p_tooth => $2::smallint, p_product => $3, p_lot => $4,
+    `select public.place_implant_v4(p_patient => $1, p_tooth => $2::smallint, p_product => $3, p_lot => $4,
        p_placed_on => '2026-03-02'::date, p_placing_delegate => $5, p_supervisor => $6, p_assisting_delegate => null,
-       p_graft => '', p_notes => '', p_slot => $7, p_technique => 'guided', p_course => $8) as id`,
+       p_graft => '', p_notes => '', p_slot => $7, p_technique => 'guided', p_course => $8, p_placing_doctor => null) as id`,
     [s.patient, f.tooth, s.product, s.lot, s.delegate, users.organizer, f.slot ?? null, f.course],
   ).then((r) => r.rows[0].id as string);
 
@@ -70,7 +70,7 @@ describe('placement records its course', () => {
     });
   });
 
-  it('correct_placement_v2 changes the course and requires one', async () => {
+  it('correct_placement_v3 changes the course and requires one', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
       const site = await placeV3(c, s, { tooth: 36, course: s.course });
@@ -78,8 +78,8 @@ describe('placement records its course', () => {
       await enroll(c, other, s.delegate);
       const correct = (course: string | null) =>
         c.query(
-          `select public.correct_placement_v2(p_site => $1, p_placed_on => '2026-03-02'::date, p_placing_delegate => $2,
-             p_assisting_delegate => null, p_supervisor => $3, p_course => $4, p_graft => '', p_notes => '')`,
+          `select public.correct_placement_v3(p_site => $1, p_placed_on => '2026-03-02'::date, p_placing_delegate => $2,
+             p_assisting_delegate => null, p_supervisor => $3, p_course => $4, p_graft => '', p_notes => '', p_placing_doctor => null)`,
           [site, s.delegate, users.organizer, course],
         );
       await correct(other);
@@ -89,7 +89,7 @@ describe('placement records its course', () => {
     });
   });
 
-  it('correct_placement_v2 refuses a placement date after a fitted restoration', async () => {
+  it('correct_placement_v3 refuses a placement date after a fitted restoration', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
       const site = await placeV3(c, s, { tooth: 36, course: s.course });
@@ -102,8 +102,8 @@ describe('placement records its course', () => {
       );
       const correct = (placedOn: string) =>
         c.query(
-          `select public.correct_placement_v2(p_site => $1, p_placed_on => $2::date, p_placing_delegate => $3,
-             p_assisting_delegate => null, p_supervisor => $4, p_course => $5, p_graft => '', p_notes => '')`,
+          `select public.correct_placement_v3(p_site => $1, p_placed_on => $2::date, p_placing_delegate => $3,
+             p_assisting_delegate => null, p_supervisor => $4, p_course => $5, p_graft => '', p_notes => '', p_placing_doctor => null)`,
           [site, placedOn, s.delegate, users.organizer, s.course],
         );
       await refused(c, () => correct('2026-03-04'), /can't be placed after its first .*restoration.*\(2026-03-03\)/);
@@ -111,15 +111,15 @@ describe('placement records its course', () => {
     });
   });
 
-  it('correct_placement_v2 refuses a placement date after a non-planning X-ray or the scan (0075)', async () => {
+  it('correct_placement_v3 refuses a placement date after a non-planning X-ray or the scan (0075)', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
       const xraySite = await placeV3(c, s, { tooth: 36, course: s.course });
       const scanSite = await placeV3(c, s, { tooth: 46, course: s.course });
       const correct = (site: string, placedOn: string) =>
         c.query(
-          `select public.correct_placement_v2(p_site => $1, p_placed_on => $2::date, p_placing_delegate => $3,
-             p_assisting_delegate => null, p_supervisor => $4, p_course => $5, p_graft => '', p_notes => '')`,
+          `select public.correct_placement_v3(p_site => $1, p_placed_on => $2::date, p_placing_delegate => $3,
+             p_assisting_delegate => null, p_supervisor => $4, p_course => $5, p_graft => '', p_notes => '', p_placing_doctor => null)`,
           [site, placedOn, s.delegate, users.organizer, s.course],
         );
       const xray = (purpose: string, on: string) =>
@@ -151,8 +151,8 @@ describe('placement records its course', () => {
       await refused(
         c,
         () => c.query(
-          `select public.correct_placement_v2(p_site => $1, p_placed_on => '2026-03-02'::date, p_placing_delegate => $2,
-             p_assisting_delegate => null, p_supervisor => $3, p_course => $4, p_graft => '', p_notes => '')`,
+          `select public.correct_placement_v3(p_site => $1, p_placed_on => '2026-03-02'::date, p_placing_delegate => $2,
+             p_assisting_delegate => null, p_supervisor => $3, p_course => $4, p_graft => '', p_notes => '', p_placing_doctor => null)`,
           [site, s.delegate, users.organizer, s.course],
         ),
         /permission/i,

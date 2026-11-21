@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
-import { apiAs, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate, seedImplantStock, seedSession } from './api';
+import { apiAs, bookSlot, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate, seedImplantStock, seedSession } from './api';
 
 test('placing a booked implant is pre-filled and closes the booking', async ({ page }) => {
   const api = await apiAs(TEST_USERS.organizer.email);
@@ -21,7 +21,7 @@ test('placing a booked implant is pre-filled and closes the booking', async ({ p
   await login(page, TEST_USERS.organizer.email);
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Booked patient') });
   const me = (await api.auth.getUser()).data.user!.id;
-  const { data: slotId, error } = await api.rpc('create_surgery_slot', {
+  const { data: slotId, error } = await bookSlot(api, {
     p_session: sessionId, p_chair: chairId, p_start: '10:00', p_end: '11:00', p_patient: patientId, p_supervisor: me,
     p_placing: [placing], p_implants: [{ tooth: 36, product_id: stock.productId, technique: 'guided' }],
   });

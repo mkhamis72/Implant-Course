@@ -39,7 +39,7 @@ async function clashSessionOn(supabase: Client, date: string): Promise<string | 
 
 /**
  * Editing in a clinic: what the booking recorded before the switch (supervisor, delegates) is hidden but kept, so
- * the recorded supervisor goes back and no delegates are sent (update_surgery_slot_v2 keeps them, 0120). A booking
+ * the recorded supervisor goes back and no delegates are sent (update_surgery_slot_v3 keeps them, 0120). A booking
  * placed by its recorded delegates takes no doctor.
  */
 function forClinicEdit(input: Record<string, unknown>, slot: RecordedPeople): Record<string, unknown> {

@@ -18,7 +18,6 @@ const MODULE_TABLES: Record<string, { areas: string[]; tables: string[]; allowed
     allowed: {
       delete_patient: 'ledger purge: deletes the movements of what it removes, whatever the module',
       remove_placement: 'ledger purge: deletes the movements of what it removes, whatever the module',
-      correct_placement_v2: "reads the implant's own lot expiry only",
       correct_placement_v3: "reads the implant's own lot expiry only",
     },
   },

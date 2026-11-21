@@ -51,7 +51,7 @@ async function asOwner<T>(c: Client, fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Places through place_implant_v3 in the given course (the booking's, else a new one, when omitted); torque / ISQ / bone type are set directly. */
+/** Places through place_implant_v4 in the given course (the booking's, else a new one, when omitted); torque / ISQ / bone type are set directly. */
 export async function place(
   c: Client,
   a: {
@@ -75,10 +75,10 @@ export async function place(
     }
   }
   const { rows } = await c.query(
-    `select public.place_implant_v3(
+    `select public.place_implant_v4(
        p_patient => $1, p_tooth => $2::smallint, p_product => $3, p_lot => $4,
        p_placed_on => coalesce($5::date, current_date), p_placing_delegate => $6, p_supervisor => $7,
-       p_assisting_delegate => $8, p_graft => '', p_notes => '', p_slot => $9, p_technique => $10, p_course => $11) as id`,
+       p_assisting_delegate => $8, p_graft => '', p_notes => '', p_slot => $9, p_technique => $10, p_course => $11, p_placing_doctor => null) as id`,
     [a.patient, a.tooth, a.product, a.lot, a.placedOn ?? null, a.delegate, a.supervisor, a.assistant ?? null, a.slot ?? null,
      a.technique ?? null, course],
   );
@@ -127,10 +127,10 @@ export async function book(
   },
 ): Promise<string> {
   const { rows } = await c.query(
-    `select public.create_surgery_slot(
+    `select public.create_surgery_slot_v4(
        p_session => $1, p_chair => $2, p_start => $3::time, p_end => $4::time, p_patient => $5,
        p_supervisor => $6, p_placing => $7::uuid[], p_assisting => $8::uuid[], p_implants => $9::jsonb,
-       p_override_reason => $10) as id`,
+       p_override_reason => $10, p_notes => '', p_placing_doctor => null, p_setting => null, p_date => null) as id`,
     [
       a.session, a.chair, a.start ?? '09:00', a.end ?? '10:00', a.patient, a.supervisor, a.placing,
       a.assisting ?? [], JSON.stringify(a.implants ?? []), a.override ?? '',

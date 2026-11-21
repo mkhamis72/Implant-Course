@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
-import { apiAs, enroll, receiveStock, seedChair, seedCourse, seedDelegate, seedProduct, seedSession } from './api';
+import { apiAs, bookSlot, enroll, receiveStock, seedChair, seedCourse, seedDelegate, seedProduct, seedSession } from './api';
 
 test('dashboard shows today, shortages, stock alerts and my items', async ({ page }) => {
   const api = await apiAs(TEST_USERS.organizer.email);
@@ -26,7 +26,7 @@ test('dashboard shows today, shortages, stock alerts and my items', async ({ pag
   await login(page, TEST_USERS.organizer.email);
   const patientName = uniqueName('Today patient');
   const patientId = await createPatientViaUi(page, { full_name: patientName });
-  const { error } = await api.rpc('create_surgery_slot', {
+  const { error } = await bookSlot(api, {
     p_session: sessionId, p_chair: chairId, p_start: '23:00', p_end: '23:30', p_patient: patientId, p_supervisor: me,
     p_placing: [delegate], p_implants: [{ tooth: 36, product_id: low }, { tooth: 46, product_id: low }],
     p_override_reason: 'E2E dashboard',

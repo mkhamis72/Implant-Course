@@ -46,12 +46,12 @@ const profileOf = async (c: Client, user: string) => {
 const deleteDelegate = async (c: Client, delegate: string) =>
   (await c.query('select public.delete_delegate($1) as login', [delegate])).rows[0].login as string | null;
 
-describe('create_pending_login and handle_new_user (0088)', () => {
+describe('create_pending_login_v2 and handle_new_user (0088)', () => {
   it("gives a new login exactly the pending company's membership, with its name", async () => {
     await withTx(async (c) => {
       const b = await companyB(c);
       await actAsBound(c, users.admin, b);
-      await c.query(`select public.create_pending_login(' Zz-Pending-B@Example.com ', 'Zz Pending B', 'organizer', null)`);
+      await c.query(`select public.create_pending_login_v2(' Zz-Pending-B@Example.com ', 'Zz Pending B', 'organizer', null, null, false)`);
       const id = await signUp(c, 'zz-pending-b@example.com', b);
       expect(await members(c, id)).toEqual([{ company_id: b, role: 'organizer', active: true, delegate_id: null }]);
       expect((await profileOf(c, id)).full_name).toBe('Zz Pending B');
@@ -64,7 +64,7 @@ describe('create_pending_login and handle_new_user (0088)', () => {
       await actAs(c, users.organizer);
       const d = await makeDelegate(c, 'Zz Pending Delegate');
       await actAsBound(c, users.admin);
-      await c.query(`select public.create_pending_login('zz-pending-d@example.com', 'Zz Pending D', 'delegate', $1)`, [d]);
+      await c.query(`select public.create_pending_login_v2('zz-pending-d@example.com', 'Zz Pending D', 'delegate', $1, null, false)`, [d]);
       const id = await signUp(c, 'Zz-Pending-D@example.com');
       expect(await members(c, id)).toEqual([{ company_id: ACADEMY_ID, role: 'delegate', active: true, delegate_id: d }]);
       expect(await profileOf(c, id)).toEqual({ full_name: 'Zz Pending D' });
@@ -75,8 +75,8 @@ describe('create_pending_login and handle_new_user (0088)', () => {
   it('a second call replaces the pending row', async () => {
     await withTx(async (c) => {
       await actAsBound(c, users.admin);
-      await c.query(`select public.create_pending_login('zz-pending-twice@example.com', 'First', 'organizer', null)`);
-      await c.query(`select public.create_pending_login('zz-pending-twice@example.com', 'Second', 'admin', null)`);
+      await c.query(`select public.create_pending_login_v2('zz-pending-twice@example.com', 'First', 'organizer', null, null, false)`);
+      await c.query(`select public.create_pending_login_v2('zz-pending-twice@example.com', 'Second', 'admin', null, null, false)`);
       expect(await pendingCount(c, 'zz-pending-twice@example.com')).toBe(1);
       const id = await signUp(c, 'zz-pending-twice@example.com');
       expect(await members(c, id)).toEqual([{ company_id: ACADEMY_ID, role: 'admin', active: true, delegate_id: null }]);
@@ -88,7 +88,7 @@ describe('create_pending_login and handle_new_user (0088)', () => {
     await withTx(async (c) => {
       const b = await companyB(c);
       await actAsBound(c, users.admin, b);
-      await c.query(`select public.create_pending_login('zz-pending-old@example.com', 'Zz Old', 'organizer', null)`);
+      await c.query(`select public.create_pending_login_v2('zz-pending-old@example.com', 'Zz Old', 'organizer', null, null, false)`);
       await asPostgres(c);
       await c.query(`update app_private.pending_logins set created_at = now() - interval '8 days' where email = 'zz-pending-old@example.com'`);
       await refused(c, () => signUp(c, 'zz-pending-old@example.com', b), /No pending login for this address./);
@@ -99,9 +99,9 @@ describe('create_pending_login and handle_new_user (0088)', () => {
     await withTx(async (c) => {
       const b = await companyB(c);
       await actAsBound(c, users.admin, b);
-      await c.query(`select public.create_pending_login('zz-pending-cancel@example.com', 'Zz B', 'organizer', null)`);
+      await c.query(`select public.create_pending_login_v2('zz-pending-cancel@example.com', 'Zz B', 'organizer', null, null, false)`);
       await actAsBound(c, users.admin);
-      await c.query(`select public.create_pending_login('zz-pending-cancel@example.com', 'Zz A', 'organizer', null)`);
+      await c.query(`select public.create_pending_login_v2('zz-pending-cancel@example.com', 'Zz A', 'organizer', null, null, false)`);
       await actAsBound(c, users.organizer);
       await refused(c, () => c.query(`select public.cancel_pending_login('zz-pending-cancel@example.com')`), /Only admins can do this/);
       await actAsBound(c, users.admin, b);
@@ -116,7 +116,7 @@ describe('create_pending_login and handle_new_user (0088)', () => {
   it('is admin-only, and the pending table is closed to the API', async () => {
     await withTx(async (c) => {
       await actAsBound(c, users.organizer);
-      await refused(c, () => c.query(`select public.create_pending_login('zz-pending-x@example.com', 'X', 'organizer', null)`),
+      await refused(c, () => c.query(`select public.create_pending_login_v2('zz-pending-x@example.com', 'X', 'organizer', null, null, false)`),
         /Only admins can do this/);
       await refused(c, () => c.query('select * from app_private.pending_logins'), /permission denied/);
     });
@@ -127,9 +127,9 @@ describe('create_pending_login and handle_new_user (0088)', () => {
       await actAs(c, users.organizer);
       const d = await makeDelegate(c, 'Zz Pending Mismatch');
       await actAsBound(c, users.admin);
-      await refused(c, () => c.query(`select public.create_pending_login('zz-pending-m@example.com', 'M', 'delegate', null)`),
+      await refused(c, () => c.query(`select public.create_pending_login_v2('zz-pending-m@example.com', 'M', 'delegate', null, null, false)`),
         /Invalid request/);
-      await refused(c, () => c.query(`select public.create_pending_login('zz-pending-m@example.com', 'M', 'organizer', $1)`, [d]),
+      await refused(c, () => c.query(`select public.create_pending_login_v2('zz-pending-m@example.com', 'M', 'organizer', $1, null, false)`, [d]),
         /Invalid request/);
     });
   });
@@ -203,7 +203,7 @@ describe('delete_delegate with shared logins (0088)', () => {
       await actAs(c, users.organizer);
       const d = await makeDelegate(c, 'Zz Pending Shared Delegate');
       await actAsBound(c, users.admin);
-      await c.query(`select public.create_pending_login('zz-pending-shared@example.com', 'Zz Shared', 'delegate', $1)`, [d]);
+      await c.query(`select public.create_pending_login_v2('zz-pending-shared@example.com', 'Zz Shared', 'delegate', $1, null, false)`, [d]);
       const login = await signUp(c, 'zz-pending-shared@example.com');
       await c.query(`insert into public.company_members (company_id, user_id, role, active) values ($1, $2, 'organizer', true)`,
         [b, login]);
@@ -236,10 +236,10 @@ describe('delete_delegate with shared logins (0088)', () => {
       await actAs(c, users.organizer);
       const d = await makeDelegate(c, 'Zz Pending Lone Delegate');
       await actAsBound(c, users.admin);
-      await c.query(`select public.create_pending_login('zz-pending-lone@example.com', 'Zz Lone', 'delegate', $1)`, [d]);
+      await c.query(`select public.create_pending_login_v2('zz-pending-lone@example.com', 'Zz Lone', 'delegate', $1, null, false)`, [d]);
       const login = await signUp(c, 'zz-pending-lone@example.com');
       await actAsBound(c, users.admin);
-      await c.query(`select public.create_pending_login('zz-pending-later@example.com', 'Zz Later', 'delegate', $1)`, [d]);
+      await c.query(`select public.create_pending_login_v2('zz-pending-later@example.com', 'Zz Later', 'delegate', $1, null, false)`, [d]);
       await actAsBound(c, users.admin);
       expect(await deleteDelegate(c, d)).toBe(login);
       expect(await profileOf(c, login)).toBeUndefined();

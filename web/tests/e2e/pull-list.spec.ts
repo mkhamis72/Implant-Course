@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
-import { apiAs, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate, seedImplantStock, seedSession } from './api';
+import { apiAs, bookSlot, enroll, randomFutureDate, seedChair, seedCourse, seedDelegate, seedImplantStock, seedSession } from './api';
 
 test('shows what the day needs against usable stock and flags shortages', async ({ page }) => {
   const api = await apiAs(TEST_USERS.organizer.email);
@@ -19,7 +19,7 @@ test('shows what the day needs against usable stock and flags shortages', async 
   await login(page, TEST_USERS.organizer.email);
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Pull patient') });
   const me = (await api.auth.getUser()).data.user!.id;
-  const { error } = await api.rpc('create_surgery_slot', {
+  const { error } = await bookSlot(api, {
     p_session: sessionId, p_chair: chairId, p_start: '09:00', p_end: '11:00', p_patient: patientId, p_supervisor: me,
     p_placing: [delegateId], p_implants: [{ tooth: 36, product_id: stock.productId }, { tooth: 46, product_id: stock.productId }],
   });

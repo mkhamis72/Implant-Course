@@ -273,7 +273,7 @@ describe('permissions: guard rails', () => {
         'set_member_role', 'set_member_active',
         // One database (0088, spec §4): admin-only login creation for the caller's bound company (a pending
         // row for a new account and its removal when Auth fails, a membership for an existing one).
-        'create_pending_login', 'add_existing_member', 'cancel_pending_login',
+        'add_existing_member', 'cancel_pending_login',
         // One database (0093): the console's first admin for a company and its cancel; service role only, no company session.
         'console_add_first_admin', 'console_cancel_pending_login',
         // One database (0095): a new company and its starting data; service role only, no company session.
@@ -289,7 +289,7 @@ describe('permissions: guard rails', () => {
         'admin_change_email', 'admin_end_sessions', 'admin_record_event', 'admin_require_mfa_setup', 'admin_set_name',
         'admin_user_history',
         // Clinic workflow (0123): login invites with a doctor and the doctor's login link; admin-only, no area
-        // (as create_pending_login / add_existing_member, 0088, and the admin tools, 0118).
+        // (as add_existing_member, 0088, and the admin tools, 0118).
         'create_pending_login_v2', 'add_existing_member_v2', 'set_doctor_login',
         // Catalogue library (0128): admin-only writers.
         'set_catalog_items', 'set_products_active',
