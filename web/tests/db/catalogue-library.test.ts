@@ -250,3 +250,33 @@ describe('place_implant_v4 keeps a switched-off planned implant (0128)', () => {
     });
   });
 });
+
+describe('receive_stock for a switched-off planned implant (0130)', () => {
+  const receiveSql = `select public.receive_stock(p_product => $1, p_qty => 1, p_lot_no => 'ZZRCV', p_expiry => null) as id`;
+
+  it('receives stock of a switched-off implant planned, or a spare, on a booking', async () => {
+    await withTx(async (c) => {
+      await asCompany(c);
+      const date = (await one<{ d: string }>(c, `select to_char('2080-01-01'::date + floor(random() * 3650)::int, 'YYYY-MM-DD') as d`)).d;
+      const session = await makeSession(c, await makeCourse(c, date, date), 'surgery', date);
+      const chair = await makeChair(c);
+      const doctor = (await one<{ id: string }>(c, `insert into public.doctors (name) values ('Zz Dr Receive') returning id`)).id;
+      const brand = `Zz Receive ${Math.random().toString(36).slice(2, 8)}`;
+      const [planned, spare, other] = [await makeProduct(c, 'implant', brand), await makeProduct(c, 'implant', brand),
+        await makeProduct(c, 'implant', brand)];
+      const patient = await makePatient(c, 'Zz Receive Patient');
+      await actAs(c, users.admin);
+      await c.query(`select public.create_surgery_slot_v4(
+        p_session => $1, p_chair => $2, p_start => '09:00'::time, p_end => '10:00'::time, p_patient => $3, p_supervisor => null,
+        p_placing => '{}'::uuid[], p_assisting => '{}'::uuid[], p_implants => $5::jsonb, p_override_reason => 'Zz test',
+        p_notes => '', p_placing_doctor => $4, p_setting => null, p_date => null)`,
+        [session, chair, patient, doctor, JSON.stringify([{ tooth: 11, product_id: planned, technique: 'guided', spares: [spare] }])]);
+      await asPostgres(c);
+      await c.query('update public.products set active = false where id = any ($1)', [[planned, spare, other]]);
+      await actAs(c, users.organizer);
+      expect((await one<{ id: string }>(c, receiveSql, [planned])).id).toBeTruthy();
+      expect((await one<{ id: string }>(c, receiveSql, [spare])).id).toBeTruthy();
+      await refused(c, () => c.query(receiveSql, [other]), /Choose an active product from the catalog\./);
+    });
+  });
+});

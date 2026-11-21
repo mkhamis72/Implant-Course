@@ -42,6 +42,13 @@ describe('<CatalogueForm>', () => {
     expect(box('PSK-MDK · PSK Normo').indeterminate).toBe(true);
   });
 
+  it('ticks a whole connection within a system', () => {
+    render(<CatalogueForm group={group} />);
+    fireEvent.click(box('Internal hex'));
+    expect(box('Ø4.1 × 10 mm REFx1').checked).toBe(true);
+    expect(box('Standard conical').indeterminate).toBe(true);
+  });
+
   it('ticks a whole brand but never switches a retired item on', async () => {
     render(<CatalogueForm group={group} />);
     fireEvent.click(box('Oxy Implant'));

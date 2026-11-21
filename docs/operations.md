@@ -265,7 +265,7 @@ Every company and the console live in the one production database (merge of cont
 *Using it:* the Companies page shows each company's health and counts. A company's page lets you suspend it (reason, and type the slug to confirm) and reactivate it, edit its name and addresses, invite its first admin, and shows whether each address is live on Vercel (**Add to Vercel** retries one that isn't). Every change, including an invited, created or reset first admin (the email, never a password) and each address added to Vercel, is recorded in the company's History (`public.company_log`) with the admin's email.
 
 **Add a company.** Console → **Add company**: company name, slug and address (suggested `<slug>.imploid.net`), and the first admin's name and email. One click then:
-1. checks no other company uses the address, then creates the company with its starting data (`provision_company`: settings, branding, catalogue, consent forms) and its address;
+1. checks no other company uses the address, then creates the company with its starting data (`provision_company`: settings, branding, consent forms; no products — its admin switches them on in Admin → Catalogue, 0128) and its address;
 2. adds the address to the Vercel project;
 3. emails the first admin an invite on the company's own address. A login this company already has gets a password-reset email instead; someone another company already uses keeps their password and gets a notice. With `EMAIL_ENABLED=false` it shows a one-time password instead.
 

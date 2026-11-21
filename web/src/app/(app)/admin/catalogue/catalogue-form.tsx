@@ -111,9 +111,16 @@ export function CatalogueForm({ group }: { group: CatalogGroup }) {
                     <h3 className="grow font-medium">{system.system || 'No system'}</h3>
                     <span className="text-sm text-muted">{sysRows.filter((r) => !r.retired && isOn(r)).length} of {full.total} on</span>
                   </div>
-                  {system.platforms.map((platform) => (
+                  {system.platforms.map((platform) => {
+                    const platRows = full.platforms.find((p) => p.platform === platform.platform)!.types.flatMap((t) => t.rows);
+                    return (
                     <div key={platform.platform} className="space-y-1 pl-8">
-                      {platform.platform && <p className="text-sm font-medium text-muted">{platform.platform}</p>}
+                      {platform.platform && (
+                        <div className="flex items-center gap-2">
+                          <TickBox label={platform.platform} tick={tickOf(platRows)} onToggle={() => toggleAll(platRows)} />
+                          <p className="text-sm font-medium text-muted">{platform.platform}</p>
+                        </div>
+                      )}
                       {platform.types.map((t) => (
                         <fieldset key={t.type} className="space-y-1">
                           <legend className="text-xs uppercase text-muted">{PRODUCT_TYPE_LABELS[t.type]}</legend>
@@ -131,7 +138,8 @@ export function CatalogueForm({ group }: { group: CatalogGroup }) {
                         </fieldset>
                       ))}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })}
