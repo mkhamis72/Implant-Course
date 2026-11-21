@@ -76,3 +76,113 @@ describe('catalogue library (0128)', () => {
     });
   });
 });
+
+const COMPANY_B = "(select id from public.companies where slug = 'company-b')";
+
+/** A library item only this test knows about (rolled back with the test). */
+async function newItem(c: Client, ref: string, retired = false): Promise<string> {
+  await asPostgres(c);
+  return (await one<{ id: string }>(c, `insert into public.catalog_items (type, brand, system, platform, diameter_mm, length_mm, ref_code, retired)
+    values ('implant', 'Zz Library', 'Zz System', 'Zz', 4, 10, $1, $2) returning id`, [ref, retired])).id;
+}
+
+async function asAdmin(c: Client) {
+  await actAs(c, users.admin);
+}
+
+describe('set_catalog_items / set_products_active (0128)', () => {
+  it('switches an item on by creating a linked product', async () => {
+    await withTx(async (c) => {
+      const item = await newItem(c, 'ZZ1');
+      await asAdmin(c);
+      expect((await one<{ n: number }>(c, 'select public.set_catalog_items($1, true) as n', [[item]])).n).toBe(1);
+      await asPostgres(c);
+      expect(await one(c, `select company_id, active, brand, ref_code, reorder_level from public.products where catalog_item_id = $1`, [item]))
+        .toEqual({ company_id: ACADEMY_ID, active: true, brand: 'Zz Library', ref_code: 'ZZ1', reorder_level: 0 });
+    });
+  });
+
+  it('switching on again changes nothing', async () => {
+    await withTx(async (c) => {
+      const p = await linkedProduct(c);
+      await asAdmin(c);
+      expect((await one<{ n: number }>(c, 'select public.set_catalog_items($1, true) as n', [[p.catalog_item_id]])).n).toBe(0);
+    });
+  });
+
+  it('reuses an unlinked row with the same brand, type and ref code', async () => {
+    await withTx(async (c) => {
+      const item = await newItem(c, 'ZZ2');
+      const own = (await one<{ id: string }>(c, `insert into public.products (company_id, type, brand, system, ref_code, description, active)
+        values ($1, 'implant', 'Zz Library', 'Older name', 'ZZ2', 'edited', false) returning id`, [ACADEMY_ID])).id;
+      await asAdmin(c);
+      expect((await one<{ n: number }>(c, 'select public.set_catalog_items($1, true) as n', [[item]])).n).toBe(1);
+      await asPostgres(c);
+      expect((await c.query('select id, active from public.products where catalog_item_id = $1', [item])).rows)
+        .toEqual([{ id: own, active: true }]);
+    });
+  });
+
+  it('switches off without deleting', async () => {
+    await withTx(async (c) => {
+      const p = await linkedProduct(c);
+      await asAdmin(c);
+      expect((await one<{ n: number }>(c, 'select public.set_catalog_items($1, false) as n', [[p.catalog_item_id]])).n).toBe(1);
+      await asPostgres(c);
+      expect(await one(c, 'select active from public.products where id = $1', [p.id])).toEqual({ active: false });
+    });
+  });
+
+  it('refuses a retired item', async () => {
+    await withTx(async (c) => {
+      const item = await newItem(c, 'ZZ3', true);
+      await asAdmin(c);
+      await refused(c, () => c.query('select public.set_catalog_items($1, true)', [[item]]),
+        /This product is no longer in the catalogue\./);
+    });
+  });
+
+  it('refuses an unknown item', async () => {
+    await withTx(async (c) => {
+      await asAdmin(c);
+      await refused(c, () => c.query('select public.set_catalog_items($1, true)', [['00000000-0000-4000-8000-000000000000']]),
+        /Product not found\./);
+    });
+  });
+
+  it('refuses a non-admin', async () => {
+    await withTx(async (c) => {
+      const p = await linkedProduct(c);
+      await actAs(c, users.organizer);
+      await refused(c, () => c.query('select public.set_catalog_items($1, false)', [[p.catalog_item_id]]), /Only an admin can do this\./);
+      await refused(c, () => c.query('select public.set_products_active($1, false)', [[p.id]]), /Only an admin can do this\./);
+    });
+  });
+
+  it('leaves other companies alone', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      const before = await one(c, `select count(*) filter (where active)::int as on, count(*)::int as n from public.products where company_id = ${COMPANY_B}`);
+      const all = (await c.query(`select array_agg(id) as ids from public.catalog_items where not retired`)).rows[0].ids;
+      const bIds = (await c.query(`select array_agg(id) as ids from public.products where company_id = ${COMPANY_B}`)).rows[0].ids;
+      await asAdmin(c);
+      await c.query('select public.set_catalog_items($1, false)', [all]);
+      expect((await one<{ n: number }>(c, 'select public.set_products_active($1, false) as n', [bIds])).n).toBe(0);
+      await asPostgres(c);
+      expect(await one(c, `select count(*) filter (where active)::int as on, count(*)::int as n from public.products where company_id = ${COMPANY_B}`))
+        .toEqual(before);
+    });
+  });
+
+  it('set_products_active switches own rows', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      const own = (await one<{ id: string }>(c, `insert into public.products (company_id, type, brand, active)
+        values ($1, 'other', 'Zz Own', true) returning id`, [ACADEMY_ID])).id;
+      await asAdmin(c);
+      expect((await one<{ n: number }>(c, 'select public.set_products_active($1, false) as n', [[own]])).n).toBe(1);
+      expect((await one<{ n: number }>(c, 'select public.set_products_active($1, false) as n', [[own]])).n).toBe(0);
+      expect((await one<{ n: number }>(c, 'select public.set_products_active($1, true) as n', [[own]])).n).toBe(1);
+    });
+  });
+});

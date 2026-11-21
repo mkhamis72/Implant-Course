@@ -291,6 +291,8 @@ describe('permissions: guard rails', () => {
         // Clinic workflow (0123): login invites with a doctor and the doctor's login link; admin-only, no area
         // (as create_pending_login / add_existing_member, 0088, and the admin tools, 0118).
         'create_pending_login_v2', 'add_existing_member_v2', 'set_doctor_login',
+        // Catalogue library (0128): admin-only writers.
+        'set_catalog_items', 'set_products_active',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
