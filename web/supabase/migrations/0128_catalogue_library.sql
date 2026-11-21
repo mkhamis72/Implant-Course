@@ -30,9 +30,10 @@ create table public.catalog_items (
 );
 alter table public.catalog_items enable row level security;
 alter table public.catalog_items force row level security;
--- Read by every signed-in user and by the definers; no API writes (the loader runs as postgres).
-create policy catalog_items_select on public.catalog_items for select to authenticated using (true);
-create policy catalog_items_tenant_definer on public.catalog_items for select to tenant_definer using (true);
+-- Read by staff (as products, not delegate logins) and by the definers; no writes but the loader's (postgres):
+-- authenticated and tenant_definer are granted select only.
+create policy catalog_items_select on public.catalog_items for select to authenticated using (public.is_active_user());
+create policy catalog_items_tenant_definer on public.catalog_items for all to tenant_definer using (true) with check (true);
 revoke all on public.catalog_items from public, anon, authenticated, tenant_definer;
 grant select on public.catalog_items to authenticated, tenant_definer, service_role;
 
