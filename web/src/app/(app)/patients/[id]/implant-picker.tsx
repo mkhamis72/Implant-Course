@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { onHandByProduct, pathOf, pickerState, sizeLabel, type PickerSelection } from '@/lib/inventory/implant-picker';
 import type { LotOnHand, Product } from '@/lib/inventory/types';
+import { NoProductsHint } from '@/components/no-products-hint';
 
 const NONE: PickerSelection = { brand: '', line: '', type: '' };
 
@@ -68,7 +69,8 @@ export function ImplantPicker({ implants, lots, usedOn, value, onChange, require
         />
         In stock only
       </label>}
-      {emptyHere && (
+      {implants.length === 0 && <NoProductsHint />}
+      {emptyHere && implants.length > 0 && (
         <p className="text-sm text-muted">Nothing in stock here. Untick <em>In stock only</em> to see every size.</p>
       )}
     </fieldset>

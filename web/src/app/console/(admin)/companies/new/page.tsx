@@ -12,8 +12,8 @@ export default async function NewCompanyPage() {
         <h1>Add company</h1>
       </div>
       <p className="mb-4 text-sm text-muted">
-        The company gets its own space in the shared database, with the product catalogue and consent forms, and its
-        address is added to Vercel. {emailEnabled()
+        The company gets its own space in the shared database, with its consent forms (its admin switches products on in
+        Admin → Catalogue), and its address is added to Vercel. {emailEnabled()
           ? 'The first admin is emailed an invite to set their password.'
           : 'Email is off: the first admin gets a temporary password to pass on.'}
       </p>

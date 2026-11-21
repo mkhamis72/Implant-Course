@@ -11,6 +11,7 @@ import { bookSurgery, updateBooking } from '../actions';
 import { PatientCard, PatientPicker } from './patient-picker';
 import { SparesEditor } from './spares-editor';
 import type { EditImplantRow } from '@/lib/schedule/schemas';
+import { NoProductsHint } from '@/components/no-products-hint';
 
 export type SessionOption = { id: string; label: string; courseId: string };
 type Role = '' | 'placing' | 'assisting';
@@ -260,6 +261,7 @@ export function SlotForm(p: Props) {
 
       <fieldset className="space-y-2">
         <legend className="label">{edit ? 'Implants' : 'Implants needed'}</legend>
+        {p.implants.length === 0 && <NoProductsHint />}
         {implants.map((row, i) => {
           const set = (patch: Partial<EditImplantRow>) => setImplants((all) => all.map((r, j) => (j === i ? { ...r, ...patch } : r)));
           return (

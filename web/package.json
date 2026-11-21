@@ -23,6 +23,7 @@
     "create-user": "tsx scripts/create-user.ts",
     "create-admin": "tsx scripts/create-user.ts --role admin",
     "catalog-export": "tsx scripts/catalog-export.ts",
+    "catalog:load": "tsx scripts/catalog-load.ts",
     "companies:list": "tsx scripts/companies-list.ts"
   },
   "dependencies": {

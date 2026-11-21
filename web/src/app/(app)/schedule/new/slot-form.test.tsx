@@ -328,3 +328,10 @@ describe('SlotForm: clinic', () => {
     expect(vi.mocked(updateBooking).mock.calls.at(-1)![0]).toMatchObject({ date: '2030-03-04', setting: 'clinic' });
   });
 });
+
+describe('<SlotForm> with no implants switched on (0128)', () => {
+  it('says an admin switches products on in Admin → Catalogue', () => {
+    render(<SlotForm {...props} sessions={[]} />);
+    expect(screen.getByText('No products switched on yet. An admin chooses them in Admin → Catalogue.')).toBeInTheDocument();
+  });
+});

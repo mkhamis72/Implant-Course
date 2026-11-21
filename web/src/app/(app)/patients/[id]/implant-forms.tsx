@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { PlacedByChoice, type PlacedBy } from '@/components/placed-by-choice';
 import { availableLots } from '@/lib/inventory/lots';
+import { withRecorded } from '@/lib/inventory/with-recorded';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { acceptsProduct } from '@/lib/inventory/components';
 import { delegatesForCourse, keepIfEnrolled } from '@/lib/inventory/enrolled';
@@ -11,7 +12,7 @@ import { coursesForDate } from '@/lib/restorations/restorations';
 import { formatDate } from '@/lib/format';
 import {
   COMPONENT_LABELS, COMPONENT_TYPES, TECHNIQUES, TECHNIQUE_LABELS,
-  type ChartData, type ComponentType, type ImplantSite, type Technique,
+  type ChartData, type ComponentType, type ImplantSite, type Product, type Technique,
 } from '@/lib/inventory/types';
 import { fitComponent, placeImplant, planImplant, receiveStockForPlacement } from './implant-actions';
 import { ImplantPicker } from './implant-picker';
@@ -309,11 +310,14 @@ export function PlaceForm({
   plannedTechnique = null,
   slot = null,
   plannedCourseId = null,
+  recordedProducts = [],
   onPlaced,
 }: Base & {
   plannedProductId: string | null; plannedTechnique?: Technique | null; slot?: ImplantSite['slot'];
   /** The course the booking's surgery session belongs to. */
   plannedCourseId?: string | null; onPlaced?: () => void;
+  /** The planned implant and the booking's spares for this tooth: offered even if since switched off (0128). */
+  recordedProducts?: Product[];
 }) {
   // A booked implant starts with the booking's delegates (or doctor) and supervisor.
   const placingFromSlot = slot?.delegates.find((d) => d.role === 'placing')?.delegate_id ?? '';
@@ -366,7 +370,7 @@ export function PlaceForm({
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, tooth, slotId: slot?.id ?? '', ...people, lotId: data.inventoryOn ? v.lotId : null }); }}>
       <p className="text-xs text-muted"><span aria-hidden="true" className="text-bad">*</span> Required</p>
       <ImplantPicker
-        implants={data.implants}
+        implants={withRecorded(data.implants, recordedProducts)}
         lots={data.lots}
         usedOn={v.placedOn}
         value={v.productId}

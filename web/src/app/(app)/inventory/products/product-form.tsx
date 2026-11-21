@@ -15,12 +15,15 @@ export function ProductForm({ action, product }: Props) {
     const raw = product?.[key];
     return valueOf(state, key, raw === null || raw === undefined ? '' : String(raw));
   };
+  // A product switched on from the catalogue library (0128) keeps the library's fields.
+  const locked = !!product?.catalog_item_id;
   return (
     <form action={formAction} className="card grid max-w-3xl gap-4 sm:grid-cols-3">
       {product && <input type="hidden" name="id" value={product.id} readOnly />}
+      {locked && <p className="text-sm text-muted sm:col-span-3">From the catalogue library.</p>}
       <label className="block">
         <span className="label">Type</span>
-        <select className="input" name="type" defaultValue={v('type') || 'implant'}>
+        <select className="input" name="type" disabled={locked} defaultValue={v('type') || 'implant'}>
           {PRODUCT_TYPES.map((t) => (
             <option key={t} value={t}>
               {PRODUCT_TYPE_LABELS[t]}
@@ -30,31 +33,31 @@ export function ProductForm({ action, product }: Props) {
       </label>
       <label className="block">
         <span className="label">Brand</span>
-        <input className="input" name="brand" defaultValue={v('brand')} />
+        <input className="input" name="brand" disabled={locked} defaultValue={v('brand')} />
       </label>
       <label className="block">
         <span className="label">System</span>
-        <input className="input" name="system" defaultValue={v('system')} />
+        <input className="input" name="system" disabled={locked} defaultValue={v('system')} />
       </label>
       <label className="block">
         <span className="label">Diameter (mm)</span>
-        <input className="input" name="diameter_mm" inputMode="decimal" defaultValue={v('diameter_mm')} />
+        <input className="input" name="diameter_mm" disabled={locked} inputMode="decimal" defaultValue={v('diameter_mm')} />
       </label>
       <label className="block">
         <span className="label">Length (mm)</span>
-        <input className="input" name="length_mm" inputMode="decimal" defaultValue={v('length_mm')} />
+        <input className="input" name="length_mm" disabled={locked} inputMode="decimal" defaultValue={v('length_mm')} />
       </label>
       <label className="block">
         <span className="label">Platform</span>
-        <input className="input" name="platform" defaultValue={v('platform')} />
+        <input className="input" name="platform" disabled={locked} defaultValue={v('platform')} />
       </label>
       <label className="block sm:col-span-2">
         <span className="label">Description</span>
-        <input className="input" name="description" defaultValue={v('description')} />
+        <input className="input" name="description" disabled={locked} defaultValue={v('description')} />
       </label>
       <label className="block">
         <span className="label">Reference code</span>
-        <input className="input" name="ref_code" defaultValue={v('ref_code')} />
+        <input className="input" name="ref_code" disabled={locked} defaultValue={v('ref_code')} />
       </label>
       <label className="block">
         <span className="label">Reorder level</span>

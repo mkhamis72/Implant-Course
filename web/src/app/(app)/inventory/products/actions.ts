@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
-import { productSchema } from '@/lib/inventory/schemas';
+import { linkedProductSchema, productSchema } from '@/lib/inventory/schemas';
 import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
 
@@ -21,9 +21,14 @@ export async function createProduct(_prev: FormState, formData: FormData): Promi
 export async function updateProduct(_prev: FormState, formData: FormData): Promise<FormState> {
   await requirePermission('inventory', 'edit');
   const id = String(formData.get('id') ?? '');
-  const parsed = productSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const supabase = await createClient();
+  // A product switched on from the catalogue library (0128): only its reorder level and flags change (the form
+  // sends no catalogue fields, and the database refuses changing them).
+  const { data: current } = await supabase.from('products').select('catalog_item_id').eq('id', id).maybeSingle();
+  const parsed = current?.catalog_item_id
+    ? linkedProductSchema.safeParse(Object.fromEntries(formData))
+    : productSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return failed(parsed.error.issues[0].message, formData);
   const { data, error } = await supabase
     .from('products')
     .update({ ...parsed.data, active: formData.get('active') === 'on', is_sample: formData.get('is_sample') === 'on' })
