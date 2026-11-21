@@ -17,10 +17,10 @@
 | **B. Clinic workflow** | Direct booking with Where (In clinic / GA in hospital); Admin/Doctor roles with linked doctors; clinic consent (EN+AR) | Design `2026-11-18-clinic-workflow-design.md` (+pdf) and plan `../plans/2026-11-18-clinic-workflow.md` (+pdf). Awaiting the owner's go; recommended subagent-driven. |
 | **A. Booking a surgery** | Patient picker (search by name, open file to confirm); planned + spare implants per tooth; edit tooth, planned implant and spares | To design |
 | **C. Product catalogue** | Hide products a company doesn't use; ready-made catalogues for common implant systems to activate | To design |
-| **D. Recall visits** | Adjust a specific recall visit's date, or the recall period | To design |
+| **D. Recall visits** | Adjust a specific recall visit's date, or the recall period | Dropped by the owner 2026-11-22: the fixed schedule stays |
 
 ## Modular follow-ups (small, designed in chat 2026-11-18, not yet planned)
-1. **Patient History labels** (`src/lib/patients/history.ts`).
+1. **Patient History labels** (`src/lib/patients/history.ts`). Done 2026-11-22 (branch `fix/history-labels`).
    - **Bug for all companies:** `placing_doctor_id` and `implant_sites.course_id` have no label, so "corrected to a doctor" or a course change shows only "Implant on tooth N updated".
    - **Fix:** add `placing_doctor_id: 'placed by'` and `course_id: 'course'` to `PLACEMENT_FIELD_LABELS`.
    - **In a clinic** the labels "assisted by", "supervisor", "delegate" and "course" appear.

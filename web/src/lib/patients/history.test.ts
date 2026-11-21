@@ -238,3 +238,33 @@ describe('describeChange: radiographs', () => {
       .toBe('Bone level removed: mesial —, distal -0.5 mm');
   });
 });
+
+describe('describeChange: placed by a doctor, course, and clinic labels', () => {
+  const before = { tooth: 36, state: 'placed', placed_on: '2026-05-02', placing_delegate_id: 'a', placing_doctor_id: null,
+    assisting_delegate_id: 'x', supervisor_id: 's', course_id: 'c1' };
+  it('names a change to a doctor or to the course', () => {
+    expect(describeChange(entry({ table_name: 'implant_sites', before, after: { ...before, placing_delegate_id: null, placing_doctor_id: 'd' } })))
+      .toBe('Implant on tooth 36 corrected: placed by');
+    expect(describeChange(entry({ table_name: 'implant_sites', before, after: { ...before, course_id: 'c2' } })))
+      .toBe('Implant on tooth 36 corrected: course');
+  });
+  it('leaves out teaching details in a clinic', () => {
+    const after = { ...before, placed_on: '2026-05-01', assisting_delegate_id: null, supervisor_id: null, course_id: null };
+    expect(describeChange(entry({ table_name: 'implant_sites', before, after }), { teaching: false }))
+      .toBe('Implant on tooth 36 corrected: placement date');
+    expect(describeChange(entry({ table_name: 'implant_sites', before, after: { ...before, supervisor_id: null } }), { teaching: false }))
+      .toBe('Implant on tooth 36 updated');
+    expect(describeChange(entry({ table_name: 'implant_sites', before, after: { ...before, placing_doctor_id: 'd' } }), { teaching: false }))
+      .toBe('Implant on tooth 36 corrected: placed by');
+    expect(describeChange(entry({ table_name: 'implant_sites', before, after }))).toBe(
+      'Implant on tooth 36 corrected: placement date, assisted by, supervisor, course',
+    );
+  });
+  it('leaves out teaching details of a restoration in a clinic', () => {
+    const r = { stage: 'final', material: 'zirconia', delegate_id: 'a', supervisor_id: 's', course_id: 'c' };
+    expect(describeChange(entry({ table_name: 'restorations', before: r, after: { ...r, material: 'emax', delegate_id: null } }), { teaching: false }))
+      .toBe('Restoration updated: material');
+    expect(describeChange(entry({ table_name: 'restorations', before: r, after: { ...r, course_id: null } }), { teaching: false }))
+      .toBe('Restoration updated');
+  });
+});
