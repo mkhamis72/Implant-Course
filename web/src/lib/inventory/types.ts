@@ -39,6 +39,8 @@ export type Product = {
   reorder_level: number;
   active: boolean;
   is_sample: boolean;
+  /** Switched on from the catalogue library (0128): its catalogue fields are locked. */
+  catalog_item_id?: string | null;
 };
 
 export type LotOnHand = {

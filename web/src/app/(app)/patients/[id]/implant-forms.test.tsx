@@ -398,3 +398,10 @@ describe('<PlaceForm> switched-off planned implant (0128)', () => {
     expect(screen.getByRole('combobox', { name: 'Implant size' })).toHaveValue('off');
   });
 });
+
+describe('<PlaceForm> with no implants switched on (0128)', () => {
+  it('says an admin switches products on in Admin → Catalogue', () => {
+    render(<PlaceForm patientId="pt" tooth={36} data={{ ...data, implants: [], lots: [] } as ChartData} onDone={() => {}} plannedProductId={null} />);
+    expect(screen.getByText('No products switched on yet. An admin chooses them in Admin → Catalogue.')).toBeInTheDocument();
+  });
+});

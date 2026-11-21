@@ -4,6 +4,7 @@ import { todayIso } from '@/lib/dates';
 import { productLabel } from '@/lib/inventory/labels';
 import type { Product } from '@/lib/inventory/types';
 import { ReceiveForm } from './receive-form';
+import { NoProductsHint } from '@/components/no-products-hint';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
 
 export default async function ReceivePage({ searchParams }: { searchParams: PageSearchParams }) {
@@ -25,6 +26,7 @@ export default async function ReceivePage({ searchParams }: { searchParams: Page
   return (
     <div className="space-y-6">
       <h1>Receive stock</h1>
+      {products.length === 0 && <NoProductsHint />}
       <ReceiveForm groups={groups} productId={String(product)} today={todayIso()} />
     </div>
   );
