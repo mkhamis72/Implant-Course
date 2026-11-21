@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
-import { withTx, actAs, asPostgres } from './helpers';
+import { withTx, actAs, asCompany, asPostgres } from './helpers';
+import { makeChair, makeCourse, makePatient, makeProduct, makeSession, receive } from './fixtures';
 
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
 const users = inject('testUsers');
@@ -113,8 +114,8 @@ describe('set_catalog_items / set_products_active (0128)', () => {
   it('reuses an unlinked row with the same brand, type and ref code', async () => {
     await withTx(async (c) => {
       const item = await newItem(c, 'ZZ2');
-      const own = (await one<{ id: string }>(c, `insert into public.products (company_id, type, brand, system, ref_code, description, active)
-        values ($1, 'implant', 'Zz Library', 'Older name', 'ZZ2', 'edited', false) returning id`, [ACADEMY_ID])).id;
+      const own = (await one<{ id: string }>(c, `insert into public.products (company_id, type, brand, system, diameter_mm, length_mm, ref_code, description, active)
+        values ($1, 'implant', 'Zz Library', 'Older name', 4, 10, 'ZZ2', 'edited', false) returning id`, [ACADEMY_ID])).id;
       await asAdmin(c);
       expect((await one<{ n: number }>(c, 'select public.set_catalog_items($1, true) as n', [[item]])).n).toBe(1);
       await asPostgres(c);
@@ -183,6 +184,69 @@ describe('set_catalog_items / set_products_active (0128)', () => {
       expect((await one<{ n: number }>(c, 'select public.set_products_active($1, false) as n', [[own]])).n).toBe(1);
       expect((await one<{ n: number }>(c, 'select public.set_products_active($1, false) as n', [[own]])).n).toBe(0);
       expect((await one<{ n: number }>(c, 'select public.set_products_active($1, true) as n', [[own]])).n).toBe(1);
+    });
+  });
+});
+
+describe('place_implant_v4 keeps a switched-off planned implant (0128)', () => {
+  type Booked = { patient: string; course: string; slot: string; planned: string; spare: string; other: string;
+    lots: Record<string, string> };
+
+  /** A booking for tooth 11 with a planned implant and a spare, all three products then switched off. */
+  async function bookThenSwitchOff(c: Client): Promise<Booked> {
+    await asCompany(c);
+    const date = (await one<{ d: string }>(c, `select to_char('2080-01-01'::date + floor(random() * 3650)::int, 'YYYY-MM-DD') as d`)).d;
+    const course = await makeCourse(c, date, date);
+    const session = await makeSession(c, course, 'surgery', date);
+    const chair = await makeChair(c);
+    const doctor = (await one<{ id: string }>(c, `insert into public.doctors (name) values ('Zz Dr Catalogue') returning id`)).id;
+    const brand = `Zz Catalogue ${Math.random().toString(36).slice(2, 8)}`;
+    const [planned, spare, other] = [await makeProduct(c, 'implant', brand), await makeProduct(c, 'implant', brand),
+      await makeProduct(c, 'implant', brand)];
+    const lots: Record<string, string> = {};
+    for (const p of [planned, spare, other]) lots[p] = await receive(c, p, 2, `ZZCAT${Math.random().toString(36).slice(2, 8)}`);
+    const patient = await makePatient(c, 'Zz Catalogue Patient');
+    await actAs(c, users.admin);
+    const slot = (await one<{ id: string }>(c, `select public.create_surgery_slot_v4(
+      p_session => $1, p_chair => $2, p_start => '09:00'::time, p_end => '10:00'::time, p_patient => $3, p_supervisor => null,
+      p_placing => '{}'::uuid[], p_assisting => '{}'::uuid[], p_implants => $5::jsonb, p_override_reason => 'Zz test',
+      p_notes => '', p_placing_doctor => $4, p_setting => null, p_date => null) as id`,
+      [session, chair, patient, doctor, JSON.stringify([{ tooth: 11, product_id: planned, technique: 'guided', spares: [spare] }])])).id;
+    await asPostgres(c);
+    await c.query('update public.products set active = false where id = any ($1)', [[planned, spare, other]]);
+    await actAs(c, users.organizer);
+    return { patient, course, slot, planned, spare, other, lots };
+  }
+
+  const place = (c: Client, b: Booked, product: string) => c.query(`select public.place_implant_v4(
+    p_patient => $1, p_tooth => 11::smallint, p_product => $2, p_lot => $5, p_placed_on => public.cairo_today(),
+    p_placing_delegate => null, p_supervisor => null, p_assisting_delegate => null, p_graft => '', p_notes => '',
+    p_slot => $3, p_technique => null, p_course => $4,
+    p_placing_doctor => (select placing_doctor_id from public.surgery_slots where id = $3)) as id`,
+    [b.patient, product, b.slot, b.course, b.lots[product]]);
+
+  it('places a switched-off planned implant', async () => {
+    await withTx(async (c) => {
+      const b = await bookThenSwitchOff(c);
+      await place(c, b, b.planned);
+      expect(await one(c, `select product_id, state from public.implant_sites where slot_id = $1 and tooth = 11`, [b.slot]))
+        .toEqual({ product_id: b.planned, state: 'placed' });
+    });
+  });
+
+  it('places a switched-off spare of that tooth', async () => {
+    await withTx(async (c) => {
+      const b = await bookThenSwitchOff(c);
+      await place(c, b, b.spare);
+      expect(await one(c, `select product_id from public.implant_sites where slot_id = $1 and tooth = 11`, [b.slot]))
+        .toEqual({ product_id: b.spare });
+    });
+  });
+
+  it('refuses a switched-off implant neither planned nor spare', async () => {
+    await withTx(async (c) => {
+      const b = await bookThenSwitchOff(c);
+      await refused(c, () => place(c, b, b.other), /Choose an implant from the catalog\./);
     });
   });
 });

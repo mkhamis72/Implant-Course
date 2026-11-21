@@ -191,4 +191,6 @@ export type ChartData = {
   teachingOn: boolean;
   /** Active doctors (Admin → Doctors), for Placed by; user_id: the linked login (Placed by starts on mine). */
   doctors: { id: string; name: string; user_id: string | null; active: boolean }[];
+  /** Spare implants of each planned site's booking for its tooth, by site id (0125): offered when placing. */
+  spares?: Record<string, Product[]>;
 };

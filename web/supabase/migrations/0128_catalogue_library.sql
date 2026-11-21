@@ -296,6 +296,9 @@ begin
   end if;
   return new;
 end $$;
+grant create on schema public, app_private to tenant_definer;
+alter function app_private.protect_catalog_product() owner to tenant_definer;
+revoke create on schema public, app_private from tenant_definer;
 revoke all on function app_private.protect_catalog_product() from public;
 
 create trigger products_catalog_locked before update on public.products

@@ -101,13 +101,15 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
   for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors]) {
     if (r.error) throw new Error('Could not load the chart');
   }
+  const siteList = ((sites.data ?? []) as unknown as ImplantSite[]).map(sortSite);
+  const spares = await sparesBySite(supabase, siteList);
   const statusMap: Partial<Record<number, ToothState>> = {};
   for (const row of statuses.data ?? []) statusMap[row.tooth as number] = row.status as ToothState;
   const all = (products.data ?? []) as Product[];
   const byLabel = (a: Product, b: Product) => productLabel(a).localeCompare(productLabel(b), undefined, { numeric: true });
   return {
     statuses: statusMap,
-    sites: ((sites.data ?? []) as unknown as ImplantSite[]).map(sortSite),
+    sites: siteList,
     visits: (visits.data ?? []) as VisitRow[],
     implants: all.filter((p) => p.type === 'implant').sort(byLabel),
     componentProducts: all.filter((p) => p.type !== 'implant').sort(byLabel),
@@ -126,5 +128,26 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     inventoryOn: me ? featureOn(me.features, 'inventory') : false,
     teachingOn: me ? teachingOn(me.features) : false,
     doctors: (doctors.data ?? []) as ChartData['doctors'],
+    spares,
   };
+}
+
+/** The spares each planned site's booking holds for its tooth (0125), by site id, in the order chosen. */
+async function sparesBySite(
+  supabase: Awaited<ReturnType<typeof createClient>>, sites: ImplantSite[],
+): Promise<Record<string, Product[]>> {
+  const planned = sites.filter((s) => s.state === 'planned' && s.slot);
+  if (planned.length === 0) return {};
+  const { data, error } = await supabase.from('slot_spare_implants')
+    .select('slot_id, tooth, position, product:products(*)')
+    .in('slot_id', [...new Set(planned.map((s) => s.slot!.id))]);
+  if (error) throw new Error('Could not load the chart');
+  type Row = { slot_id: string; tooth: number; position: number; product: Product | null };
+  const rows = ((data ?? []) as unknown as Row[]).sort((a, b) => a.position - b.position);
+  const out: Record<string, Product[]> = {};
+  for (const s of planned) {
+    const list = rows.filter((r) => r.slot_id === s.slot!.id && r.tooth === s.tooth && r.product).map((r) => r.product!);
+    if (list.length) out[s.id] = list;
+  }
+  return out;
 }

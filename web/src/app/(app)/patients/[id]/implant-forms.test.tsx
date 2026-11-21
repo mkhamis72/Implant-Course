@@ -388,3 +388,13 @@ describe('<PlaceForm> supervisor default with a doctor', () => {
     expect(screen.getByTestId('booked-people')).not.toHaveTextContent(/supervised/);
   });
 });
+
+describe('<PlaceForm> switched-off planned implant (0128)', () => {
+  it('still offers and preselects the planned implant switched off in Admin → Catalogue', () => {
+    const off = { ...implant, id: 'off', diameter_mm: 4.5, length_mm: 11.5 };
+    const offLot = { ...lot, stock_lot_id: 'loff', product_id: 'off', lot_no: 'OFF' };
+    render(<PlaceForm patientId="pt" tooth={36} data={{ ...data, lots: [lot, offLot] } as ChartData} onDone={() => {}}
+      plannedProductId="off" recordedProducts={[off as never]} />);
+    expect(screen.getByRole('combobox', { name: 'Implant size' })).toHaveValue('off');
+  });
+});
