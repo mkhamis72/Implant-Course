@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 import { PRODUCT_TYPES, PRODUCT_TYPE_LABELS, type Product } from '@/lib/inventory/types';
+import { productSpecs } from '@/lib/inventory/specs';
 import { checkedOf, valueOf, type FormState } from '@/lib/patients/form-state';
 
 type Props = {
@@ -17,6 +18,7 @@ export function ProductForm({ action, product }: Props) {
   };
   // A product switched on from the catalogue library (0128) keeps the library's fields.
   const locked = !!product?.catalog_item_id;
+  const specs = product ? productSpecs(product) : [];
   return (
     <form action={formAction} className="card grid max-w-3xl gap-4 sm:grid-cols-3">
       {product && <input type="hidden" name="id" value={product.id} readOnly />}
@@ -55,6 +57,57 @@ export function ProductForm({ action, product }: Props) {
         <span className="label">Description</span>
         <input className="input" name="description" disabled={locked} defaultValue={v('description')} />
       </label>
+      <fieldset className="grid gap-4 sm:col-span-3 sm:grid-cols-3">
+        <legend className="label">Specifications</legend>
+        {locked ? (
+          specs.length ? (
+            <ul className="text-sm sm:col-span-3">
+              {specs.map((s) => (
+                <li key={s.label}>
+                  {s.label}: {s.value}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted sm:col-span-3">None recorded in the library.</p>
+          )
+        ) : (
+          <>
+            <label className="block">
+              <span className="label">Connection</span>
+              <input className="input" name="connection" defaultValue={v('connection')} />
+            </label>
+            <label className="block">
+              <span className="label">Gingival height (mm)</span>
+              <input className="input" name="gingival_height_mm" inputMode="decimal" defaultValue={v('gingival_height_mm')} />
+            </label>
+            <label className="block">
+              <span className="label">Angle (°)</span>
+              <input className="input" name="angle_deg" inputMode="decimal" defaultValue={v('angle_deg')} />
+            </label>
+            <label className="block">
+              <span className="label">Material</span>
+              <input className="input" name="material" defaultValue={v('material')} />
+            </label>
+            <label className="block">
+              <span className="label">Screwdriver interface</span>
+              <input className="input" name="driver_interface" defaultValue={v('driver_interface')} />
+            </label>
+            <label className="block">
+              <span className="label">Screwdriver size</span>
+              <input className="input" name="driver_size" defaultValue={v('driver_size')} />
+            </label>
+            <label className="block">
+              <span className="label">Screwdriver ref</span>
+              <input className="input" name="driver_ref" defaultValue={v('driver_ref')} />
+            </label>
+            <label className="block">
+              <span className="label">Recommended torque (Ncm)</span>
+              <input className="input" name="torque_ncm" inputMode="decimal" defaultValue={v('torque_ncm')} />
+            </label>
+          </>
+        )}
+      </fieldset>
       <label className="block">
         <span className="label">Reference code</span>
         <input className="input" name="ref_code" disabled={locked} defaultValue={v('ref_code')} />

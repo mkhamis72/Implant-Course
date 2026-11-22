@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { diffLibrary, parseCatalogCsv, type LibraryRow } from './catalog-library';
+import { EMPTY_SPECS, diffLibrary, parseCatalogCsv, type LibraryRow } from './catalog-library';
 
 const OXY = readFileSync(join(process.cwd(), '..', 'docs', 'catalog', 'oxy-catalog.csv'), 'utf8');
 const HEADER = 'Type,Brand,System,Platform,Diameter (mm),Length (mm),Ref code,Description,Source,Check';
 
 const row = (over: Partial<LibraryRow> = {}): LibraryRow => ({
   type: 'implant', brand: 'B', system: 'S', platform: 'P', diameter_mm: 4, length_mm: 10, ref_code: 'R1',
-  description: '', source: 'p.1', ...over,
+  description: '', source: 'p.1', ...EMPTY_SPECS, ...over,
 });
 
 describe('parseCatalogCsv', () => {
@@ -17,7 +17,7 @@ describe('parseCatalogCsv', () => {
     expect(rows).toHaveLength(OXY.split(/\r?\n/).filter((l) => l.trim()).length - 1);
     expect(rows[0]).toEqual({
       type: 'implant', brand: 'Oxy Implant', system: 'PSK-MDK · MDK Medium Narrow', platform: 'Mini conical',
-      diameter_mm: 3, length_mm: 10, ref_code: 'OMKN30100', description: '', source: 'PSK-MDK p.11',
+      diameter_mm: 3, length_mm: 10, ref_code: 'OMKN30100', description: '', source: 'PSK-MDK p.11', ...EMPTY_SPECS,
     });
   });
 
@@ -38,6 +38,33 @@ describe('parseCatalogCsv', () => {
     expect(parseCatalogCsv(`${HEADER}\nImplant,B,S,P, 4.5 ,10,R1,,,`)[0]).toMatchObject({ diameter_mm: 4.5, length_mm: 10 });
   });
 
+  const SPEC_HEAD = `${HEADER},Connection,Gingival height (mm),Angle (°),Material,Driver interface,Driver size,Driver ref,Torque (Ncm)`;
+
+  it('reads the optional trailing specification columns', () => {
+    const rows = parseCatalogCsv(
+      `${SPEC_HEAD}\nHealing abutment,B,S,P,,,R1,,p.1,,Internal hex,2.5,17,Titanium,Hex,1.25 mm,DRV1,25\nImplant,B,S,P,4,10,R2,,p.1,,,,,,,,,`,
+    );
+    expect(rows[0]).toMatchObject({ connection: 'Internal hex', gingival_height_mm: 2.5, angle_deg: 17, material: 'Titanium',
+      driver_interface: 'Hex', driver_size: '1.25 mm', driver_ref: 'DRV1', torque_ncm: 25 });
+    expect(rows[1]).toMatchObject({ ...EMPTY_SPECS });
+  });
+
+  it('finds specification columns by name, also in a file without the Check column', () => {
+    const head = 'Type,Brand,System,Platform,Diameter (mm),Length (mm),Ref code,Description,Source,Torque (Ncm)';
+    expect(parseCatalogCsv(`${head}\nImplant,B,S,P,4,10,R1,,p.1,35`)[0].torque_ncm).toBe(35);
+  });
+
+  it('accepts the old 9-column header', () => {
+    const head = 'Type,Brand,System,Platform,Diameter (mm),Length (mm),Ref code,Description,Source';
+    expect(parseCatalogCsv(`${head}\nImplant,B,S,P,4,10,R1,,p.1`)[0]).toMatchObject({ ref_code: 'R1', ...EMPTY_SPECS });
+  });
+
+  it('refuses a specification number that is not a number, with its row and column', () => {
+    expect(() => parseCatalogCsv(`${SPEC_HEAD}\nImplant,B,S,P,4,10,R1,,p.1,,,,,,,,,abc`)).toThrow(
+      'Row 2: Torque (Ncm) is not a number: "abc"',
+    );
+  });
+
   it('refuses a file without the catalogue header', () => {
     expect(() => parseCatalogCsv('a,b\n1,2')).toThrow(/header/);
   });
@@ -56,6 +83,10 @@ describe('diffLibrary', () => {
 
   it('updates descriptive fields', () => {
     expect(diffLibrary([existing()], [row({ description: 'new' })]).update).toEqual([{ id: 'i1', row: row({ description: 'new' }) }]);
+  });
+
+  it('updates specification changes', () => {
+    expect(diffLibrary([existing()], [row({ torque_ncm: 25 })]).update).toEqual([{ id: 'i1', row: row({ torque_ncm: 25 }) }]);
   });
 
   it('retires rows of the same brand missing from the file, and leaves other brands', () => {
