@@ -399,3 +399,36 @@ describe('components by role: fixes (0136)', () => {
     });
   });
 });
+
+describe('components by role: undo hardening (0137)', () => {
+  it('backfill drops a link whose closer was dated differently', async () => {
+    await withTx(async (c) => {
+      const s = await twoSites(c);
+      const wrong = await fit2(c, s.site, 'cover_screw');
+      const closer = await fit2(c, s.site, 'healing_abutment');
+      const right = await fit2(c, s.other, 'cover_screw');
+      const rightCloser = await fit2(c, s.other, 'healing_abutment');
+      await asPostgres(c);
+      // As the 0136 backfill could leave it: linked to a row whose date is not the day the row was closed.
+      await c.query(`update public.site_components set fitted_on = fitted_on - 3 where id = $1`, [closer]);
+      await c.query('select app_private.clear_wrong_closer_links()');
+      expect(await row(c, wrong)).toMatchObject({ current: false, replaced_by: null });
+      expect(await row(c, right)).toMatchObject({ current: false, replaced_by: rightCloser });
+    });
+  });
+
+  it('undoing an abutment refuses while a newer screw holds its place', async () => {
+    await withTx(async (c) => {
+      const s = await twoSites(c);
+      const first = await fit3(c, s.site, 'ti_base');
+      const screw = await fit3(c, s.site, 'prosthetic_screw', { holds: first });
+      const second = await fit3(c, s.site, 'abutment');
+      const crown = await restorationOn(c, s.patient, s.site);
+      const newer = await fit3(c, s.site, 'prosthetic_screw', { holdsRestoration: crown });
+      await refused(c, () => undo(c, second), /Undo the newer part in the same place first\./);
+      await undo(c, newer);
+      await undo(c, second);
+      expect(await currentAt(c, s.site)).toEqual([first, screw].sort());
+    });
+  });
+});
