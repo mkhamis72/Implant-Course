@@ -287,3 +287,60 @@ test('fits a multi-unit with its screws and replaces the prosthetic screw: curre
   await expect(parts.nth(2)).toContainText('Screwdriver: Hex 1.25 mm');
   await expect(panel(page).getByTestId('component-history').getByRole('listitem').filter({ hasText: 'Prosthetic screw' }).first()).toContainText('replaced on');
 });
+
+test('a zygomatic implant placed instead of the planned one: type, planned product, anchorage and angle; a tilted neighbour', async ({ page }) => {
+  const s = await setup(page);
+  const zygBrand = uniqueName('Zygoma');
+  const zygomatic = await seedProduct(s.api, { type: 'implant', brand: zygBrand, diameter_mm: 4, length_mm: 45, implant_kind: 'zygomatic' });
+  await receiveStock(s.api, zygomatic, 2, `ZYG-${Date.now()}`, '2031-12-31');
+  await page.reload();
+
+  // Plan the conventional implant on 14, then place the zygomatic one there.
+  await page.getByRole('button', { name: 'Tooth 14, Present' }).click();
+  await panel(page).getByRole('button', { name: 'Plan implant' }).click();
+  await chooseImplant(page, s.brand, 'Ø4.0 × 10 mm');
+  await page.getByRole('combobox', { name: 'Technique' }).selectOption({ label: 'Free hand' });
+  await page.getByRole('button', { name: 'Save plan' }).click();
+  await expect(page.getByRole('button', { name: 'Tooth 14, Implant planned' })).toBeVisible();
+  await panel(page).getByRole('button', { name: 'Place implant' }).click();
+  await chooseImplant(page, zygBrand, 'Ø4.0 × 45 mm');
+  await page.getByRole('radiogroup', { name: 'Stock batch' }).getByRole('radio').first().check();
+  await page.getByRole('combobox', { name: 'Course' }).selectOption(s.courseId);
+  await page.getByLabel('Placed by (delegate)').selectOption({ label: s.delegate });
+  await page.getByRole('button', { name: 'Save placement' }).click();
+  await expect(page.getByRole('button', { name: /^Tooth 14, Implant placed, ZYG/ })).toBeVisible();
+  await expect(page.locator('[data-tooth="14"] [data-type-label]')).toHaveText('ZYG');
+
+  await panel(page).getByRole('tab', { name: 'Implant' }).click();
+  const facts = panel(page).getByTestId('site-details');
+  await expect(facts.getByTestId('implant-type')).toHaveText('Zygomatic');
+  await expect(facts.getByTestId('planned-product')).toHaveText(`Planned: ${s.brand} E2E Ø4.0 × 10 mm`);
+  await expect(facts).toContainText('Emergence 14');
+
+  // Anchorage and angle in Surgical details.
+  await panel(page).getByRole('tab', { name: /^Surgical details/ }).click();
+  const type = panel(page).getByRole('region', { name: 'Implant type and angle' });
+  await type.getByRole('button', { name: 'Edit type and angle' }).click();
+  await type.getByRole('textbox', { name: 'Angle (°)' }).fill('45');
+  await type.getByRole('combobox', { name: 'Direction' }).selectOption('distal');
+  await type.getByRole('combobox', { name: 'Anchorage' }).selectOption('zygoma');
+  await type.getByRole('button', { name: 'Save type and angle' }).click();
+  await expect(type.getByText('Zygomatic · 45° distal · Zygoma')).toBeVisible();
+  await panel(page).getByRole('tab', { name: 'Implant' }).click();
+  await expect(facts.getByTestId('implant-type')).toHaveText('Zygomatic · 45° distal · Zygoma');
+
+  // A conventional implant on 15, set Tilted 30° distal.
+  await placeOn(page, s, 15);
+  await panel(page).getByRole('tab', { name: /^Surgical details/ }).click();
+  const tilted = panel(page).getByRole('region', { name: 'Implant type and angle' });
+  await tilted.getByRole('button', { name: 'Edit type and angle' }).click();
+  await tilted.getByRole('combobox', { name: 'Implant type' }).selectOption('tilted');
+  await tilted.getByRole('textbox', { name: 'Angle (°)' }).fill('30');
+  await tilted.getByRole('combobox', { name: 'Direction' }).selectOption('distal');
+  await tilted.getByRole('button', { name: 'Save type and angle' }).click();
+  await expect(tilted.getByText('Tilted · 30° distal')).toBeVisible();
+  await expect(page.locator('[data-tooth="15"] [data-type-label]')).toHaveText('TLT');
+
+  await page.goto(`/patients/${s.patientId}/implants`);
+  await expect(page.getByTestId('implant-type')).toHaveText(['ZYG', 'TLT']);
+});

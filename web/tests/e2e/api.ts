@@ -26,7 +26,7 @@ export async function apiAs(email: string, company = ACADEMY_COMPANY_ID): Promis
 
 export async function seedProduct(
   api: SupabaseClient,
-  fields: { type: string; brand: string; system?: string; description?: string; diameter_mm?: number; length_mm?: number },
+  fields: { type: string; brand: string; system?: string; description?: string; diameter_mm?: number; length_mm?: number; implant_kind?: string },
 ): Promise<string> {
   const { data, error } = await api.from('products').insert({ system: 'E2E', ...fields }).select('id').single();
   if (error) throw error;

@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { currentComponent, lastFollowup } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
-import { COMPONENT_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type ImplantSite } from '@/lib/inventory/types';
+import { COMPONENT_LABELS, IMPLANT_TYPE_LABELS, SITE_STATE_LABELS, TECHNIQUE_LABELS, type ImplantSite } from '@/lib/inventory/types';
+import { typeShortLabel } from '@/lib/patients/implant-type';
 import { formatDate } from '@/lib/format';
 import { featureOn, teachingOn } from '@/lib/modules/modules';
 import { nextVisit, visitResult, VISIT_STATUS_LABELS, type VisitRow } from '@/lib/visits/visits';
@@ -40,6 +41,7 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
               <th>Tooth</th>
               <th>State</th>
               <th>Implant</th>
+              <th>Type</th>
               <th>Technique</th>
               {inventoryOn && <th>Batch</th>}
               <th>Placed</th>
@@ -66,6 +68,11 @@ export default async function ImplantsPage({ params }: { params: Promise<{ id: s
                   </td>
                   <td data-label="State">{SITE_STATE_LABELS[s.state]}</td>
                   <td data-label="Implant">{s.product ? productLabel(s.product) : '—'}</td>
+                  <td data-label="Type" data-testid="implant-type">
+                    {s.implant_type && typeShortLabel(s.implant_type)
+                      ? <abbr title={IMPLANT_TYPE_LABELS[s.implant_type]} className="no-underline">{typeShortLabel(s.implant_type)}</abbr>
+                      : '—'}
+                  </td>
                   <td data-label="Technique">{s.technique ? TECHNIQUE_LABELS[s.technique] : '—'}</td>
                   {inventoryOn && <td data-label="Batch">{s.lot ? s.lot.lot_no ?? 'No lot' : '—'}</td>}
                   <td data-label="Placed">{s.placed_on ? formatDate(s.placed_on) : '—'}</td>

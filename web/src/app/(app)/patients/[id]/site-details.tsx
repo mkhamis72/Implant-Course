@@ -10,6 +10,7 @@ import {
   type ChartData, type ImplantSite, type SiteComponent,
 } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
+import { isAnchored, typeLine } from '@/lib/patients/implant-type';
 import { setTechnique } from './implant-actions';
 import { Corrections } from './corrections';
 import { SurgicalDetails } from './surgical-details';
@@ -112,6 +113,8 @@ export function ImplantFacts({ site, patientId, data }: { site: ImplantSite; pat
       : site.lot
         ? (site.lot.lot_no ? `Lot ${site.lot.lot_no}` : 'No lot')
         : !site.stock_lot_id && site.state !== 'planned' ? 'No stock batch recorded' : null,
+    // A zygomatic or pterygoid implant is anchored away from the ridge: its tooth is where it emerges.
+    isAnchored(site.implant_type) ? `Emergence ${site.tooth}` : null,
     site.placed_on ? formatDate(site.placed_on) : null,
     site.torque_ncm !== null ? `${site.torque_ncm} Ncm` : null,
     site.isq !== null && site.isq !== undefined ? `ISQ ${site.isq}` : null,
@@ -120,6 +123,10 @@ export function ImplantFacts({ site, patientId, data }: { site: ImplantSite; pat
   ].filter(Boolean) as string[];
   // A clinic (no Teaching) shows only the doctor, even where older records name delegates or a supervisor.
   const teaching = data.teachingOn;
+  const type = typeLine(site);
+  // The planned product, named only once a different one was placed.
+  const planned = site.state !== 'planned' && site.planned_product && site.planned_product.id !== site.product?.id
+    ? site.planned_product : null;
   const people = [
     site.doctor?.name ? `Placed by ${site.doctor.name}` : teaching && site.placing?.full_name ? `Placed by ${site.placing.full_name}` : null,
     teaching && site.assisting?.full_name ? `assisted by ${site.assisting.full_name}` : null,
@@ -132,6 +139,8 @@ export function ImplantFacts({ site, patientId, data }: { site: ImplantSite; pat
           {site.product ? productLabel(site.product) : 'Implant'}
           <span className="sr-only"> — {SITE_STATE_LABELS[site.state]}</span>
         </p>
+        {type && <p data-testid="implant-type" className="text-ink">{type}</p>}
+        {planned && <p data-testid="planned-product" className="text-muted">Planned: {productLabel(planned)}</p>}
         {facts.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
             {facts.map((f) => <li key={f} className="badge">{f}</li>)}

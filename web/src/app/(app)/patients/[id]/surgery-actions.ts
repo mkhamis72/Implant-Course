@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/auth/session';
 import { userMessage } from '@/lib/db-errors';
 import { graftSchema, surgerySchema } from '@/lib/implants/surgery';
+import { geometrySchema } from '@/lib/inventory/schemas';
 
 type Result = { error?: string };
 
@@ -36,6 +37,18 @@ export async function saveSurgery(input: Record<string, unknown>): Promise<Resul
     p_isq: s.isq,
     p_bone_type: s.boneType,
     p_expected_updated_at: s.expectedUpdatedAt,
+  });
+}
+
+/** The type and angle section of Surgical details, saved as a whole (set_implant_geometry, 0140). */
+export async function saveImplantGeometry(input: Record<string, unknown>): Promise<Result> {
+  await requirePermission('patients', 'edit');
+  const parsed = geometrySchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const g = parsed.data;
+  return run(g.patientId, 'set_implant_geometry', {
+    p_site: g.siteId, p_type: g.type, p_angulation: g.angulation, p_direction: g.direction, p_anchorage: g.anchorage,
+    p_entry: g.entryPoint, p_trajectory: g.trajectory,
   });
 }
 

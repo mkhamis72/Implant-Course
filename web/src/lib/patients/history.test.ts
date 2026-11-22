@@ -78,6 +78,22 @@ describe('describeChange — implants', () => {
       'Implant on tooth 36: stability recorded — torque, ISQ',
     );
   });
+  it('labels type and angle changes (set_implant_geometry, 0140)', () => {
+    const before = {
+      tooth: 14, state: 'placed', implant_type: 'zygomatic', angulation_deg: null, angulation_direction: null, anchorage: null,
+      entry_point: '', trajectory: '', planned_product_id: 'p1',
+    };
+    expect(describeChange(entry({ table_name: 'implant_sites', before, after: { ...before, angulation_deg: 45 } }))).toBe(
+      'Implant on tooth 14: type and angle recorded — angle',
+    );
+    expect(describeChange(entry({
+      table_name: 'implant_sites', before,
+      after: { ...before, implant_type: 'pterygoid', angulation_direction: 'distal', anchorage: 'zygoma', entry_point: 'a', trajectory: 'b' },
+    }))).toBe('Implant on tooth 14: type and angle recorded — implant type, direction, anchorage, entry point, trajectory');
+    expect(describeChange(entry({ table_name: 'implant_sites', before, after: { ...before, planned_product_id: 'p2' } }))).toBe(
+      'Implant on tooth 14 corrected: planned product',
+    );
+  });
 });
 
 describe('describeChange for implant follow-up records', () => {

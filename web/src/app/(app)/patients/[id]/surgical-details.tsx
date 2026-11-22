@@ -2,7 +2,11 @@
 
 import { addDays, todayIso } from '@/lib/dates';
 import { useState, useTransition } from 'react';
-import type { ImplantSite } from '@/lib/inventory/types';
+import {
+  ANCHORAGES, ANCHORAGE_LABELS, ANGULATION_DIRECTIONS, ANGULATION_DIRECTION_LABELS, IMPLANT_TYPES, IMPLANT_TYPE_LABELS,
+  type ImplantSite, type ImplantType,
+} from '@/lib/inventory/types';
+import { isAnchored, typeLine } from '@/lib/patients/implant-type';
 import {
   FLAPS, FLAP_LABELS, GRAFT_MATERIALS, GRAFT_MATERIAL_LABELS, GRAFT_PROCEDURES, GRAFT_PROCEDURE_LABELS, GRAFT_TIMINGS,
   GRAFT_TIMING_LABELS, HEALINGS, HEALING_LABELS, MEMBRANES, MEMBRANE_LABELS, PHENOTYPES, PHENOTYPE_LABELS, PLACEMENT_TIMINGS,
@@ -10,10 +14,10 @@ import {
   daysSinceExtraction, describeGraft, describeSurgery, surgeryCompleteness, timingWarning,
   type ImplantGraft, type PlacementTiming,
 } from '@/lib/implants/surgery';
-import { BONE_TYPES } from '@/lib/inventory/schemas';
+import { BONE_TYPES, geometrySchema } from '@/lib/inventory/schemas';
 import { YES_NO } from '@/lib/patients/risk-factors';
 import { Field, Footer, useSubmit } from './implant-forms';
-import { deleteGraft, saveGraft, saveSurgery } from './surgery-actions';
+import { deleteGraft, saveGraft, saveImplantGeometry, saveSurgery } from './surgery-actions';
 
 // bare: inside the Surgical details tab, which already shows the count (no collapsible wrapper).
 type Props = { site: ImplantSite; patientId: string; editable: boolean; startOpen?: boolean; bare?: boolean };
@@ -66,6 +70,7 @@ export function SurgicalDetails({ site, patientId, editable, startOpen = false, 
   const body = (
     <div className={bare ? 'space-y-3' : 'mt-2 space-y-3'}>
       {startOpen && <p className="text-muted">Add surgical details now or later.</p>}
+      <TypeAndAngle site={site} patientId={patientId} editable={editable && (site.state === 'placed' || site.state === 'restored')} />
       {editing ? (
         <SurgeryForm site={site} patientId={patientId} onDone={() => setEditing(false)} />
       ) : (
@@ -90,6 +95,81 @@ export function SurgicalDetails({ site, patientId, editable, startOpen = false, 
       </summary>
       {body}
     </details>
+  );
+}
+
+/** Type, angle and (zygomatic / pterygoid) anchorage: its own section with its own Save (set_implant_geometry, 0140). */
+function TypeAndAngle({ site, patientId, editable }: { site: ImplantSite; patientId: string; editable: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const line = typeLine(site) || (site.implant_type ? IMPLANT_TYPE_LABELS[site.implant_type] : '');
+  return (
+    <section aria-label="Implant type and angle" className="space-y-2">
+      <h5 className="font-medium">Implant type and angle</h5>
+      {editing ? (
+        <GeometryForm site={site} patientId={patientId} onDone={() => setEditing(false)} />
+      ) : (
+        <>
+          {line ? <p>{line}</p> : <p className="text-muted">Not recorded.</p>}
+          {(site.entry_point || site.trajectory) && (
+            <p className="text-muted">
+              {[site.entry_point && `Entry point: ${site.entry_point}`, site.trajectory && `Trajectory: ${site.trajectory}`].filter(Boolean).join(' · ')}
+            </p>
+          )}
+          {editable && (
+            <button type="button" className="btn-secondary btn" onClick={() => setEditing(true)}>Edit type and angle</button>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function GeometryForm({ site, patientId, onDone }: { site: ImplantSite; patientId: string; onDone: () => void }) {
+  const [v, setV] = useState({
+    type: site.implant_type ?? '', angulation: site.angulation_deg === null || site.angulation_deg === undefined ? '' : String(site.angulation_deg),
+    direction: site.angulation_direction ?? '', anchorage: site.anchorage ?? '', entryPoint: site.entry_point ?? '', trajectory: site.trajectory ?? '',
+  });
+  const set = (key: keyof typeof v) => (value: string) => setV((cur) => ({ ...cur, [key]: value }));
+  const [invalid, setInvalid] = useState<string | null>(null);
+  const { error, pending, submit } = useSubmit(saveImplantGeometry, onDone);
+  const anchored = isAnchored((v.type || null) as ImplantType | null);
+  return (
+    <form className="space-y-3" onSubmit={(e) => {
+      e.preventDefault();
+      // Anchorage, entry point and trajectory belong only to zygomatic and pterygoid implants: switching away drops them.
+      const input = {
+        siteId: site.id, patientId, type: v.type, angulation: v.angulation, direction: v.direction,
+        anchorage: anchored ? v.anchorage : '', entryPoint: anchored ? v.entryPoint : '', trajectory: anchored ? v.trajectory : '',
+      };
+      const parsed = geometrySchema.safeParse(input);
+      setInvalid(parsed.success ? null : parsed.error.issues[0].message);
+      if (parsed.success) submit(input);
+    }}>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="Implant type" required>
+          <select className="input" aria-required="true" value={v.type} onChange={(e) => set('type')(e.target.value)}>
+            {!site.implant_type && <option value="">Choose…</option>}
+            {IMPLANT_TYPES.map((t) => <option key={t} value={t}>{IMPLANT_TYPE_LABELS[t]}</option>)}
+          </select>
+        </Field>
+        <Field label="Angle (°)" required={v.type === 'tilted'}>
+          <input className="input" inputMode="decimal" value={v.angulation} onChange={(e) => set('angulation')(e.target.value)} />
+        </Field>
+        <Choice label="Direction" value={v.direction} onChange={set('direction')} values={ANGULATION_DIRECTIONS} labels={ANGULATION_DIRECTION_LABELS} />
+      </div>
+      {anchored && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Choice label="Anchorage" value={v.anchorage} onChange={set('anchorage')} values={ANCHORAGES} labels={ANCHORAGE_LABELS} />
+          <Field label="Entry point">
+            <input className="input" maxLength={200} value={v.entryPoint} onChange={(e) => set('entryPoint')(e.target.value)} />
+          </Field>
+          <Field label="Trajectory">
+            <input className="input" maxLength={200} value={v.trajectory} onChange={(e) => set('trajectory')(e.target.value)} />
+          </Field>
+        </div>
+      )}
+      <Footer error={invalid ?? error} pending={pending} saveLabel="Save type and angle" onCancel={onDone} />
+    </form>
   );
 }
 

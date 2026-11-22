@@ -111,3 +111,29 @@ describe('site details: parts on the implant', () => {
     expect(screen.getAllByTestId('current-part').map((li) => li.textContent).join(' ')).not.toContain('Scan body');
   });
 });
+
+describe('site details: implant type and planned product', () => {
+  const implant = (id: string, system: string, length: number) => ({
+    id, type: 'implant', brand: 'Oxy', system, platform: '', diameter_mm: 4, length_mm: length, ref_code: id, description: '',
+  });
+  const conventional = implant('pc', 'PSK', 10);
+  const zygomatic = implant('pz', 'Zygo', 45);
+  const typed = (over: Record<string, unknown>) => ({
+    ...site, tooth: 14, implant_type: 'zygomatic', angulation_deg: 45, angulation_direction: 'distal', anchorage: 'zygoma',
+    entry_point: '', trajectory: '', product: zygomatic, planned_product: conventional, ...over,
+  }) as unknown as ImplantSite;
+
+  it('shows the type line, the planned product when it differs, and where an anchored implant emerges', () => {
+    render(<ImplantFacts site={typed({})} patientId="pt" data={chart(true)} />);
+    expect(screen.getByText('Zygomatic · 45° distal · Zygoma')).toBeInTheDocument();
+    expect(screen.getByText('Planned: Oxy PSK Ø4.0 × 10 mm')).toBeInTheDocument();
+    expect(screen.getByText('Emergence 14')).toBeInTheDocument();
+  });
+
+  it('no "Planned:" when the placed product is the planned one, and no emergence for a conventional implant', () => {
+    render(<ImplantFacts site={typed({ implant_type: 'conventional', angulation_deg: null, angulation_direction: null, anchorage: null, product: conventional })} patientId="pt" data={chart(true)} />);
+    expect(screen.queryByText(/^Planned:/)).toBeNull();
+    expect(screen.queryByText(/Emergence/)).toBeNull();
+    expect(screen.queryByText(/Zygomatic/)).toBeNull();
+  });
+});
