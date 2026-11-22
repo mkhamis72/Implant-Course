@@ -145,7 +145,6 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
   };
 }
 
-/** The spares each planned site's booking holds for its tooth (0125), by site id, in the order chosen. */
 /**
  * Each site's planned product, read by its own query: planned_product_id has no foreign key for now (0141), so
  * PostgREST can't embed it, and a second key to products would make older unhinted `products(*)` embeds ambiguous.
@@ -161,6 +160,7 @@ export async function withPlannedProducts(
   return sites.map((s) => ({ ...s, planned_product: (s.planned_product_id && byId.get(s.planned_product_id)) || null }));
 }
 
+/** The spares each planned site's booking holds for its tooth (0125), by site id, in the order chosen. */
 async function sparesBySite(
   supabase: Awaited<ReturnType<typeof createClient>>, sites: ImplantSite[],
 ): Promise<Record<string, Product[]>> {
