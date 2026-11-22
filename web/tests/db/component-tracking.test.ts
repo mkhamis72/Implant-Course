@@ -228,7 +228,7 @@ describe('components by role (0135)', () => {
       const screw = await fit3(c, s.site, 'prosthetic_screw', { holdsRestoration: own });
       expect(await one(c, 'select holds_restoration_id from public.site_components where id = $1', [screw]))
         .toEqual({ holds_restoration_id: own });
-      await refused(c, () => fit3(c, s.site, 'healing_cap', { holds: abutment }), /Only screws hold another part\./);
+      await refused(c, () => fit3(c, s.site, 'cover_screw', { holds: abutment }), /Only screws hold another part\./);
     });
   });
 
@@ -273,7 +273,7 @@ describe('components by role (0135)', () => {
       const s = await twoSites(c);
       const abutment = await fit3(c, s.site, 'ti_base');
       await fit3(c, s.site, 'abutment_screw', { holds: abutment });
-      await refused(c, () => undo(c, abutment), /Undo the screw that holds this part first\./);
+      await refused(c, () => undo(c, abutment), /Undo the part that sits on this one first\./);
     });
   });
 
@@ -429,6 +429,84 @@ describe('components by role: undo hardening (0137)', () => {
       await undo(c, newer);
       await undo(c, second);
       expect(await currentAt(c, s.site)).toEqual([first, screw].sort());
+    });
+  });
+});
+
+describe('healing cap on the abutment (0138)', () => {
+  it('a healing cap sits on the multi-unit abutment and does not close it', async () => {
+    await withTx(async (c) => {
+      const s = await twoSites(c);
+      const mua = await fit3(c, s.site, 'multi_unit');
+      const screw = await fit3(c, s.site, 'abutment_screw', { holds: mua });
+      const cap = await fit3(c, s.site, 'healing_cap', { holds: mua });
+      expect(await row(c, mua)).toMatchObject({ current: true, replaced_by: null });
+      expect(await currentAt(c, s.site)).toEqual([mua, screw, cap].sort());
+      expect(await one(c, 'select holds_component_id from public.site_components where id = $1', [cap]))
+        .toEqual({ holds_component_id: mua });
+      await asPostgres(c);
+      expect(await one(c, `select app_private.component_role('healing_cap') as role`)).toEqual({ role: 'cap' });
+      // The role moved from healing to cap: no site has two current healing caps.
+      const { rows } = await c.query(`select site_id from public.site_components
+        where removed_on is null and component_type = 'healing_cap' group by site_id having count(*) > 1`);
+      expect(rows).toEqual([]);
+    });
+  });
+
+  it('cap needs a current abutment', async () => {
+    await withTx(async (c) => {
+      const s = await twoSites(c);
+      await refused(c, () => fit3(c, s.site, 'healing_cap'), /Choose the abutment this cap sits on\./);
+      const healing = await fit3(c, s.site, 'healing_abutment');
+      await refused(c, () => fit3(c, s.site, 'healing_cap', { holds: healing }), /Choose the abutment this cap sits on\./);
+      const mua = await fit3(c, s.site, 'multi_unit');
+      const elsewhere = await fit3(c, s.other, 'multi_unit');
+      await refused(c, () => fit3(c, s.site, 'healing_cap', { holds: elsewhere }), /Choose the abutment this cap sits on\./);
+      await refused(c, () => fit3(c, s.site, 'healing_cap'), /Choose the abutment this cap sits on\./);
+      const crown = await restorationOn(c, s.patient, s.site);
+      await refused(c, () => fit3(c, s.site, 'healing_cap', { holds: mua, holdsRestoration: crown }),
+        /Choose the abutment this cap sits on\./);
+    });
+  });
+
+  it('replacing the abutment closes its cap', async () => {
+    await withTx(async (c) => {
+      const s = await twoSites(c);
+      const mua = await fit3(c, s.site, 'multi_unit');
+      const cap = await fit3(c, s.site, 'healing_cap', { holds: mua });
+      const next = await fit3(c, s.site, 'ti_base');
+      expect(await row(c, cap)).toMatchObject({ current: false, replaced_by: next });
+      expect(await currentAt(c, s.site)).toEqual([next]);
+      const mua2 = await fit3(c, s.other, 'multi_unit');
+      const cap2 = await fit3(c, s.other, 'healing_cap', { holds: mua2 });
+      const healing = await fit3(c, s.other, 'healing_abutment');
+      expect(await row(c, cap2)).toMatchObject({ current: false, replaced_by: healing });
+      expect(await currentAt(c, s.other)).toEqual([healing]);
+    });
+  });
+
+  it('a new cap replaces the old cap', async () => {
+    await withTx(async (c) => {
+      const s = await twoSites(c);
+      const mua = await fit3(c, s.site, 'multi_unit');
+      const screw = await fit3(c, s.site, 'abutment_screw', { holds: mua });
+      const first = await fit3(c, s.site, 'healing_cap', { holds: mua });
+      const second = await fit3(c, s.site, 'healing_cap', { holds: mua });
+      expect(await row(c, first)).toMatchObject({ current: false, replaced_by: second });
+      expect(await currentAt(c, s.site)).toEqual([mua, screw, second].sort());
+    });
+  });
+
+  it('undoing the abutment replacement brings the cap back', async () => {
+    await withTx(async (c) => {
+      const s = await twoSites(c);
+      const mua = await fit3(c, s.site, 'multi_unit');
+      const cap = await fit3(c, s.site, 'healing_cap', { holds: mua });
+      await refused(c, () => undo(c, mua), /Undo the part that sits on this one first\./);
+      const next = await fit3(c, s.site, 'ti_base');
+      await undo(c, next);
+      expect(await currentAt(c, s.site)).toEqual([mua, cap].sort());
+      expect(await row(c, cap)).toMatchObject({ current: true, replaced_by: null });
     });
   });
 });

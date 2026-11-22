@@ -37,7 +37,7 @@ export const productSchema = z
     angle_deg: optionalNumber(0, 45, 'Enter an angle between 0 and 45°.'),
     material: text(60),
     driver_interface: text(60),
-    driver_size: text(40),
+    driver_size: text(30),
     driver_ref: text(60),
     torque_ncm: optionalNumber(0, 150, TORQUE_MESSAGE),
   })
@@ -183,4 +183,8 @@ export const componentSchema = z
       return true;
     },
     { message: 'Choose what this screw holds.' },
+  )
+  .refine(
+    (c) => componentRole(c.componentType) !== 'cap' || (c.holdsComponentId !== null && c.holdsRestorationId === null),
+    { message: 'Choose the abutment this cap sits on.' },
   );

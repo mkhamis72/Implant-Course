@@ -18,7 +18,7 @@ import { Complications } from './complications';
 import { FailureBox } from './failure-box';
 import { ImpressionControl } from './impression-control';
 
-/** What a screw holds, named: "Multi-unit abutment" or "Full arch 15–25 (final)". */
+/** What a screw holds (or a cap sits on), named: "Multi-unit abutment" or "Full arch 15–25 (final)". */
 function holderOf(c: SiteComponent, site: ImplantSite, restorations: Restoration[]): string | null {
   if (c.holds_component_id) {
     const held = site.components.find((x) => x.id === c.holds_component_id);
@@ -49,7 +49,7 @@ function CurrentParts({ site, restorations }: { site: ImplantSite; restorations:
                 <span className="font-medium text-ink">{partLabel(c)}</span>
                 {c.product && <span className="text-muted"> · {productLabel(c.product)}</span>}
                 {c.torque_ncm !== null && <span> · Torque: {c.torque_ncm} Ncm</span>}
-                {holder && <span> · holds {holder}</span>}
+                {holder && <span> · {componentRole(c.component_type) === 'cap' ? 'on' : 'holds'} {holder}</span>}
                 {specs && <span className="block text-xs text-muted">{specs}</span>}
               </li>
             );

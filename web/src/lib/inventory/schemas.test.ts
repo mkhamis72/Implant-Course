@@ -114,6 +114,17 @@ describe('product specs and screw holders', () => {
     expect(err(componentSchema.safeParse({ ...c, componentType: 'abutment_screw', holdsRestorationId: id }))).toBe(msg);
     expect(err(componentSchema.safeParse({ ...c, componentType: 'prosthetic_screw', holdsComponentId: id, holdsRestorationId: id }))).toBe(msg);
   });
+  it('a cap sits on the abutment', () => {
+    const msg = 'Choose the abutment this cap sits on.';
+    expect(err(componentSchema.safeParse({ ...c, componentType: 'healing_cap' }))).toBe(msg);
+    expect(err(componentSchema.safeParse({ ...c, componentType: 'healing_cap', holdsRestorationId: id }))).toBe(msg);
+    expect(err(componentSchema.safeParse({ ...c, componentType: 'healing_cap', holdsComponentId: id, holdsRestorationId: id }))).toBe(msg);
+    expect(componentSchema.safeParse({ ...c, componentType: 'healing_cap', holdsComponentId: id }).success).toBe(true);
+  });
+  it('refuses a screwdriver size over 30 characters', () => {
+    expect(productSchema.safeParse({ ...base, driver_size: 'x'.repeat(30) }).success).toBe(true);
+    expect(productSchema.safeParse({ ...base, driver_size: 'x'.repeat(31) }).success).toBe(false);
+  });
 });
 
 describe('linkedProductSchema (0128)', () => {

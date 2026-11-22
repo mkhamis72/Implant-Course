@@ -94,6 +94,15 @@ describe('site details: parts on the implant', () => {
     expect(items[2]).toContain('holds Full arch 15–25 (final)');
   });
 
+  it('shows a healing cap as on the abutment, after it', () => {
+    const capped = { ...withParts, components: [...withParts.components, part({ id: 'cap', component_type: 'healing_cap', holds_component_id: 'mua' })] } as unknown as ImplantSite;
+    render(<ImplantFacts site={capped} patientId="pt" data={data} />);
+    const items = screen.getAllByTestId('current-part').map((li) => li.textContent);
+    expect(items[1]).toContain('Healing cap');
+    expect(items[1]).toContain('on Multi-unit abutment');
+    expect(items[1]).not.toContain('holds');
+  });
+
   it('shows the replaced screw and the scan body only in the history', () => {
     render(<ImplantFacts site={withParts} patientId="pt" data={data} />);
     const history = screen.getByTestId('component-history');

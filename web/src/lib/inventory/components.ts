@@ -23,7 +23,7 @@ export function acceptsProduct(component: ComponentType, product: ProductType): 
 }
 
 const ROLES: Record<ComponentType, ComponentRole> = {
-  cover_screw: 'healing', healing_abutment: 'healing', healing_cap: 'healing',
+  cover_screw: 'healing', healing_abutment: 'healing', healing_cap: 'cap',
   ti_base: 'abutment', multi_unit: 'abutment', abutment: 'abutment', temporary_abutment: 'abutment',
   abutment_screw: 'abutment_screw', prosthetic_screw: 'prosthetic_screw', temporary_cylinder_screw: 'prosthetic_screw',
   scan_body: 'transfer', impression_coping: 'transfer', final_restoration: 'legacy',
@@ -34,9 +34,9 @@ export function componentRole(type: ComponentType): ComponentRole {
   return ROLES[type];
 }
 
-const CURRENT_ORDER: ComponentRole[] = ['healing', 'abutment', 'abutment_screw', 'prosthetic_screw'];
+const CURRENT_ORDER: ComponentRole[] = ['healing', 'abutment', 'cap', 'abutment_screw', 'prosthetic_screw'];
 
-/** The parts on the implant now (not closed, not voided): healing, abutment, abutment screw, prosthetic screw. */
+/** The parts on the implant now (not closed, not voided): healing, abutment, cap, abutment screw, prosthetic screw. */
 export function currentComponents(site: ImplantSite): SiteComponent[] {
   return CURRENT_ORDER.flatMap((role) =>
     site.components.filter((c) => c.removed_on === null && c.voided_at === null && componentRole(c.component_type) === role),
@@ -59,9 +59,10 @@ export function partLabel(c: SiteComponent): string {
   return `${COMPONENT_LABELS[c.component_type]} — ${used}${formatDate(c.fitted_on)}`;
 }
 
-/** What void_component accepts: the current parts, then the transfers; `latest` is the last fitted of them. */
+/** What void_component accepts: the current parts, a current old crown record, then the transfers; `latest` is the last fitted of them. */
 export function undoableComponents(site: ImplantSite): { options: SiteComponent[]; latest: SiteComponent | null } {
-  const options = [...currentComponents(site), ...transferComponents(site)];
+  const legacy = site.components.filter((c) => c.removed_on === null && c.voided_at === null && componentRole(c.component_type) === 'legacy');
+  const options = [...currentComponents(site), ...legacy, ...transferComponents(site)];
   // site.components is in fitting order (chart-data sorts it), so among equal dates the later one wins.
   const order = (c: SiteComponent) => site.components.indexOf(c);
   const latest = options.reduce<SiteComponent | null>(
@@ -70,7 +71,6 @@ export function undoableComponents(site: ImplantSite): { options: SiteComponent[
   );
   return { options, latest };
 }
-
 
 export function activeSite(sites: readonly ImplantSite[], tooth: number): ImplantSite | null {
   return sites.find((s) => s.tooth === tooth && (s.state === 'planned' || s.state === 'placed' || s.state === 'restored')) ?? null;

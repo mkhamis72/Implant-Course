@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { acceptsProduct, activeSite, badgesFor, componentRole, currentComponent, currentComponents, lastFollowup, partLabel, transferComponents, undoableComponents } from './components';
-import type { ImplantSite, SiteComponent } from './types';
+import { COMPONENT_ROLE_LABELS, type ImplantSite, type SiteComponent } from './types';
 
 const comp = (type: SiteComponent['component_type'], removed_on: string | null): SiteComponent => ({
   id: type, component_type: type, fitted_on: '2026-01-01', removed_on, notes: '', product: null, lot: null, course_id: null,
@@ -51,7 +51,7 @@ describe('component rules', () => {
 describe('component roles', () => {
   it('maps every type like app_private.component_role', () => {
     const expected = {
-      cover_screw: 'healing', healing_abutment: 'healing', healing_cap: 'healing',
+      cover_screw: 'healing', healing_abutment: 'healing', healing_cap: 'cap',
       ti_base: 'abutment', multi_unit: 'abutment', abutment: 'abutment', temporary_abutment: 'abutment',
       abutment_screw: 'abutment_screw', prosthetic_screw: 'prosthetic_screw', temporary_cylinder_screw: 'prosthetic_screw',
       scan_body: 'transfer', impression_coping: 'transfer', final_restoration: 'legacy',
@@ -74,9 +74,15 @@ describe('component roles', () => {
     expect(currentComponent(s)?.component_type).toBe('ti_base');
     expect(currentComponent(site(36, 'placed', [comp('abutment_screw', null)]))).toBeNull();
   });
+  it('lists the cap after the abutment and before the screws', () => {
+    const s = site(36, 'placed', [comp('prosthetic_screw', null), comp('healing_cap', null), comp('abutment_screw', null), comp('multi_unit', null)]);
+    expect(currentComponents(s).map((c) => c.component_type)).toEqual(['multi_unit', 'healing_cap', 'abutment_screw', 'prosthetic_screw']);
+    expect(COMPONENT_ROLE_LABELS.cap).toBe('Cap');
+  });
   it('shows MUA with an abutment screw also current', () => {
     expect(badgesFor([site(36, 'placed', [comp('abutment_screw', null), comp('multi_unit', null)])])).toEqual({ 36: 'MUA' });
-    expect(badgesFor([site(36, 'placed', [comp('healing_cap', null)])])).toEqual({ 36: 'HC' });
+    // A healing cap sits on the abutment: the chart still shows the abutment.
+    expect(badgesFor([site(36, 'placed', [comp('multi_unit', null), comp('healing_cap', null)])])).toEqual({ 36: 'MUA' });
   });
 });
 
@@ -111,5 +117,12 @@ describe('parts for the panel and corrections', () => {
     const { options, latest } = undoableComponents(site(36, 'placed', parts));
     expect(options.map((c) => c.id)).toEqual(['multi_unit', 'abutment_screw', 'scan_body']);
     expect(latest?.id).toBe('abutment_screw');
+  });
+  it('offers a current old crown record (final_restoration) for undo', () => {
+    const s = site(36, 'restored', [comp('healing_abutment', '2026-01-01'), comp('final_restoration', null)]);
+    const { options, latest } = undoableComponents(s);
+    expect(options.map((c) => c.id)).toEqual(['final_restoration']);
+    expect(latest?.id).toBe('final_restoration');
+    expect(partLabel(options[0])).toBe('Final restoration — 01 Jan 2026');
   });
 });

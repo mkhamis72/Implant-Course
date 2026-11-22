@@ -443,16 +443,16 @@ export function PlaceForm({
 }
 
 // Crowns and bridges are recorded on the Restoration tab; final_restoration stays for old records only.
-const FORM_ROLES: ComponentRole[] = ['healing', 'abutment', 'abutment_screw', 'prosthetic_screw', 'transfer'];
+const FORM_ROLES: ComponentRole[] = ['healing', 'abutment', 'cap', 'abutment_screw', 'prosthetic_screw', 'transfer'];
 
-/** What a screw can hold: the implant's current abutment and, for a prosthetic screw, its current restorations. */
+/** What a screw can hold (or a cap sit on): the implant's current abutment and, for a prosthetic screw, its current restorations. */
 function holdsOptions(site: ImplantSite, data: ChartData, type: ComponentType): { value: string; label: string }[] {
   const role = componentRole(type);
-  if (role !== 'abutment_screw' && role !== 'prosthetic_screw') return [];
+  if (role !== 'abutment_screw' && role !== 'prosthetic_screw' && role !== 'cap') return [];
   const abutments = currentComponents(site)
     .filter((c) => componentRole(c.component_type) === 'abutment')
     .map((c) => ({ value: `component:${c.id}`, label: partLabel(c) }));
-  if (role === 'abutment_screw') return abutments;
+  if (role !== 'prosthetic_screw') return abutments;
   const restorations = screwHoldableRestorations(site.id, data.restorations ?? [])
     .map((r) => ({ value: `restoration:${r.id}`, label: restorationLabel(r) }));
   return [...abutments, ...restorations];
@@ -479,6 +479,7 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
   const holds = holdsOptions(site, data, v.componentType);
   const role = componentRole(v.componentType);
   const isScrew = role === 'abutment_screw' || role === 'prosthetic_screw';
+  const isCap = role === 'cap';
   // The torque is checked here too, so a wrong value is named before anything is sent.
   const { error, pending, submit } = useSubmit(async (input) => {
     const torque = componentTorque.safeParse(input.torque);
@@ -492,7 +493,7 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
         patientId, siteId: site.id, ...v,
         ...(data.teachingOn ? {} : { courseId: null, byDelegateId: null }),
         lotId: data.inventoryOn ? v.lotId : null,
-        holdsComponentId: isScrew && holdsKind === 'component' ? holdsId : null,
+        holdsComponentId: (isScrew || isCap) && holdsKind === 'component' ? holdsId : null,
         holdsRestorationId: isScrew && holdsKind === 'restoration' ? holdsId : null,
       });
     }}>
@@ -516,12 +517,23 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
       {isScrew && (
         <>
           <Field label="Holds" required>
-            <select className="input" aria-required="true" value={v.holds} onChange={(e) => set('holds')(e.target.value)}>
+            <select className="input" required aria-required="true" value={v.holds} onChange={(e) => set('holds')(e.target.value)}>
               <option value="">Choose what it holds…</option>
               {holds.map((h) => <option key={h.value} value={h.value}>{h.label}</option>)}
             </select>
           </Field>
           {holds.length === 0 && <p className="text-sm text-warn">Nothing on this implant for the screw to hold: record the abutment{role === 'prosthetic_screw' ? ' or the restoration' : ''} first.</p>}
+        </>
+      )}
+      {isCap && (
+        <>
+          <Field label="Sits on" required>
+            <select className="input" required aria-required="true" value={v.holds} onChange={(e) => set('holds')(e.target.value)}>
+              <option value="">Choose the abutment…</option>
+              {holds.map((h) => <option key={h.value} value={h.value}>{h.label}</option>)}
+            </select>
+          </Field>
+          {holds.length === 0 && <p className="text-sm text-warn">No abutment on this implant for the cap to sit on: record the abutment first.</p>}
         </>
       )}
       <Field label="Torque (Ncm)">

@@ -426,7 +426,7 @@ describe('<ComponentForm> screws, torque and specs', () => {
   it('groups the component types by role', () => {
     render(<ComponentForm patientId="pt" site={site} data={screwData} onDone={() => {}} />);
     const select = screen.getByRole('combobox', { name: 'Component' });
-    expect([...select.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(['Healing', 'Abutment', 'Abutment screw', 'Prosthetic screw', 'Scan / impression']);
+    expect([...select.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(['Healing', 'Abutment', 'Cap', 'Abutment screw', 'Prosthetic screw', 'Scan / impression']);
   });
 
   it('a prosthetic screw needs Holds, listing the abutment and the current restoration, and sends the restoration', async () => {
@@ -437,6 +437,7 @@ describe('<ComponentForm> screws, torque and specs', () => {
     choose('Component', 'prosthetic_screw');
     const holds = screen.getByRole('combobox', { name: /^Holds/ });
     expect(holds).toHaveAttribute('aria-required', 'true');
+    expect(holds).toBeRequired();
     expect(within(holds).getAllByRole('option').map((o) => o.textContent)).toEqual([
       'Choose what it holds…', 'Multi-unit abutment — 01 Jun 2030', 'Full arch 15–25 (final)',
     ]);
@@ -453,6 +454,22 @@ describe('<ComponentForm> screws, torque and specs', () => {
     choose('Component', 'abutment_screw');
     expect(within(screen.getByRole('combobox', { name: /^Holds/ })).getAllByRole('option').map((o) => o.textContent))
       .toEqual(['Choose what it holds…', 'Multi-unit abutment — 01 Jun 2030']);
+  });
+
+  it('a healing cap sits on the current abutment only, and sends it', async () => {
+    const { fitComponent } = await import('./implant-actions');
+    vi.mocked(fitComponent).mockResolvedValue({});
+    render(<ComponentForm patientId="pt" site={site} data={screwData} onDone={() => {}} />);
+    choose('Component', 'healing_cap');
+    expect(screen.queryByRole('combobox', { name: /^Holds/ })).not.toBeInTheDocument();
+    const on = screen.getByRole('combobox', { name: /^Sits on/ });
+    expect(on).toBeRequired();
+    expect(within(on).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose the abutment…', 'Multi-unit abutment — 01 Jun 2030']);
+    fireEvent.change(on, { target: { value: 'component:mua' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save component' }));
+    await vi.waitFor(() => expect(vi.mocked(fitComponent).mock.calls.at(-1)?.[0]).toMatchObject({
+      componentType: 'healing_cap', holdsComponentId: 'mua', holdsRestorationId: null,
+    }));
   });
 
   it('shows the chosen product specs', () => {

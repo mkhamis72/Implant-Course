@@ -77,9 +77,9 @@ export const COMPONENT_BADGES: Record<ComponentType, string> = {
 };
 
 /** What a component is for (mirrors app_private.component_role). */
-export type ComponentRole = 'healing' | 'abutment' | 'abutment_screw' | 'prosthetic_screw' | 'transfer' | 'legacy';
+export type ComponentRole = 'healing' | 'abutment' | 'cap' | 'abutment_screw' | 'prosthetic_screw' | 'transfer' | 'legacy';
 export const COMPONENT_ROLE_LABELS: Record<ComponentRole, string> = {
-  healing: 'Healing', abutment: 'Abutment', abutment_screw: 'Abutment screw', prosthetic_screw: 'Prosthetic screw',
+  healing: 'Healing', abutment: 'Abutment', cap: 'Cap', abutment_screw: 'Abutment screw', prosthetic_screw: 'Prosthetic screw',
   transfer: 'Scan / impression', legacy: 'Final restoration (old record)',
 };
 
