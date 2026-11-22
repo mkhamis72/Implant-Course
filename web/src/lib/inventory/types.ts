@@ -10,6 +10,7 @@ import type { Enrollment } from './enrolled';
 export const PRODUCT_TYPES = [
   'implant', 'cover_screw', 'healing_abutment', 'graft', 'membrane', 'ti_base', 'multi_unit',
   'abutment_straight', 'abutment_angled', 'scan_body', 'impression_coping', 'analog', 'prosthetic_screw', 'other',
+  'healing_cap', 'temporary_abutment', 'abutment_screw',
 ] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
 
@@ -17,7 +18,8 @@ export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
   implant: 'Implant', cover_screw: 'Cover screw', healing_abutment: 'Healing abutment', graft: 'Bone graft',
   membrane: 'Membrane', ti_base: 'Ti-base', multi_unit: 'Multi-unit abutment', abutment_straight: 'Straight abutment',
   abutment_angled: 'Angled abutment', scan_body: 'Scan body', impression_coping: 'Impression coping', analog: 'Lab analog',
-  prosthetic_screw: 'Prosthetic screw', other: 'Other',
+  prosthetic_screw: 'Prosthetic screw', other: 'Other', healing_cap: 'Healing cap', temporary_abutment: 'Temporary abutment',
+  abutment_screw: 'Abutment screw',
 };
 
 export type Product = {
@@ -36,6 +38,15 @@ export type Product = {
   is_sample: boolean;
   /** Switched on from the catalogue library (0128): its catalogue fields are locked. */
   catalog_item_id?: string | null;
+  /** Specs (0134): text is empty and numbers null when not given. */
+  connection: string;
+  gingival_height_mm: number | null;
+  angle_deg: number | null;
+  material: string;
+  driver_interface: string;
+  driver_size: string;
+  driver_ref: string;
+  torque_ncm: number | null;
 };
 
 export type LotOnHand = {
@@ -48,14 +59,28 @@ export type LotOnHand = {
   on_hand: number;
 };
 
-export const COMPONENT_TYPES = ['cover_screw', 'healing_abutment', 'ti_base', 'multi_unit', 'abutment', 'final_restoration'] as const;
+export const COMPONENT_TYPES = [
+  'cover_screw', 'healing_abutment', 'healing_cap', 'ti_base', 'multi_unit', 'abutment', 'temporary_abutment', 'scan_body',
+  'impression_coping', 'abutment_screw', 'prosthetic_screw', 'temporary_cylinder_screw', 'final_restoration',
+] as const;
 export type ComponentType = (typeof COMPONENT_TYPES)[number];
 export const COMPONENT_LABELS: Record<ComponentType, string> = {
-  cover_screw: 'Cover screw', healing_abutment: 'Healing abutment', ti_base: 'Ti-base', multi_unit: 'Multi-unit abutment',
-  abutment: 'Abutment', final_restoration: 'Final restoration',
+  cover_screw: 'Cover screw', healing_abutment: 'Healing abutment', healing_cap: 'Healing cap', ti_base: 'Ti-base',
+  multi_unit: 'Multi-unit abutment', abutment: 'Abutment', temporary_abutment: 'Temporary abutment', scan_body: 'Scan body',
+  impression_coping: 'Impression coping', abutment_screw: 'Abutment screw', prosthetic_screw: 'Prosthetic screw',
+  temporary_cylinder_screw: 'Temporary cylinder screw', final_restoration: 'Final restoration',
 };
 export const COMPONENT_BADGES: Record<ComponentType, string> = {
-  cover_screw: 'CS', healing_abutment: 'HA', ti_base: 'TB', multi_unit: 'MUA', abutment: 'AB', final_restoration: 'CR',
+  cover_screw: 'CS', healing_abutment: 'HA', healing_cap: 'HC', ti_base: 'TB', multi_unit: 'MUA', abutment: 'AB',
+  temporary_abutment: 'TA', scan_body: '', impression_coping: '', abutment_screw: '', prosthetic_screw: '',
+  temporary_cylinder_screw: '', final_restoration: 'CR',
+};
+
+/** What a component is for (mirrors app_private.component_role). */
+export type ComponentRole = 'healing' | 'abutment' | 'cap' | 'abutment_screw' | 'prosthetic_screw' | 'transfer' | 'legacy';
+export const COMPONENT_ROLE_LABELS: Record<ComponentRole, string> = {
+  healing: 'Healing', abutment: 'Abutment', cap: 'Cap', abutment_screw: 'Abutment screw', prosthetic_screw: 'Prosthetic screw',
+  transfer: 'Scan / impression', legacy: 'Final restoration (old record)',
 };
 
 export const SITE_STATES = ['planned', 'placed', 'restored', 'failed', 'removed'] as const;
@@ -97,6 +122,15 @@ export type SiteComponent = {
   course_id: string | null;
   voided_at: string | null;
   voided_reason: string;
+  /** Torque the part was tightened to (0135). */
+  torque_ncm: number | null;
+  /** A screw: the abutment or the restoration it holds. */
+  holds_component_id: string | null;
+  holds_restoration_id: string | null;
+  /** The component that took this one's place. */
+  replaced_by: string | null;
+  /** When it was recorded: orders parts fitted on the same day. */
+  created_at?: string;
 };
 
 export type Followup = VisitFindings & {

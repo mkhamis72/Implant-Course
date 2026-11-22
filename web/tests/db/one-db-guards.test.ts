@@ -29,7 +29,7 @@ const PARENT_SCOPED_UNIQUES = new Set<string>([
   'patient_consents_file_id_key', // one consent per stored file
   'radiograph_bone_levels_pkey', // within one radiograph
   'restoration_sites_pkey', // within one restoration
-  'site_components_one_current', // within one implant
+  'site_components_one_current_role', // within one implant
   'slot_delegates_slot_id_delegate_id_key', // within one booking
   'slot_planned_implants_slot_id_tooth_key', // within one booking
   'slot_spare_implants_slot_id_tooth_product_id_key', // within one booking

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { acceptsProduct, currentComponent } from '@/lib/inventory/components';
+import { acceptsProduct, partLabel, undoableComponents } from '@/lib/inventory/components';
 import { delegatesForCourse, keepIfEnrolled, withRecordedDelegate } from '@/lib/inventory/enrolled';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
 import { COMPONENT_LABELS, type ChartData, type ImplantSite, type LotOnHand } from '@/lib/inventory/types';
@@ -243,7 +243,10 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
   const [removeReason, setRemoveReason] = useState('');
   const [confirmRemove, setConfirmRemove] = useState(false);
 
-  const current = currentComponent(site);
+  // Any current part, or a scan body / impression coping, can be undone (void_component reopens what it replaced).
+  const undoable = undoableComponents(site);
+  const [undoId, setUndoId] = useState(undoable.latest?.id ?? '');
+  const undoTarget = undoable.options.find((c) => c.id === undoId) ?? undoable.latest;
   const products = component
     ? data.componentProducts.filter((p) => acceptsProduct(component.component_type, p.type))
     : data.implants;
@@ -342,9 +345,14 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
             )}
           </div>
         )}
-        {current && site.state !== 'failed' && (
+        {undoTarget && site.state !== 'failed' && (
           <div className="space-y-2">
-            <p>Current component: {COMPONENT_LABELS[current.component_type]} ({formatDate(current.fitted_on)})</p>
+            <label className="block">
+              <span className="label">Component to undo</span>
+              <select className="input" value={undoTarget.id} onChange={(e) => setUndoId(e.target.value)}>
+                {undoable.options.map((c) => <option key={c.id} value={c.id}>{partLabel(c)}</option>)}
+              </select>
+            </label>
             <label className="block">
               <span className="label">Reason for undoing the component</span>
               <input className="input" value={componentReason} onChange={(e) => setComponentReason(e.target.value)} />
@@ -353,9 +361,13 @@ export function Corrections({ patientId, site, data, bare = false }: { patientId
               type="button"
               className="btn-secondary btn"
               disabled={pending}
-              onClick={() => run(() => voidComponent({ id: current.id, patientId, reason: componentReason }))}
+              onClick={() => run(async () => {
+                const r = await voidComponent({ id: undoTarget.id, patientId, reason: componentReason });
+                if (!r.error) { setUndoId(''); setComponentReason(''); }
+                return r;
+              })}
             >
-              Undo current component
+              Undo component
             </button>
           </div>
         )}

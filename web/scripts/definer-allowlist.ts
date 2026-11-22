@@ -46,5 +46,8 @@ export const DEFINER_ALLOWLIST: ReadonlySet<string> = new Set([
   // Modules (0109): the console's plan writes, service role only
   'public.console_save_plan',
   'public.console_set_company_plan',
+  // Catalogue library (0134): a library item's spec update reaches every company's linked products, also from
+  // catalog:load with no session or company.
+  'app_private.sync_catalog_specs',
   // The console / service-role functions that later plan-3 tasks add join this list there.
 ]);

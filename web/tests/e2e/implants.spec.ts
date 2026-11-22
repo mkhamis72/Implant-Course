@@ -225,3 +225,65 @@ test('records a digital scan and finds the patient by it', async ({ page }) => {
   await page.goto(`/patients?stage=impression_pending&q=${encodeURIComponent(name)}`);
   await expect(page.getByRole('row', { name: new RegExp(name) })).toHaveCount(0);
 });
+
+test('fits a multi-unit with its screws and replaces the prosthetic screw: current parts, torque, specs and history', async ({ page }) => {
+  const s = await setup(page);
+  const mua = await seedComponent(s.api, 'multi_unit', `${s.brand} MUA`, 1);
+  const abutmentScrew = await seedComponent(s.api, 'abutment_screw', `${s.brand} AS`, 1);
+  const screw = await seedComponent(s.api, 'prosthetic_screw', `${s.brand} PS`, 2);
+  const { error } = await s.api.from('products').update({ driver_interface: 'Hex', driver_size: '1.25 mm' }).eq('id', screw.productId);
+  expect(error).toBeNull();
+  await placeOn(page, s, 36);
+
+  const fit = async (type: string, productId: string, torque: string, holds?: string | RegExp) => {
+    await panel(page).getByRole('tab', { name: 'Implant' }).click();
+    await panel(page).getByRole('button', { name: 'Add component' }).click();
+    await page.getByRole('combobox', { name: 'Component', exact: true }).selectOption(type);
+    await page.getByLabel('Product (optional)').selectOption(productId);
+    await page.getByRole('radiogroup', { name: 'Stock batch' }).getByRole('radio').first().check();
+    if (holds) {
+      const select = page.getByRole('combobox', { name: 'Holds' });
+      const value = await select.locator('option').filter({ hasText: holds }).getAttribute('value');
+      await select.selectOption(value!);
+    }
+    await page.getByLabel('Torque (Ncm)', { exact: true }).fill(torque);
+  };
+
+  await fit('multi_unit', mua.productId, '30');
+  await page.getByRole('button', { name: 'Save component' }).click();
+  await expect(page.getByRole('button', { name: 'Tooth 36, Implant placed, MUA' })).toBeVisible();
+
+  await fit('abutment_screw', abutmentScrew.productId, '25', /^Multi-unit abutment/);
+  await page.getByRole('button', { name: 'Save component' }).click();
+  await expect(panel(page).getByTestId('current-part')).toHaveCount(2);
+
+  await panel(page).getByRole('tab', { name: 'Restoration' }).click();
+  await panel(page).getByRole('button', { name: 'Add restoration' }).click();
+  await panel(page).getByRole('combobox', { name: /Stage/ }).selectOption('temporary');
+  await panel(page).getByRole('combobox', { name: /Type/ }).selectOption('single_crown');
+  await panel(page).getByRole('button', { name: 'Save restoration' }).click();
+  await expect(panel(page).getByTestId('restoration')).toHaveCount(1);
+
+  await fit('prosthetic_screw', screw.productId, '15', 'Single crown 36 (temporary)');
+  await expect(page.getByText('Screwdriver: Hex 1.25 mm')).toBeVisible();
+  await page.getByRole('button', { name: 'Save component' }).click();
+  await expect(panel(page).getByTestId('current-part')).toHaveCount(3);
+
+  // The screw is replaced: the new one holds the same crown, the old one moves to the history.
+  await fit('prosthetic_screw', screw.productId, '15', 'Single crown 36 (temporary)');
+  await page.getByRole('button', { name: 'Save component' }).click();
+  await expect(panel(page).getByTestId('component-history')).toContainText('replaced on');
+
+  await page.reload();
+  await page.getByRole('button', { name: /^Tooth 36, Implant placed/ }).click();
+  await panel(page).getByRole('tab', { name: 'Implant' }).click();
+  const parts = panel(page).getByTestId('current-part');
+  await expect(parts).toHaveCount(3);
+  await expect(parts.nth(0)).toContainText('Multi-unit abutment');
+  await expect(parts.nth(0)).toContainText('Torque: 30 Ncm');
+  await expect(parts.nth(1)).toContainText('holds Multi-unit abutment');
+  await expect(parts.nth(2)).toContainText('holds Single crown 36 (temporary)');
+  await expect(parts.nth(2)).toContainText('Torque: 15 Ncm');
+  await expect(parts.nth(2)).toContainText('Screwdriver: Hex 1.25 mm');
+  await expect(panel(page).getByTestId('component-history').getByRole('listitem').filter({ hasText: 'Prosthetic screw' }).first()).toContainText('replaced on');
+});

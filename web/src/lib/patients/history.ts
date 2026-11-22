@@ -47,6 +47,9 @@ const RADIOGRAPH_FIELD_LABELS: Record<string, string> = {
   taken_on: 'date', type: 'type', purpose: 'purpose', teeth: 'teeth', link: 'link', notes: 'notes',
 };
 
+/** Component details (0135): the torque a part was tightened to and what a screw holds. */
+const COMPONENT_FIELD_LABELS: Record<string, string> = { torque_ncm: 'torque', holds_component_id: 'holds', holds_restoration_id: 'holds' };
+
 const IMPRESSION_FIELD_LABELS: Record<string, string> = { impression_type: 'scan / impression', impression_taken_on: 'scan / impression date' };
 
 function changedFields(
@@ -68,9 +71,19 @@ function stateLabel(value: unknown): string {
  * Link rows that only repeat what their restoration entry already says (the row holds no tooth to name), and the
  * step of remove_placement that stores the reason just before the implant is deleted (its delete says it all).
  */
+/** fit_component_v3 closes a row, then sets its replaced_by: the closing update alone says nothing the next one doesn't. */
+function onlyClosed(e: HistoryEntry): boolean {
+  if (e.action !== 'UPDATE' || !e.before || !e.after) return false;
+  const { before, after } = e;
+  const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])]
+    .filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+  return changed.length === 1 && changed[0] === 'removed_on' && before.removed_on == null && after.removed_on != null;
+}
+
 export const isHiddenFromHistory = (e: HistoryEntry) =>
   e.table_name === 'restoration_sites'
-  || (e.table_name === 'implant_sites' && e.action === 'UPDATE' && !!e.after?.removal_reason && !e.before?.removal_reason);
+  || (e.table_name === 'implant_sites' && e.action === 'UPDATE' && !!e.after?.removal_reason && !e.before?.removal_reason)
+  || (e.table_name === 'site_components' && onlyClosed(e));
 
 /** `teaching: false` (a clinic) leaves out the teaching details (delegate, assisted by, supervisor, course). */
 export function describeChange(e: HistoryEntry, { teaching = true }: { teaching?: boolean } = {}): string {
@@ -136,7 +149,13 @@ export function describeChange(e: HistoryEntry, { teaching = true }: { teaching?
       const row = e.after ?? e.before;
       const label = COMPONENT_LABELS[row?.component_type as ComponentType] ?? String(row?.component_type);
       if (e.after?.voided_at && !e.before?.voided_at) return `Component removed from the record: ${label} (${e.after.voided_reason})`;
-      return e.action === 'INSERT' ? `Component fitted: ${label}` : `Component updated: ${label}`;
+      if (e.action === 'INSERT') return `Component fitted: ${label}`;
+      if (e.after?.replaced_by && !e.before?.replaced_by) return `Component replaced: ${label}`;
+      if (e.before?.removed_on && e.before?.replaced_by && e.after && e.after.removed_on == null && e.after.replaced_by == null) {
+        return `Component back in place: ${label}`;
+      }
+      const changed = changedFields(e.before, e.after, COMPONENT_FIELD_LABELS);
+      return changed.length ? `Component updated: ${label} (${changed.join(', ')})` : `Component updated: ${label}`;
     }
     case 'implant_followups': {
       const row = e.after ?? e.before;

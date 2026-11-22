@@ -93,6 +93,16 @@ export function currentRestoration(siteId: string, all: Restoration[]): Restorat
   return all.find((r) => isCurrent(r) && r.site_ids.includes(siteId)) ?? null;
 }
 
+/** "Full arch 15–25 (final)": what a prosthetic screw holds. */
+export function restorationLabel(r: Pick<Restoration, 'type' | 'teeth' | 'stage'>): string {
+  return `${RESTORATION_TYPE_LABELS[r.type]} ${describeTeeth(r.teeth)} (${STAGE_LABELS[r.stage].toLowerCase()})`;
+}
+
+/** The current restorations sitting on this implant (the list is already free of voided ones): a prosthetic screw can hold them. */
+export function screwHoldableRestorations(siteId: string, all: Restoration[]): Restoration[] {
+  return all.filter((r) => isCurrent(r) && r.site_ids.includes(siteId));
+}
+
 /** A current restoration as the odontogram draws it: one bar under `teeth`. */
 export type RestorationSpan = { id: string; teeth: number[]; implantTeeth: number[]; label: string; temporary: boolean };
 

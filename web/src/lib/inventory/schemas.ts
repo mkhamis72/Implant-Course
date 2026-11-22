@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { isRealDate, todayIso } from '@/lib/dates';
 import { isFdiTooth } from '@/lib/patients/fdi';
 import { COMPONENT_TYPES, PRODUCT_TYPES, TECHNIQUES } from './types';
+import { componentRole } from './components';
 import { blankToNull, optionalUuid } from '@/lib/form-values';
 
 const requiredId = (message: string) => z.string({ message }).uuid({ message });
@@ -16,6 +17,10 @@ const reorderLevel = z.preprocess(
   z.number().int().min(0).max(10000, { message: 'Enter a reorder level between 0 and 10000.' }),
 );
 
+const TORQUE_MESSAGE = 'Enter a torque between 0 and 150 Ncm.';
+/** A component's torque (Ncm), optional; the Component form checks it before sending. */
+export const componentTorque = optionalNumber(0, 150, TORQUE_MESSAGE);
+
 export const productSchema = z
   .object({
     type: z.enum(PRODUCT_TYPES, { message: 'Choose the product type.' }),
@@ -27,6 +32,14 @@ export const productSchema = z
     ref_code: text(60),
     description: text(200),
     reorder_level: reorderLevel,
+    connection: text(60),
+    gingival_height_mm: optionalNumber(0, 10, 'Enter a gingival height between 0 and 10 mm.'),
+    angle_deg: optionalNumber(0, 45, 'Enter an angle between 0 and 45°.'),
+    material: text(60),
+    driver_interface: text(60),
+    driver_size: text(30),
+    driver_ref: text(60),
+    torque_ncm: optionalNumber(0, 150, TORQUE_MESSAGE),
   })
   .refine((p) => p.type !== 'implant' || (p.diameter_mm !== null && p.length_mm !== null), {
     message: 'Implants need a diameter and a length.',
@@ -156,6 +169,22 @@ export const componentSchema = z
     byDelegateId: optionalUuid,
     byOrganizerId: optionalUuid,
     courseId: optionalUuid,
+    torque: componentTorque,
+    holdsComponentId: optionalUuid,
+    holdsRestorationId: optionalUuid,
     notes: text(1000),
   })
-  .refine((c) => c.byDelegateId !== null || c.byOrganizerId !== null, { message: 'Choose who fitted the component.' });
+  .refine((c) => c.byDelegateId !== null || c.byOrganizerId !== null, { message: 'Choose who fitted the component.' })
+  .refine(
+    (c) => {
+      const role = componentRole(c.componentType);
+      if (role === 'abutment_screw') return c.holdsComponentId !== null && c.holdsRestorationId === null;
+      if (role === 'prosthetic_screw') return (c.holdsComponentId === null) !== (c.holdsRestorationId === null);
+      return true;
+    },
+    { message: 'Choose what this screw holds.' },
+  )
+  .refine(
+    (c) => componentRole(c.componentType) !== 'cap' || (c.holdsComponentId !== null && c.holdsRestorationId === null),
+    { message: 'Choose the abutment this cap sits on.' },
+  );

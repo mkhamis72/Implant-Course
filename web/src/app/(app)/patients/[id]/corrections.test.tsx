@@ -243,3 +243,34 @@ describe('<Corrections> remove an implant entered by mistake', () => {
     expect(screen.queryByRole('button', { name: 'Remove implant' })).not.toBeInTheDocument();
   });
 });
+
+describe('<Corrections> undo a component', () => {
+  const part = (id: string, component_type: string, fitted_on: string, over: Record<string, unknown> = {}) => ({
+    id, component_type, fitted_on, removed_on: null, voided_at: null, voided_reason: '', product: null, stock_lot_id: null,
+    torque_ncm: null, holds_component_id: null, holds_restoration_id: null, replaced_by: null, ...over,
+  });
+  const withParts = {
+    ...site,
+    components: [
+      part('old', 'healing_abutment', '2026-05-03', { removed_on: '2026-05-10', replaced_by: 'mua' }),
+      part('mua', 'multi_unit', '2026-05-10'),
+      part('sb', 'scan_body', '2026-05-11', { removed_on: '2026-05-11' }),
+      part('as', 'abutment_screw', '2026-05-12', { holds_component_id: 'mua' }),
+    ],
+  } as unknown as ImplantSite;
+
+  it('lists every current part and the scan body, the latest fitted chosen, and undoes the chosen one', async () => {
+    const { voidComponent } = await import('./implant-actions');
+    vi.mocked(voidComponent).mockResolvedValue({});
+    render(<Corrections patientId="pt" site={withParts} data={data} />);
+    const select = screen.getByRole('combobox', { name: 'Component to undo' });
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Multi-unit abutment — 10 May 2026', 'Abutment screw — 12 May 2026', 'Scan body — used 11 May 2026',
+    ]);
+    expect(select).toHaveValue('as');
+    fireEvent.change(select, { target: { value: 'mua' } });
+    fireEvent.change(screen.getByLabelText('Reason for undoing the component'), { target: { value: 'Wrong part' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Undo component' }));
+    await vi.waitFor(() => expect(vi.mocked(voidComponent)).toHaveBeenCalledWith({ id: 'mua', patientId: 'pt', reason: 'Wrong part' }));
+  });
+});

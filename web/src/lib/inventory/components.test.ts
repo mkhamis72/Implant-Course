@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { acceptsProduct, activeSite, badgesFor, currentComponent, lastFollowup } from './components';
-import type { ImplantSite, SiteComponent } from './types';
+import { acceptsProduct, activeSite, badgesFor, componentRole, currentComponent, currentComponents, lastFollowup, partLabel, transferComponents, undoableComponents } from './components';
+import { COMPONENT_ROLE_LABELS, type ImplantSite, type SiteComponent } from './types';
 
 const comp = (type: SiteComponent['component_type'], removed_on: string | null): SiteComponent => ({
   id: type, component_type: type, fitted_on: '2026-01-01', removed_on, notes: '', product: null, lot: null, course_id: null,
   fitted_by_delegate: null, fitted_by_organizer: null, voided_at: null, voided_reason: '', stock_lot_id: null,
+  torque_ncm: null, holds_component_id: null, holds_restoration_id: null, replaced_by: null,
 });
 
 const site = (tooth: number, state: ImplantSite['state'], components: SiteComponent[] = []): ImplantSite => ({
@@ -47,6 +48,44 @@ describe('component rules', () => {
   });
 });
 
+describe('component roles', () => {
+  it('maps every type like app_private.component_role', () => {
+    const expected = {
+      cover_screw: 'healing', healing_abutment: 'healing', healing_cap: 'cap',
+      ti_base: 'abutment', multi_unit: 'abutment', abutment: 'abutment', temporary_abutment: 'abutment',
+      abutment_screw: 'abutment_screw', prosthetic_screw: 'prosthetic_screw', temporary_cylinder_screw: 'prosthetic_screw',
+      scan_body: 'transfer', impression_coping: 'transfer', final_restoration: 'legacy',
+    };
+    expect(Object.keys(expected)).toHaveLength(13);
+    for (const [type, role] of Object.entries(expected)) expect(componentRole(type as never)).toBe(role);
+  });
+  it('matches the new products to the new component types', () => {
+    expect(acceptsProduct('temporary_cylinder_screw', 'prosthetic_screw')).toBe(true);
+    expect(acceptsProduct('healing_cap', 'healing_abutment')).toBe(false);
+    expect(acceptsProduct('abutment_screw', 'abutment_screw')).toBe(true);
+  });
+  it('lists the current components by role, leaving out closed and voided rows', () => {
+    const voided = { ...comp('multi_unit', null), voided_at: '2026-02-01T00:00:00Z' };
+    const s = site(36, 'placed', [
+      comp('prosthetic_screw', null), comp('healing_abutment', '2026-02-01'), voided,
+      comp('abutment_screw', null), comp('ti_base', null), comp('scan_body', null),
+    ]);
+    expect(currentComponents(s).map((c) => c.component_type)).toEqual(['ti_base', 'abutment_screw', 'prosthetic_screw']);
+    expect(currentComponent(s)?.component_type).toBe('ti_base');
+    expect(currentComponent(site(36, 'placed', [comp('abutment_screw', null)]))).toBeNull();
+  });
+  it('lists the cap after the abutment and before the screws', () => {
+    const s = site(36, 'placed', [comp('prosthetic_screw', null), comp('healing_cap', null), comp('abutment_screw', null), comp('multi_unit', null)]);
+    expect(currentComponents(s).map((c) => c.component_type)).toEqual(['multi_unit', 'healing_cap', 'abutment_screw', 'prosthetic_screw']);
+    expect(COMPONENT_ROLE_LABELS.cap).toBe('Cap');
+  });
+  it('shows MUA with an abutment screw also current', () => {
+    expect(badgesFor([site(36, 'placed', [comp('abutment_screw', null), comp('multi_unit', null)])])).toEqual({ 36: 'MUA' });
+    // A healing cap sits on the abutment: the chart still shows the abutment.
+    expect(badgesFor([site(36, 'placed', [comp('multi_unit', null), comp('healing_cap', null)])])).toEqual({ 36: 'MUA' });
+  });
+});
+
 describe('lastFollowup (I5)', () => {
   it('ignores removed follow-ups', () => {
     const s = site(36, 'placed');
@@ -55,5 +94,35 @@ describe('lastFollowup (I5)', () => {
       { id: 'b', date: '2026-03-10', check_type: '3-month', outcome: 'failed', notes: '', voided_at: '2026-03-11T00:00:00Z', voided_reason: 'wrong patient', visit_key: null, attendance: null, ...noFindings },
     ];
     expect(lastFollowup(s)?.id).toBe('a');
+  });
+});
+
+describe('parts for the panel and corrections', () => {
+  const at = (c: SiteComponent, over: Partial<SiteComponent>): SiteComponent => ({ ...c, ...over });
+  const parts = [
+    at(comp('healing_abutment', '2026-02-01'), { fitted_on: '2026-01-10', replaced_by: 'multi_unit' }),
+    at(comp('multi_unit', null), { fitted_on: '2026-02-01' }),
+    at(comp('scan_body', '2026-02-03'), { fitted_on: '2026-02-03' }),
+    at(comp('impression_coping', '2026-02-04'), { fitted_on: '2026-02-04', voided_at: '2026-02-05' }),
+    at(comp('abutment_screw', null), { fitted_on: '2026-02-05' }),
+  ];
+  it('names a part with its date, a transfer as used', () => {
+    expect(partLabel(parts[1])).toBe('Multi-unit abutment — 01 Feb 2026');
+    expect(partLabel(parts[2])).toBe('Scan body — used 03 Feb 2026');
+  });
+  it('lists transfers that are not voided', () => {
+    expect(transferComponents(site(36, 'placed', parts)).map((c) => c.id)).toEqual(['scan_body']);
+  });
+  it('offers the current parts then the transfers for undo, the latest fitted first chosen', () => {
+    const { options, latest } = undoableComponents(site(36, 'placed', parts));
+    expect(options.map((c) => c.id)).toEqual(['multi_unit', 'abutment_screw', 'scan_body']);
+    expect(latest?.id).toBe('abutment_screw');
+  });
+  it('offers a current old crown record (final_restoration) for undo', () => {
+    const s = site(36, 'restored', [comp('healing_abutment', '2026-01-01'), comp('final_restoration', null)]);
+    const { options, latest } = undoableComponents(s);
+    expect(options.map((c) => c.id)).toEqual(['final_restoration']);
+    expect(latest?.id).toBe('final_restoration');
+    expect(partLabel(options[0])).toBe('Final restoration — 01 Jan 2026');
   });
 });

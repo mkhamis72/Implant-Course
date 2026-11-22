@@ -91,3 +91,20 @@ test('a batch can be received without a lot number', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('No lot number');
   await expect(page.getByTestId('on-hand')).toHaveText('2');
 });
+
+test('a product keeps its specifications', async ({ page }) => {
+  const brand = uniqueName('Brand');
+  await page.goto('/inventory/products/new');
+  await page.getByLabel('Type').selectOption('healing_abutment');
+  await page.getByLabel('Brand').fill(brand);
+  await page.getByLabel('System').fill('X2');
+  await page.getByLabel('Screwdriver interface').fill('Hex');
+  await page.getByLabel('Screwdriver size').fill('1.25 mm');
+  await page.getByLabel('Recommended torque (Ncm)').fill('25');
+  await page.getByRole('button', { name: 'Save product' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(brand);
+  await page.reload();
+  await expect(page.getByLabel('Screwdriver interface')).toHaveValue('Hex');
+  await expect(page.getByLabel('Screwdriver size')).toHaveValue('1.25 mm');
+  await expect(page.getByLabel('Recommended torque (Ncm)')).toHaveValue('25');
+});
