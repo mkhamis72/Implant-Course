@@ -19,12 +19,13 @@ async function refused(c: Client, fn: () => Promise<unknown>, pattern: RegExp) {
 }
 
 /** The migration's backfill, between its `-- backfill:start` and `-- backfill:end` markers. */
-function backfillSql(): string {
-  const sql = readFileSync(join(process.cwd(), 'supabase', 'migrations', '0139_implant_kind_and_geometry.sql'), 'utf8');
+function backfillSql(file = '0139_implant_kind_and_geometry.sql'): string {
+  const sql = readFileSync(join(process.cwd(), 'supabase', 'migrations', file), 'utf8');
   const m = /-- backfill:start([\s\S]*?)-- backfill:end/.exec(sql);
-  if (!m) throw new Error('0139 has no backfill markers');
+  if (!m) throw new Error(`${file} has no backfill markers`);
   return m[1];
 }
+const BACKFILLS = ['0139_implant_kind_and_geometry.sql', '0140_implant_type_placement.sql'];
 
 /** One of academy's Oxy implants that 0128 linked to the library. */
 async function linkedProduct(c: Client): Promise<{ id: string; catalog_item_id: string }> {
@@ -34,8 +35,9 @@ async function linkedProduct(c: Client): Promise<{ id: string; catalog_item_id: 
     order by ref_code limit 1`, [ACADEMY_ID]);
 }
 
-/** A booking with a planned implant of `planned` on tooth 16, then placed with `placed`. */
-async function placedFromBooking(c: Client) {
+/** A booking planning `planned` (conventional) on teeth 16 and 17; `placed` (of `placedKind`) has a lot in stock
+ *  and, with `spare`, is the booking's spare for tooth 16. Acts as the organizer when it returns. */
+async function bookedPlan(c: Client, opts: { placedKind?: string; spare?: boolean } = {}) {
   await actAs(c, users.admin);
   const chair = await makeChair(c);
   await actAs(c, users.organizer);
@@ -45,16 +47,45 @@ async function placedFromBooking(c: Client) {
   await enroll(c, course, delegate);
   const planned = await makeProduct(c, 'implant', 'Zz Types Planned');
   const placed = await makeProduct(c, 'implant', 'Zz Types Placed');
+  if (opts.placedKind) {
+    await c.query('update public.products set implant_kind = $2 where id = $1', [placed, opts.placedKind]);
+  }
   const lot = await receive(c, placed, 5, 'ZZTYPES');
   const patient = await makePatient(c, 'Zz Types Patient');
+  const tooth16 = { tooth: 16, product_id: planned, ...(opts.spare ? { spares: [placed] } : {}) };
   const slot = await book(c, {
     session, chair, patient, supervisor: users.organizer, placing: [delegate],
-    implants: [{ tooth: 16, product_id: planned }],
+    implants: [tooth16 as { tooth: number; product_id: string }, { tooth: 17, product_id: planned }],
   });
+  const plannedSite = (await one<{ id: string }>(c,
+    `select id from public.implant_sites where patient_id = $1 and tooth = 17 and state = 'planned'`, [patient])).id;
+  return { course, delegate, planned, placed, lot, patient, slot, plannedSite };
+}
+
+/** bookedPlan, then tooth 16 placed with `placed`. */
+async function placedFromBooking(c: Client, opts: { placedKind?: string; spare?: boolean } = {}) {
+  const b = await bookedPlan(c, opts);
   const site = await place(c, {
-    patient, tooth: 16, product: placed, lot, delegate, supervisor: users.organizer, slot, placedOn: '2026-01-10',
+    patient: b.patient, tooth: 16, product: b.placed, lot: b.lot, delegate: b.delegate, supervisor: users.organizer,
+    slot: b.slot, placedOn: '2026-01-10',
   });
-  return { site, planned, placed };
+  return { ...b, site };
+}
+
+type SiteRow = {
+  implant_type: string | null; angulation_deg: string | null; angulation_direction: string | null;
+  anchorage: string | null; entry_point: string; trajectory: string; planned_product_id: string | null;
+  product_id: string; updated_at: Date;
+};
+async function siteRow(c: Client, id: string): Promise<SiteRow> {
+  return one<SiteRow>(c, `select implant_type, angulation_deg, angulation_direction, anchorage, entry_point, trajectory,
+    planned_product_id, product_id, updated_at from public.implant_sites where id = $1`, [id]);
+}
+
+const GEOMETRY_SQL = 'select public.set_implant_geometry($1, $2, $3, $4, $5, $6, $7)';
+function geometry(c: Client, site: string, type: string | null, angle: number | null = null, direction: string | null = null,
+  anchorage: string | null = null, entry: string | null = null, trajectory: string | null = null) {
+  return c.query(GEOMETRY_SQL, [site, type, angle, direction, anchorage, entry, trajectory]);
 }
 
 describe('implant types (0139–0140)', () => {
@@ -132,41 +163,215 @@ describe('implant types (0139–0140)', () => {
     });
   });
 
-  it('placed implants are backfilled as conventional', async () => {
+  it('a library implant_kind change leaves a placed implant\'s type unchanged', async () => {
     await withTx(async (c) => {
-      const { site } = await placedFromBooking(c);
       await asPostgres(c);
-      const planned = await one<{ id: string }>(c,
-        `select id from public.implant_sites where state = 'planned' and implant_type is null limit 1`);
+      const p = await one<{ id: string; catalog_item_id: string }>(c, `select id, catalog_item_id from public.products
+        where company_id = $1 and brand = 'Oxy Implant' and type = 'implant' and catalog_item_id is not null and active
+        order by ref_code limit 1`, [ACADEMY_ID]);
+      await actAs(c, users.organizer);
+      const delegate = await makeDelegate(c, 'Zz Types Library Placer');
+      const patient = await makePatient(c, 'Zz Types Library Patient');
+      const lot = await receive(c, p.id, 2, 'ZZLIBKIND');
+      const site = await place(c, { patient, tooth: 26, product: p.id, lot, delegate, supervisor: users.organizer });
+      expect((await siteRow(c, site)).implant_type).toBe('conventional');
+      await asPostgres(c);
+      await c.query(`update public.catalog_items set implant_kind = 'zygomatic' where id = $1`, [p.catalog_item_id]);
+      expect((await one<{ implant_kind: string }>(c, 'select implant_kind from public.products where id = $1', [p.id])).implant_kind)
+        .toBe('zygomatic');
+      expect((await siteRow(c, site)).implant_type).toBe('conventional');
+    });
+  });
+
+  it.each(BACKFILLS)('placed implants are backfilled as conventional (%s)', async (file) => {
+    await withTx(async (c) => {
+      const { site, plannedSite } = await placedFromBooking(c);
+      await asPostgres(c);
       await c.query('update public.implant_sites set implant_type = null, planned_product_id = null where id = $1', [site]);
-      await c.query(backfillSql());
-      const row = await one<{ implant_type: string | null }>(c,
-        'select implant_type from public.implant_sites where id = $1', [site]);
+      const before = await siteRow(c, site);
+      await c.query(backfillSql(file));
+      const row = await siteRow(c, site);
       expect(row.implant_type).toBe('conventional');
-      if (planned) {
-        const p = await one<{ implant_type: string | null }>(c,
-          'select implant_type from public.implant_sites where id = $1', [planned.id]);
-        expect(p.implant_type).toBeNull();
-      }
+      expect(row.updated_at).toEqual(before.updated_at); // no new updated_at
+      expect((await siteRow(c, plannedSite)).implant_type).toBeNull();
       const { n } = await one<{ n: number }>(c, `select count(*)::int as n from public.implant_sites
         where state in ('placed', 'restored', 'failed') and implant_type is null`);
       expect(n).toBe(0);
     });
   });
 
-  it('backfill takes the planned product from the booking', async () => {
+  it.each(BACKFILLS)('backfill takes the planned product from the booking (%s)', async (file) => {
     await withTx(async (c) => {
       const { site, planned, placed } = await placedFromBooking(c);
       await asPostgres(c);
       await c.query('update public.implant_sites set implant_type = null, planned_product_id = null where id = $1', [site]);
       const { audits } = await one<{ audits: number }>(c, 'select count(*)::int as audits from public.audit_log');
-      await c.query(backfillSql());
-      const row = await one<{ planned_product_id: string | null; product_id: string }>(c,
-        'select planned_product_id, product_id from public.implant_sites where id = $1', [site]);
+      await c.query(backfillSql(file));
+      const row = await siteRow(c, site);
       expect(row.product_id).toBe(placed);
       expect(row.planned_product_id).toBe(planned);
       const after = await one<{ audits: number }>(c, 'select count(*)::int as audits from public.audit_log');
       expect(after.audits).toBe(audits); // written without audit rows
+    });
+  });
+
+  // ── Placement (0140) ─────────────────────────────────────────────────────────────────────────────────
+  it('placing records the planned product and the product\'s kind', async () => {
+    await withTx(async (c) => {
+      const { site, planned, placed } = await placedFromBooking(c, { placedKind: 'zygomatic' });
+      const row = await siteRow(c, site);
+      expect(row.product_id).toBe(placed);
+      expect(row.planned_product_id).toBe(planned);
+      expect(row.implant_type).toBe('zygomatic');
+    });
+  });
+
+  it('placing a spare keeps the primary plan', async () => {
+    await withTx(async (c) => {
+      const b = await bookedPlan(c, { placedKind: 'pterygoid', spare: true });
+      // Switched off: accepted only because it is the booking's spare for this tooth.
+      await c.query('update public.products set active = false where id = $1', [b.placed]);
+      const site = await place(c, {
+        patient: b.patient, tooth: 16, product: b.placed, lot: b.lot, delegate: b.delegate, supervisor: users.organizer,
+        slot: b.slot, placedOn: '2026-01-10',
+      });
+      const row = await siteRow(c, site);
+      expect(row.product_id).toBe(b.placed);
+      expect(row.planned_product_id).toBe(b.planned);
+      expect(row.implant_type).toBe('pterygoid');
+    });
+  });
+
+  it('placement via the unchanged signature sets type and plan', async () => {
+    await withTx(async (c) => {
+      const b = await bookedPlan(c, { placedKind: 'zygomatic' });
+      // The named arguments exactly as implant-actions.ts sends them.
+      const { id } = await one<{ id: string }>(c, `select public.place_implant_v4(
+        p_patient => $1, p_tooth => $2, p_product => $3, p_lot => $4, p_placed_on => $5,
+        p_placing_delegate => $6, p_supervisor => $7, p_assisting_delegate => $8, p_graft => $9, p_notes => $10,
+        p_slot => $11, p_technique => $12, p_course => $13, p_placing_doctor => $14) as id`,
+      [b.patient, 16, b.placed, b.lot, '2026-01-10', b.delegate, users.organizer, null, '', '', b.slot, null, b.course, null]);
+      const row = await siteRow(c, id);
+      expect(row.planned_product_id).toBe(b.planned);
+      expect(row.implant_type).toBe('zygomatic');
+
+      // No plan: nothing was planned, the type still comes from the product.
+      const conventional = await makeProduct(c, 'implant', 'Zz Types Unplanned');
+      const lot2 = await receive(c, conventional, 1, 'ZZUNPLANNED');
+      const free = await one<{ id: string }>(c, `select public.place_implant_v4(
+        p_patient => $1, p_tooth => $2, p_product => $3, p_lot => $4, p_placed_on => $5,
+        p_placing_delegate => $6, p_supervisor => $7, p_assisting_delegate => $8, p_graft => $9, p_notes => $10,
+        p_slot => $11, p_technique => $12, p_course => $13, p_placing_doctor => $14) as id`,
+      [b.patient, 36, conventional, lot2, '2026-01-10', b.delegate, users.organizer, null, '', '', null, null, b.course, null]);
+      const freeRow = await siteRow(c, free.id);
+      expect(freeRow.planned_product_id).toBeNull();
+      expect(freeRow.implant_type).toBe('conventional');
+    });
+  });
+
+  it('correct_batch re-defaults an untouched type', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedFromBooking(c);
+      expect((await siteRow(c, site)).implant_type).toBe('conventional');
+      const zyg = await makeProduct(c, 'implant', 'Zz Types Zyg');
+      await c.query(`update public.products set implant_kind = 'zygomatic' where id = $1`, [zyg]);
+      const zygLot = await receive(c, zyg, 1, 'ZZZYG');
+      await c.query(`select public.correct_batch($1, $2, 'Wrong box picked', null, $3)`, [site, zygLot, zyg]);
+      const row = await siteRow(c, site);
+      expect(row.product_id).toBe(zyg);
+      expect(row.implant_type).toBe('zygomatic');
+    });
+  });
+
+  it('correct_batch keeps a type the user changed', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedFromBooking(c);
+      await geometry(c, site, 'tilted', 30, 'distal');
+      const zyg = await makeProduct(c, 'implant', 'Zz Types Zyg');
+      await c.query(`update public.products set implant_kind = 'zygomatic' where id = $1`, [zyg]);
+      const zygLot = await receive(c, zyg, 1, 'ZZZYG');
+      await c.query(`select public.correct_batch($1, $2, 'Wrong box picked', null, $3)`, [site, zygLot, zyg]);
+      const row = await siteRow(c, site);
+      expect(row.product_id).toBe(zyg);
+      expect(row.implant_type).toBe('tilted');
+    });
+  });
+
+  // ── set_implant_geometry (0140) ──────────────────────────────────────────────────────────────────────
+  it('set_implant_geometry saves tilted 30° distal', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedFromBooking(c);
+      await geometry(c, site, 'tilted', 30, 'distal');
+      const row = await siteRow(c, site);
+      expect(row.implant_type).toBe('tilted');
+      expect(Number(row.angulation_deg)).toBe(30);
+      expect(row.angulation_direction).toBe('distal');
+      expect(row.anchorage).toBeNull();
+      expect(row.entry_point).toBe('');
+      expect(row.trajectory).toBe('');
+
+      await geometry(c, site, 'zygomatic', 45, 'buccal', 'zygoma', 'Zygoma body', 'Extra-sinus');
+      const z = await siteRow(c, site);
+      expect([z.implant_type, Number(z.angulation_deg), z.angulation_direction, z.anchorage, z.entry_point, z.trajectory])
+        .toEqual(['zygomatic', 45, 'buccal', 'zygoma', 'Zygoma body', 'Extra-sinus']);
+
+      await geometry(c, site, 'conventional');
+      const back = await siteRow(c, site);
+      expect([back.implant_type, back.angulation_deg, back.angulation_direction, back.anchorage, back.entry_point, back.trajectory])
+        .toEqual(['conventional', null, null, null, '', '']);
+    });
+  });
+
+  it('tilted needs an angle', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedFromBooking(c);
+      await refused(c, () => geometry(c, site, 'tilted'), /Enter the angle of the tilted implant\./);
+      await refused(c, () => geometry(c, site, null), /Choose the implant type\./);
+      await refused(c, () => geometry(c, site, 'tilted', 61), /Enter an angle between 0 and 60°\./);
+      await refused(c, () => geometry(c, site, 'tilted', -1), /Enter an angle between 0 and 60°\./);
+      await geometry(c, site, 'tilted', 60);
+    });
+  });
+
+  it('anchorage only for zygomatic or pterygoid', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedFromBooking(c);
+      const ONLY = /Anchorage is only recorded for zygomatic and pterygoid implants\./;
+      await refused(c, () => geometry(c, site, 'conventional', null, null, 'zygoma'), ONLY);
+      await refused(c, () => geometry(c, site, 'tilted', 30, 'distal', null, 'Crest'), ONLY);
+      await refused(c, () => geometry(c, site, 'tilted', 30, 'distal', null, null, 'Along the sinus wall'), ONLY);
+      await refused(c, () => geometry(c, site, 'pterygoid', null, null, 'pterygoid_plate', 'x'.repeat(201)),
+        /200 characters/);
+      await geometry(c, site, 'pterygoid', null, null, 'pterygoid_plate', 'Tuberosity', 'Towards the pterygoid plate');
+      expect((await siteRow(c, site)).anchorage).toBe('pterygoid_plate');
+    });
+  });
+
+  it('refuses on a planned implant', async () => {
+    await withTx(async (c) => {
+      const { plannedSite } = await bookedPlan(c);
+      await refused(c, () => geometry(c, plannedSite, 'conventional'), /Only a placed implant has a type and angle\./);
+      await refused(c, () => geometry(c, '00000000-0000-4000-8000-000000000000', 'conventional'),
+        /Only a placed implant has a type and angle\./);
+    });
+  });
+
+  it('works in a clinic', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedFromBooking(c);
+      await asPostgres(c);
+      await c.query(`update public.companies set kind = 'clinic' where id = $1`, [ACADEMY_ID]);
+      await actAs(c, users.organizer);
+      await geometry(c, site, 'zygomatic', 40, 'buccal', 'zygoma');
+      expect((await siteRow(c, site)).implant_type).toBe('zygomatic');
+    });
+  });
+
+  it('needs Edit on Patients', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedFromBooking(c);
+      await actAs(c, users.viewer);
+      await refused(c, () => geometry(c, site, 'tilted', 30, 'distal'), /You don't have permission to edit Patients/);
     });
   });
 });
