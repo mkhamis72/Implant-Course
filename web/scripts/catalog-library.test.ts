@@ -65,6 +65,16 @@ describe('parseCatalogCsv', () => {
     );
   });
 
+  it('keeps 0 as a specification value and refuses one out of range, with its row', () => {
+    expect(parseCatalogCsv(`${SPEC_HEAD}\nImplant,B,S,P,4,10,R1,,p.1,,,,0,,,,,`)[0].angle_deg).toBe(0);
+    expect(() => parseCatalogCsv(`${SPEC_HEAD}\nImplant,B,S,P,4,10,R1,,p.1,,,,,,,,,200`)).toThrow(
+      'Row 2: Torque (Ncm) must be between 0 and 150: "200"',
+    );
+    expect(() => parseCatalogCsv(`${SPEC_HEAD}\nImplant,B,S,P,4,10,R1,,p.1,,,,60,,,,,`)).toThrow(
+      'Row 2: Angle (°) must be between 0 and 45: "60"',
+    );
+  });
+
   it('refuses a file without the catalogue header', () => {
     expect(() => parseCatalogCsv('a,b\n1,2')).toThrow(/header/);
   });

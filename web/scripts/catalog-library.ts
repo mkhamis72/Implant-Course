@@ -61,24 +61,33 @@ function size(s: string | undefined, row: number, column: string): number | null
   return n;
 }
 
+/** A specification number: empty is null, 0 is allowed, and it must lie within the database bounds. */
+function specNumber(s: string | undefined, row: number, column: string, max: number): number | null {
+  if (s === undefined || s.trim() === '') return null;
+  const n = Number(s.trim());
+  if (!Number.isFinite(n)) throw new Error(`Row ${row}: ${column} is not a number: "${s.trim()}"`);
+  if (n < 0 || n > max) throw new Error(`Row ${row}: ${column} must be between 0 and ${max}: "${s.trim()}"`);
+  return n;
+}
+
 export function parseCatalogCsv(text: string): LibraryRow[] {
   const [header, ...rows] = records(text.replace(/^﻿/, ''));
   if (!header || HEADER.some((h, i) => header[i]?.trim() !== h)) {
     throw new Error(`The file needs the catalogue header: ${HEADER.join(',')},Check`);
   }
-  const at = (key: keyof Specs) => header.findIndex((h) => h.trim() === SPEC_HEADERS[key]);
+  const col = Object.fromEntries(SPEC_COLUMNS.map((k) => [k, header.findIndex((h) => h.trim() === SPEC_HEADERS[k])])) as Record<keyof Specs, number>;
   return rows.map((f, i) => {
     const type = TYPE_BY_LABEL.get(f[0].trim());
     if (!type) throw new Error(`Row ${i + 2}: unknown type "${f[0].trim()}"`);
-    const text = (key: keyof Specs) => (at(key) < 0 ? '' : (f[at(key)] ?? '').trim());
-    const num = (key: keyof Specs) => (at(key) < 0 ? null : size(f[at(key)], i + 2, SPEC_HEADERS[key]));
+    const str = (key: keyof Specs) => (col[key] < 0 ? '' : (f[col[key]] ?? '').trim());
+    const num = (key: keyof Specs, max: number) => (col[key] < 0 ? null : specNumber(f[col[key]], i + 2, SPEC_HEADERS[key], max));
     return {
       type, brand: f[1].trim(), system: (f[2] ?? '').trim(), platform: (f[3] ?? '').trim(),
       diameter_mm: size(f[4], i + 2, 'Diameter (mm)'), length_mm: size(f[5], i + 2, 'Length (mm)'), ref_code: (f[6] ?? '').trim(),
       description: (f[7] ?? '').trim(), source: (f[8] ?? '').trim(),
-      connection: text('connection'), gingival_height_mm: num('gingival_height_mm'), angle_deg: num('angle_deg'),
-      material: text('material'), driver_interface: text('driver_interface'), driver_size: text('driver_size'),
-      driver_ref: text('driver_ref'), torque_ncm: num('torque_ncm'),
+      connection: str('connection'), gingival_height_mm: num('gingival_height_mm', 10), angle_deg: num('angle_deg', 45),
+      material: str('material'), driver_interface: str('driver_interface'), driver_size: str('driver_size'),
+      driver_ref: str('driver_ref'), torque_ncm: num('torque_ncm', 150),
     };
   });
 }
