@@ -48,6 +48,10 @@ describe('parseCatalogCsv', () => {
     expect(parseCatalogCsv(`${HEADER}\nImplant,B,S,P,4,10,R1,,p.1,`)[0].implant_kind).toBe('conventional');
   });
 
+  it('refuses a length over 60 mm with its row', () => {
+    expect(() => parseCatalogCsv(`${HEADER}\nImplant,B,S,P,4,61,R1,,p.1,`)).toThrow('Row 2: Length (mm) must be at most 60: "61"');
+  });
+
   it('refuses an unknown implant kind with its row', () => {
     expect(() => parseCatalogCsv(`${HEADER},Implant kind\nImplant,B,S,P,4,10,R1,,p.1,,Tilted`)).toThrow(
       'Row 2: Implant kind must be Conventional, Zygomatic or Pterygoid: "Tilted"',

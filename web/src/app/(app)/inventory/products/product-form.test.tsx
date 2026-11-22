@@ -71,6 +71,26 @@ describe('<ProductForm> implant kind (0139)', () => {
     expect(screen.queryByLabelText('Implant kind')).not.toBeInTheDocument();
   });
 
+  it('keeps Type and Implant kind after a failed save', async () => {
+    const action = vi.fn(async (_prev: unknown, fd: FormData) => ({ error: 'Enter the brand.', values: Object.fromEntries(fd) as Record<string, string> }));
+    render(<ProductForm action={action} />);
+    await userEvent.selectOptions(screen.getByLabelText('Implant kind'), 'zygomatic');
+    await userEvent.click(screen.getByRole('button', { name: 'Save product' }));
+    expect(await screen.findByText('Enter the brand.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Type')).toHaveValue('implant');
+    expect(screen.getByLabelText('Implant kind')).toHaveValue('zygomatic');
+  });
+
+  it('keeps a changed Type and hides the kind after a failed save', async () => {
+    const action = vi.fn(async (_prev: unknown, fd: FormData) => ({ error: 'Enter the brand.', values: Object.fromEntries(fd) as Record<string, string> }));
+    render(<ProductForm action={action} />);
+    await userEvent.selectOptions(screen.getByLabelText('Type'), 'cover_screw');
+    await userEvent.click(screen.getByRole('button', { name: 'Save product' }));
+    expect(await screen.findByText('Enter the brand.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Type')).toHaveValue('cover_screw');
+    expect(screen.queryByLabelText('Implant kind')).not.toBeInTheDocument();
+  });
+
   it('keeps the stored kind, read-only for a linked product', () => {
     render(<ProductForm action={vi.fn()} product={{ ...product, catalog_item_id: 'i1', implant_kind: 'pterygoid' }} />);
     expect(screen.getByLabelText('Implant kind')).toBeDisabled();

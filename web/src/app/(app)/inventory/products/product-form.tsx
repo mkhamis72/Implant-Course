@@ -18,7 +18,11 @@ export function ProductForm({ action, product }: Props) {
   };
   // A product switched on from the catalogue library (0128) keeps the library's fields.
   const locked = !!product?.catalog_item_id;
-  const [type, setType] = useState(v('type') || 'implant');
+  // The kind select follows the chosen Type. The selects stay uncontrolled and remount on each result (React 19
+  // resets the form after the action).
+  const [picked, setPicked] = useState<{ state: FormState; type: string } | null>(null);
+  const type = picked?.state === state ? picked.type : v('type') || 'implant';
+  const selectKey = `${state.error ?? ''}|${state.values?.type ?? ''}|${state.values?.implant_kind ?? ''}`;
   const specs = product ? productSpecs(product) : [];
   return (
     <form action={formAction} className="card grid max-w-3xl gap-4 sm:grid-cols-3">
@@ -26,7 +30,7 @@ export function ProductForm({ action, product }: Props) {
       {locked && <p className="text-sm text-muted sm:col-span-3">From the catalogue library.</p>}
       <label className="block">
         <span className="label">Type</span>
-        <select className="input" name="type" disabled={locked} value={type} onChange={(e) => setType(e.target.value)}>
+        <select className="input" name="type" key={selectKey} disabled={locked} defaultValue={v('type') || 'implant'} onChange={(e) => setPicked({ state, type: e.target.value })}>
           {PRODUCT_TYPES.map((t) => (
             <option key={t} value={t}>
               {PRODUCT_TYPE_LABELS[t]}
@@ -53,7 +57,7 @@ export function ProductForm({ action, product }: Props) {
       {type === 'implant' && (
         <label className="block">
           <span className="label">Implant kind</span>
-          <select className="input" name="implant_kind" disabled={locked} defaultValue={v('implant_kind') || 'conventional'}>
+          <select key={selectKey} className="input" name="implant_kind" disabled={locked} defaultValue={v('implant_kind') || 'conventional'}>
             {IMPLANT_KINDS.map((k) => (
               <option key={k} value={k}>
                 {IMPLANT_KIND_LABELS[k]}

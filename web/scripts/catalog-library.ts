@@ -57,10 +57,11 @@ function records(text: string): string[][] {
 }
 
 /** An empty size is null; anything else must be a positive number (a decimal point, not a comma). */
-function size(s: string | undefined, row: number, column: string): number | null {
+function size(s: string | undefined, row: number, column: string, max = Infinity): number | null {
   if (s === undefined || s.trim() === '') return null;
   const n = Number(s.trim());
   if (!Number.isFinite(n) || n <= 0) throw new Error(`Row ${row}: ${column} is not a number: "${s.trim()}"`);
+  if (n > max) throw new Error(`Row ${row}: ${column} must be at most ${max}: "${s.trim()}"`);
   return n;
 }
 
@@ -94,7 +95,7 @@ export function parseCatalogCsv(text: string): LibraryRow[] {
     const num = (key: keyof Specs, max: number) => (col[key] < 0 ? null : specNumber(f[col[key]], i + 2, SPEC_HEADERS[key], max));
     return {
       type, brand: f[1].trim(), system: (f[2] ?? '').trim(), platform: (f[3] ?? '').trim(),
-      diameter_mm: size(f[4], i + 2, 'Diameter (mm)'), length_mm: size(f[5], i + 2, 'Length (mm)'), ref_code: (f[6] ?? '').trim(),
+      diameter_mm: size(f[4], i + 2, 'Diameter (mm)'), length_mm: size(f[5], i + 2, 'Length (mm)', 60), ref_code: (f[6] ?? '').trim(),
       description: (f[7] ?? '').trim(), source: (f[8] ?? '').trim(),
       connection: str('connection'), gingival_height_mm: num('gingival_height_mm', 10), angle_deg: num('angle_deg', 45),
       material: str('material'), driver_interface: str('driver_interface'), driver_size: str('driver_size'),
