@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { choosePatient, login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
@@ -25,6 +25,12 @@ async function world() {
   return { day, chair, session, placing, courseId, a, b, c };
 }
 type World = Awaited<ReturnType<typeof world>>;
+
+const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, (m) => `\\${m}`);
+/** A whole card line: `Tooth N · Implant: <brand …> · Spares: <brand …>, <brand …>`, exactly these spares in order. */
+const lineOf = (tooth: number, implant: string, spares: string[]) =>
+  new RegExp(`^Tooth ${tooth} · Implant: ${esc(implant)}[^·,]* · Spares: ${spares.map((b) => `${esc(b)}[^·,]*`).join(', ')}$`);
+const toothLine = (card: Locator, tooth: number) => card.getByText(new RegExp(`^Tooth ${tooth} · `));
 
 async function bookWithSpares(page: Page, w: World, fileNo: string) {
   await page.goto(`/schedule/new?date=${w.day}`);
@@ -57,9 +63,8 @@ test('book with a searched patient and 2 spares', async ({ page }) => {
   const fileNo = await patientFileNo(page);
   await bookWithSpares(page, w, fileNo);
   const card = page.getByTestId(`booking-${fileNo}`);
-  await expect(card).toContainText('Spares:');
-  await expect(card).toContainText(w.b.brand);
-  await expect(card).toContainText(w.c.brand);
+  // The card names the planned implant as well as the spares, on the tooth's line.
+  await expect(toothLine(card, 36)).toHaveText(lineOf(36, w.a.brand, [w.b.brand, w.c.brand]));
 });
 
 test('edit: change implant and spares, add then remove a tooth', async ({ page }) => {
@@ -82,9 +87,8 @@ test('edit: change implant and spares, add then remove a tooth', async ({ page }
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page).toHaveURL((u) => u.pathname === '/schedule' && u.searchParams.get('date') === w.day);
   await expect(card()).toContainText('Tooth 46');
-  await expect(card()).toContainText(`Tooth 36 · Spares: ${w.c.brand}`);
-  await expect(card()).toContainText(`Tooth 46 · Spares: ${w.b.brand}`);
-  await expect(card()).not.toContainText(`Tooth 36 · Spares: ${w.b.brand}`);
+  await expect(toothLine(card(), 36)).toHaveText(lineOf(36, w.b.brand, [w.c.brand]));
+  await expect(toothLine(card(), 46)).toHaveText(lineOf(46, w.a.brand, [w.b.brand]));
 
   // Remove tooth 46 again.
   await card().getByRole('link', { name: 'Edit booking' }).click();
