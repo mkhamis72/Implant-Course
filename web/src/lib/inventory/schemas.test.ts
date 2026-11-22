@@ -86,6 +86,36 @@ describe('placeSchema / componentSchema', () => {
   });
 });
 
+describe('product specs and screw holders', () => {
+  const base = { type: 'abutment_straight', brand: 'Oxy' };
+  it('accepts the spec fields and refuses out-of-range numbers', () => {
+    expect(productSchema.parse({ ...base, gingival_height_mm: '3', angle_deg: '17.5', torque_ncm: '25', connection: 'Conical' })).toMatchObject({
+      gingival_height_mm: 3, angle_deg: 17.5, torque_ncm: 25, connection: 'Conical', material: '',
+    });
+    expect(productSchema.parse({ ...base, angle_deg: '' })).toMatchObject({ angle_deg: null });
+    expect(err(productSchema.safeParse({ ...base, gingival_height_mm: '11' }))).toBe('Enter a gingival height between 0 and 10 mm.');
+    expect(err(productSchema.safeParse({ ...base, angle_deg: '46' }))).toBe('Enter an angle between 0 and 45°.');
+    expect(err(productSchema.safeParse({ ...base, torque_ncm: '151' }))).toBe('Enter a torque between 0 and 150 Ncm.');
+  });
+  const c = { siteId: id, patientId: id, componentType: 'ti_base', fittedOn: '2026-01-10', byDelegateId: id };
+  it('takes a torque', () => {
+    expect(componentSchema.parse({ ...c, torque: '25' })).toMatchObject({ torque: 25 });
+    expect(componentSchema.parse(c)).toMatchObject({ torque: null, holdsComponentId: null, holdsRestorationId: null });
+    expect(err(componentSchema.safeParse({ ...c, torque: '200' }))).toBe('Enter a torque between 0 and 150 Ncm.');
+  });
+  it('screws need something to hold', () => {
+    const msg = 'Choose what this screw holds.';
+    expect(err(componentSchema.safeParse({ ...c, componentType: 'prosthetic_screw' }))).toBe(msg);
+    expect(err(componentSchema.safeParse({ ...c, componentType: 'temporary_cylinder_screw' }))).toBe(msg);
+    expect(err(componentSchema.safeParse({ ...c, componentType: 'abutment_screw' }))).toBe(msg);
+    expect(componentSchema.safeParse({ ...c, componentType: 'prosthetic_screw', holdsRestorationId: id }).success).toBe(true);
+    expect(componentSchema.safeParse({ ...c, componentType: 'prosthetic_screw', holdsComponentId: id }).success).toBe(true);
+    expect(componentSchema.safeParse({ ...c, componentType: 'abutment_screw', holdsComponentId: id }).success).toBe(true);
+    expect(err(componentSchema.safeParse({ ...c, componentType: 'abutment_screw', holdsRestorationId: id }))).toBe(msg);
+    expect(err(componentSchema.safeParse({ ...c, componentType: 'prosthetic_screw', holdsComponentId: id, holdsRestorationId: id }))).toBe(msg);
+  });
+});
+
 describe('linkedProductSchema (0128)', () => {
   it('reads only the reorder level of a product from the catalogue library', () => {
     expect(linkedProductSchema.parse({ reorder_level: '5', brand: '' })).toEqual({ reorder_level: 5 });

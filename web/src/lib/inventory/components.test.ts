@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { acceptsProduct, activeSite, badgesFor, currentComponent, lastFollowup } from './components';
+import { acceptsProduct, activeSite, badgesFor, componentRole, currentComponent, currentComponents, lastFollowup } from './components';
 import type { ImplantSite, SiteComponent } from './types';
 
 const comp = (type: SiteComponent['component_type'], removed_on: string | null): SiteComponent => ({
   id: type, component_type: type, fitted_on: '2026-01-01', removed_on, notes: '', product: null, lot: null, course_id: null,
   fitted_by_delegate: null, fitted_by_organizer: null, voided_at: null, voided_reason: '', stock_lot_id: null,
+  torque_ncm: null, holds_component_id: null, holds_restoration_id: null, replaced_by: null,
 });
 
 const site = (tooth: number, state: ImplantSite['state'], components: SiteComponent[] = []): ImplantSite => ({
@@ -44,6 +45,38 @@ describe('component rules', () => {
         site(21, 'planned'),
       ]),
     ).toEqual({ 36: 'TB', 26: 'AB' }); // old final_restoration components are drawn as restorations now
+  });
+});
+
+describe('component roles', () => {
+  it('maps every type like app_private.component_role', () => {
+    const expected = {
+      cover_screw: 'healing', healing_abutment: 'healing', healing_cap: 'healing',
+      ti_base: 'abutment', multi_unit: 'abutment', abutment: 'abutment', temporary_abutment: 'abutment',
+      abutment_screw: 'abutment_screw', prosthetic_screw: 'prosthetic_screw', temporary_cylinder_screw: 'prosthetic_screw',
+      scan_body: 'transfer', impression_coping: 'transfer', final_restoration: 'legacy',
+    };
+    expect(Object.keys(expected)).toHaveLength(13);
+    for (const [type, role] of Object.entries(expected)) expect(componentRole(type as never)).toBe(role);
+  });
+  it('matches the new products to the new component types', () => {
+    expect(acceptsProduct('temporary_cylinder_screw', 'prosthetic_screw')).toBe(true);
+    expect(acceptsProduct('healing_cap', 'healing_abutment')).toBe(false);
+    expect(acceptsProduct('abutment_screw', 'abutment_screw')).toBe(true);
+  });
+  it('lists the current components by role, leaving out closed and voided rows', () => {
+    const voided = { ...comp('multi_unit', null), voided_at: '2026-02-01T00:00:00Z' };
+    const s = site(36, 'placed', [
+      comp('prosthetic_screw', null), comp('healing_abutment', '2026-02-01'), voided,
+      comp('abutment_screw', null), comp('ti_base', null), comp('scan_body', null),
+    ]);
+    expect(currentComponents(s).map((c) => c.component_type)).toEqual(['ti_base', 'abutment_screw', 'prosthetic_screw']);
+    expect(currentComponent(s)?.component_type).toBe('ti_base');
+    expect(currentComponent(site(36, 'placed', [comp('abutment_screw', null)]))).toBeNull();
+  });
+  it('shows MUA with an abutment screw also current', () => {
+    expect(badgesFor([site(36, 'placed', [comp('abutment_screw', null), comp('multi_unit', null)])])).toEqual({ 36: 'MUA' });
+    expect(badgesFor([site(36, 'placed', [comp('healing_cap', null)])])).toEqual({ 36: 'HC' });
   });
 });
 

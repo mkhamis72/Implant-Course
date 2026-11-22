@@ -1,4 +1,4 @@
-import { COMPONENT_BADGES, type ComponentType, type ImplantSite, type ProductType, type SiteComponent } from './types';
+import { COMPONENT_BADGES, type ComponentRole, type ComponentType, type ImplantSite, type ProductType, type SiteComponent } from './types';
 
 /** Mirrors app_private.component_accepts in the database. */
 export const COMPONENT_ACCEPTS: Record<ComponentType, readonly ProductType[]> = {
@@ -8,14 +8,43 @@ export const COMPONENT_ACCEPTS: Record<ComponentType, readonly ProductType[]> = 
   multi_unit: ['multi_unit'],
   abutment: ['abutment_straight', 'abutment_angled'],
   final_restoration: ['other'],
+  healing_cap: ['healing_cap'],
+  temporary_abutment: ['temporary_abutment'],
+  scan_body: ['scan_body'],
+  impression_coping: ['impression_coping'],
+  abutment_screw: ['abutment_screw'],
+  prosthetic_screw: ['prosthetic_screw'],
+  temporary_cylinder_screw: ['prosthetic_screw'],
 };
 
 export function acceptsProduct(component: ComponentType, product: ProductType): boolean {
   return COMPONENT_ACCEPTS[component].includes(product);
 }
 
+const ROLES: Record<ComponentType, ComponentRole> = {
+  cover_screw: 'healing', healing_abutment: 'healing', healing_cap: 'healing',
+  ti_base: 'abutment', multi_unit: 'abutment', abutment: 'abutment', temporary_abutment: 'abutment',
+  abutment_screw: 'abutment_screw', prosthetic_screw: 'prosthetic_screw', temporary_cylinder_screw: 'prosthetic_screw',
+  scan_body: 'transfer', impression_coping: 'transfer', final_restoration: 'legacy',
+};
+
+/** Mirrors app_private.component_role in the database. */
+export function componentRole(type: ComponentType): ComponentRole {
+  return ROLES[type];
+}
+
+const CURRENT_ORDER: ComponentRole[] = ['healing', 'abutment', 'abutment_screw', 'prosthetic_screw'];
+
+/** The parts on the implant now (not closed, not voided): healing, abutment, abutment screw, prosthetic screw. */
+export function currentComponents(site: ImplantSite): SiteComponent[] {
+  return CURRENT_ORDER.flatMap((role) =>
+    site.components.filter((c) => c.removed_on === null && c.voided_at === null && componentRole(c.component_type) === role),
+  );
+}
+
+/** The current healing part or abutment (what the chart shows), or null. */
 export function currentComponent(site: ImplantSite): SiteComponent | null {
-  return site.components.find((c) => c.removed_on === null) ?? null;
+  return currentComponents(site).find((c) => { const r = componentRole(c.component_type); return r === 'healing' || r === 'abutment'; }) ?? null;
 }
 
 /** Components shown on the chart and the component timeline: old final_restoration rows are drawn as restorations now. */
@@ -31,7 +60,7 @@ export function badgesFor(sites: readonly ImplantSite[]): Partial<Record<number,
   const badges: Partial<Record<number, string>> = {};
   for (const site of sites) {
     if (site.state !== 'placed' && site.state !== 'restored') continue;
-    const current = shownComponents(site).find((c) => c.removed_on === null);
+    const current = currentComponent(site);
     if (current) badges[site.tooth] = COMPONENT_BADGES[current.component_type];
   }
   return badges;
