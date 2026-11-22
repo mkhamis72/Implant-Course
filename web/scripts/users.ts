@@ -1,15 +1,7 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Client as PgClient, type Client } from 'pg';
 import { pgConfig } from './db';
 import { ACADEMY_COMPANY_ID } from '../src/lib/tenant/types';
 import { nodeAuth, sentEmails } from './self-auth-node';
-
-export function adminClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Supabase URL / service role key missing (see .env.example)');
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
 
 /** A pending login for the email in the company's database (as postgres): a new Auth account needs one
  *  (handle_new_user, 0090) and becomes an active organizer of the company. setProfile sets the final role. */
