@@ -375,3 +375,17 @@ describe('implant types (0139–0140)', () => {
     });
   });
 });
+
+describe('planned product key (0141)', () => {
+  it('implant_sites has one key to products, so an unhinted products(*) embed is not ambiguous', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      const { rows } = await c.query(`select conname from pg_constraint
+        where contype = 'f' and conrelid = 'public.implant_sites'::regclass and confrelid = 'public.products'::regclass`);
+      expect(rows.map((r) => r.conname)).toEqual(['implant_sites_product_id_fkey']);
+      const idx = await one(c, `select count(*)::int as n from pg_indexes
+        where schemaname = 'public' and indexname = 'implant_sites_planned_product_id_idx'`);
+      expect(idx.n).toBe(1);
+    });
+  });
+});

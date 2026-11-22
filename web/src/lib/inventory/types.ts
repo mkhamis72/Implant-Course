@@ -184,6 +184,8 @@ export type ImplantSite = {
   trajectory: string;
   /** The product planned for the tooth, kept when it is placed (0140). */
   planned_product: Product | null;
+  /** Read with the site; `planned_product` is attached from it by a query of its own (no key to embed through, 0141). */
+  planned_product_id?: string | null;
   stock_lot_id: string | null;
   torque_ncm: number | null;
   isq: number | null;

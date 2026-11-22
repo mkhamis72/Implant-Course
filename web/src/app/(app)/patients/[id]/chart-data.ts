@@ -17,9 +17,8 @@ import type { CourseOption, Restoration, RestorationProblem } from '@/lib/restor
 export const SITE_SELECT = `
   id, tooth, state, technique, impression_type, impression_taken_on, placed_on, torque_ncm, isq, bone_type, graft, notes, created_at, updated_at, failed_on, failure_type, failure_reason, failure_notes, stock_lot_id,
   placing_delegate_id, assisting_delegate_id, supervisor_id, course_id, placing_doctor_id,
-  implant_type, angulation_deg, angulation_direction, anchorage, entry_point, trajectory,
+  implant_type, angulation_deg, angulation_direction, anchorage, entry_point, trajectory, planned_product_id,
   product:products!implant_sites_product_id_fkey(*),
-  planned_product:products!implant_sites_planned_product_id_fkey(*),
   lot:stock_lots(lot_no, expiry),
   placing:delegates!implant_sites_placing_delegate_id_fkey(full_name),
   assisting:delegates!implant_sites_assisting_delegate_id_fkey(full_name),
@@ -115,7 +114,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
   for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors]) {
     if (r.error) throw new Error('Could not load the chart');
   }
-  const siteList = ((sites.data ?? []) as unknown as ImplantSite[]).map(sortSite);
+  const siteList = await withPlannedProducts(supabase, ((sites.data ?? []) as unknown as ImplantSite[]).map(sortSite));
   const spares = await sparesBySite(supabase, siteList);
   const statusMap: Partial<Record<number, ToothState>> = {};
   for (const row of statuses.data ?? []) statusMap[row.tooth as number] = row.status as ToothState;
@@ -147,6 +146,21 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
 }
 
 /** The spares each planned site's booking holds for its tooth (0125), by site id, in the order chosen. */
+/**
+ * Each site's planned product, read by its own query: planned_product_id has no foreign key for now (0141), so
+ * PostgREST can't embed it, and a second key to products would make older unhinted `products(*)` embeds ambiguous.
+ */
+export async function withPlannedProducts(
+  supabase: Pick<Awaited<ReturnType<typeof createClient>>, 'from'>, sites: ImplantSite[],
+): Promise<ImplantSite[]> {
+  const ids = [...new Set(sites.map((s) => s.planned_product_id).filter((id): id is string => !!id))];
+  if (ids.length === 0) return sites.map((s) => ({ ...s, planned_product: null }));
+  const { data, error } = await supabase.from('products').select('*').in('id', ids);
+  if (error) throw new Error('Could not load the chart');
+  const byId = new Map(((data ?? []) as Product[]).map((p) => [p.id, p]));
+  return sites.map((s) => ({ ...s, planned_product: (s.planned_product_id && byId.get(s.planned_product_id)) || null }));
+}
+
 async function sparesBySite(
   supabase: Awaited<ReturnType<typeof createClient>>, sites: ImplantSite[],
 ): Promise<Record<string, Product[]>> {
