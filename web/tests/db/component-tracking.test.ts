@@ -1,7 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, asPostgres } from './helpers';
-import { makeDelegate, makePatient, makeProduct, place, receive } from './fixtures';
+import { makeDelegate, makePatient, makeProduct, onHand, place, receive } from './fixtures';
 
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
 const users = inject('testUsers');
@@ -315,6 +315,87 @@ describe('components by role (0135)', () => {
       const s = await twoSites(c);
       const id = await fit2(c, s.site, 'cover_screw');
       expect(await currentAt(c, s.site)).toEqual([id]);
+      const next = await fit2(c, s.site, 'healing_abutment');
+      expect(await row(c, id)).toMatchObject({ current: false, replaced_by: next });
+    });
+  });
+});
+
+describe('components by role: fixes (0136)', () => {
+  it('replacing the abutment closes a prosthetic screw that holds it, not one that holds a restoration', async () => {
+    await withTx(async (c) => {
+      const s = await twoSites(c);
+      const first = await fit3(c, s.site, 'ti_base');
+      const onAbutment = await fit3(c, s.site, 'prosthetic_screw', { holds: first });
+      const second = await fit3(c, s.site, 'abutment');
+      expect(await row(c, onAbutment)).toMatchObject({ current: false, replaced_by: second });
+      expect(await currentAt(c, s.site)).toEqual([second]);
+      await undo(c, second);
+      expect(await currentAt(c, s.site)).toEqual([first, onAbutment].sort());
+
+      const otherAbutment = await fit3(c, s.other, 'ti_base');
+      const crown = await restorationOn(c, s.patient, s.other);
+      const onCrown = await fit3(c, s.other, 'prosthetic_screw', { holdsRestoration: crown });
+      const healing = await fit3(c, s.other, 'healing_abutment');
+      expect(await row(c, otherAbutment)).toMatchObject({ current: false, replaced_by: healing });
+      expect(await row(c, onCrown)).toMatchObject({ current: true, replaced_by: null });
+    });
+  });
+
+  it('legacy final restoration current → v3 abutment → void → final restoration current again, the older abutment still closed', async () => {
+    await withTx(async (c) => {
+      const s = await twoSites(c);
+      const older = await fit2(c, s.site, 'ti_base');
+      const legacy = await fit2(c, s.site, 'final_restoration');
+      const abutment = await fit3(c, s.site, 'abutment');
+      expect(await row(c, legacy)).toMatchObject({ current: false, replaced_by: abutment });
+      expect(await currentAt(c, s.site)).toEqual([abutment]);
+      await undo(c, abutment);
+      expect(await currentAt(c, s.site)).toEqual([legacy]);
+      expect(await row(c, older)).toMatchObject({ current: false, replaced_by: legacy });
+    });
+  });
+
+  it('a v3 fitting that closed nothing reopens nothing when undone', async () => {
+    await withTx(async (c) => {
+      const s = await twoSites(c);
+      const abutment = await fit3(c, s.site, 'ti_base');
+      const first = await fit3(c, s.site, 'abutment_screw', { holds: abutment });
+      await fit3(c, s.site, 'abutment');
+      const healing = await fit3(c, s.site, 'healing_abutment');
+      await undo(c, healing);
+      // The newer abutment came back; the first screw, closed with the first abutment, did not.
+      expect(await row(c, first)).toMatchObject({ current: false });
+      const screwless = await fit3(c, s.other, 'ti_base');
+      await undo(c, screwless);
+      expect(await currentAt(c, s.other)).toEqual([]);
+    });
+  });
+
+  it('a scan body entered by mistake can be undone and its stock returns', async () => {
+    await withTx(async (c) => {
+      const s = await twoSites(c);
+      const healing = await fit3(c, s.site, 'healing_abutment');
+      const product = await makeProduct(c, 'scan_body', 'Zz Tracking Brand');
+      const lot = await receive(c, product, 2, 'ZZTRKSB');
+      const scan = await fit3(c, s.site, 'scan_body', { product, lot });
+      expect(await onHand(c, lot)).toBe(1);
+      await undo(c, scan);
+      expect(await onHand(c, lot)).toBe(2);
+      expect(await row(c, scan)).toMatchObject({ current: false, voided: true });
+      expect(await currentAt(c, s.site)).toEqual([healing]);
+      await refused(c, () => undo(c, scan), /Only the current component can be undone\./);
+    });
+  });
+
+  it('every component type has a role', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      const { rows } = await c.query(
+        `select t::text as type, app_private.component_role(t) as role
+         from unnest(enum_range(null::public.component_type)) t`);
+      expect(rows.filter((r) => r.role === null)).toEqual([]);
+      expect(rows.length).toBeGreaterThanOrEqual(13);
     });
   });
 });
