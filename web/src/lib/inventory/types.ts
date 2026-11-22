@@ -20,11 +20,6 @@ export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
   prosthetic_screw: 'Prosthetic screw', other: 'Other',
 };
 
-const SURGICAL: readonly ProductType[] = ['implant', 'cover_screw', 'healing_abutment', 'graft', 'membrane'];
-export function categoryOf(t: ProductType): 'surgical' | 'prosthetic' {
-  return SURGICAL.includes(t) ? 'surgical' : 'prosthetic';
-}
-
 export type Product = {
   id: string;
   type: ProductType;
