@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { shownComponents } from '@/lib/inventory/components';
+import { componentRole, currentComponents, partLabel } from '@/lib/inventory/components';
 import { productLabel } from '@/lib/inventory/labels';
+import { specsLine } from '@/lib/inventory/specs';
+import { restorationLabel, type Restoration } from '@/lib/restorations/restorations';
 import {
   COMPONENT_LABELS, SITE_STATE_LABELS, TECHNIQUES, TECHNIQUE_LABELS,
-  type ChartData, type ComponentType, type ImplantSite,
+  type ChartData, type ImplantSite, type SiteComponent,
 } from '@/lib/inventory/types';
 import { formatDate } from '@/lib/format';
 import { setTechnique } from './implant-actions';
@@ -16,38 +18,45 @@ import { Complications } from './complications';
 import { FailureBox } from './failure-box';
 import { ImpressionControl } from './impression-control';
 
-// The component sequence on an implant; the connection stage covers Ti-base, multi-unit or abutment. Crowns are
-// restorations now (Restoration tab): old final_restoration components are left out here, kept in the history list.
-const STAGES: { label: string; types: ComponentType[] }[] = [
-  { label: 'Cover screw', types: ['cover_screw'] },
-  { label: 'Healing abutment', types: ['healing_abutment'] },
-  { label: 'Abutment', types: ['ti_base', 'multi_unit', 'abutment'] },
-];
+/** What a screw holds, named: "Multi-unit abutment" or "Full arch 15–25 (final)". */
+function holderOf(c: SiteComponent, site: ImplantSite, restorations: Restoration[]): string | null {
+  if (c.holds_component_id) {
+    const held = site.components.find((x) => x.id === c.holds_component_id);
+    return held ? COMPONENT_LABELS[held.component_type] : 'an abutment';
+  }
+  if (c.holds_restoration_id) {
+    const held = restorations.find((r) => r.id === c.holds_restoration_id);
+    return held ? restorationLabel(held) : 'a restoration';
+  }
+  return null;
+}
 
-function ComponentTimeline({ site }: { site: ImplantSite }) {
-  const components = shownComponents(site);
-  const current = components.find((c) => c.removed_on === null)?.component_type;
-  const fitted = new Set(components.filter((c) => !c.voided_at).map((c) => c.component_type));
+/** The parts on the implant now, one line each: healing or abutment, then its screws. */
+function CurrentParts({ site, restorations }: { site: ImplantSite; restorations: Restoration[] }) {
+  const parts = currentComponents(site);
   return (
-    <ol aria-label="Components so far" className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-xs">
-      {STAGES.map((stage, i) => {
-        const isCurrent = current !== undefined && stage.types.includes(current);
-        const reached = stage.types.some((t) => fitted.has(t));
-        return (
-          <li key={stage.label} className="flex items-center gap-1">
-            {i > 0 && <span aria-hidden="true" className={`h-px w-3 ${reached ? 'bg-accent' : 'bg-line-strong'}`} />}
-            <span
-              aria-current={isCurrent ? 'step' : undefined}
-              className={`whitespace-nowrap rounded-full px-2 py-0.5 ${
-                isCurrent ? 'bg-accent font-semibold text-white' : reached ? 'bg-accent-soft text-accent-strong' : 'border border-line text-muted'
-              }`}
-            >
-              {isCurrent && current ? COMPONENT_LABELS[current] : stage.label}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+    <div>
+      <p className="text-muted">Current parts</p>
+      {parts.length === 0 ? (
+        <p className="text-muted">None recorded.</p>
+      ) : (
+        <ul aria-label="Current parts" className="space-y-1">
+          {parts.map((c) => {
+            const holder = holderOf(c, site, restorations);
+            const specs = c.product ? specsLine(c.product) : '';
+            return (
+              <li key={c.id} data-testid="current-part">
+                <span className="font-medium text-ink">{partLabel(c)}</span>
+                {c.product && <span className="text-muted"> · {productLabel(c.product)}</span>}
+                {c.torque_ncm !== null && <span> · Torque: {c.torque_ncm} Ncm</span>}
+                {holder && <span> · holds {holder}</span>}
+                {specs && <span className="block text-xs text-muted">{specs}</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -133,7 +142,7 @@ export function ImplantFacts({ site, patientId, data }: { site: ImplantSite; pat
         {site.state !== 'planned' && site.state !== 'removed' && (
           <ImpressionControl site={site} patientId={patientId} editable={data.editable} />
         )}
-        {(site.state === 'placed' || site.state === 'restored') && <ComponentTimeline site={site} />}
+        {(site.state === 'placed' || site.state === 'restored') && <CurrentParts site={site} restorations={data.restorations ?? []} />}
       </div>
       <FailureBox site={site} patientId={patientId} editable={data.editable} restorations={data.restorations} />
       {site.components.length > 0 && (
@@ -142,9 +151,13 @@ export function ImplantFacts({ site, patientId, data }: { site: ImplantSite; pat
           <ol className="list-decimal pl-5 text-muted" data-testid="component-history">
             {site.components.map((c) => (
               <li key={c.id} className={c.voided_at ? 'text-muted line-through' : ''}>
-                {COMPONENT_LABELS[c.component_type]} — {formatDate(c.fitted_on)}
+                {partLabel(c)}
                 {data.teachingOn && c.course_id && ` — ${data.courses.find((x) => x.id === c.course_id)?.name ?? 'Unknown course'}`}
-                {c.voided_at ? ` — undone: ${c.voided_reason}` : c.removed_on ? ` (until ${formatDate(c.removed_on)})` : ' (current)'}
+                {c.voided_at
+                  ? ` — undone: ${c.voided_reason}`
+                  : componentRole(c.component_type) === 'transfer' ? ''
+                  : c.replaced_by && c.removed_on ? ` — replaced on ${formatDate(c.removed_on)}`
+                  : c.removed_on ? ` (until ${formatDate(c.removed_on)})` : ' (current)'}
               </li>
             ))}
           </ol>

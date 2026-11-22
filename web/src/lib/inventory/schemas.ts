@@ -18,6 +18,8 @@ const reorderLevel = z.preprocess(
 );
 
 const TORQUE_MESSAGE = 'Enter a torque between 0 and 150 Ncm.';
+/** A component's torque (Ncm), optional; the Component form checks it before sending. */
+export const componentTorque = optionalNumber(0, 150, TORQUE_MESSAGE);
 
 export const productSchema = z
   .object({
@@ -167,7 +169,7 @@ export const componentSchema = z
     byDelegateId: optionalUuid,
     byOrganizerId: optionalUuid,
     courseId: optionalUuid,
-    torque: optionalNumber(0, 150, TORQUE_MESSAGE),
+    torque: componentTorque,
     holdsComponentId: optionalUuid,
     holdsRestorationId: optionalUuid,
     notes: text(1000),

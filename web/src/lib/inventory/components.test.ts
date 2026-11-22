@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { acceptsProduct, activeSite, badgesFor, componentRole, currentComponent, currentComponents, lastFollowup } from './components';
+import { acceptsProduct, activeSite, badgesFor, componentRole, currentComponent, currentComponents, lastFollowup, partLabel, transferComponents, undoableComponents } from './components';
 import type { ImplantSite, SiteComponent } from './types';
 
 const comp = (type: SiteComponent['component_type'], removed_on: string | null): SiteComponent => ({
@@ -88,5 +88,28 @@ describe('lastFollowup (I5)', () => {
       { id: 'b', date: '2026-03-10', check_type: '3-month', outcome: 'failed', notes: '', voided_at: '2026-03-11T00:00:00Z', voided_reason: 'wrong patient', visit_key: null, attendance: null, ...noFindings },
     ];
     expect(lastFollowup(s)?.id).toBe('a');
+  });
+});
+
+describe('parts for the panel and corrections', () => {
+  const at = (c: SiteComponent, over: Partial<SiteComponent>): SiteComponent => ({ ...c, ...over });
+  const parts = [
+    at(comp('healing_abutment', '2026-02-01'), { fitted_on: '2026-01-10', replaced_by: 'multi_unit' }),
+    at(comp('multi_unit', null), { fitted_on: '2026-02-01' }),
+    at(comp('scan_body', '2026-02-03'), { fitted_on: '2026-02-03' }),
+    at(comp('impression_coping', '2026-02-04'), { fitted_on: '2026-02-04', voided_at: '2026-02-05' }),
+    at(comp('abutment_screw', null), { fitted_on: '2026-02-05' }),
+  ];
+  it('names a part with its date, a transfer as used', () => {
+    expect(partLabel(parts[1])).toBe('Multi-unit abutment — 01 Feb 2026');
+    expect(partLabel(parts[2])).toBe('Scan body — used 03 Feb 2026');
+  });
+  it('lists transfers that are not voided', () => {
+    expect(transferComponents(site(36, 'placed', parts)).map((c) => c.id)).toEqual(['scan_body']);
+  });
+  it('offers the current parts then the transfers for undo, the latest fitted first chosen', () => {
+    const { options, latest } = undoableComponents(site(36, 'placed', parts));
+    expect(options.map((c) => c.id)).toEqual(['multi_unit', 'abutment_screw', 'scan_body']);
+    expect(latest?.id).toBe('abutment_screw');
   });
 });

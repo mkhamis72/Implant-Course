@@ -6,13 +6,15 @@ import { PlacedByChoice, type PlacedBy } from '@/components/placed-by-choice';
 import { availableLots } from '@/lib/inventory/lots';
 import { withRecorded } from '@/lib/inventory/with-recorded';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
-import { acceptsProduct } from '@/lib/inventory/components';
+import { acceptsProduct, componentRole, currentComponents, partLabel } from '@/lib/inventory/components';
 import { delegatesForCourse, keepIfEnrolled } from '@/lib/inventory/enrolled';
-import { coursesForDate } from '@/lib/restorations/restorations';
+import { componentTorque } from '@/lib/inventory/schemas';
+import { specsLine } from '@/lib/inventory/specs';
+import { coursesForDate, restorationLabel, screwHoldableRestorations } from '@/lib/restorations/restorations';
 import { formatDate } from '@/lib/format';
 import {
-  COMPONENT_LABELS, COMPONENT_TYPES, TECHNIQUES, TECHNIQUE_LABELS,
-  type ChartData, type ComponentType, type ImplantSite, type Product, type Technique,
+  COMPONENT_LABELS, COMPONENT_ROLE_LABELS, COMPONENT_TYPES, TECHNIQUES, TECHNIQUE_LABELS,
+  type ChartData, type ComponentRole, type ComponentType, type ImplantSite, type Product, type Technique,
 } from '@/lib/inventory/types';
 import { fitComponent, placeImplant, planImplant, receiveStockForPlacement } from './implant-actions';
 import { ImplantPicker } from './implant-picker';
@@ -440,29 +442,67 @@ export function PlaceForm({
   );
 }
 
+// Crowns and bridges are recorded on the Restoration tab; final_restoration stays for old records only.
+const FORM_ROLES: ComponentRole[] = ['healing', 'abutment', 'abutment_screw', 'prosthetic_screw', 'transfer'];
+
+/** What a screw can hold: the implant's current abutment and, for a prosthetic screw, its current restorations. */
+function holdsOptions(site: ImplantSite, data: ChartData, type: ComponentType): { value: string; label: string }[] {
+  const role = componentRole(type);
+  if (role !== 'abutment_screw' && role !== 'prosthetic_screw') return [];
+  const abutments = currentComponents(site)
+    .filter((c) => componentRole(c.component_type) === 'abutment')
+    .map((c) => ({ value: `component:${c.id}`, label: partLabel(c) }));
+  if (role === 'abutment_screw') return abutments;
+  const restorations = screwHoldableRestorations(site.id, data.restorations ?? [])
+    .map((r) => ({ value: `restoration:${r.id}`, label: restorationLabel(r) }));
+  return [...abutments, ...restorations];
+}
+
 export function ComponentForm({ patientId, site, data, onDone }: { patientId: string; site: ImplantSite; data: ChartData; onDone: () => void }) {
   const [v, setV] = useState({
     componentType: 'healing_abutment' as ComponentType, productId: '', lotId: '', fittedOn: data.today,
-    byDelegateId: '', byOrganizerId: data.me, courseId: site.course_id ?? '', notes: '',
+    byDelegateId: '', byOrganizerId: data.me, courseId: site.course_id ?? '', notes: '', torque: '', holds: '',
   });
   const set = (key: keyof typeof v) => (value: string) =>
     setV((cur) => ({
       ...cur,
       [key]: value,
-      ...(key === 'componentType' ? { productId: '', lotId: '' } : {}),
+      ...(key === 'componentType' ? { productId: '', lotId: '', holds: '' } : {}),
       ...(key === 'productId' ? { lotId: '' } : {}),
       ...(key === 'fittedOn' ? { lotId: keepIfUsable(data, cur.productId, cur.lotId, value) } : {}),
       ...(key === 'courseId' ? { byDelegateId: keepIfEnrolled(data.enrollments, value, cur.byDelegateId) } : {}),
     }));
   const enrolled = delegatesForCourse(data.delegates, data.enrollments, v.courseId);
   const products = data.componentProducts.filter((p) => acceptsProduct(v.componentType, p.type));
-  const { error, pending, submit } = useSubmit(fitComponent, onDone);
+  const chosen = products.find((p) => p.id === v.productId) ?? null;
+  const specs = chosen ? specsLine(chosen) : '';
+  const holds = holdsOptions(site, data, v.componentType);
+  const role = componentRole(v.componentType);
+  const isScrew = role === 'abutment_screw' || role === 'prosthetic_screw';
+  // The torque is checked here too, so a wrong value is named before anything is sent.
+  const { error, pending, submit } = useSubmit(async (input) => {
+    const torque = componentTorque.safeParse(input.torque);
+    return torque.success ? fitComponent(input) : { error: torque.error.issues[0].message };
+  }, onDone);
+  const [holdsKind, holdsId] = v.holds.split(':');
   return (
-    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit({ patientId, siteId: site.id, ...v, ...(data.teachingOn ? {} : { courseId: null, byDelegateId: null }), lotId: data.inventoryOn ? v.lotId : null }); }}>
+    <form className="space-y-3" onSubmit={(e) => {
+      e.preventDefault();
+      submit({
+        patientId, siteId: site.id, ...v,
+        ...(data.teachingOn ? {} : { courseId: null, byDelegateId: null }),
+        lotId: data.inventoryOn ? v.lotId : null,
+        holdsComponentId: isScrew && holdsKind === 'component' ? holdsId : null,
+        holdsRestorationId: isScrew && holdsKind === 'restoration' ? holdsId : null,
+      });
+    }}>
       <Field label="Component">
         <select className="input" value={v.componentType} onChange={(e) => set('componentType')(e.target.value)}>
-          {/* Crowns and bridges are recorded on the Restoration tab; final_restoration stays for old records only. */}
-          {COMPONENT_TYPES.filter((t) => t !== 'final_restoration').map((t) => <option key={t} value={t}>{COMPONENT_LABELS[t]}</option>)}
+          {FORM_ROLES.map((role) => (
+            <optgroup key={role} label={COMPONENT_ROLE_LABELS[role]}>
+              {COMPONENT_TYPES.filter((t) => componentRole(t) === role).map((t) => <option key={t} value={t}>{COMPONENT_LABELS[t]}</option>)}
+            </optgroup>
+          ))}
         </select>
       </Field>
       <Field label="Product (optional)">
@@ -471,7 +511,22 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
           {products.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
         </select>
       </Field>
+      {specs && <p className="text-sm text-muted" data-testid="product-specs">{specs}</p>}
       {data.inventoryOn && v.productId && <BatchSelect data={data} productId={v.productId} usedOn={v.fittedOn} value={v.lotId} onChange={set('lotId')} />}
+      {isScrew && (
+        <>
+          <Field label="Holds" required>
+            <select className="input" aria-required="true" value={v.holds} onChange={(e) => set('holds')(e.target.value)}>
+              <option value="">Choose what it holds…</option>
+              {holds.map((h) => <option key={h.value} value={h.value}>{h.label}</option>)}
+            </select>
+          </Field>
+          {holds.length === 0 && <p className="text-sm text-warn">Nothing on this implant for the screw to hold: record the abutment{role === 'prosthetic_screw' ? ' or the restoration' : ''} first.</p>}
+        </>
+      )}
+      <Field label="Torque (Ncm)">
+        <input className="input" inputMode="decimal" value={v.torque} onChange={(e) => set('torque')(e.target.value)} />
+      </Field>
       <Field label="Fitted on">
         <input className="input" type="date" min={site.placed_on ?? undefined} max={data.today} value={v.fittedOn} onChange={(e) => set('fittedOn')(e.target.value)} />
       </Field>

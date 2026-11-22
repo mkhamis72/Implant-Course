@@ -277,7 +277,7 @@ describe('without Inventory', () => {
   it('fits a component with no batch group and lotId null', async () => {
     const { fitComponent } = await import('./implant-actions');
     vi.mocked(fitComponent).mockResolvedValue({});
-    const abutment = { id: 'a1', type: 'ti_base', brand: 'Brand', system: 'S', platform: null, diameter_mm: null, length_mm: null, description: '' };
+    const abutment = { id: 'a1', type: 'ti_base', brand: 'Brand', system: 'S', platform: null, diameter_mm: null, length_mm: null, description: '', connection: '', gingival_height_mm: null, angle_deg: null, material: '', driver_interface: '', driver_size: '', driver_ref: '', torque_ncm: null };
     const site = { id: 's1', tooth: 36, state: 'placed', components: [] } as unknown as Parameters<typeof ComponentForm>[0]['site'];
     render(<ComponentForm patientId='pt' site={site} data={{ ...off, componentProducts: [abutment] } as unknown as ChartData} onDone={() => {}} />);
     fireEvent.change(screen.getByRole('combobox', { name: 'Component' }), { target: { value: 'ti_base' } });
@@ -403,5 +403,73 @@ describe('<PlaceForm> with no implants switched on (0128)', () => {
   it('says an admin switches products on in Admin → Catalogue', () => {
     render(<PlaceForm patientId="pt" tooth={36} data={{ ...data, implants: [], lots: [] } as ChartData} onDone={() => {}} plannedProductId={null} />);
     expect(screen.getByText('No products switched on yet. An admin chooses them in Admin → Catalogue.')).toBeInTheDocument();
+  });
+});
+
+describe('<ComponentForm> screws, torque and specs', () => {
+  const spec = { connection: '', gingival_height_mm: null, angle_deg: null, material: '', driver_interface: '', driver_size: '', driver_ref: '', torque_ncm: null };
+  const prod = (id: string, type: string, over: Record<string, unknown> = {}) =>
+    ({ id, type, brand: 'Oxy', system: 'PSK', platform: '', diameter_mm: null, length_mm: null, ref_code: id, description: '', ...spec, ...over });
+  const mua = {
+    id: 'mua', component_type: 'multi_unit', fitted_on: '2030-06-01', removed_on: null, voided_at: null, voided_reason: '', product: null,
+    torque_ncm: 30, holds_component_id: null, holds_restoration_id: null, replaced_by: null,
+  };
+  const site = { id: 's1', tooth: 15, state: 'restored', placed_on: '2030-05-01', course_id: null, components: [mua] } as unknown as Parameters<typeof ComponentForm>[0]['site'];
+  const arch = { id: 'r1', stage: 'final', type: 'full_arch', teeth: [15, 14, 13, 12, 11, 21, 22, 23, 24, 25], ended_on: null, site_ids: ['s1'] };
+  const ended = { ...arch, id: 'r0', stage: 'temporary', ended_on: '2030-05-20' };
+  const screwData = {
+    ...data, organizers: [{ id: 'u1', label: 'Me' }], restorations: [arch, ended],
+    componentProducts: [prod('ps1', 'prosthetic_screw', { driver_interface: 'Hex', driver_size: '1.25 mm' }), prod('mu1', 'multi_unit')],
+  } as unknown as ChartData;
+  const choose = (name: RegExp | string, value: string) => fireEvent.change(screen.getByRole('combobox', { name }), { target: { value } });
+
+  it('groups the component types by role', () => {
+    render(<ComponentForm patientId="pt" site={site} data={screwData} onDone={() => {}} />);
+    const select = screen.getByRole('combobox', { name: 'Component' });
+    expect([...select.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(['Healing', 'Abutment', 'Abutment screw', 'Prosthetic screw', 'Scan / impression']);
+  });
+
+  it('a prosthetic screw needs Holds, listing the abutment and the current restoration, and sends the restoration', async () => {
+    const { fitComponent } = await import('./implant-actions');
+    vi.mocked(fitComponent).mockResolvedValue({});
+    render(<ComponentForm patientId="pt" site={site} data={screwData} onDone={() => {}} />);
+    expect(screen.queryByRole('combobox', { name: /^Holds/ })).not.toBeInTheDocument();
+    choose('Component', 'prosthetic_screw');
+    const holds = screen.getByRole('combobox', { name: /^Holds/ });
+    expect(holds).toHaveAttribute('aria-required', 'true');
+    expect(within(holds).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Choose what it holds…', 'Multi-unit abutment — 01 Jun 2030', 'Full arch 15–25 (final)',
+    ]);
+    fireEvent.change(holds, { target: { value: 'restoration:r1' } });
+    fireEvent.change(screen.getByLabelText(/^Torque \(Ncm\)/), { target: { value: '15' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save component' }));
+    await vi.waitFor(() => expect(vi.mocked(fitComponent).mock.calls.at(-1)?.[0]).toMatchObject({
+      componentType: 'prosthetic_screw', holdsRestorationId: 'r1', holdsComponentId: null, torque: '15',
+    }));
+  });
+
+  it('an abutment screw holds only the abutment', () => {
+    render(<ComponentForm patientId="pt" site={site} data={screwData} onDone={() => {}} />);
+    choose('Component', 'abutment_screw');
+    expect(within(screen.getByRole('combobox', { name: /^Holds/ })).getAllByRole('option').map((o) => o.textContent))
+      .toEqual(['Choose what it holds…', 'Multi-unit abutment — 01 Jun 2030']);
+  });
+
+  it('shows the chosen product specs', () => {
+    render(<ComponentForm patientId="pt" site={site} data={screwData} onDone={() => {}} />);
+    choose('Component', 'prosthetic_screw');
+    expect(within(screen.getByRole('combobox', { name: /^Product/ })).getAllByRole('option')).toHaveLength(2);
+    choose(/^Product/, 'ps1');
+    expect(screen.getByText('Screwdriver: Hex 1.25 mm')).toBeInTheDocument();
+  });
+
+  it('refuses a torque over 150 Ncm without calling the action', async () => {
+    const { fitComponent } = await import('./implant-actions');
+    vi.mocked(fitComponent).mockClear();
+    render(<ComponentForm patientId="pt" site={site} data={screwData} onDone={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/^Torque \(Ncm\)/), { target: { value: '200' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save component' }));
+    expect(await screen.findByText('Enter a torque between 0 and 150 Ncm.')).toBeInTheDocument();
+    expect(vi.mocked(fitComponent)).not.toHaveBeenCalled();
   });
 });

@@ -47,7 +47,10 @@ const RADIOGRAPH_FIELD_LABELS: Record<string, string> = {
   taken_on: 'date', type: 'type', purpose: 'purpose', teeth: 'teeth', link: 'link', notes: 'notes',
 };
 
-const IMPRESSION_FIELD_LABELS: Record<string, string> = { impression_type: 'scan / impression', impression_taken_on: 'scan / impression date' };
+/** Component details (0135): the torque a part was tightened to and what a screw holds. */
+const COMPONENT_FIELD_LABELS: Record<string, string> = { torque_ncm: 'torque', holds_component_id: 'holds', holds_restoration_id: 'holds' };
+
+const IMPRESSION_FIELD_LABELS:Record<string, string> = { impression_type: 'scan / impression', impression_taken_on: 'scan / impression date' };
 
 function changedFields(
   before: Record<string, unknown> | null, after: Record<string, unknown> | null, labels: Record<string, string> = FIELD_LABELS,
@@ -136,7 +139,10 @@ export function describeChange(e: HistoryEntry, { teaching = true }: { teaching?
       const row = e.after ?? e.before;
       const label = COMPONENT_LABELS[row?.component_type as ComponentType] ?? String(row?.component_type);
       if (e.after?.voided_at && !e.before?.voided_at) return `Component removed from the record: ${label} (${e.after.voided_reason})`;
-      return e.action === 'INSERT' ? `Component fitted: ${label}` : `Component updated: ${label}`;
+      if (e.action === 'INSERT') return `Component fitted: ${label}`;
+      if (e.after?.replaced_by && !e.before?.replaced_by) return `Component replaced: ${label}`;
+      const changed = changedFields(e.before, e.after, COMPONENT_FIELD_LABELS);
+      return changed.length ? `Component updated: ${label} (${changed.join(', ')})` : `Component updated: ${label}`;
     }
     case 'implant_followups': {
       const row = e.after ?? e.before;

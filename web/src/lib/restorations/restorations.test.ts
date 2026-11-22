@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   coursesForDate, currentRestoration, describeTeeth, jawOf, loadingOf, problemEditSchema, problemSchema, restorationEditSchema, restorationSchema,
-  restorationSpans,
+  restorationLabel, restorationSpans, screwHoldableRestorations,
   type Restoration,
 } from './restorations';
 
@@ -143,5 +143,16 @@ describe('restorationSpans (odontogram bars)', () => {
   });
   it('labels an overdenture by its implants', () => {
     expect(restorationSpans([r({ type: 'overdenture', teeth: [34, 35, 36], site_ids: ['s34', 's36'] })], sites)[0].label).toBe('Overdenture · on 34, 36');
+  });
+});
+
+describe('restorationLabel and screwHoldableRestorations', () => {
+  it('names a restoration by type, teeth and stage', () => {
+    expect(restorationLabel(r({ type: 'full_arch', teeth: [15, 14, 13, 12, 11, 21, 22, 23, 24, 25] }))).toBe('Full arch 15–25 (final)');
+    expect(restorationLabel(r({ stage: 'temporary' }))).toBe('Single crown 36 (temporary)');
+  });
+  it('lists the current restorations on the site', () => {
+    const all = [r({ id: 'a' }), r({ id: 'b', ended_on: '2026-02-01' }), r({ id: 'c', site_ids: ['other'] })];
+    expect(screwHoldableRestorations('s1', all).map((x) => x.id)).toEqual(['a']);
   });
 });

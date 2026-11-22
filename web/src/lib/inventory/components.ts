@@ -1,4 +1,5 @@
-import { COMPONENT_BADGES, type ComponentRole, type ComponentType, type ImplantSite, type ProductType, type SiteComponent } from './types';
+import { formatDate } from '@/lib/format';
+import { COMPONENT_BADGES, COMPONENT_LABELS, type ComponentRole, type ComponentType, type ImplantSite, type ProductType, type SiteComponent } from './types';
 
 /** Mirrors app_private.component_accepts in the database. */
 export const COMPONENT_ACCEPTS: Record<ComponentType, readonly ProductType[]> = {
@@ -47,10 +48,29 @@ export function currentComponent(site: ImplantSite): SiteComponent | null {
   return currentComponents(site).find((c) => { const r = componentRole(c.component_type); return r === 'healing' || r === 'abutment'; }) ?? null;
 }
 
-/** Components shown on the chart and the component timeline: old final_restoration rows are drawn as restorations now. */
-export function shownComponents(site: ImplantSite): SiteComponent[] {
-  return site.components.filter((c) => c.component_type !== 'final_restoration');
+/** Scan bodies and impression copings (recorded already closed) that are not voided: shown in history, undoable. */
+export function transferComponents(site: ImplantSite): SiteComponent[] {
+  return site.components.filter((c) => c.voided_at === null && componentRole(c.component_type) === 'transfer');
 }
+
+/** "Multi-unit abutment — 03 Nov 2026"; a scan body or impression coping: "Scan body — used 03 Nov 2026". */
+export function partLabel(c: SiteComponent): string {
+  const used = componentRole(c.component_type) === 'transfer' ? 'used ' : '';
+  return `${COMPONENT_LABELS[c.component_type]} — ${used}${formatDate(c.fitted_on)}`;
+}
+
+/** What void_component accepts: the current parts, then the transfers; `latest` is the last fitted of them. */
+export function undoableComponents(site: ImplantSite): { options: SiteComponent[]; latest: SiteComponent | null } {
+  const options = [...currentComponents(site), ...transferComponents(site)];
+  // site.components is in fitting order (chart-data sorts it), so among equal dates the later one wins.
+  const order = (c: SiteComponent) => site.components.indexOf(c);
+  const latest = options.reduce<SiteComponent | null>(
+    (best, c) => (!best || c.fitted_on > best.fitted_on || (c.fitted_on === best.fitted_on && order(c) > order(best)) ? c : best),
+    null,
+  );
+  return { options, latest };
+}
+
 
 export function activeSite(sites: readonly ImplantSite[], tooth: number): ImplantSite | null {
   return sites.find((s) => s.tooth === tooth && (s.state === 'planned' || s.state === 'placed' || s.state === 'restored')) ?? null;

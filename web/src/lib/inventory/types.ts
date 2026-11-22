@@ -129,6 +129,8 @@ export type SiteComponent = {
   holds_restoration_id: string | null;
   /** The component that took this one's place. */
   replaced_by: string | null;
+  /** When it was recorded: orders parts fitted on the same day. */
+  created_at?: string;
 };
 
 export type Followup = VisitFindings & {

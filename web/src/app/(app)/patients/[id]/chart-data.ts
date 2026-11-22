@@ -23,7 +23,8 @@ export const SITE_SELECT = `
   supervisor:supervisors!implant_sites_supervisor_ref_fkey(full_name),
   doctor:doctors!implant_sites_placing_doctor_id_fkey(name),
   components:site_components(
-    id, component_type, fitted_on, removed_on, notes, voided_at, voided_reason, stock_lot_id, course_id,
+    id, component_type, fitted_on, removed_on, notes, voided_at, voided_reason, stock_lot_id, course_id, created_at,
+    torque_ncm, holds_component_id, holds_restoration_id, replaced_by,
     product:products(*), lot:stock_lots(lot_no),
     fitted_by_delegate:delegates(full_name),
     fitted_by_organizer:profiles!site_components_fitted_by_organizer_id_fkey(full_name, email)
@@ -44,7 +45,8 @@ export function sortSite(site: ImplantSite): ImplantSite {
   const surgery = site.surgery as ImplantSite['surgery'] | ImplantSite['surgery'][] | undefined;
   return {
     ...site,
-    components: [...site.components].sort((a, b) => (a.fitted_on < b.fitted_on ? -1 : a.fitted_on > b.fitted_on ? 1 : 0)),
+    // Fitting order: by date, then by when it was recorded (a replacement on the same day comes after what it replaced).
+    components: [...site.components].sort((a, b) => a.fitted_on.localeCompare(b.fitted_on) || (a.created_at ?? '').localeCompare(b.created_at ?? '')),
     followups: [...site.followups].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
     surgery: Array.isArray(surgery) ? surgery[0] ?? null : surgery ?? null,
     grafts: [...(site.grafts ?? [])].sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0)),

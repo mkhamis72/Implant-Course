@@ -89,6 +89,22 @@ describe('describeChange for implant follow-up records', () => {
       after: { component_type: 'ti_base', voided_at: '2026-10-01', voided_reason: 'Wrong entry' },
     }))).toBe('Component removed from the record: Ti-base (Wrong entry)');
   });
+  it('names a torque or holder change on a component, and a replaced part', () => {
+    expect(describeChange(entry({
+      table_name: 'site_components', before: { component_type: 'prosthetic_screw', torque_ncm: 15, voided_at: null },
+      after: { component_type: 'prosthetic_screw', torque_ncm: 20, voided_at: null },
+    }))).toBe('Component updated: Prosthetic screw (torque)');
+    expect(describeChange(entry({
+      table_name: 'site_components', before: { component_type: 'abutment_screw', holds_component_id: 'a', torque_ncm: 25, voided_at: null },
+      after: { component_type: 'abutment_screw', holds_component_id: 'b', torque_ncm: 25, voided_at: null },
+    }))).toBe('Component updated: Abutment screw (holds)');
+    expect(describeChange(entry({
+      table_name: 'site_components', before: { component_type: 'multi_unit', removed_on: null, replaced_by: null, voided_at: null },
+      after: { component_type: 'multi_unit', removed_on: '2026-11-03', replaced_by: 'x', voided_at: null },
+    }))).toBe('Component replaced: Multi-unit abutment');
+    expect(describeChange(entry({ table_name: 'site_components', action: 'INSERT', after: { component_type: 'scan_body', voided_at: null } })))
+      .toBe('Component fitted: Scan body');
+  });
   it('describes recorded and voided follow-ups', () => {
     expect(describeChange(entry({ table_name: 'implant_followups', action: 'INSERT', after: { check_type: 'Review', outcome: 'integrated', voided_at: null } })))
       .toBe('Follow-up (Review): Integrated');
