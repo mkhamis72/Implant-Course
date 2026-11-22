@@ -37,7 +37,13 @@ function records(text: string): string[][] {
   return out;
 }
 
-const size = (s: string | undefined) => (s === undefined || s.trim() === '' ? null : Number(s));
+/** An empty size is null; anything else must be a positive number (a decimal point, not a comma). */
+function size(s: string | undefined, row: number, column: string): number | null {
+  if (s === undefined || s.trim() === '') return null;
+  const n = Number(s.trim());
+  if (!Number.isFinite(n) || n <= 0) throw new Error(`Row ${row}: ${column} is not a number: "${s.trim()}"`);
+  return n;
+}
 
 export function parseCatalogCsv(text: string): LibraryRow[] {
   const [header, ...rows] = records(text.replace(/^﻿/, ''));
@@ -49,7 +55,7 @@ export function parseCatalogCsv(text: string): LibraryRow[] {
     if (!type) throw new Error(`Row ${i + 2}: unknown type "${f[0].trim()}"`);
     return {
       type, brand: f[1].trim(), system: (f[2] ?? '').trim(), platform: (f[3] ?? '').trim(),
-      diameter_mm: size(f[4]), length_mm: size(f[5]), ref_code: (f[6] ?? '').trim(),
+      diameter_mm: size(f[4], i + 2, 'Diameter (mm)'), length_mm: size(f[5], i + 2, 'Length (mm)'), ref_code: (f[6] ?? '').trim(),
       description: (f[7] ?? '').trim(), source: (f[8] ?? '').trim(),
     };
   });

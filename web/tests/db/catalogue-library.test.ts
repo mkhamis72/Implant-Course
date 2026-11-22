@@ -280,3 +280,86 @@ describe('receive_stock for a switched-off planned implant (0130)', () => {
     });
   });
 });
+
+describe('catalogue follow-ups (0132)', () => {
+  const ownCopy = async (c: Client, ref: string, at: string) => {
+    await asPostgres(c);
+    return (await one<{ id: string }>(c, `insert into public.products (company_id, type, brand, system, diameter_mm, length_mm, ref_code, active, created_at)
+      values ($1, 'implant', 'Zz Library', 'Zz System', 4, 10, $2, true, $3::timestamptz) returning id`, [ACADEMY_ID, ref, at])).id;
+  };
+
+  it('switching an item off also switches off a hand-entered copy with the same brand, type and ref code', async () => {
+    await withTx(async (c) => {
+      const item = await newItem(c, 'ZZ4');
+      const older = await ownCopy(c, 'ZZ4', '2026-01-01');
+      const copy = await ownCopy(c, 'ZZ4', '2026-02-01');
+      const other = await ownCopy(c, 'ZZ4-OTHER', '2026-02-01');
+      await asAdmin(c);
+      await c.query('select public.set_catalog_items($1, true)', [[item]]);
+      expect((await one<{ n: number }>(c, 'select public.set_catalog_items($1, false) as n', [[item]])).n).toBe(2);
+      await asPostgres(c);
+      expect((await c.query('select id, active, catalog_item_id from public.products where id = any($1) order by created_at, ref_code',
+        [[older, copy, other]])).rows).toEqual([
+        { id: older, active: false, catalog_item_id: item },
+        { id: copy, active: false, catalog_item_id: null },
+        { id: other, active: true, catalog_item_id: null },
+      ]);
+    });
+  });
+
+  it('set_products_active will not switch on a product whose catalogue item is retired', async () => {
+    await withTx(async (c) => {
+      const item = await newItem(c, 'ZZ5');
+      await asAdmin(c);
+      await c.query('select public.set_catalog_items($1, true)', [[item]]);
+      await c.query('select public.set_catalog_items($1, false)', [[item]]);
+      await asPostgres(c);
+      await c.query('update public.catalog_items set retired = true where id = $1', [item]);
+      const product = (await one<{ id: string }>(c, 'select id from public.products where catalog_item_id = $1', [item])).id;
+      await asAdmin(c);
+      await refused(c, () => c.query('select public.set_products_active($1, true)', [[product]]),
+        /This product is no longer in the catalogue\./);
+      expect((await one<{ n: number }>(c, 'select public.set_products_active($1, false) as n', [[product]])).n).toBe(0);
+    });
+  });
+
+  it('save_catalogue saves every change together and counts them', async () => {
+    await withTx(async (c) => {
+      const on = await newItem(c, 'ZZ6');
+      const p = await linkedProduct(c);
+      const own = await ownCopy(c, 'ZZ6-OWN', '2026-01-01');
+      await asAdmin(c);
+      expect(await one(c, 'select * from public.save_catalogue($1, $2, $3, $4)', [[on], [p.catalog_item_id], [], [own]]))
+        .toEqual({ switched_on: 1, switched_off: 2 });
+    });
+  });
+
+  it('save_catalogue saves nothing when one change is refused', async () => {
+    await withTx(async (c) => {
+      const on = await newItem(c, 'ZZ7');
+      const retired = await newItem(c, 'ZZ8', true);
+      const p = await linkedProduct(c);
+      await asAdmin(c);
+      await refused(c, () => c.query('select * from public.save_catalogue($1, $2, $3, $4)', [[on, retired], [p.catalog_item_id], [], []]),
+        /This product is no longer in the catalogue\./);
+      await asPostgres(c);
+      expect(await one(c, 'select active from public.products where id = $1', [p.id])).toEqual({ active: true });
+      expect((await c.query('select 1 from public.products where catalog_item_id = $1', [on])).rows).toHaveLength(0);
+    });
+  });
+
+  it('save_catalogue is for admins only', async () => {
+    await withTx(async (c) => {
+      await actAs(c, users.organizer);
+      await refused(c, () => c.query(`select * from public.save_catalogue('{}', '{}', '{}', '{}')`), /Only an admin can do this\./);
+    });
+  });
+
+  it('the library read policy evaluates is_active_user once per query', async () => {
+    await withTx(async (c) => {
+      const { qual } = await one<{ qual: string }>(c,
+        `select qual from pg_policies where schemaname = 'public' and tablename = 'catalog_items' and policyname = 'catalog_items_select'`);
+      expect(qual).toMatch(/SELECT public\.is_active_user\(\)|SELECT is_active_user\(\)/);
+    });
+  });
+});

@@ -76,6 +76,18 @@ describe('<CatalogueForm>', () => {
     expect(box('Cuff 3 mm REFold').disabled).toBe(true);
   });
 
+  it('a brand or system tick switches only the rows Find shows', async () => {
+    render(<CatalogueForm group={group} />);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Find' }), { target: { value: 'refn3' } });
+    expect(box('Oxy Implant').checked).toBe(false);
+    fireEvent.click(box('Oxy Implant'));
+    expect(box('Ø4.5 × 13 mm REFn3').checked).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(saveCatalogue).toHaveBeenCalled());
+    expect(sent().on).toEqual(['n3']);
+    expect(sent().off).toEqual([]);
+  });
+
   it('filters by brand, system, platform or ref code', () => {
     render(<CatalogueForm group={group} />);
     fireEvent.change(screen.getByRole('searchbox', { name: 'Find' }), { target: { value: 'normo' } });

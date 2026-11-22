@@ -1,7 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, asCompany, asPostgres } from './helpers';
-import { enroll, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, place, receive } from './fixtures';
+import { enroll, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, receive } from './fixtures';
 
 // Modules release 3 (0115): implants placed and surgeries booked by a doctor; the clinic rules.
 
