@@ -40,6 +40,20 @@ describe('parseCatalogCsv', () => {
 
   const SPEC_HEAD = `${HEADER},Connection,Gingival height (mm),Angle (°),Material,Driver interface,Driver size,Driver ref,Torque (Ncm)`;
 
+  it('reads the optional Implant kind column, in any case; empty or missing is conventional', () => {
+    const head = `${HEADER},Implant kind`;
+    const kinds = parseCatalogCsv(`${head}\nImplant,B,S,P,4,50,R1,,p.1,,Zygomatic\nImplant,B,S,P,4,60,R2,,p.1,,pterygoid\nImplant,B,S,P,4,10,R3,,p.1,,\nImplant,B,S,P,4,10,R4,,p.1,,CONVENTIONAL`);
+    expect(kinds.map((r) => r.implant_kind)).toEqual(['zygomatic', 'pterygoid', 'conventional', 'conventional']);
+    expect(kinds[1].length_mm).toBe(60);
+    expect(parseCatalogCsv(`${HEADER}\nImplant,B,S,P,4,10,R1,,p.1,`)[0].implant_kind).toBe('conventional');
+  });
+
+  it('refuses an unknown implant kind with its row', () => {
+    expect(() => parseCatalogCsv(`${HEADER},Implant kind\nImplant,B,S,P,4,10,R1,,p.1,,Tilted`)).toThrow(
+      'Row 2: Implant kind must be Conventional, Zygomatic or Pterygoid: "Tilted"',
+    );
+  });
+
   it('reads the optional trailing specification columns', () => {
     const rows = parseCatalogCsv(
       `${SPEC_HEAD}\nHealing abutment,B,S,P,,,R1,,p.1,,Internal hex,2.5,17,Titanium,Hex,1.25 mm,DRV1,25\nImplant,B,S,P,4,10,R2,,p.1,,,,,,,,,`,
@@ -104,6 +118,10 @@ describe('diffLibrary', () => {
     expect(diffLibrary([existing(), other], [row({ ref_code: 'R2' })])).toEqual({
       add: [row({ ref_code: 'R2' })], update: [], retire: ['i1'],
     });
+  });
+
+  it('updates an item whose implant kind changed', () => {
+    expect(diffLibrary([existing()], [row({ implant_kind: 'zygomatic' })]).update).toEqual([{ id: 'i1', row: row({ implant_kind: 'zygomatic' }) }]);
   });
 
   it('brings a retired row back', () => {

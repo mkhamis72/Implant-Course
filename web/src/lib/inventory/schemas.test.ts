@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { adjustSchema, componentSchema, correctPlacementSchema, delegateSchema, placeSchema, productSchema, receiveSchema, linkedProductSchema } from './schemas';
+import { adjustSchema, componentSchema, correctPlacementSchema, delegateSchema, geometrySchema, placeSchema, productSchema, receiveSchema, linkedProductSchema } from './schemas';
 
 const id = '1b4e28ba-2fa1-41d2-883f-0016d3cca427';
 const err = (r: { error?: { issues: { message: string }[] } }) => r.error?.issues[0].message;
@@ -11,6 +11,50 @@ describe('productSchema', () => {
     });
     expect(err(productSchema.safeParse({ type: 'implant', brand: 'MIS' }))).toBe('Implants need a diameter and a length.');
     expect(productSchema.parse({ type: 'ti_base', brand: 'MIS', diameter_mm: '' })).toMatchObject({ diameter_mm: null });
+  });
+});
+
+describe('productSchema implant kind and length', () => {
+  const implant = { type: 'implant', brand: 'MIS', diameter_mm: '4', length_mm: '50' };
+  it('takes lengths up to 60 mm and refuses beyond', () => {
+    expect(productSchema.parse(implant).length_mm).toBe(50);
+    expect(productSchema.parse({ ...implant, length_mm: '60' }).length_mm).toBe(60);
+    expect(err(productSchema.safeParse({ ...implant, length_mm: '61' }))).toBe('Enter a length between 4 and 60 mm.');
+    expect(err(productSchema.safeParse({ ...implant, length_mm: '3' }))).toBe('Enter a length between 4 and 60 mm.');
+  });
+  it('defaults the kind to conventional and checks it', () => {
+    expect(productSchema.parse(implant).implant_kind).toBe('conventional');
+    expect(productSchema.parse({ ...implant, implant_kind: 'zygomatic' }).implant_kind).toBe('zygomatic');
+    expect(err(productSchema.safeParse({ ...implant, implant_kind: 'x' }))).toBe('Choose the implant kind.');
+  });
+});
+
+describe('geometrySchema', () => {
+  const ok = { siteId: id, patientId: id, type: 'conventional' };
+  const msg = (extra: Record<string, string>) => err(geometrySchema.safeParse({ ...ok, ...extra }));
+  it('accepts a conventional implant with nothing else, as nulls', () => {
+    expect(geometrySchema.parse(ok)).toMatchObject({ type: 'conventional', angulation: null, direction: null, anchorage: null, entryPoint: '', trajectory: '' });
+  });
+  it('accepts a zygomatic implant with all fields', () => {
+    expect(
+      geometrySchema.parse({ ...ok, type: 'zygomatic', angulation: '45', direction: 'distal', anchorage: 'zygoma', entryPoint: ' a ', trajectory: 'b' }),
+    ).toMatchObject({ type: 'zygomatic', angulation: 45, direction: 'distal', anchorage: 'zygoma', entryPoint: 'a', trajectory: 'b' });
+  });
+  it('mirrors the database messages', () => {
+    expect(msg({ type: '' })).toBe('Choose the implant type.');
+    expect(msg({ type: 'x' })).toBe('Choose the implant type.');
+    expect(msg({ type: 'tilted' })).toBe('Enter the angle of the tilted implant.');
+    expect(msg({ type: 'tilted', angulation: '61' })).toBe('Enter an angle between 0 and 60°.');
+    expect(msg({ angulation: '-1' })).toBe('Enter an angle between 0 and 60°.');
+    expect(msg({ angulation: 'abc' })).toBe('Enter an angle between 0 and 60°.');
+    expect(geometrySchema.parse({ ...ok, type: 'tilted', angulation: '0' }).angulation).toBe(0);
+    expect(msg({ angulation: '10', direction: 'up' })).toBe('Choose the direction of the angle.');
+    expect(msg({ type: 'tilted', angulation: '10', anchorage: 'zygoma' })).toBe('Anchorage is only recorded for zygomatic and pterygoid implants.');
+    expect(msg({ entryPoint: 'x' })).toBe('Anchorage is only recorded for zygomatic and pterygoid implants.');
+    expect(msg({ type: 'pterygoid', anchorage: 'bone' })).toBe('Choose the anchorage.');
+    expect(msg({ type: 'zygomatic', entryPoint: 'x'.repeat(201) })).toBe('Keep the entry point and trajectory to 200 characters each.');
+    expect(geometrySchema.safeParse({ ...ok, type: 'zygomatic', trajectory: 'x'.repeat(200) }).success).toBe(true);
+    expect(err(geometrySchema.safeParse({ ...ok, siteId: '' }))).toBe('Implant not found.');
   });
 });
 

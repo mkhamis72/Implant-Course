@@ -1,7 +1,7 @@
 'use client';
 
-import { useActionState } from 'react';
-import { PRODUCT_TYPES, PRODUCT_TYPE_LABELS, type Product } from '@/lib/inventory/types';
+import { useActionState, useState } from 'react';
+import { IMPLANT_KINDS, IMPLANT_KIND_LABELS, PRODUCT_TYPES, PRODUCT_TYPE_LABELS, type Product } from '@/lib/inventory/types';
 import { productSpecs } from '@/lib/inventory/specs';
 import { checkedOf, valueOf, type FormState } from '@/lib/patients/form-state';
 
@@ -18,6 +18,7 @@ export function ProductForm({ action, product }: Props) {
   };
   // A product switched on from the catalogue library (0128) keeps the library's fields.
   const locked = !!product?.catalog_item_id;
+  const [type, setType] = useState(v('type') || 'implant');
   const specs = product ? productSpecs(product) : [];
   return (
     <form action={formAction} className="card grid max-w-3xl gap-4 sm:grid-cols-3">
@@ -25,7 +26,7 @@ export function ProductForm({ action, product }: Props) {
       {locked && <p className="text-sm text-muted sm:col-span-3">From the catalogue library.</p>}
       <label className="block">
         <span className="label">Type</span>
-        <select className="input" name="type" disabled={locked} defaultValue={v('type') || 'implant'}>
+        <select className="input" name="type" disabled={locked} value={type} onChange={(e) => setType(e.target.value)}>
           {PRODUCT_TYPES.map((t) => (
             <option key={t} value={t}>
               {PRODUCT_TYPE_LABELS[t]}
@@ -49,6 +50,18 @@ export function ProductForm({ action, product }: Props) {
         <span className="label">Length (mm)</span>
         <input className="input" name="length_mm" disabled={locked} inputMode="decimal" defaultValue={v('length_mm')} />
       </label>
+      {type === 'implant' && (
+        <label className="block">
+          <span className="label">Implant kind</span>
+          <select className="input" name="implant_kind" disabled={locked} defaultValue={v('implant_kind') || 'conventional'}>
+            {IMPLANT_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {IMPLANT_KIND_LABELS[k]}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="block">
         <span className="label">Platform</span>
         <input className="input" name="platform" disabled={locked} defaultValue={v('platform')} />
