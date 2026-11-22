@@ -293,6 +293,8 @@ describe('permissions: guard rails', () => {
         'create_pending_login_v2', 'add_existing_member_v2', 'set_doctor_login',
         // Catalogue library (0128): admin-only writers.
         'set_catalog_items', 'set_products_active',
+        // Catalogue follow-ups (0132): one Save, all or nothing; admin-only.
+        'save_catalogue',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });

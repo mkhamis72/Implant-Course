@@ -31,6 +31,13 @@ describe('parseCatalogCsv', () => {
     expect(() => parseCatalogCsv(`${HEADER}\nImplant,B,S,P,4,10,R1,,,\nWidget,B,S,P,,,R2,,,`)).toThrow('Row 3: unknown type "Widget"');
   });
 
+  it('refuses a size that is not a positive number, with its row and column', () => {
+    expect(() => parseCatalogCsv(`${HEADER}\nImplant,B,S,P,"4,5",10,R1,,,`)).toThrow('Row 2: Diameter (mm) is not a number: "4,5"');
+    expect(() => parseCatalogCsv(`${HEADER}\nImplant,B,S,P,4,ten,R1,,,`)).toThrow('Row 2: Length (mm) is not a number: "ten"');
+    expect(() => parseCatalogCsv(`${HEADER}\nImplant,B,S,P,4,-10,R1,,,`)).toThrow('Row 2: Length (mm) is not a number: "-10"');
+    expect(parseCatalogCsv(`${HEADER}\nImplant,B,S,P, 4.5 ,10,R1,,,`)[0]).toMatchObject({ diameter_mm: 4.5, length_mm: 10 });
+  });
+
   it('refuses a file without the catalogue header', () => {
     expect(() => parseCatalogCsv('a,b\n1,2')).toThrow(/header/);
   });

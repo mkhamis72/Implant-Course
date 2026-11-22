@@ -86,12 +86,15 @@ export function CatalogueForm({ group }: { group: CatalogGroup }) {
           })).filter((p) => p.types.length),
         })).filter((s) => s.platforms.length);
         if (systems.length === 0) return null;
+        // The ticks switch only what Find shows; the counts are of the whole brand or system.
+        const rowsOf = (ps: typeof systems[number]['platforms']) => ps.flatMap((p) => p.types.flatMap((t) => t.rows));
+        const shownRows = systems.flatMap((s) => rowsOf(s.platforms));
         const expanded = !!q || !!open[brand.brand];
         const liveOn = brandRows.filter((r) => !r.retired && isOn(r)).length;
         return (
           <section key={brand.brand} className="card space-y-3">
             <div className="flex items-center gap-3">
-              <TickBox label={brand.brand} tick={tickOf(brandRows)} onToggle={() => toggleAll(brandRows)} />
+              <TickBox label={brand.brand} tick={tickOf(shownRows)} onToggle={() => toggleAll(shownRows)} />
               <h2 className="grow text-base font-semibold">{brand.brand}</h2>
               <span className="text-sm text-muted">{liveOn} of {brand.total} on</span>
               {!q && (
@@ -104,15 +107,16 @@ export function CatalogueForm({ group }: { group: CatalogGroup }) {
             {expanded && systems.map((system) => {
               const full = brand.systems.find((s) => s.system === system.system)!;
               const sysRows = full.platforms.flatMap((p) => p.types.flatMap((t) => t.rows));
+              const shownSysRows = rowsOf(system.platforms);
               return (
                 <div key={system.system} className="space-y-2 border-t border-line pt-3">
                   <div className="flex items-center gap-3">
-                    <TickBox label={system.system || 'No system'} tick={tickOf(sysRows)} onToggle={() => toggleAll(sysRows)} />
+                    <TickBox label={system.system || 'No system'} tick={tickOf(shownSysRows)} onToggle={() => toggleAll(shownSysRows)} />
                     <h3 className="grow font-medium">{system.system || 'No system'}</h3>
                     <span className="text-sm text-muted">{sysRows.filter((r) => !r.retired && isOn(r)).length} of {full.total} on</span>
                   </div>
                   {system.platforms.map((platform) => {
-                    const platRows = full.platforms.find((p) => p.platform === platform.platform)!.types.flatMap((t) => t.rows);
+                    const platRows = platform.types.flatMap((t) => t.rows);
                     return (
                     <div key={platform.platform} className="space-y-1 pl-8">
                       {platform.platform && (

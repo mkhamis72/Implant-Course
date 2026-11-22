@@ -8,28 +8,16 @@ import type { FormState } from '@/lib/patients/form-state';
 
 const ids = (fd: FormData, name: string) => fd.getAll(name).map(String).filter(Boolean);
 
-/** Admin → Catalogue: switches the changed library items and own products on or off (0128). */
+/** Admin → Catalogue: switches the changed library items and own products on or off in one call (save_catalogue, 0132). */
 export async function saveCatalogue(_prev: FormState, formData: FormData): Promise<FormState> {
   await requireAdmin();
   const supabase = await createClient();
-  const calls: [string, Record<string, unknown>, 'on' | 'off'][] = [
-    ['set_catalog_items', { p_item_ids: ids(formData, 'on_item'), p_on: true }, 'on'],
-    ['set_catalog_items', { p_item_ids: ids(formData, 'off_item'), p_on: false }, 'off'],
-    ['set_products_active', { p_product_ids: ids(formData, 'on_product'), p_on: true }, 'on'],
-    ['set_products_active', { p_product_ids: ids(formData, 'off_product'), p_on: false }, 'off'],
-  ];
-  let on = 0;
-  let off = 0;
-  for (const [fn, args, way] of calls) {
-    if ((Object.values(args)[0] as string[]).length === 0) continue;
-    const { data, error } = await supabase.rpc(fn, args);
-    if (error) {
-      revalidatePath('/admin/catalogue');
-      return { error: userMessage(error) ?? 'Could not save the catalogue.' };
-    }
-    if (way === 'on') on += Number(data ?? 0);
-    else off += Number(data ?? 0);
-  }
+  const { data, error } = await supabase.rpc('save_catalogue', {
+    p_items_on: ids(formData, 'on_item'), p_items_off: ids(formData, 'off_item'),
+    p_products_on: ids(formData, 'on_product'), p_products_off: ids(formData, 'off_product'),
+  });
   revalidatePath('/admin/catalogue');
-  return { ok: `Saved: ${on} switched on, ${off} switched off.` };
+  if (error) return { error: userMessage(error) ?? 'Could not save the catalogue.' };
+  const row = (Array.isArray(data) ? data[0] : data) as { switched_on: number; switched_off: number } | null;
+  return { ok: `Saved: ${row?.switched_on ?? 0} switched on, ${row?.switched_off ?? 0} switched off.` };
 }
