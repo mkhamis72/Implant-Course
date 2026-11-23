@@ -22,6 +22,7 @@ const ANON_EXEC_ALLOWLIST = new Set([
 const PARENT_SCOPED_UNIQUES = new Set<string>([
   'checklist_items_position', // within one checklist
   'enrollments_course_id_delegate_id_key', // within one course
+  'full_arch_stages_case_id_stage_key', // within one case
   'implant_followups_one_visit', // within one implant
   'implant_sites_one_active', // within one patient
   'implant_surgery_pkey', // one row per implant

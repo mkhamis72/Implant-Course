@@ -126,6 +126,10 @@ async function seedCompany(c: Client, key: 'A' | 'B'): Promise<Company> {
   await c.query('insert into public.restoration_sites (restoration_id, site_id) values ($1, $2)', [r.restorations, site]);
   r.restoration_problems = await one(c, `insert into public.restoration_problems (restoration_id, noticed_on, type, action)
     values ($1, ${today}, 'chipping', 'none') returning id`, [r.restorations]);
+  r.full_arch_cases = await one(c, `insert into public.full_arch_cases (patient_id, arch, configuration)
+    values ($1, 'upper', 'all_on_4') returning id`, [r.patients]);
+  r.full_arch_stages = await one(c, `insert into public.full_arch_stages (case_id, stage, done_on)
+    values ($1, 'scan', ${today}) returning id`, [r.full_arch_cases]);
   r.radiographs = await one(c, `insert into public.radiographs (patient_id, taken_on, type, purpose, teeth)
     values ($1, ${today}, 'periapical', 'baseline', '{11}') returning id`, [r.patients]);
   await c.query('insert into public.radiograph_bone_levels (radiograph_id, site_id, mesial_mm) values ($1, $2, 1)', [r.radiographs, site]);
