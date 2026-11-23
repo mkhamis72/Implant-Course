@@ -12,12 +12,13 @@ import type { ToothState } from '@/lib/patients/types';
 import type { VisitRow } from '@/lib/visits/visits';
 import type { Enrollment } from '@/lib/inventory/enrolled';
 import type { Radiograph } from '@/lib/radiographs/radiographs';
+import { CASE_STAGES, type FullArchCase } from '@/lib/full-arch/cases';
 import type { CourseOption, Restoration, RestorationProblem } from '@/lib/restorations/restorations';
 
 export const SITE_SELECT = `
   id, tooth, state, technique, impression_type, impression_taken_on, placed_on, torque_ncm, isq, bone_type, graft, notes, created_at, updated_at, failed_on, failure_type, failure_reason, failure_notes, stock_lot_id,
   placing_delegate_id, assisting_delegate_id, supervisor_id, course_id, placing_doctor_id,
-  implant_type, angulation_deg, angulation_direction, anchorage, entry_point, trajectory, planned_product_id,
+  implant_type, angulation_deg, angulation_direction, anchorage, entry_point, trajectory, planned_product_id, case_id,
   product:products!implant_sites_product_id_fkey(*),
   lot:stock_lots(lot_no, expiry),
   placing:delegates!implant_sites_placing_delegate_id_fkey(full_name),
@@ -56,9 +57,22 @@ export function sortSite(site: ImplantSite): ImplantSite {
   };
 }
 
-const RESTORATION_SELECT = `
+const CASE_SELECT = `
+  id, arch, configuration, name, notes, closed_at, close_reason, updated_at,
+  stages:full_arch_stages(stage, done_on, lab, passive_fit, occlusion, notes)
+`;
+
+/** Cases as loaded, their stages in the order of the process (scan, lab and design, try-in). */
+export function toCases(rows: unknown): FullArchCase[] {
+  return ((rows ?? []) as FullArchCase[]).map((c) => ({
+    ...c,
+    stages: [...(c.stages ?? [])].sort((a, b) => CASE_STAGES.indexOf(a.stage) - CASE_STAGES.indexOf(b.stage)),
+  }));
+}
+
+export const RESTORATION_SELECT = `
   id, stage, type, teeth, fitted_on, retention, material, delegate_id, supervisor_id, course_id, notes,
-  ended_on, end_kind, end_reason, updated_at,
+  ended_on, end_kind, end_reason, updated_at, case_id,
   sites:restoration_sites(site_id),
   problems:restoration_problems(id, noticed_on, type, action, notes, updated_at, voided_at),
   delegate:delegates(full_name),
@@ -94,7 +108,7 @@ function allRows<T>(page: Parameters<typeof fetchAll<T>>[0]): Promise<{ data: T[
 export async function loadChartData(patientId: string): Promise<ChartData> {
   const supabase = await createClient();
   const me = await getCurrentProfile();
-  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors] = await Promise.all([
+  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors, cases] = await Promise.all([
     supabase.from('tooth_status').select('tooth, status').eq('patient_id', patientId),
     supabase.from('implant_sites').select(SITE_SELECT).eq('patient_id', patientId).order('created_at'),
     // PostgREST caps a response at 1000 rows: page through products and stocked batches.
@@ -110,8 +124,10 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supabase.rpc('radiographs_for', { p_patient: patientId }),
     supabase.from('enrollments').select('course_id, delegate_id'),
     supabase.from('doctors').select('id, name, user_id, active').eq('active', true).order('name'),
+    // Closed cases too: they keep their record; newest first.
+    supabase.from('full_arch_cases').select(CASE_SELECT).eq('patient_id', patientId).order('created_at', { ascending: false }),
   ]);
-  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors]) {
+  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors, cases]) {
     if (r.error) throw new Error('Could not load the chart');
   }
   const siteList = await withPlannedProducts(supabase, ((sites.data ?? []) as unknown as ImplantSite[]).map(sortSite));
@@ -142,6 +158,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     teachingOn: me ? teachingOn(me.features) : false,
     doctors: (doctors.data ?? []) as ChartData['doctors'],
     spares,
+    cases: toCases(cases.data),
   };
 }
 

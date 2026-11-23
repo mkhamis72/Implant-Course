@@ -8,7 +8,7 @@ import {
 const r = (over: Partial<Restoration>): Restoration => ({
   id: 'r1', stage: 'final', type: 'single_crown', teeth: [36], fitted_on: '2026-01-10', retention: null, material: null,
   delegate_id: null, supervisor_id: null, course_id: null, notes: '', ended_on: null, end_kind: null, end_reason: null,
-  updated_at: '2026-01-10T10:00:00+00:00', site_ids: ['s1'], problems: [], ...over,
+  updated_at: '2026-01-10T10:00:00+00:00', case_id: null, site_ids: ['s1'], problems: [], ...over,
 });
 
 describe('arch helpers', () => {

@@ -26,7 +26,7 @@ const site = {
 const data = (editable: boolean) =>
   ({
     statuses: {}, sites: [site], visits: [], implants: [], componentProducts: [], lots: [], delegates: [], organizers: [], supervisors: [], restorations: [], courses: [], radiographs: [],
-    today: '2026-10-18', me: 'u1', editable, inventoryOn: true, teachingOn: true, doctors: [],
+    today: '2026-10-18', me: 'u1', editable, inventoryOn: true, teachingOn: true, doctors: [], cases: [],
   }) as unknown as ChartData;
 
 // The section owns the selected tab; this stands in for it.

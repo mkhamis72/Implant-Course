@@ -4,7 +4,7 @@ import type { ImplantSite } from '@/lib/inventory/types';
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
 vi.mock('@/lib/auth/session', () => ({ getCurrentProfile: vi.fn() }));
-import { SITE_SELECT, withPlannedProducts } from './chart-data';
+import { RESTORATION_SELECT, SITE_SELECT, toCases, withPlannedProducts } from './chart-data';
 
 const site = (id: string, planned: string | null) => ({ id, planned_product_id: planned }) as unknown as ImplantSite;
 
@@ -36,5 +36,19 @@ describe('chart data: planned products (0141, no embed)', () => {
     const sites = await withPlannedProducts(db.client, [site('a', null)]);
     expect(db.from).not.toHaveBeenCalled();
     expect(sites[0].planned_product).toBeNull();
+  });
+});
+
+describe('chart data: full-arch cases (0142)', () => {
+  it('reads case_id with sites and restorations', () => {
+    expect(SITE_SELECT).toMatch(/case_id/);
+    expect(RESTORATION_SELECT).toMatch(/case_id/);
+  });
+
+  it('puts the stages of each case in process order and tolerates no rows', () => {
+    const stage = (s: string) => ({ stage: s, done_on: '2026-11-01', lab: null, passive_fit: null, occlusion: null, notes: '' });
+    const out = toCases([{ id: 'c1', stages: [stage('try_in'), stage('scan')] }, { id: 'c2', stages: [] }]);
+    expect(out.map((c) => c.stages.map((x) => x.stage))).toEqual([['scan', 'try_in'], []]);
+    expect(toCases(null)).toEqual([]);
   });
 });

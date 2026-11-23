@@ -248,6 +248,46 @@ describe('describeChange: restorations', () => {
   });
 });
 
+describe('describeChange: full-arch cases', () => {
+  const base = { id: 1, at: '2026-11-24T10:00:00Z', actor: 'A' };
+  const c = { arch: 'upper', configuration: 'all_on_4', name: '', notes: '', closed_at: null, close_reason: null };
+  it('describes a case', () => {
+    expect(describeChange({ ...base, table_name: 'full_arch_cases', action: 'INSERT', before: null, after: c }))
+      .toBe('Full-arch case started: Upper arch, All-on-4');
+    expect(describeChange({ ...base, table_name: 'full_arch_cases', action: 'UPDATE', before: c, after: { ...c, configuration: 'all_on_6', name: 'Plan B' } }))
+      .toBe('Full-arch case updated: configuration, name');
+    expect(describeChange({ ...base, table_name: 'full_arch_cases', action: 'UPDATE', before: c, after: { ...c, notes: 'x' } }))
+      .toBe('Full-arch case updated: notes');
+    expect(describeChange({ ...base, table_name: 'full_arch_cases', action: 'UPDATE', before: c, after: { ...c, closed_at: '2026-11-24T10:00:00Z', close_reason: 'Moved' } }))
+      .toBe('Full-arch case closed (Moved)');
+    expect(describeChange({ ...base, table_name: 'full_arch_cases', action: 'UPDATE', before: { ...c, closed_at: '2026-11-24T10:00:00Z', close_reason: 'Moved' }, after: c }))
+      .toBe('Full-arch case reopened');
+    expect(describeChange({ ...base, table_name: 'full_arch_cases', action: 'DELETE', before: c, after: null }))
+      .toBe('Full-arch case deleted: Upper arch, All-on-4');
+  });
+  it('describes stages with their fields', () => {
+    const s = { stage: 'lab_design', done_on: '2026-11-10', lab: 'Lab A', passive_fit: null, occlusion: null, notes: '' };
+    expect(describeChange({ ...base, table_name: 'full_arch_stages', action: 'INSERT', before: null, after: s }))
+      .toBe('Full-arch stage recorded: Lab and design approved on 10 Nov 2026 (lab Lab A)');
+    expect(describeChange({ ...base, table_name: 'full_arch_stages', action: 'INSERT', before: null,
+      after: { ...s, stage: 'try_in', lab: null, passive_fit: true, occlusion: 'Even' } }))
+      .toBe('Full-arch stage recorded: Try-in on 10 Nov 2026 (passive fit yes, occlusion Even)');
+    expect(describeChange({ ...base, table_name: 'full_arch_stages', action: 'UPDATE', before: s, after: { ...s, done_on: '2026-11-12', lab: 'Lab B' } }))
+      .toBe('Full-arch stage updated: Lab and design approved (date, lab)');
+    expect(describeChange({ ...base, table_name: 'full_arch_stages', action: 'DELETE', before: { ...s, stage: 'scan', lab: null }, after: null }))
+      .toBe('Full-arch stage cleared: Scan / impression');
+  });
+  it('labels a restoration update that changes only its case link', () => {
+    const r = { stage: 'final', teeth: [15, 25], material: 'zirconia', case_id: null, voided_at: null };
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'UPDATE', before: r, after: { ...r, case_id: 'c1' } }))
+      .toBe('Linked to full-arch case');
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'UPDATE', before: { ...r, case_id: 'c1' }, after: r }))
+      .toBe('Removed from full-arch case');
+    expect(describeChange({ ...base, table_name: 'restorations', action: 'UPDATE', before: r, after: { ...r, case_id: 'c1', material: 'pmma_acrylic' } }))
+      .toBe('Restoration updated: material');
+  });
+});
+
 describe('restoration links', () => {
   it('hides restoration_sites rows and nothing else', () => {
     const base = { id: 1, at: '2026-10-21T10:00:00Z', actor: 'A', action: 'INSERT' as const, before: null, after: { site_id: 's1' } };

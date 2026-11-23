@@ -20,7 +20,7 @@ import { ChartPanel } from './chart-panel';
 const data = (editable: boolean) =>
   ({
     statuses: {}, sites: [], visits: [], implants: [], componentProducts: [], lots: [], delegates: [], organizers: [], supervisors: [], restorations: [], courses: [], radiographs: [],
-    today: '2030-06-10', me: 'u1', editable, inventoryOn: true, teachingOn: true, doctors: [],
+    today: '2030-06-10', me: 'u1', editable, inventoryOn: true, teachingOn: true, doctors: [], cases: [],
   }) as unknown as ChartData;
 
 describe('ChartPanel', () => {

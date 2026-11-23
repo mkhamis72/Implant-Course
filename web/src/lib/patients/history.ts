@@ -7,6 +7,7 @@ import { TYPE_LABELS } from '@/lib/implants/complications';
 import { FAILURE_REASON_LABELS, FAILURE_TYPE_LABELS, type FailureReason, type FailureType } from '@/lib/implants/failure';
 import { PROBLEM_ACTION_LABELS, PROBLEM_TYPE_LABELS, RESTORATION_TYPE_LABELS, STAGE_LABELS, describeTeeth } from '@/lib/restorations/restorations';
 import { RADIOGRAPH_PURPOSE_LABELS, RADIOGRAPH_TYPE_LABELS, boneLevelLabel, type RadiographPurpose, type RadiographType } from '@/lib/radiographs/radiographs';
+import { ARCH_LABELS, CASE_STAGE_LABELS, CONFIGURATION_LABELS, type Arch, type CaseStage, type Configuration } from '@/lib/full-arch/cases';
 import { visitResult, type Attendance } from '@/lib/visits/visits';
 import { formatDate } from '@/lib/format';
 import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
@@ -56,6 +57,17 @@ const RADIOGRAPH_FIELD_LABELS: Record<string, string> = {
 
 /** Component details (0135): the torque a part was tightened to and what a screw holds. */
 const COMPONENT_FIELD_LABELS: Record<string, string> = { torque_ncm: 'torque', holds_component_id: 'holds', holds_restoration_id: 'holds' };
+
+const CASE_FIELD_LABELS: Record<string, string> = { configuration: 'configuration', name: 'name', notes: 'notes' };
+const CASE_STAGE_FIELD_LABELS: Record<string, string> = { done_on: 'date', lab: 'lab', passive_fit: 'passive fit', occlusion: 'occlusion', notes: 'notes' };
+
+/** Which keys differ between the two versions of a row (updated_at ignored: every update moves it). */
+function changedKeys(e: HistoryEntry): string[] {
+  if (!e.before || !e.after) return [];
+  const { before, after } = e;
+  return [...new Set([...Object.keys(before), ...Object.keys(after)])]
+    .filter((key) => key !== 'updated_at' && JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+}
 
 const IMPRESSION_FIELD_LABELS: Record<string, string> = { impression_type: 'scan / impression', impression_taken_on: 'scan / impression date' };
 
@@ -208,6 +220,8 @@ export function describeChange(e: HistoryEntry, { teaching = true }: { teaching?
         return e.after.end_kind === 'remade' ? `Restoration remade on ${on} (${e.after.end_reason})` : `Restoration replaced on ${on}`;
       }
       if (e.before?.end_kind && !e.after?.end_kind) return 'Restoration reopened';
+      const keys = changedKeys(e);
+      if (keys.length === 1 && keys[0] === 'case_id') return e.after?.case_id ? 'Linked to full-arch case' : 'Removed from full-arch case';
       const changed = changedFields(e.before, e.after, visible(RESTORATION_FIELD_LABELS));
       return changed.length ? `Restoration updated: ${changed.join(', ')}` : 'Restoration updated';
     }
@@ -217,6 +231,31 @@ export function describeChange(e: HistoryEntry, { teaching = true }: { teaching?
       if (e.after?.voided_at && !e.before?.voided_at) return `Restoration problem removed from the record: ${type} (${e.after.voided_reason})`;
       const action = PROBLEM_ACTION_LABELS[row?.action as keyof typeof PROBLEM_ACTION_LABELS] ?? String(row?.action);
       return `Restoration problem ${e.action === 'INSERT' ? 'recorded' : 'updated'}: ${type} — ${action}`;
+    }
+    case 'full_arch_cases': {
+      const row = e.after ?? e.before;
+      const title = `${ARCH_LABELS[row?.arch as Arch] ?? String(row?.arch)}, ${CONFIGURATION_LABELS[row?.configuration as Configuration] ?? String(row?.configuration)}`;
+      if (e.action === 'INSERT') return `Full-arch case started: ${title}`;
+      if (e.action === 'DELETE') return `Full-arch case deleted: ${title}`;
+      if (e.after?.closed_at && !e.before?.closed_at) return `Full-arch case closed (${e.after.close_reason})`;
+      if (e.before?.closed_at && !e.after?.closed_at) return 'Full-arch case reopened';
+      const changed = changedFields(e.before, e.after, CASE_FIELD_LABELS);
+      return changed.length ? `Full-arch case updated: ${changed.join(', ')}` : 'Full-arch case updated';
+    }
+    case 'full_arch_stages': {
+      const row = e.after ?? e.before;
+      const label = CASE_STAGE_LABELS[row?.stage as CaseStage] ?? String(row?.stage);
+      if (e.action === 'DELETE') return `Full-arch stage cleared: ${label}`;
+      if (e.action === 'UPDATE') {
+        const changed = changedFields(e.before, e.after, CASE_STAGE_FIELD_LABELS);
+        return changed.length ? `Full-arch stage updated: ${label} (${changed.join(', ')})` : `Full-arch stage updated: ${label}`;
+      }
+      const details = [
+        row?.lab ? `lab ${row.lab}` : null,
+        row?.passive_fit === true ? 'passive fit yes' : row?.passive_fit === false ? 'passive fit no' : null,
+        row?.occlusion ? `occlusion ${row.occlusion}` : null,
+      ].filter(Boolean);
+      return `Full-arch stage recorded: ${label} on ${formatDate(String(row?.done_on))}${details.length ? ` (${details.join(', ')})` : ''}`;
     }
     case 'radiographs': {
       const row = e.after ?? e.before;

@@ -20,7 +20,7 @@ const s16 = { id: 's16', tooth: 16, state: 'placed', placed_on: '2026-01-10' } a
 const temp: Restoration = {
   id: 'r1', stage: 'temporary', type: 'single_crown', teeth: [36], fitted_on: '2026-01-12', retention: 'screw', material: 'pmma_acrylic',
   delegate_id: null, supervisor_id: null, course_id: null, notes: '', ended_on: null, end_kind: null, end_reason: null,
-  updated_at: '2026-01-12T10:00:00.5+00:00', site_ids: ['s36'], problems: [],
+  updated_at: '2026-01-12T10:00:00.5+00:00', case_id: null, site_ids: ['s36'], problems: [],
 };
 const final: Restoration = { ...temp, id: 'r2', stage: 'final', material: 'zirconia', fitted_on: '2026-04-01', updated_at: '2026-04-01T10:00:00+00:00' };
 
@@ -30,7 +30,7 @@ const data = (restorations: Restoration[], editable = true) =>
     delegates: [{ id: 'd1', label: 'Dr Delegate' }, { id: 'd2', label: 'Dr Second' }], supervisors: [{ id: 'v1', label: 'Dr Supervisor' }],
     enrollments: [{ course_id: 'c1', delegate_id: 'd1' }],
     courses: [{ id: 'c1', name: 'Autumn course', start_date: '2026-10-01', end_date: '2026-10-30' }],
-    restorations, today: '2026-10-21', me: 'u1', editable, canReceive: false, inventoryOn: true, teachingOn: true, doctors: [],
+    restorations, today: '2026-10-21', me: 'u1', editable, canReceive: false, inventoryOn: true, teachingOn: true, doctors: [], cases: [],
   }) as unknown as ChartData;
 
 beforeEach(() => {

@@ -5,6 +5,7 @@ import type { FailureReason, FailureType } from '@/lib/implants/failure';
 import type { Attendance, VisitFindings, VisitRow } from '@/lib/visits/visits';
 import type { CourseOption, Restoration } from '@/lib/restorations/restorations';
 import type { Radiograph } from '@/lib/radiographs/radiographs';
+import type { FullArchCase } from '@/lib/full-arch/cases';
 import type { Enrollment } from './enrolled';
 
 export const PRODUCT_TYPES = [
@@ -186,6 +187,8 @@ export type ImplantSite = {
   planned_product: Product | null;
   /** Read with the site; `planned_product` is attached from it by a query of its own (no key to embed through, 0141). */
   planned_product_id?: string | null;
+  /** The full-arch case this implant belongs to, if any (0142). */
+  case_id: string | null;
   stock_lot_id: string | null;
   torque_ncm: number | null;
   isq: number | null;
@@ -239,6 +242,8 @@ export type ChartData = {
   supervisors: Option[];
   /** The patient's restorations (voided ones left out), each with its implants and live problems. */
   restorations: Restoration[];
+  /** The patient's full-arch cases, closed ones too, newest first, each with its stages (0142). */
+  cases: FullArchCase[];
   /** The patient's X-rays (voided ones left out) with their bone levels, from radiographs_for. */
   radiographs: Radiograph[];
   /** Course pickers (placement, corrections, restoration), from course_options(): newest first. */

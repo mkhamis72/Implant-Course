@@ -15,7 +15,7 @@ const site = {
   components: [], followups: [], slot: null, created_at: '2026-05-02T00:00:00Z',
 } as unknown as ImplantSite;
 const data = {
-  inventoryOn: true, teachingOn: true, doctors: [{ id: 'doc1', name: 'Dr Nabil' }], lots: [], implants: [], componentProducts: [],
+  inventoryOn: true, teachingOn: true, cases: [], doctors: [{ id: 'doc1', name: 'Dr Nabil' }], lots: [], implants: [], componentProducts: [],
   delegates: [{ id: 'd1', label: 'Dr Right' }], enrollments: [{ course_id: 'c1', delegate_id: 'd1' }, { course_id: 'c2', delegate_id: 'd1' }],
   supervisors: [{ id: 'sup1', label: 'Prof A' }, { id: 'sup2', label: 'Prof B' }],
   courses: [
