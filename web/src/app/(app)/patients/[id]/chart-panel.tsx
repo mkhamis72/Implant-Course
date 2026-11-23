@@ -3,6 +3,9 @@
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { Odontogram } from '@/components/odontogram/odontogram';
 import { Legend } from '@/components/odontogram/legend';
+import { FullArch } from '@/components/full-arch/full-arch';
+import { FullArchLegend } from '@/components/full-arch/legend';
+import { fullArchModel } from '@/components/full-arch/model';
 import { MANUAL_STATES, STATE_LABELS, canSetByHand, type ManualState, type ToothState } from '@/lib/patients/types';
 import { badgesFor } from '@/lib/inventory/components';
 import { typeLabels } from '@/lib/patients/implant-type';
@@ -19,14 +22,21 @@ type Props = {
   patientId: string;
   data: ChartData;
   initialTooth: number | null;
+  /** Which drawing opens first (the page reads it from `?view=arch`). */
+  initialView?: ChartView;
 };
 
-export function ChartPanel({ patientId, data, initialTooth }: Props) {
+export type ChartView = 'teeth' | 'arch';
+const VIEWS: { view: ChartView; label: string }[] = [{ view: 'teeth', label: 'Teeth' }, { view: 'arch', label: 'Full arch' }];
+
+export function ChartPanel({ patientId, data, initialTooth, initialView = 'teeth' }: Props) {
   const statuses = data.statuses;
   const badges = useMemo(() => badgesFor(data.sites), [data.sites]);
   const types = useMemo(() => typeLabels(data.sites), [data.sites]);
   const alerts = useMemo(() => openComplicationTeeth(data.sites), [data.sites]);
   const spans = useMemo(() => restorationSpans(data.restorations, data.sites), [data.restorations, data.sites]);
+  const arch = useMemo(() => fullArchModel({ sites: data.sites, spans, badges, types }), [data.sites, spans, badges, types]);
+  const [view, setView] = useState<ChartView>(initialView);
   const [selected, setSelected] = useState<number[]>(initialTooth ? [initialTooth] : []);
   // A restoration bar or covered tooth opens the Restoration tab; `n` remounts the panel when the tooth was already open.
   const [opened, setOpened] = useState<{ tab: 'restoration'; n: number } | null>(null);
@@ -58,6 +68,15 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
     });
   }
 
+  function switchView(next: ChartView) {
+    setView(next);
+    // Keep the view on reload and when the link is shared, without a server round trip.
+    const url = new URL(window.location.href);
+    if (next === 'arch') url.searchParams.set('view', 'arch');
+    else url.searchParams.delete('view');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }
+
   function apply(status: ManualState) {
     startTransition(async () => {
       const result = await setToothStatus({ patientId, teeth: selected, status });
@@ -71,6 +90,13 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
   return (
     <div className="space-y-4">
       <div className="card space-y-4">
+        <div role="group" aria-label="Chart view" className="tabs">
+          {VIEWS.map((v) => (
+            <button key={v.view} type="button" className="tab" aria-pressed={view === v.view} onClick={() => switchView(v.view)}>
+              {v.label}
+            </button>
+          ))}
+        </div>
         {/* Touch screens keep teeth at a fingertip size (about 44px each); the chart scrolls sideways inside its panel. */}
         <div className="-mx-2 overflow-x-auto px-2">
           <div className="min-w-[36rem] sm:min-w-0 pointer-coarse:min-w-[46rem]">
@@ -79,10 +105,14 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
               <span>Right</span>
               <span>Left</span>
             </div>
-            <Odontogram statuses={statuses} badges={badges} types={types} alerts={alerts} spans={spans} openSpan={openSpan} selected={selected} onSelect={onSelect} />
+            {view === 'arch' ? (
+              <FullArch model={arch} selected={selected} onSelect={onSelect} />
+            ) : (
+              <Odontogram statuses={statuses} badges={badges} types={types} alerts={alerts} spans={spans} openSpan={openSpan} selected={selected} onSelect={onSelect} />
+            )}
           </div>
         </div>
-        <Legend />
+        {view === 'arch' ? <FullArchLegend /> : <Legend />}
       </div>
       <aside
         ref={panelRef}

@@ -113,4 +113,42 @@ describe('ChartPanel', () => {
     expect(tooth.querySelector('[data-type-label]')?.textContent).toBe('ZYG');
     expect(tooth.querySelector('[data-badge]')).not.toBeNull();
   });
+
+  describe('Teeth | Full arch switch', () => {
+    it('shows Teeth by default', () => {
+      render(<ChartPanel patientId="pt" data={data(true)} initialTooth={null} />);
+      expect(screen.getByRole('button', { name: 'Teeth', pressed: true })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Full arch', pressed: false })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Tooth 36, / })).toBeInTheDocument();
+      expect(screen.queryByRole('img', { name: 'Full-arch chart' })).toBeNull();
+    });
+
+    it('switches to Full arch', () => {
+      const replace = vi.spyOn(window.history, 'replaceState');
+      render(<ChartPanel patientId="pt" data={data(true)} initialTooth={null} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Full arch' }));
+      expect(screen.getByRole('button', { name: 'Full arch', pressed: true })).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Full-arch chart' })).toBeInTheDocument();
+      expect(screen.getByText(/Schematic drawing/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Tooth 36, / })).toBeNull();
+      expect(replace).toHaveBeenLastCalledWith(null, '', expect.stringContaining('view=arch'));
+      fireEvent.click(screen.getByRole('button', { name: 'Teeth' }));
+      expect(replace).toHaveBeenLastCalledWith(null, '', expect.not.stringContaining('view='));
+      replace.mockRestore();
+    });
+
+    it('initialView arch opens Full arch', () => {
+      render(<ChartPanel patientId="pt" data={data(true)} initialTooth={null} initialView="arch" />);
+      expect(screen.getByRole('button', { name: 'Full arch', pressed: true })).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Full-arch chart' })).toBeInTheDocument();
+    });
+
+    it('switch keeps selection', () => {
+      window.matchMedia = vi.fn(() => ({ matches: false })) as unknown as typeof window.matchMedia;
+      render(<ChartPanel patientId="pt" data={data(true)} initialTooth={null} />);
+      fireEvent.click(screen.getByRole('button', { name: /^Tooth 36, / }));
+      fireEvent.click(screen.getByRole('button', { name: 'Full arch' }));
+      expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('36');
+    });
+  });
 });

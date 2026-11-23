@@ -71,8 +71,10 @@ function Bridge({ bridge, onSelect }: { bridge: ArchBridge; onSelect: Props['onS
           );
         })}
       </g>
+      {/* A surface halo keeps the label readable where it crosses the unit boxes. */}
       <text x={(x + right) / 2} y={y + BRIDGE_H / 2 + 3.5} textAnchor="middle" fontSize={10} fontWeight={600}
-        style={{ fill: 'var(--color-accent-strong)' }}>
+        paintOrder="stroke" strokeWidth={4} strokeLinejoin="round"
+        style={{ fill: 'var(--color-accent-strong)', stroke: 'var(--color-surface)' }}>
         {bridge.label}
       </text>
     </g>

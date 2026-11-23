@@ -13,8 +13,10 @@ export default async function PatientChartPage({
 }) {
   await requirePermission('patients');
   const { id } = await params;
-  const tooth = (await readParams(searchParams, 'tooth')).tooth || undefined;
+  const { tooth: toothParam, view } = await readParams(searchParams, 'tooth', 'view');
+  const tooth = toothParam || undefined;
   const data = await loadChartData(id);
   const initial = Number(tooth);
-  return <ChartPanel patientId={id} data={data} initialTooth={isFdiTooth(initial) ? initial : null} />;
+  return <ChartPanel patientId={id} data={data} initialTooth={isFdiTooth(initial) ? initial : null}
+    initialView={view === 'arch' ? 'arch' : 'teeth'} />;
 }
