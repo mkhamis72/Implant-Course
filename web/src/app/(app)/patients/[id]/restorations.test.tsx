@@ -250,4 +250,12 @@ describe('<Restorations> in a full-arch case', () => {
     render(<Restorations site={s36} patientId="pt" data={withCase(temp)} />);
     expect(screen.queryByRole('button', { name: 'Link to case' })).toBeNull();
   });
+
+  it('only the newest restoration (the editable card) offers Link or Unlink', () => {
+    const older = { ...onUpper, id: 'r15', case_id: 'c1', fitted_on: '2026-01-11', ended_on: '2026-01-12', end_kind: 'replaced' as const };
+    const newer = { ...onUpper, case_id: 'c1' };
+    render(<Restorations site={s16} patientId="pt" data={{ ...withCase(newer), restorations: [older, newer] } as unknown as ChartData} />);
+    expect(screen.getAllByText('Part of: Upper arch · All-on-4')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Unlink from case' })).toHaveLength(1);
+  });
 });

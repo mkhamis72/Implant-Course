@@ -62,6 +62,30 @@ describe('<FullArchCasePanel>', () => {
     }));
   });
 
+  it('implants of a closed case are offered and pre-ticked in a new case', async () => {
+    const closed = { ...CASE, closed_at: '2030-06-01T10:00:00+00:00', close_reason: 'Redone' };
+    render(<FullArchCasePanel patientId="pt" data={data({
+      cases: [closed],
+      sites: [site('s15', 15, 'placed', '2030-05-01', 'c1'), site('s25', 25, 'placed', '2030-05-01', 'c1'), site('s36', 36, 'placed', '2030-05-01')],
+    })} arch="upper" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start upper case' }));
+    expect(screen.getByRole('checkbox', { name: /15/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /25/ })).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Start case' }));
+    await vi.waitFor(() => expect(createCase).toHaveBeenCalledWith(expect.objectContaining({ sites: ['s15', 's25'] })));
+  });
+
+  it('Change implants offers implants of a closed case, unticked', () => {
+    const closed = { ...CASE, id: 'c0', closed_at: '2030-04-01T10:00:00+00:00', close_reason: 'Old' };
+    render(<FullArchCasePanel patientId="pt" data={inCase({
+      cases: [CASE, closed],
+      sites: [site('s14', 14, 'placed', '2030-05-02', 'c1'), site('s15', 15, 'placed', '2030-05-01', 'c0')],
+    })} arch="upper" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Change implants' }));
+    expect(screen.getByRole('checkbox', { name: /14/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /15/ })).not.toBeChecked();
+  });
+
   it('read-only: shows the case without buttons, and no Start button', () => {
     render(<FullArchCasePanel patientId="pt" data={inCase({ editable: false })} arch="upper" />);
     const panel = screen.getByRole('region', { name: 'Upper arch · All-on-4' });

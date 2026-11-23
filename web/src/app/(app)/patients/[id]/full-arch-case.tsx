@@ -90,10 +90,12 @@ function siteLabel(s: ImplantSite): string {
   return [String(s.tooth), type, SITE_STATE_LABELS[s.state]].filter(Boolean).join(' · ');
 }
 
-/** The arch's implants that a case can hold (not cancelled, not in another case), in tooth order. */
+/** The arch's implants that a case can hold (not cancelled, not in another open case), in tooth order. */
 function candidatesFor(data: ChartData, arch: Arch, caseId: string | null): ImplantSite[] {
+  const closed = new Set(data.cases.filter((c) => c.closed_at).map((c) => c.id));
+  const available = (s: ImplantSite) => s.case_id === null || s.case_id === caseId || closed.has(s.case_id);
   return data.sites
-    .filter((s) => archOf(s.tooth) === arch && s.state !== 'removed' && (s.case_id === null || s.case_id === caseId))
+    .filter((s) => archOf(s.tooth) === arch && s.state !== 'removed' && available(s))
     .sort((a, b) => a.tooth - b.tooth);
 }
 
