@@ -15,6 +15,8 @@ type Props = {
   onSelect: (fdi: number, additive: boolean, tab?: 'restoration') => void;
   /** Current component per tooth (CS, HA, TB, MUA, AB). */
   badges?: Partial<Record<number, string>>;
+  /** The implant type tag per tooth (ZYG, TLT, PTG; none for conventional), drawn beside the component badge. */
+  types?: Partial<Record<number, string>>;
   /** Teeth whose implant has an open complication. */
   alerts?: Partial<Record<number, boolean>>;
   /** Current restorations, one bar each. */
@@ -33,6 +35,7 @@ function Tooth({
   selected,
   onSelect,
   badge,
+  typeLabel,
   alert,
   span,
   spanOpen,
@@ -42,6 +45,7 @@ function Tooth({
   selected: boolean;
   onSelect: Props['onSelect'];
   badge: string | undefined;
+  typeLabel: string | undefined;
   alert: boolean;
   span: Span | undefined;
   spanOpen: boolean;
@@ -63,7 +67,7 @@ function Tooth({
     <g
       role="button"
       tabIndex={0}
-      aria-label={`Tooth ${box.fdi}, ${STATE_LABELS[status]}${badge ? `, ${badge}` : ''}${alert ? ', open complication' : ''}${pontic ? `, under ${span.label}` : ''}`}
+      aria-label={`Tooth ${box.fdi}, ${STATE_LABELS[status]}${typeLabel ? `, ${typeLabel}` : ''}${badge ? `, ${badge}` : ''}${alert ? ', open complication' : ''}${pontic ? `, under ${span.label}` : ''}`}
       aria-pressed={selected}
       data-tooth={box.fdi}
       data-status={status}
@@ -102,6 +106,23 @@ function Tooth({
             style={{ fill: 'var(--color-surface)' }}
           >
             {badge}
+          </text>
+        </g>
+      )}
+      {typeLabel && (
+        // Outlined, on the root side of the component badge, so the two tags never read as one.
+        <g data-type-label>
+          <rect x={box.x + 4} y={box.y + (box.jaw === 'upper' ? 78 : 38)} width={TOOTH_W - 8} height={15} rx={3}
+            style={{ fill: 'var(--color-surface)', stroke: 'var(--color-accent-strong)' }} strokeWidth={1.5} />
+          <text
+            x={box.x + TOOTH_W / 2}
+            y={box.y + (box.jaw === 'upper' ? 89.5 : 49.5)}
+            textAnchor="middle"
+            fontSize={9.5}
+            fontWeight={700}
+            style={{ fill: 'var(--color-accent-strong)' }}
+          >
+            {typeLabel}
           </text>
         </g>
       )}
@@ -148,7 +169,7 @@ function SpanBar({ span, onSelect }: { span: Span; onSelect: Props['onSelect'] }
   );
 }
 
-export function Odontogram({ statuses, selected, onSelect, badges, alerts, spans = [], openSpan = null }: Props) {
+export function Odontogram({ statuses, selected, onSelect, badges, types, alerts, spans = [], openSpan = null }: Props) {
   const spanOf = new Map(spans.flatMap((s) => s.teeth.map((t) => [t, s] as const)));
   return (
     <svg
@@ -166,6 +187,7 @@ export function Odontogram({ statuses, selected, onSelect, badges, alerts, spans
           status={statuses[box.fdi] ?? 'present'}
           selected={selected.includes(box.fdi)}
           badge={badges?.[box.fdi]}
+          typeLabel={types?.[box.fdi]}
           alert={alerts?.[box.fdi] ?? false}
           span={spanOf.get(box.fdi)}
           spanOpen={openSpan !== null && spanOf.get(box.fdi)?.id === openSpan}

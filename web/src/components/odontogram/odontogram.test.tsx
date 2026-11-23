@@ -61,6 +61,18 @@ describe('<Odontogram> badges', () => {
     expect(tooth.querySelector('[data-badge]')?.textContent).toBe('TB');
     expect(screen.getByRole('button', { name: 'Tooth 46, Present' }).querySelector('[data-badge]')).toBeNull();
   });
+
+  it('shows the implant type label next to the component badge, keeping the badge', () => {
+    render(<Odontogram statuses={{ 14: 'implant_placed', 15: 'implant_placed' }} badges={{ 14: 'MUA' }} types={{ 14: 'ZYG', 15: 'TLT' }}
+      selected={[]} onSelect={vi.fn()} />);
+    const tooth = screen.getByRole('button', { name: 'Tooth 14, Implant placed, ZYG, MUA' });
+    expect(tooth.querySelector('[data-type-label]')?.textContent).toBe('ZYG');
+    expect(tooth.querySelector('[data-badge]')?.textContent).toBe('MUA');
+    const tilted = screen.getByRole('button', { name: 'Tooth 15, Implant placed, TLT' });
+    expect(tilted.querySelector('[data-type-label]')?.textContent).toBe('TLT');
+    expect(tilted.querySelector('[data-badge]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Tooth 46, Present' }).querySelector('[data-type-label]')).toBeNull();
+  });
 });
 
 describe('<Odontogram> alerts', () => {

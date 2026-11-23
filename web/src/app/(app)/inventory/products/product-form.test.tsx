@@ -8,7 +8,7 @@ const product = {
   id: 'p1', type: 'implant', category: 'surgical', brand: 'Oxy Implant', system: 'PSK-MDK · PSK Normo', platform: 'Standard',
   diameter_mm: 4.5, length_mm: 10, ref_code: 'PSKR45100', description: '', reorder_level: 2, active: true, is_sample: false,
   catalog_item_id: null, connection: '', gingival_height_mm: null, angle_deg: null, material: '', driver_interface: '',
-  driver_size: '', driver_ref: '', torque_ncm: null,
+  driver_size: '', driver_ref: '', torque_ncm: null, implant_kind: 'conventional',
 } as Product;
 
 describe('<ProductForm> from the catalogue library (0128)', () => {
@@ -56,5 +56,49 @@ describe('<ProductForm> specifications (0134)', () => {
   it('keeps the stored specifications of a hand-entered product', () => {
     render(<ProductForm action={vi.fn()} product={{ ...product, torque_ncm: 35 }} />);
     expect(screen.getByLabelText('Recommended torque (Ncm)')).toHaveValue('35');
+  });
+});
+
+describe('<ProductForm> implant kind (0139)', () => {
+  it('shows the kind for implants only and submits it', async () => {
+    const action = vi.fn().mockResolvedValue({});
+    render(<ProductForm action={action} />);
+    await userEvent.selectOptions(screen.getByLabelText('Implant kind'), 'zygomatic');
+    await userEvent.type(screen.getByLabelText('Brand'), 'B');
+    await userEvent.click(screen.getByRole('button', { name: 'Save product' }));
+    expect(Object.fromEntries(action.mock.calls[0][1] as FormData)).toMatchObject({ implant_kind: 'zygomatic' });
+    await userEvent.selectOptions(screen.getByLabelText('Type'), 'cover_screw');
+    expect(screen.queryByLabelText('Implant kind')).not.toBeInTheDocument();
+  });
+
+  it('keeps Type and Implant kind after a failed save', async () => {
+    const action = vi.fn(async (_prev: unknown, fd: FormData) => ({ error: 'Enter the brand.', values: Object.fromEntries(fd) as Record<string, string> }));
+    render(<ProductForm action={action} />);
+    await userEvent.selectOptions(screen.getByLabelText('Implant kind'), 'zygomatic');
+    await userEvent.click(screen.getByRole('button', { name: 'Save product' }));
+    expect(await screen.findByText('Enter the brand.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Type')).toHaveValue('implant');
+    expect(screen.getByLabelText('Implant kind')).toHaveValue('zygomatic');
+  });
+
+  it('keeps a changed Type and hides the kind after a failed save', async () => {
+    const action = vi.fn(async (_prev: unknown, fd: FormData) => ({ error: 'Enter the brand.', values: Object.fromEntries(fd) as Record<string, string> }));
+    render(<ProductForm action={action} />);
+    await userEvent.selectOptions(screen.getByLabelText('Type'), 'cover_screw');
+    await userEvent.click(screen.getByRole('button', { name: 'Save product' }));
+    expect(await screen.findByText('Enter the brand.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Type')).toHaveValue('cover_screw');
+    expect(screen.queryByLabelText('Implant kind')).not.toBeInTheDocument();
+  });
+
+  it('keeps the stored kind, read-only for a linked product', () => {
+    render(<ProductForm action={vi.fn()} product={{ ...product, catalog_item_id: 'i1', implant_kind: 'pterygoid' }} />);
+    expect(screen.getByLabelText('Implant kind')).toBeDisabled();
+    expect(screen.getByLabelText('Implant kind')).toHaveValue('pterygoid');
+  });
+
+  it('hides the kind for a non-implant product', () => {
+    render(<ProductForm action={vi.fn()} product={{ ...product, type: 'cover_screw' }} />);
+    expect(screen.queryByLabelText('Implant kind')).not.toBeInTheDocument();
   });
 });

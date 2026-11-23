@@ -3,12 +3,12 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import type { ImplantSite } from '@/lib/inventory/types';
 import type { ImplantGraft, ImplantSurgery } from '@/lib/implants/surgery';
 
-vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), deleteGraft: vi.fn() }));
+vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), deleteGraft: vi.fn(), saveImplantGeometry: vi.fn() }));
 vi.mock('./implant-actions', () => ({
   fitComponent: vi.fn(), placeImplant: vi.fn(), planImplant: vi.fn(), receiveStockForPlacement: vi.fn(),
 }));
 import { SurgicalDetails } from './surgical-details';
-import { deleteGraft, saveGraft, saveSurgery } from './surgery-actions';
+import { deleteGraft, saveGraft, saveImplantGeometry, saveSurgery } from './surgery-actions';
 
 const surgery: ImplantSurgery = {
   site_id: 's1', extraction_date: null, placement_timing: 'delayed', soft_tissue_phenotype: null, keratinized_mucosa_mm: null,
@@ -25,6 +25,7 @@ beforeEach(() => {
   vi.mocked(saveSurgery).mockReset().mockResolvedValue({});
   vi.mocked(saveGraft).mockReset().mockResolvedValue({});
   vi.mocked(deleteGraft).mockReset().mockResolvedValue({});
+  vi.mocked(saveImplantGeometry).mockReset().mockResolvedValue({});
 });
 
 describe('<SurgicalDetails>', () => {
@@ -141,5 +142,95 @@ describe('staged graft date limit', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add graft' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Graft timing' }), { target: { value: 'staged' } });
     expect(screen.getByLabelText(/Graft date/)).toHaveAttribute('max', '2026-03-09');
+  });
+});
+
+describe('<SurgicalDetails> implant type and angle', () => {
+  const SITE = '00000000-0000-4000-8000-000000000001';
+  const PT = '00000000-0000-4000-8000-000000000002';
+  const typed = (over: Partial<ImplantSite> = {}) => site({
+    id: SITE, implant_type: 'conventional', angulation_deg: null, angulation_direction: null, anchorage: null, entry_point: '', trajectory: '', ...over,
+  });
+  const section = () => within(screen.getByRole('region', { name: 'Implant type and angle' }));
+
+  it('shows the recorded type line, "Conventional" for a plain implant, and nothing to edit for viewers', () => {
+    const { unmount } = render(<SurgicalDetails site={typed({ implant_type: 'zygomatic', angulation_deg: 45, angulation_direction: 'distal', anchorage: 'zygoma' })} patientId={PT} editable={false} />);
+    expect(section().getByText('Zygomatic · 45° distal · Zygoma')).toBeInTheDocument();
+    expect(section().queryByRole('button', { name: 'Edit type and angle' })).toBeNull();
+    unmount();
+    render(<SurgicalDetails site={typed()} patientId={PT} editable />);
+    expect(section().getByText('Conventional')).toBeInTheDocument();
+  });
+
+  it('shows anchorage, entry point and trajectory only for zygomatic and pterygoid implants', () => {
+    render(<SurgicalDetails site={typed()} patientId={PT} editable />);
+    fireEvent.click(section().getByRole('button', { name: 'Edit type and angle' }));
+    const type = section().getByRole('combobox', { name: 'Implant type' });
+    for (const hidden of ['conventional', 'tilted']) {
+      fireEvent.change(type, { target: { value: hidden } });
+      expect(section().queryByRole('combobox', { name: 'Anchorage' })).toBeNull();
+      expect(section().queryByRole('textbox', { name: 'Entry point' })).toBeNull();
+      expect(section().queryByRole('textbox', { name: 'Trajectory' })).toBeNull();
+    }
+    fireEvent.change(type, { target: { value: 'zygomatic' } });
+    expect(section().getByRole('combobox', { name: 'Anchorage' })).toBeInTheDocument();
+    expect(section().getByRole('textbox', { name: 'Entry point' })).toBeInTheDocument();
+    expect(section().getByRole('textbox', { name: 'Trajectory' })).toBeInTheDocument();
+  });
+
+  it('a tilted implant needs an angle: the message shows and nothing is sent', () => {
+    render(<SurgicalDetails site={typed()} patientId={PT} editable />);
+    fireEvent.click(section().getByRole('button', { name: 'Edit type and angle' }));
+    fireEvent.change(section().getByRole('combobox', { name: 'Implant type' }), { target: { value: 'tilted' } });
+    fireEvent.click(section().getByRole('button', { name: 'Save type and angle' }));
+    expect(section().getByRole('alert')).toHaveTextContent('Enter the angle of the tilted implant.');
+    expect(saveImplantGeometry).not.toHaveBeenCalled();
+  });
+
+  it('saves the whole section; switching away from zygomatic sends no anchorage, entry point or trajectory', async () => {
+    render(<SurgicalDetails site={typed({ implant_type: 'zygomatic', anchorage: 'zygoma', entry_point: 'Crest', trajectory: 'Sinus' })} patientId={PT} editable />);
+    fireEvent.click(section().getByRole('button', { name: 'Edit type and angle' }));
+    fireEvent.change(section().getByRole('combobox', { name: 'Implant type' }), { target: { value: 'tilted' } });
+    fireEvent.change(section().getByRole('textbox', { name: 'Angle (°)' }), { target: { value: '30' } });
+    fireEvent.change(section().getByRole('combobox', { name: 'Direction' }), { target: { value: 'distal' } });
+    fireEvent.click(section().getByRole('button', { name: 'Save type and angle' }));
+    expect(saveImplantGeometry).toHaveBeenCalledWith({
+      siteId: SITE, patientId: PT, type: 'tilted', angulation: '30', direction: 'distal', anchorage: '', entryPoint: '', trajectory: '',
+    });
+    expect(await screen.findByRole('button', { name: 'Edit type and angle' })).toBeInTheDocument();
+  });
+
+  it('sends anchorage, entry point and trajectory for a zygomatic implant', () => {
+    render(<SurgicalDetails site={typed({ implant_type: 'zygomatic' })} patientId={PT} editable />);
+    fireEvent.click(section().getByRole('button', { name: 'Edit type and angle' }));
+    fireEvent.change(section().getByRole('textbox', { name: 'Angle (°)' }), { target: { value: '45' } });
+    fireEvent.change(section().getByRole('combobox', { name: 'Anchorage' }), { target: { value: 'zygoma' } });
+    fireEvent.change(section().getByRole('textbox', { name: 'Entry point' }), { target: { value: 'Palatal of 14' } });
+    fireEvent.click(section().getByRole('button', { name: 'Save type and angle' }));
+    expect(saveImplantGeometry).toHaveBeenCalledWith({
+      siteId: SITE, patientId: PT, type: 'zygomatic', angulation: '45', direction: '', anchorage: 'zygoma',
+      entryPoint: 'Palatal of 14', trajectory: '',
+    });
+  });
+
+  it('a failed save keeps what was entered and shows the error', async () => {
+    vi.mocked(saveImplantGeometry).mockResolvedValue({ error: 'Only a placed implant has a type and angle.' });
+    render(<SurgicalDetails site={typed()} patientId={PT} editable />);
+    fireEvent.click(section().getByRole('button', { name: 'Edit type and angle' }));
+    fireEvent.change(section().getByRole('combobox', { name: 'Implant type' }), { target: { value: 'pterygoid' } });
+    fireEvent.change(section().getByRole('textbox', { name: 'Angle (°)' }), { target: { value: '20' } });
+    fireEvent.change(section().getByRole('combobox', { name: 'Anchorage' }), { target: { value: 'pterygoid_plate' } });
+    fireEvent.change(section().getByRole('textbox', { name: 'Trajectory' }), { target: { value: 'Through the tuberosity' } });
+    fireEvent.click(section().getByRole('button', { name: 'Save type and angle' }));
+    expect(await section().findByRole('alert')).toHaveTextContent('Only a placed implant has a type and angle.');
+    expect(section().getByRole('combobox', { name: 'Implant type' })).toHaveValue('pterygoid');
+    expect(section().getByRole('textbox', { name: 'Angle (°)' })).toHaveValue('20');
+    expect(section().getByRole('combobox', { name: 'Anchorage' })).toHaveValue('pterygoid_plate');
+    expect(section().getByRole('textbox', { name: 'Trajectory' })).toHaveValue('Through the tuberosity');
+  });
+
+  it('a planned or failed implant has no type editor', () => {
+    render(<SurgicalDetails site={typed({ state: 'failed' })} patientId={PT} editable />);
+    expect(section().queryByRole('button', { name: 'Edit type and angle' })).toBeNull();
   });
 });

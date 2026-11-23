@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { ChartData } from '@/lib/inventory/types';
 
 vi.mock('./chart-actions', () => ({ setToothStatus: vi.fn() }));
-vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), deleteGraft: vi.fn() }));
+vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), deleteGraft: vi.fn(), saveImplantGeometry: vi.fn() }));
 vi.mock('./restoration-actions', () => ({
   addRestoration: vi.fn(), updateRestoration: vi.fn(), voidRestoration: vi.fn(),
   recordRestorationProblem: vi.fn(), updateRestorationProblem: vi.fn(), voidRestorationProblem: vi.fn(),
@@ -99,5 +99,18 @@ describe('ChartPanel', () => {
     };
     render(<ChartPanel patientId="pt" data={{ ...data(true), statuses: { 36: 'implant_placed' }, sites: [site] } as unknown as ChartData} initialTooth={36} />);
     expect(screen.queryByText('Date problem')).toBeNull();
+  });
+
+  it('labels a zygomatic implant on the chart and keeps its component badge', () => {
+    const site = {
+      id: 's1', tooth: 14, state: 'placed', placed_on: '2030-03-10', technique: 'guided', torque_ncm: null, isq: null, bone_type: null,
+      graft: '', product: null, lot: null, stock_lot_id: null, placing: null, assisting: null, supervisor: null, slot: null,
+      complications: [], followups: [], surgery: null, grafts: [], implant_type: 'zygomatic',
+      components: [{ id: 'c1', component_type: 'healing_abutment', fitted_on: '2030-03-10', removed_on: null, voided_at: null, replaced_by: null }],
+    };
+    render(<ChartPanel patientId="pt" data={{ ...data(true), statuses: { 14: 'implant_placed' }, sites: [site] } as unknown as ChartData} initialTooth={null} />);
+    const tooth = screen.getByRole('button', { name: /^Tooth 14, / });
+    expect(tooth.querySelector('[data-type-label]')?.textContent).toBe('ZYG');
+    expect(tooth.querySelector('[data-badge]')).not.toBeNull();
   });
 });

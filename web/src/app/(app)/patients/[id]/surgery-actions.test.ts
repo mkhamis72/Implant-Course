@@ -4,7 +4,7 @@ const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ rpc }) }));
 vi.mock('@/lib/auth/session', () => ({ requirePermission: vi.fn(async () => ({})) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-import { deleteGraft, saveGraft, saveSurgery } from './surgery-actions';
+import { deleteGraft, saveGraft, saveImplantGeometry, saveSurgery } from './surgery-actions';
 
 const ids = { siteId: '00000000-0000-4000-8000-000000000001', patientId: '00000000-0000-4000-8000-000000000002' };
 
@@ -33,6 +33,25 @@ describe('surgery actions', () => {
     expect(await saveSurgery({ ...ids })).toEqual({ error: 'These surgical details were changed by someone else. Reload to see them.' });
     rpc.mockClear();
     expect(await saveSurgery({ ...ids, keratinizedMucosaMm: '99' })).toEqual({ error: 'Enter the keratinized mucosa width from 0 to 15 mm.' });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('saves the type and angle, empty text and no angle meaning "not recorded"', async () => {
+    expect(await saveImplantGeometry({
+      ...ids, type: 'zygomatic', angulation: '45', direction: 'distal', anchorage: 'zygoma', entryPoint: ' Crest ', trajectory: '',
+    })).toEqual({});
+    expect(rpc).toHaveBeenCalledWith('set_implant_geometry', {
+      p_site: ids.siteId, p_type: 'zygomatic', p_angulation: 45, p_direction: 'distal', p_anchorage: 'zygoma',
+      p_entry: 'Crest', p_trajectory: '',
+    });
+    await saveImplantGeometry({ ...ids, type: 'conventional' });
+    expect(rpc).toHaveBeenLastCalledWith('set_implant_geometry', {
+      p_site: ids.siteId, p_type: 'conventional', p_angulation: null, p_direction: null, p_anchorage: null, p_entry: '', p_trajectory: '',
+    });
+  });
+
+  it('refuses a tilted implant without an angle before calling the database', async () => {
+    expect(await saveImplantGeometry({ ...ids, type: 'tilted' })).toEqual({ error: 'Enter the angle of the tilted implant.' });
     expect(rpc).not.toHaveBeenCalled();
   });
 

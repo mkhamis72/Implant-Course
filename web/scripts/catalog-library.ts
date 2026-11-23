@@ -1,20 +1,23 @@
 // The catalogue library's CSV (docs/catalog/*.csv, the oxy-catalog.csv columns) and what loading it would change.
-import { PRODUCT_TYPE_LABELS, type ProductType } from '../src/lib/inventory/types';
+import { IMPLANT_KINDS, PRODUCT_TYPE_LABELS, type ImplantKind, type ProductType } from '../src/lib/inventory/types';
 
 /** The specification columns (0133): optional trailing columns of the file, found by their header name. */
 export type Specs = {
   connection: string; gingival_height_mm: number | null; angle_deg: number | null; material: string;
   driver_interface: string; driver_size: string; driver_ref: string; torque_ncm: number | null;
+  /** Conventional, zygomatic or pterygoid (0139); a file without the column means conventional. */
+  implant_kind: ImplantKind;
 };
 export const EMPTY_SPECS: Specs = {
   connection: '', gingival_height_mm: null, angle_deg: null, material: '',
-  driver_interface: '', driver_size: '', driver_ref: '', torque_ncm: null,
+  driver_interface: '', driver_size: '', driver_ref: '', torque_ncm: null, implant_kind: 'conventional',
 };
 export const SPEC_COLUMNS = ['connection', 'gingival_height_mm', 'angle_deg', 'material', 'driver_interface', 'driver_size',
-  'driver_ref', 'torque_ncm'] as const satisfies readonly (keyof Specs)[];
+  'driver_ref', 'torque_ncm', 'implant_kind'] as const satisfies readonly (keyof Specs)[];
 const SPEC_HEADERS: Record<keyof Specs, string> = {
   connection: 'Connection', gingival_height_mm: 'Gingival height (mm)', angle_deg: 'Angle (°)', material: 'Material',
   driver_interface: 'Driver interface', driver_size: 'Driver size', driver_ref: 'Driver ref', torque_ncm: 'Torque (Ncm)',
+  implant_kind: 'Implant kind',
 };
 
 export type LibraryRow = {
@@ -54,10 +57,11 @@ function records(text: string): string[][] {
 }
 
 /** An empty size is null; anything else must be a positive number (a decimal point, not a comma). */
-function size(s: string | undefined, row: number, column: string): number | null {
+function size(s: string | undefined, row: number, column: string, max = Infinity): number | null {
   if (s === undefined || s.trim() === '') return null;
   const n = Number(s.trim());
   if (!Number.isFinite(n) || n <= 0) throw new Error(`Row ${row}: ${column} is not a number: "${s.trim()}"`);
+  if (n > max) throw new Error(`Row ${row}: ${column} must be at most ${max}: "${s.trim()}"`);
   return n;
 }
 
@@ -68,6 +72,14 @@ function specNumber(s: string | undefined, row: number, column: string, max: num
   if (!Number.isFinite(n)) throw new Error(`Row ${row}: ${column} is not a number: "${s.trim()}"`);
   if (n < 0 || n > max) throw new Error(`Row ${row}: ${column} must be between 0 and ${max}: "${s.trim()}"`);
   return n;
+}
+
+/** The optional Implant kind column: empty is conventional; anything else must name a kind (any case). */
+function implantKind(s: string, row: number): ImplantKind {
+  if (s === '') return 'conventional';
+  const kind = IMPLANT_KINDS.find((k) => k === s.toLowerCase());
+  if (!kind) throw new Error(`Row ${row}: Implant kind must be Conventional, Zygomatic or Pterygoid: "${s}"`);
+  return kind;
 }
 
 export function parseCatalogCsv(text: string): LibraryRow[] {
@@ -83,11 +95,12 @@ export function parseCatalogCsv(text: string): LibraryRow[] {
     const num = (key: keyof Specs, max: number) => (col[key] < 0 ? null : specNumber(f[col[key]], i + 2, SPEC_HEADERS[key], max));
     return {
       type, brand: f[1].trim(), system: (f[2] ?? '').trim(), platform: (f[3] ?? '').trim(),
-      diameter_mm: size(f[4], i + 2, 'Diameter (mm)'), length_mm: size(f[5], i + 2, 'Length (mm)'), ref_code: (f[6] ?? '').trim(),
+      diameter_mm: size(f[4], i + 2, 'Diameter (mm)'), length_mm: size(f[5], i + 2, 'Length (mm)', 60), ref_code: (f[6] ?? '').trim(),
       description: (f[7] ?? '').trim(), source: (f[8] ?? '').trim(),
       connection: str('connection'), gingival_height_mm: num('gingival_height_mm', 10), angle_deg: num('angle_deg', 45),
       material: str('material'), driver_interface: str('driver_interface'), driver_size: str('driver_size'),
       driver_ref: str('driver_ref'), torque_ncm: num('torque_ncm', 150),
+      implant_kind: implantKind(str('implant_kind'), i + 2),
     };
   });
 }

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { isRealDate, todayIso } from '@/lib/dates';
 import { isFdiTooth } from '@/lib/patients/fdi';
-import { COMPONENT_TYPES, PRODUCT_TYPES, TECHNIQUES } from './types';
+import { ANCHORAGES, ANGULATION_DIRECTIONS, COMPONENT_TYPES, IMPLANT_KINDS, IMPLANT_TYPES, PRODUCT_TYPES, TECHNIQUES } from './types';
 import { componentRole } from './components';
 import { blankToNull, optionalUuid } from '@/lib/form-values';
 
@@ -28,7 +28,7 @@ export const productSchema = z
     system: text(60),
     platform: text(40),
     diameter_mm: optionalNumber(2, 9, 'Enter a diameter between 2 and 9 mm.'),
-    length_mm: optionalNumber(4, 25, 'Enter a length between 4 and 25 mm.'),
+    length_mm: optionalNumber(4, 60, 'Enter a length between 4 and 60 mm.'),
     ref_code: text(60),
     description: text(200),
     reorder_level: reorderLevel,
@@ -40,6 +40,7 @@ export const productSchema = z
     driver_size: text(30),
     driver_ref: text(60),
     torque_ncm: optionalNumber(0, 150, TORQUE_MESSAGE),
+    implant_kind: z.enum(IMPLANT_KINDS, { message: 'Choose the implant kind.' }).default('conventional'),
   })
   .refine((p) => p.type !== 'implant' || (p.diameter_mm !== null && p.length_mm !== null), {
     message: 'Implants need a diameter and a length.',
@@ -188,3 +189,43 @@ export const componentSchema = z
     (c) => componentRole(c.componentType) !== 'cap' || (c.holdsComponentId !== null && c.holdsRestorationId === null),
     { message: 'Choose the abutment this cap sits on.' },
   );
+
+/**
+ * A placed implant's type, angle and anchorage (set_implant_geometry, 0140). Mirrors its checks and messages, in its
+ * order; empty text and no angle mean "not recorded".
+ */
+export const geometrySchema = z
+  .object({
+    siteId: requiredId('Implant not found.'),
+    patientId: requiredId('Patient not found.'),
+    type: z.string().default(''),
+    angulation: z.string().trim().default(''),
+    direction: z.string().trim().default(''),
+    anchorage: z.string().trim().default(''),
+    entryPoint: z.string().trim().default(''),
+    trajectory: z.string().trim().default(''),
+  })
+  .superRefine((g, ctx) => {
+    const fail = (message: string) => { ctx.addIssue({ code: 'custom', message }); return z.NEVER; };
+    const angle = g.angulation === '' ? null : Number(g.angulation);
+    if (!(IMPLANT_TYPES as readonly string[]).includes(g.type)) return fail('Choose the implant type.');
+    if (g.type === 'tilted' && angle === null) return fail('Enter the angle of the tilted implant.');
+    if (angle !== null && !(Number.isFinite(angle) && angle >= 0 && angle <= 60)) return fail('Enter an angle between 0 and 60°.');
+    if (g.direction !== '' && !(ANGULATION_DIRECTIONS as readonly string[]).includes(g.direction)) {
+      return fail('Choose the direction of the angle.');
+    }
+    const anchored = g.type === 'zygomatic' || g.type === 'pterygoid';
+    if (!anchored && (g.anchorage !== '' || g.entryPoint !== '' || g.trajectory !== '')) {
+      return fail('Anchorage is only recorded for zygomatic and pterygoid implants.');
+    }
+    if (g.anchorage !== '' && !(ANCHORAGES as readonly string[]).includes(g.anchorage)) return fail('Choose the anchorage.');
+    if (g.entryPoint.length > 200 || g.trajectory.length > 200) {
+      return fail('Keep the entry point and trajectory to 200 characters each.');
+    }
+  })
+  .transform((g) => ({
+    ...g,
+    angulation: g.angulation === '' ? null : Number(g.angulation),
+    direction: g.direction === '' ? null : g.direction,
+    anchorage: g.anchorage === '' ? null : g.anchorage,
+  }));

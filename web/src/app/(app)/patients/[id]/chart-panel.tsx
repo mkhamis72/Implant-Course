@@ -5,6 +5,7 @@ import { Odontogram } from '@/components/odontogram/odontogram';
 import { Legend } from '@/components/odontogram/legend';
 import { MANUAL_STATES, STATE_LABELS, canSetByHand, type ManualState, type ToothState } from '@/lib/patients/types';
 import { badgesFor } from '@/lib/inventory/components';
+import { typeLabels } from '@/lib/patients/implant-type';
 import { openComplicationTeeth } from '@/lib/implants/complications';
 import { restorationSpans } from '@/lib/restorations/restorations';
 import type { ChartData } from '@/lib/inventory/types';
@@ -23,6 +24,7 @@ type Props = {
 export function ChartPanel({ patientId, data, initialTooth }: Props) {
   const statuses = data.statuses;
   const badges = useMemo(() => badgesFor(data.sites), [data.sites]);
+  const types = useMemo(() => typeLabels(data.sites), [data.sites]);
   const alerts = useMemo(() => openComplicationTeeth(data.sites), [data.sites]);
   const spans = useMemo(() => restorationSpans(data.restorations, data.sites), [data.restorations, data.sites]);
   const [selected, setSelected] = useState<number[]>(initialTooth ? [initialTooth] : []);
@@ -77,7 +79,7 @@ export function ChartPanel({ patientId, data, initialTooth }: Props) {
               <span>Right</span>
               <span>Left</span>
             </div>
-            <Odontogram statuses={statuses} badges={badges} alerts={alerts} spans={spans} openSpan={openSpan} selected={selected} onSelect={onSelect} />
+            <Odontogram statuses={statuses} badges={badges} types={types} alerts={alerts} spans={spans} openSpan={openSpan} selected={selected} onSelect={onSelect} />
           </div>
         </div>
         <Legend />

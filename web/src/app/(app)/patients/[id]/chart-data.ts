@@ -6,6 +6,7 @@ import { canEdit } from '@/lib/auth/permissions';
 import { featureOn, teachingOn } from '@/lib/modules/modules';
 import { todayIso } from '@/lib/dates';
 import { productLabel } from '@/lib/inventory/labels';
+import { fetchAll } from '@/lib/catalog/fetch-all';
 import type { ChartData, ImplantSite, LotOnHand, Product } from '@/lib/inventory/types';
 import type { ToothState } from '@/lib/patients/types';
 import type { VisitRow } from '@/lib/visits/visits';
@@ -16,7 +17,8 @@ import type { CourseOption, Restoration, RestorationProblem } from '@/lib/restor
 export const SITE_SELECT = `
   id, tooth, state, technique, impression_type, impression_taken_on, placed_on, torque_ncm, isq, bone_type, graft, notes, created_at, updated_at, failed_on, failure_type, failure_reason, failure_notes, stock_lot_id,
   placing_delegate_id, assisting_delegate_id, supervisor_id, course_id, placing_doctor_id,
-  product:products(*),
+  implant_type, angulation_deg, angulation_direction, anchorage, entry_point, trajectory, planned_product_id,
+  product:products!implant_sites_product_id_fkey(*),
   lot:stock_lots(lot_no, expiry),
   placing:delegates!implant_sites_placing_delegate_id_fkey(full_name),
   assisting:delegates!implant_sites_assisting_delegate_id_fkey(full_name),
@@ -81,14 +83,23 @@ function toRestoration({ sites, problems, ...r }: RestorationRow): Restoration {
   };
 }
 
+/** Every row of a paged read, in the `{ data, error }` shape of a single one. */
+function allRows<T>(page: Parameters<typeof fetchAll<T>>[0]): Promise<{ data: T[] | null; error: { message: string } | null }> {
+  return fetchAll(page).then(
+    (data) => ({ data, error: null }),
+    (e: unknown) => ({ data: null, error: { message: e instanceof Error ? e.message : String(e) } }),
+  );
+}
+
 export async function loadChartData(patientId: string): Promise<ChartData> {
   const supabase = await createClient();
   const me = await getCurrentProfile();
   const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors] = await Promise.all([
     supabase.from('tooth_status').select('tooth, status').eq('patient_id', patientId),
     supabase.from('implant_sites').select(SITE_SELECT).eq('patient_id', patientId).order('created_at'),
-    supabase.from('products').select('*').eq('active', true),
-    supabase.from('stock_on_hand').select('*').gt('on_hand', 0),
+    // PostgREST caps a response at 1000 rows: page through products and stocked batches.
+    allRows((from, to) => supabase.from('products').select('*').eq('active', true).order('id').range(from, to)),
+    allRows((from, to) => supabase.from('stock_on_hand').select('*').gt('on_hand', 0).order('stock_lot_id').range(from, to)),
     supabase.from('delegates').select('id, full_name').eq('active', true).order('full_name'),
     staffOptions(supabase),
     supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name'),
@@ -103,7 +114,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
   for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors]) {
     if (r.error) throw new Error('Could not load the chart');
   }
-  const siteList = ((sites.data ?? []) as unknown as ImplantSite[]).map(sortSite);
+  const siteList = await withPlannedProducts(supabase, ((sites.data ?? []) as unknown as ImplantSite[]).map(sortSite));
   const spares = await sparesBySite(supabase, siteList);
   const statusMap: Partial<Record<number, ToothState>> = {};
   for (const row of statuses.data ?? []) statusMap[row.tooth as number] = row.status as ToothState;
@@ -132,6 +143,21 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     doctors: (doctors.data ?? []) as ChartData['doctors'],
     spares,
   };
+}
+
+/**
+ * Each site's planned product, read by its own query: planned_product_id has no foreign key for now (0141), so
+ * PostgREST can't embed it, and a second key to products would make older unhinted `products(*)` embeds ambiguous.
+ */
+export async function withPlannedProducts(
+  supabase: Pick<Awaited<ReturnType<typeof createClient>>, 'from'>, sites: ImplantSite[],
+): Promise<ImplantSite[]> {
+  const ids = [...new Set(sites.map((s) => s.planned_product_id).filter((id): id is string => !!id))];
+  if (ids.length === 0) return sites.map((s) => ({ ...s, planned_product: null }));
+  const { data, error } = await supabase.from('products').select('*').in('id', ids);
+  if (error) throw new Error('Could not load the chart');
+  const byId = new Map(((data ?? []) as Product[]).map((p) => [p.id, p]));
+  return sites.map((s) => ({ ...s, planned_product: (s.planned_product_id && byId.get(s.planned_product_id)) || null }));
 }
 
 /** The spares each planned site's booking holds for its tooth (0125), by site id, in the order chosen. */

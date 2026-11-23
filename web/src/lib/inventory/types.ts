@@ -22,6 +22,26 @@ export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
   abutment_screw: 'Abutment screw',
 };
 
+export const IMPLANT_KINDS = ['conventional', 'zygomatic', 'pterygoid'] as const;
+export type ImplantKind = (typeof IMPLANT_KINDS)[number];
+export const IMPLANT_KIND_LABELS: Record<ImplantKind, string> = { conventional: 'Conventional', zygomatic: 'Zygomatic', pterygoid: 'Pterygoid' };
+
+export const IMPLANT_TYPES = ['conventional', 'tilted', 'zygomatic', 'pterygoid'] as const;
+export type ImplantType = (typeof IMPLANT_TYPES)[number];
+export const IMPLANT_TYPE_LABELS: Record<ImplantType, string> = {
+  conventional: 'Conventional', tilted: 'Tilted', zygomatic: 'Zygomatic', pterygoid: 'Pterygoid',
+};
+export const ANGULATION_DIRECTIONS = ['mesial', 'distal', 'buccal', 'palatal_lingual'] as const;
+export type AngulationDirection = (typeof ANGULATION_DIRECTIONS)[number];
+export const ANGULATION_DIRECTION_LABELS: Record<AngulationDirection, string> = {
+  mesial: 'Mesial', distal: 'Distal', buccal: 'Buccal', palatal_lingual: 'Palatal / lingual',
+};
+export const ANCHORAGES = ['zygoma', 'pterygoid_plate', 'tuberosity', 'other'] as const;
+export type Anchorage = (typeof ANCHORAGES)[number];
+export const ANCHORAGE_LABELS: Record<Anchorage, string> = {
+  zygoma: 'Zygoma', pterygoid_plate: 'Pterygoid plate', tuberosity: 'Maxillary tuberosity', other: 'Other',
+};
+
 export type Product = {
   id: string;
   type: ProductType;
@@ -47,6 +67,8 @@ export type Product = {
   driver_size: string;
   driver_ref: string;
   torque_ncm: number | null;
+  /** Conventional, zygomatic or pterygoid (0139). */
+  implant_kind: ImplantKind;
 };
 
 export type LotOnHand = {
@@ -153,6 +175,17 @@ export type ImplantSite = {
   impression_type: 'digital_scan' | 'conventional' | null;
   impression_taken_on: string | null;
   placed_on: string | null;
+  /** Null while planned (0139). */
+  implant_type: ImplantType | null;
+  angulation_deg: number | null;
+  angulation_direction: AngulationDirection | null;
+  anchorage: Anchorage | null;
+  entry_point: string;
+  trajectory: string;
+  /** The product planned for the tooth, kept when it is placed (0140). */
+  planned_product: Product | null;
+  /** Read with the site; `planned_product` is attached from it by a query of its own (no key to embed through, 0141). */
+  planned_product_id?: string | null;
   stock_lot_id: string | null;
   torque_ncm: number | null;
   isq: number | null;

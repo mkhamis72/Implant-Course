@@ -5,7 +5,7 @@ import type { Product } from './types';
 const product = (over: Partial<Product> = {}): Product => ({
   id: 'p', type: 'abutment_straight', category: 'prosthetic', brand: 'Oxy', system: '', platform: '', diameter_mm: null, length_mm: null,
   ref_code: '', description: '', reorder_level: 0, active: true, is_sample: false,
-  connection: '', gingival_height_mm: null, angle_deg: null, material: '', driver_interface: '', driver_size: '', driver_ref: '', torque_ncm: null,
+  connection: '', gingival_height_mm: null, angle_deg: null, material: '', driver_interface: '', driver_size: '', driver_ref: '', torque_ncm: null, implant_kind: 'conventional',
   ...over,
 });
 

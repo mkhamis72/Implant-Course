@@ -37,7 +37,14 @@ const TEACHING_FIELDS = new Set(['placing_delegate_id', 'assisting_delegate_id',
 
 /** Stability values are recorded in Surgical details (save_implant_surgery_v2, 0053); older corrections may name them too. */
 const STABILITY_FIELD_LABELS: Record<string, string> = { torque_ncm: 'torque', isq: 'ISQ', bone_type: 'bone type' };
-const SITE_FIELD_LABELS: Record<string, string> = { ...PLACEMENT_FIELD_LABELS, ...STABILITY_FIELD_LABELS };
+/** Type and angle, recorded in Surgical details (set_implant_geometry, 0140); the planned product is kept at placement. */
+const GEOMETRY_FIELD_LABELS: Record<string, string> = {
+  implant_type: 'implant type', angulation_deg: 'angle', angulation_direction: 'direction', anchorage: 'anchorage',
+  entry_point: 'entry point', trajectory: 'trajectory',
+};
+const SITE_FIELD_LABELS: Record<string, string> = {
+  ...PLACEMENT_FIELD_LABELS, ...STABILITY_FIELD_LABELS, ...GEOMETRY_FIELD_LABELS, planned_product_id: 'planned product',
+};
 
 const RESTORATION_FIELD_LABELS: Record<string, string> = {
   retention: 'retention', material: 'material', delegate_id: 'delegate', supervisor_id: 'supervisor', course_id: 'course', notes: 'notes',
@@ -140,6 +147,10 @@ export function describeChange(e: HistoryEntry, { teaching = true }: { teaching?
           }
           const stability = changedFields(e.before, e.after, STABILITY_FIELD_LABELS);
           if (stability.length) return `Implant on tooth ${tooth}: stability recorded — ${stability.join(', ')}`;
+          const geometry = changedFields(e.before, e.after, GEOMETRY_FIELD_LABELS);
+          if (geometry.length && geometry.length === corrected.length) {
+            return `Implant on tooth ${tooth}: type and angle recorded — ${geometry.join(', ')}`;
+          }
         }
         return corrected.length ? `Implant on tooth ${tooth} corrected: ${corrected.join(', ')}` : `Implant on tooth ${tooth} updated`;
       }

@@ -58,7 +58,7 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
       : supabase.from('doctors').select('id, name').eq('active', true).order('name'),
     supabase.from('products').select('*').eq('type', 'implant').eq('active', true),
     // Every site the booking holds, placed ones included: they go back to set_booking_implants as recorded (0126).
-    supabase.from('implant_sites').select('tooth, state, product_id, technique, product:products(*)').eq('slot_id', id),
+    supabase.from('implant_sites').select('tooth, state, product_id, technique, product:products!implant_sites_product_id_fkey(*)').eq('slot_id', id),
   ]);
   if (results.some((r) => r.error)) throw new Error('Could not load the booking form');
   const [
