@@ -3,7 +3,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { CHART_WIDTH, MIDLINE_X, TOOTH_W, toothLayout, type ToothBox } from '@/components/odontogram/layout';
 import { COLORS } from '@/components/odontogram/visuals';
-import { implantLine, type ArchBridge, type ArchImplant } from './model';
+import { ARCH_VIEWBOX, archCentre, BODY_R, HEAD_Y, implantLine, type ArchBridge, type ArchImplant } from './model';
 
 type Props = {
   model: { implants: ArchImplant[]; bridges: ArchBridge[] };
@@ -12,20 +12,16 @@ type Props = {
   onSelect: (fdi: number, additive: boolean, tab?: 'restoration') => void;
 };
 
-// Vertical layout, top to bottom: upper implant zone (a zygomatic is 130 long), upper bridge row, upper numbers,
+// Vertical layout, top to bottom: upper implant zone (HEAD_Y), upper bridge row, upper numbers,
 // lower numbers, lower bridge row, lower implant zone.
-const HEAD_Y = { upper: 150, lower: 274 } as const;
 const BRIDGE_H = 22;
 const BRIDGE_Y = { upper: 160, lower: 242 } as const;
 const NUMBER_Y = { upper: 200, lower: 232 } as const;
 const JAW_LINE_Y = 216;
-const HEIGHT = 414;
-/** Half the drawn width of an implant body. */
-const BODY_R = 4.5;
 
 const BOXES = toothLayout();
 const BOX = new Map(BOXES.map((b) => [b.fdi, b]));
-const centre = (fdi: number) => (BOX.get(fdi)?.x ?? MIDLINE_X) + TOOTH_W / 2;
+const centre = archCentre;
 
 const additive = (e: MouseEvent | KeyboardEvent) => e.shiftKey || e.ctrlKey || e.metaKey;
 
@@ -161,7 +157,7 @@ export function FullArch({ model, selected, onSelect }: Props) {
   return (
     <div className="space-y-2">
       <svg
-        viewBox={`-6 -6 ${CHART_WIDTH + 12} ${HEIGHT + 12}`}
+        viewBox={`${ARCH_VIEWBOX.x} ${ARCH_VIEWBOX.y} ${ARCH_VIEWBOX.width} ${ARCH_VIEWBOX.height}`}
         className="h-auto w-full max-w-4xl select-none"
         role="group"
         aria-label="Implants and bridges"

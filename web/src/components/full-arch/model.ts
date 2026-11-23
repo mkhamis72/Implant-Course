@@ -3,7 +3,7 @@ import {
   ANGULATION_DIRECTION_LABELS, type AngulationDirection, type ImplantSite, type ImplantType, IMPLANT_TYPE_LABELS,
 } from '@/lib/inventory/types';
 import { CHART_ORDER } from '@/lib/patients/fdi';
-import { MIDLINE_X, TOOTH_W, toothLayout } from '@/components/odontogram/layout';
+import { CHART_WIDTH, MIDLINE_X, TOOTH_W, toothLayout } from '@/components/odontogram/layout';
 import type { Span } from '@/components/odontogram/odontogram';
 
 export type ArchImplant = {
@@ -23,11 +23,32 @@ export const IMPLANT_LENGTH: Record<ImplantType, number> = { conventional: 56, t
 const DEFAULT_ANGLE: Record<ImplantType, number> = { conventional: 0, tilted: 0, zygomatic: 45, pterygoid: 30 };
 
 const CENTRES = new Map(toothLayout().map((b) => [b.fdi, b.x + TOOTH_W / 2]));
+/** x of a tooth's centre in the chart layout (the implant head). */
+export const archCentre = (fdi: number) => CENTRES.get(fdi) ?? MIDLINE_X;
 
-function drawnLean(tooth: number, direction: AngulationDirection | null): -1 | 0 | 1 {
+/** y of the implant heads: the upper implant zone holds a 130-unit zygomatic above it. */
+export const HEAD_Y = { upper: 150, lower: 274 } as const;
+export const ARCH_HEIGHT = 414;
+/** Half the drawn width of an implant body. */
+export const BODY_R = 4.5;
+/**
+ * Side room beyond the outermost teeth: a zygomatic (130) at 60° from 17/27 reaches about 47 past the chart edge,
+ * a pterygoid (80) at 60° from 18/28 about 49; plus the body. The teeth keep their toothLayout() positions.
+ */
+const SIDE = 60;
+export const ARCH_VIEWBOX = { x: -SIDE, y: -6, width: CHART_WIDTH + 2 * SIDE, height: ARCH_HEIGHT + 12 } as const;
+
+/**
+ * Drawn x direction of the apex. For conventional and tilted implants the recorded direction names where the head
+ * (crown end) tilts, so the apex goes the other way: an All-on-4 posterior "30° distal" converges on the midline.
+ * Zygomatic and pterygoid apices go distal (into the zygoma or pterygoid plate) unless mesial is recorded.
+ * Buccal and palatal tilts are not drawn.
+ */
+function drawnLean(tooth: number, kind: ImplantType, direction: AngulationDirection | null): -1 | 0 | 1 {
   if (direction === 'buccal' || direction === 'palatal_lingual') return 0;
-  const away = (CENTRES.get(tooth) ?? MIDLINE_X) < MIDLINE_X ? -1 : 1;
-  return direction === 'mesial' ? (-away as -1 | 1) : away;
+  const away = archCentre(tooth) < MIDLINE_X ? -1 : 1;
+  const apexDistal = kind === 'zygomatic' || kind === 'pterygoid' ? direction !== 'mesial' : direction === 'mesial';
+  return apexDistal ? away : (-away as -1 | 1);
 }
 
 function geometryText(site: ImplantSite): string {
@@ -51,9 +72,8 @@ export function fullArchModel(input: {
       let angle = 0;
       let lean: -1 | 0 | 1 = 0;
       if (!planned) {
-        const direction = site.angulation_direction ?? (kind === 'zygomatic' || kind === 'pterygoid' ? 'distal' : null);
         angle = site.angulation_deg ?? DEFAULT_ANGLE[kind];
-        lean = angle > 0 ? drawnLean(tooth, direction) : 0;
+        lean = angle > 0 ? drawnLean(tooth, kind, site.angulation_direction) : 0;
         if (lean === 0) angle = 0;
       }
       const geometry = planned ? '' : geometryText(site);

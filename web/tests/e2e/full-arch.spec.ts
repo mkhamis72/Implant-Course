@@ -5,16 +5,18 @@ import { createPatientViaUi, uniqueName } from './patients';
 import { apiAs, enroll, seedDelegate, seedImplantStock, seedRunningCourse } from './api';
 
 const TEETH = [15, 12, 22, 25];
+/** Placed too, outside the bridge's implants: a zygomatic. */
+const ZYGOMATIC = 14;
 const ARCH = [15, 14, 13, 12, 11, 21, 22, 23, 24, 25];
 
 /**
  * A full-arch case through the API: implants placed at 15, 12, 22, 25 (place_implant_v4), 15 and 25 tilted 30° distal
- * (set_implant_geometry), and a final full-arch restoration over 15–25 on those four implants (add_restoration).
+ * (set_implant_geometry), a zygomatic at 14 (45° distal), and a final full-arch restoration over 15–25 on those four implants (add_restoration).
  */
 async function setup(page: Page) {
   const api = await apiAs(TEST_USERS.organizer.email);
   const me = (await api.auth.getUser()).data.user!.id;
-  const stock = await seedImplantStock(api, { brand: uniqueName('Arch'), qty: TEETH.length, lot: `E2E-FA${Date.now()}`, expiry: null });
+  const stock = await seedImplantStock(api, { brand: uniqueName('Arch'), qty: TEETH.length + 1, lot: `E2E-FA${Date.now()}`, expiry: null });
   const delegateId = await seedDelegate(api, uniqueName('Dr Arch'));
   const courseId = await seedRunningCourse(api, uniqueName('Arch course'));
   await enroll(api, courseId, delegateId);
@@ -22,7 +24,7 @@ async function setup(page: Page) {
   const patientId = await createPatientViaUi(page, { full_name: uniqueName('Arch patient') });
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date());
   const sites: Record<number, string> = {};
-  for (const tooth of TEETH) {
+  for (const tooth of [...TEETH, ZYGOMATIC]) {
     const { data, error } = await api.rpc('place_implant_v4', {
       p_patient: patientId, p_tooth: tooth, p_product: stock.productId, p_lot: stock.lotId, p_placed_on: today,
       p_placing_delegate: delegateId, p_supervisor: me, p_assisting_delegate: null, p_graft: null, p_notes: null,
@@ -37,6 +39,10 @@ async function setup(page: Page) {
     });
     expect(error).toBeNull();
   }
+  const zyg = await api.rpc('set_implant_geometry', {
+    p_site: sites[ZYGOMATIC], p_type: 'zygomatic', p_angulation: 45, p_direction: 'distal', p_anchorage: 'zygoma', p_entry: null, p_trajectory: null,
+  });
+  expect(zyg.error).toBeNull();
   const { error } = await api.rpc('add_restoration', {
     p_patient: patientId, p_stage: 'final', p_type: 'full_arch', p_sites: TEETH.map((t) => sites[t]), p_teeth: ARCH, p_fitted_on: today,
     p_retention: 'screw', p_material: null, p_delegate: delegateId, p_supervisor: null, p_course: courseId, p_remake_reason: null, p_notes: null,
@@ -45,15 +51,16 @@ async function setup(page: Page) {
   return { patientId };
 }
 
-test('full-arch case shows four implants under one bridge', async ({ page }) => {
+test('full-arch case shows four implants under one bridge, and a zygomatic', async ({ page }) => {
   const { patientId } = await setup(page);
   await page.goto(`/patients/${patientId}`);
   await page.getByRole('button', { name: 'Full arch', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Full arch', exact: true, pressed: true })).toBeVisible();
   await expect(page).toHaveURL(/[?&]view=arch/);
   await expect(page.getByRole('img', { name: 'Full-arch chart' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Implant \d+,/ })).toHaveCount(4);
+  await expect(page.getByRole('button', { name: /^Implant \d+,/ })).toHaveCount(5);
   await expect(page.getByRole('button', { name: /Implant 15, Tilted, 30° distal/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Implant 14, Zygomatic, 45° distal/ })).toBeVisible();
   const bridge = page.getByRole('button', { name: /final/ });
   await expect(bridge).toHaveCount(1);
   await bridge.click();
