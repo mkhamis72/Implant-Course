@@ -33,6 +33,10 @@ const data = (over: Partial<ChartData> = {}) =>
     ...over,
   }) as unknown as ChartData;
 
+const bridge = (o: Partial<Restoration> & { voided_at?: string }) =>
+  ({ id: 'r', stage: 'final', type: 'full_arch', fitted_on: '2030-05-02', ended_on: null, end_kind: null, case_id: 'c1',
+    site_ids: ['s14', 's24'], ...o }) as unknown as Restoration;
+
 const inCase = (over: Partial<ChartData> = {}) => data({
   cases: [CASE],
   sites: [site('s14', 14, 'placed', '2030-05-02', 'c1'), site('s24', 24, 'placed', '2030-05-01', 'c1'), site('s36', 36, 'placed', '2030-05-01')],
@@ -169,10 +173,28 @@ describe('<FullArchCasePanel>', () => {
   });
 
   it('shows the bridges from linked restorations', () => {
-    const temp = { id: 'r1', stage: 'temporary', fitted_on: '2030-05-02', ended_on: null, case_id: 'c1' } as unknown as Restoration;
-    render(<FullArchCasePanel patientId="pt" data={inCase({ restorations: [temp] })} arch="upper" />);
+    render(<FullArchCasePanel patientId="pt" data={inCase({ restorations: [bridge({ id: 'r1', stage: 'temporary' })] })} arch="upper" />);
     expect(screen.getByTestId('bridge-temporary')).toHaveTextContent('Delivered 02 May 2030');
     expect(screen.getByTestId('bridge-final')).toHaveTextContent('Not yet');
+  });
+
+  it('keeps the temporary after the final replaced it, and completes the case', () => {
+    const temp = bridge({ id: 'r1', stage: 'temporary', ended_on: '2030-06-01', end_kind: 'replaced' });
+    const final = bridge({ id: 'r2', stage: 'final', fitted_on: '2030-06-01' });
+    render(<FullArchCasePanel patientId="pt" data={inCase({ restorations: [temp, final] })} arch="upper" />);
+    expect(screen.getByTestId('bridge-temporary')).toHaveTextContent('Delivered 02 May 2030');
+    expect(screen.getByTestId('bridge-final')).toHaveTextContent('Delivered 01 Jun 2030');
+    expect(screen.getByTestId('stage-delivery')).toHaveTextContent('01 Jun 2030');
+    expect(screen.getByText('Completed')).toBeInTheDocument();
+  });
+
+  it('says what a final that does not cover every implant covers, and stays in treatment', () => {
+    const crown = bridge({ id: 'r3', stage: 'final', type: 'single_crown', site_ids: ['s14'], fitted_on: '2030-06-01' });
+    const part = bridge({ id: 'r4', stage: 'final', type: 'bridge', site_ids: ['s14'], fitted_on: '2030-06-01' });
+    render(<FullArchCasePanel patientId="pt" data={inCase({ restorations: [crown, part] })} arch="upper" />);
+    expect(screen.getByTestId('bridge-final')).toHaveTextContent('Fitted 01 Jun 2030 · covers 14 of 14, 24');
+    expect(screen.getByTestId('stage-delivery')).toHaveTextContent('Not yet');
+    expect(screen.getByText('In treatment')).toBeInTheDocument();
   });
 });
 
@@ -181,5 +203,12 @@ describe('caseCaptions', () => {
     expect(caseCaptions(inCase())).toEqual([
       { arch: 'upper', title: 'Upper arch · All-on-4 · In treatment', progress: 'Scan ✓ · Lab — · Try-in — · Delivery —' },
     ]);
+  });
+  it('marks Delivery only when the finals cover every implant', () => {
+    const crown = bridge({ stage: 'final', type: 'single_crown', site_ids: ['s14'] });
+    expect(caseCaptions(inCase({ restorations: [crown] }))[0].progress).toBe('Scan ✓ · Lab — · Try-in — · Delivery —');
+    expect(caseCaptions(inCase({ restorations: [bridge({})] }))[0]).toMatchObject({
+      title: 'Upper arch · All-on-4 · Completed', progress: 'Scan ✓ · Lab — · Try-in — · Delivery ✓',
+    });
   });
 });

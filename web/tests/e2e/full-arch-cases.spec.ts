@@ -93,6 +93,7 @@ test('full-arch case from plan to final bridge', async ({ page }) => {
   await addBridge(s.api, s, sites, 'temporary');
   await page.reload();
   await expect(card.getByTestId('bridge-temporary')).toHaveText(/^Delivered /);
+  const temporaryLine = (await card.getByTestId('bridge-temporary').textContent())!;
   await expect(card.getByTestId('bridge-final')).toHaveText('Not yet');
 
   // The lab stages, through the panel.
@@ -115,6 +116,8 @@ test('full-arch case from plan to final bridge', async ({ page }) => {
   await expect(card.getByTestId('bridge-final')).toHaveText(/^Delivered /);
   const delivered = (await card.getByTestId('bridge-final').textContent())!.replace('Delivered ', '');
   await expect(card.getByTestId('stage-delivery')).toContainText(`✓ ${delivered}`);
+  // The final replaced the temporary, which still shows when it was delivered.
+  await expect(card.getByTestId('bridge-temporary')).toHaveText(temporaryLine);
 
   // Voiding the final takes the case back into treatment.
   const { error } = await s.api.rpc('void_restoration', { p_restoration: final, p_reason: 'E2E entered by mistake' });

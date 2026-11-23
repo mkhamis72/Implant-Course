@@ -15,7 +15,7 @@ const kase = (o: Partial<FullArchCase> = {}): FullArchCase => ({
 const site = (o: Partial<ImplantSite> & { case_id?: string | null }): ImplantSite =>
   ({ id: 's', tooth: 15, state: 'placed', case_id: 'c1', ...o }) as unknown as ImplantSite;
 const resto = (o: Partial<Restoration>): Restoration =>
-  ({ id: 'r', stage: 'final', type: 'full_arch', teeth: [15, 25], fitted_on: '2026-11-01', ended_on: null, end_kind: null, case_id: 'c1', ...o }) as unknown as Restoration;
+  ({ id: 'r', stage: 'final', type: 'full_arch', teeth: [15, 25], fitted_on: '2026-11-01', ended_on: null, end_kind: null, case_id: 'c1', site_ids: ['s'], ...o }) as unknown as Restoration;
 
 describe('caseStatus', () => {
   it('is planned while no implant of the case is placed', () => {
@@ -30,6 +30,19 @@ describe('caseStatus', () => {
   });
   it('is completed with a current final restoration', () => {
     expect(caseStatus(kase(), [site({})], [resto({})])).toBe('completed');
+  });
+  it('is completed by a full-arch final covering all four placed implants', () => {
+    const four = [15, 12, 22, 25].map((tooth) => site({ id: `s${tooth}`, tooth }));
+    expect(caseStatus(kase(), four, [resto({ site_ids: ['s15', 's12', 's22', 's25'] })])).toBe('completed');
+  });
+  it('is in treatment with a single crown final on one case implant', () => {
+    const two = [site({ id: 's15', tooth: 15 }), site({ id: 's25', tooth: 25 })];
+    expect(caseStatus(kase(), two, [resto({ type: 'single_crown', site_ids: ['s15'] })])).toBe('in_treatment');
+    expect(caseStatus(kase(), [site({})], [resto({ type: 'single_crown' })])).toBe('in_treatment');
+  });
+  it('is in treatment while the finals leave a placed implant out', () => {
+    const two = [site({ id: 's15', tooth: 15 }), site({ id: 's25', tooth: 25, state: 'restored' })];
+    expect(caseStatus(kase(), two, [resto({ type: 'bridge', site_ids: ['s15'] })])).toBe('in_treatment');
   });
   it('is in treatment when the final is ended or a temporary, or belongs to another case', () => {
     expect(caseStatus(kase(), [site({})], [resto({ ended_on: '2026-11-05', end_kind: 'remade' })])).toBe('in_treatment');
@@ -56,19 +69,52 @@ describe('caseTitle', () => {
 });
 
 describe('caseBridges', () => {
-  it('picks the current temporary and final linked to the case', () => {
-    const t = resto({ id: 't', stage: 'temporary' });
-    const f = resto({ id: 'f' });
-    expect(caseBridges(kase(), [t, f])).toEqual({ temporary: t, final: f });
+  // An All-on-4: 15, 12, 22, 25 placed in case c1.
+  const four = [
+    site({ id: 's15', tooth: 15 }), site({ id: 's12', tooth: 12 }), site({ id: 's22', tooth: 22 }), site({ id: 's25', tooth: 25 }),
+  ];
+  const all = ['s15', 's12', 's22', 's25'];
+  it('picks the temporary and the finals linked to the case', () => {
+    const t = resto({ id: 't', stage: 'temporary', site_ids: all });
+    const f = resto({ id: 'f', site_ids: all, fitted_on: '2026-12-01' });
+    expect(caseBridges(kase(), four, [t, f])).toMatchObject({ temporary: t, finals: [f], complete: true, deliveredOn: '2026-12-01' });
   });
-  it('ignores ended, voided and other cases, and takes the latest of several', () => {
-    const old = resto({ id: 'old', ended_on: '2026-11-02', end_kind: 'replaced' });
-    const other = resto({ id: 'o', case_id: 'c2' });
-    const voided = resto({ id: 'v', voided_at: '2026-11-03' } as Partial<Restoration>);
-    expect(caseBridges(kase(), [old, other, voided])).toEqual({ temporary: null, final: null });
-    const a = resto({ id: 'a', fitted_on: '2026-11-01' });
-    const b = resto({ id: 'b', fitted_on: '2026-11-08' });
-    expect(caseBridges(kase(), [a, b]).final).toBe(b);
+  it('still shows the temporary after a final replaced it', () => {
+    const t = resto({ id: 't', stage: 'temporary', site_ids: all, ended_on: '2026-12-01', end_kind: 'replaced' });
+    const f = resto({ id: 'f', site_ids: all, fitted_on: '2026-12-01' });
+    expect(caseBridges(kase(), four, [t, f]).temporary).toBe(t);
+  });
+  it('takes the latest temporary bridge, never a voided one or a single crown', () => {
+    const a = resto({ id: 'a', stage: 'temporary', fitted_on: '2026-11-01', ended_on: '2026-11-08', end_kind: 'replaced' });
+    const b = resto({ id: 'b', stage: 'temporary', fitted_on: '2026-11-08' });
+    const voided = resto({ id: 'v', stage: 'temporary', fitted_on: '2026-11-20', voided_at: '2026-11-21' } as Partial<Restoration>);
+    const crown = resto({ id: 'c', stage: 'temporary', type: 'single_crown', fitted_on: '2026-11-22' });
+    expect(caseBridges(kase(), four, [a, b, voided, crown]).temporary).toBe(b);
+  });
+  it('ignores ended, voided, single-crown and other-case finals', () => {
+    const old = resto({ id: 'old', site_ids: all, ended_on: '2026-11-02', end_kind: 'remade' });
+    const other = resto({ id: 'o', site_ids: all, case_id: 'c2' });
+    const voided = resto({ id: 'v', site_ids: all, voided_at: '2026-11-03' } as Partial<Restoration>);
+    const crown = resto({ id: 'c', type: 'single_crown', site_ids: ['s15'] });
+    expect(caseBridges(kase(), four, [old, other, voided, crown])).toMatchObject({ temporary: null, finals: [], complete: false, deliveredOn: null });
+  });
+  it('is complete with two bridges covering every implant, delivered on the later one', () => {
+    const right = resto({ id: 'r', type: 'bridge', site_ids: ['s15', 's12'], fitted_on: '2026-12-01' });
+    const left = resto({ id: 'l', type: 'bridge', site_ids: ['s22', 's25'], fitted_on: '2026-12-05' });
+    expect(caseBridges(kase(), four, [right, left])).toMatchObject({ complete: true, deliveredOn: '2026-12-05' });
+  });
+  it('is not complete while finals leave an implant out, and says which', () => {
+    const part = resto({ id: 'p', type: 'bridge', site_ids: ['s12', 's22'] });
+    expect(caseBridges(kase(), four, [part])).toMatchObject({
+      finals: [part], complete: false, deliveredOn: null, coveredTeeth: [12, 22], neededTeeth: [15, 12, 22, 25],
+    });
+  });
+  it('does not need a failed implant', () => {
+    const withFailed = [...four, site({ id: 's14', tooth: 14, state: 'failed' })];
+    expect(caseBridges(kase(), withFailed, [resto({ site_ids: all })]).complete).toBe(true);
+  });
+  it('is never complete without a placed implant', () => {
+    expect(caseBridges(kase(), [site({ state: 'planned' })], [resto({})]).complete).toBe(false);
   });
 });
 

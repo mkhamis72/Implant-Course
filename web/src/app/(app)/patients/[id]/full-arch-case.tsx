@@ -9,7 +9,7 @@ import { typeShortLabel } from '@/lib/patients/implant-type';
 import { jawOf } from '@/lib/restorations/restorations';
 import {
   ARCH_LABELS, CASE_STAGES, CASE_STAGE_LABELS, CASE_STATUS_LABELS, CONFIGURATIONS, CONFIGURATION_LABELS, caseBridges, caseStatus,
-  caseTitle, type Arch, type CaseStage, type CaseStageRow, type CaseStatus, type FullArchCase,
+  caseTitle, type Arch, type CaseBridges, type CaseStage, type CaseStageRow, type CaseStatus, type FullArchCase,
 } from '@/lib/full-arch/cases';
 import type { ArchCaption } from '@/components/full-arch/full-arch';
 import { clearCaseStage, closeCase, createCase, recordCaseStage, reopenCase, setCaseSites, updateCase } from './case-actions';
@@ -36,7 +36,7 @@ export function caseCaptions(data: ChartData): ArchCaption[] {
     const c = shownCase(data.cases, arch);
     if (!c) return [];
     const done = (s: CaseStage) => c.stages.some((row) => row.stage === s);
-    const delivered = caseBridges(c, data.restorations).final !== null;
+    const delivered = caseBridges(c, data.sites, data.restorations).complete;
     const progress = [
       ...CASE_STAGES.map((s) => `${SHORT_STAGE[s]} ${done(s) ? '✓' : '—'}`),
       `Delivery ${delivered ? '✓' : '—'}`,
@@ -306,7 +306,15 @@ function CloseControl({ patientId, c }: { patientId: string; c: FullArchCase }) 
   );
 }
 
-function CaseCard({ patientId, data, c }: { patientId: string; data: ChartData; c: FullArchCase }) {
+/** "Delivered 01 Jun 2030", or for finals that leave implants out "Fitted 01 Jun 2030 · covers 12, 22 of 15, 12, 22, 25". */
+function finalLine(b: CaseBridges): string {
+  if (b.deliveredOn) return `Delivered ${formatDate(b.deliveredOn)}`;
+  if (b.finals.length === 0) return 'Not yet';
+  const covers = b.coveredTeeth.length ? b.coveredTeeth.join(', ') : 'none';
+  return `Fitted ${formatDate(b.finals[0].fitted_on)} · covers ${covers} of ${b.neededTeeth.join(', ')}`;
+}
+
+function CaseCard({patientId, data, c }: { patientId: string; data: ChartData; c: FullArchCase }) {
   const [mode, setMode] = useState<'view' | 'edit' | 'sites'>('view');
   const reopen = useAction();
   const status = caseStatus(c, data.sites, data.restorations);
@@ -314,7 +322,7 @@ function CaseCard({ patientId, data, c }: { patientId: string; data: ChartData; 
   const editable = data.editable && !closed;
   const sites = data.sites.filter((s) => s.case_id === c.id).sort((a, b) => a.tooth - b.tooth);
   const firstPlacement = earliestDate(sites.filter((s) => HAS_PLACEMENT.includes(s.state)).map((s) => s.placed_on));
-  const bridges = caseBridges(c, data.restorations);
+  const bridges = caseBridges(c, data.sites, data.restorations);
   const title = caseTitle(c);
   return (
     <section aria-label={title} className="space-y-3">
@@ -353,7 +361,7 @@ function CaseCard({ patientId, data, c }: { patientId: string; data: ChartData; 
           <dt className="text-muted">Temporary</dt>
           <dd data-testid="bridge-temporary">{bridges.temporary ? `Delivered ${formatDate(bridges.temporary.fitted_on)}` : 'Not yet'}</dd>
           <dt className="text-muted">Final</dt>
-          <dd data-testid="bridge-final">{bridges.final ? `Delivered ${formatDate(bridges.final.fitted_on)}` : 'Not yet'}</dd>
+          <dd data-testid="bridge-final">{finalLine(bridges)}</dd>
         </dl>
       </div>
 
@@ -369,7 +377,7 @@ function CaseCard({ patientId, data, c }: { patientId: string; data: ChartData; 
           ))}
           <li data-testid="stage-delivery" className="py-2">
             <p className="font-medium">Delivery</p>
-            {bridges.final ? <p className="text-ok">✓ {formatDate(bridges.final.fitted_on)}</p> : <p className="text-muted">Not yet</p>}
+            {bridges.deliveredOn ? <p className="text-ok">✓ {formatDate(bridges.deliveredOn)}</p> : <p className="text-muted">Not yet</p>}
           </li>
         </ol>
       </div>

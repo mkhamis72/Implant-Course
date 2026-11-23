@@ -34,31 +34,63 @@ export const CASE_STATUS_LABELS: Record<CaseStatus, string> = {
   planned: 'Planned', in_treatment: 'In treatment', completed: 'Completed', closed: 'Closed',
 };
 
-/** A restoration that counts: loaded restorations leave voided ones out already, but a voided one is never current. */
-function isCurrent(r: Restoration): boolean {
-  return !r.ended_on && !(r as { voided_at?: string | null }).voided_at;
+/** Restoration types that count as a case's bridge; a single crown on a case implant stays linked but never does. */
+const BRIDGE_TYPES: readonly Restoration['type'][] = ['bridge', 'full_arch', 'overdenture'];
+
+/** Loaded restorations leave voided ones out already, but a voided one never counts. */
+const isVoided = (r: Restoration) => !!(r as { voided_at?: string | null }).voided_at;
+
+const byLatestFitted = (a: Restoration, b: Restoration) => b.fitted_on.localeCompare(a.fitted_on);
+
+export type CaseBridges = {
+  /** The latest linked temporary bridge, even if a final has since replaced it. */
+  temporary: Restoration | null;
+  /** The current (not ended) final bridges linked to the case, latest fitted first. */
+  finals: Restoration[];
+  /** The finals cover every placed or restored implant of the case (failed ones aren't needed; none placed = never). */
+  complete: boolean;
+  /** The latest fitted date among the finals, once complete. */
+  deliveredOn: string | null;
+  /** Teeth of the needed implants, in arch order, and those the finals cover. */
+  neededTeeth: number[];
+  coveredTeeth: number[];
+};
+
+const archIndex = (tooth: number) => {
+  const q = Math.floor(tooth / 10);
+  const n = tooth % 10;
+  return q === 1 || q === 4 ? -n : n; // right side first (18…11 | 21…28; 48…41 | 31…38)
+};
+
+export function caseBridges(
+  c: FullArchCase, sites: readonly ImplantSite[], restorations: readonly Restoration[],
+): CaseBridges {
+  const bridges = restorations.filter((r) => r.case_id === c.id && BRIDGE_TYPES.includes(r.type) && !isVoided(r));
+  const temporary = bridges.filter((r) => r.stage === 'temporary').sort(byLatestFitted)[0] ?? null;
+  const finals = bridges.filter((r) => r.stage === 'final' && !r.ended_on).sort(byLatestFitted);
+  const needed = sites
+    .filter((s) => s.case_id === c.id && (s.state === 'placed' || s.state === 'restored'))
+    .sort((a, b) => archIndex(a.tooth) - archIndex(b.tooth));
+  const coveredIds = new Set(finals.flatMap((r) => r.site_ids ?? []));
+  const covered = needed.filter((s) => coveredIds.has(s.id));
+  const complete = needed.length > 0 && covered.length === needed.length;
+  return {
+    temporary, finals, complete,
+    deliveredOn: complete ? finals[0].fitted_on : null,
+    neededTeeth: needed.map((s) => s.tooth),
+    coveredTeeth: covered.map((s) => s.tooth),
+  };
 }
 
 export function caseStatus(c: FullArchCase, sites: readonly ImplantSite[], restorations: readonly Restoration[]): CaseStatus {
   if (c.closed_at) return 'closed';
-  if (restorations.some((r) => r.case_id === c.id && r.stage === 'final' && isCurrent(r))) return 'completed';
+  if (caseBridges(c, sites, restorations).complete) return 'completed';
   if (sites.some((s) => s.case_id === c.id && ['placed', 'restored', 'failed'].includes(s.state))) return 'in_treatment';
   return 'planned';
 }
 
 export function caseTitle(c: FullArchCase): string {
   return `${ARCH_LABELS[c.arch]} · ${c.name.trim() || CONFIGURATION_LABELS[c.configuration]}`;
-}
-
-/** The current temporary and final bridge linked to the case (the latest fitted if several). */
-export function caseBridges(
-  c: FullArchCase, restorations: readonly Restoration[],
-): { temporary: Restoration | null; final: Restoration | null } {
-  const latest = (stage: Restoration['stage']) =>
-    restorations
-      .filter((r) => r.case_id === c.id && r.stage === stage && isCurrent(r))
-      .sort((a, b) => b.fitted_on.localeCompare(a.fitted_on))[0] ?? null;
-  return { temporary: latest('temporary'), final: latest('final') };
 }
 
 // ── Schemas (limits: the plan's Global Constraints; SQL stays the authority) ───────────────────────────
