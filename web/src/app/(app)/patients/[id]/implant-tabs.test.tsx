@@ -5,6 +5,7 @@ import type { ChartData, ImplantSite } from '@/lib/inventory/types';
 
 vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), deleteGraft: vi.fn(), saveImplantGeometry: vi.fn() }));
 vi.mock('./restoration-actions', () => ({ addRestoration: vi.fn(), updateRestoration: vi.fn(), voidRestoration: vi.fn() }));
+vi.mock('./case-actions', () => ({ setCaseRestoration: vi.fn() }));
 vi.mock('./visit-actions', () => ({ recordVisit: vi.fn() }));
 vi.mock('./outcome-actions', () => ({ saveComplication: vi.fn(), voidComplication: vi.fn(), saveFailure: vi.fn() }));
 vi.mock('./xrays/actions', () => ({ saveRadiograph: vi.fn(), voidRadiograph: vi.fn() }));

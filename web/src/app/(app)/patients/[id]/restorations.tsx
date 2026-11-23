@@ -14,6 +14,8 @@ import { Field, Footer, NoneEnrolled, useSubmit } from './implant-forms';
 import {
   addRestoration, recordRestorationProblem, updateRestoration, updateRestorationProblem, voidRestoration, voidRestorationProblem,
 } from './restoration-actions';
+import { setCaseRestoration } from './case-actions';
+import { caseTitle } from '@/lib/full-arch/cases';
 
 const IN_PLACE = ['placed', 'restored'];
 
@@ -97,6 +99,7 @@ export function RestorationCard({ r, patientId, data, editable }: { r: Restorati
           {r.notes && <p>{r.notes}</p>}
         </>
       )}
+      <CaseLine r={r} patientId={patientId} data={data} />
       {r.problems.length > 0 && (
         <div>
           <p className="font-medium">Problems</p>
@@ -126,6 +129,35 @@ export function RestorationCard({ r, patientId, data, editable }: { r: Restorati
         </div>
       )}
       {error && <p role="alert" className="text-bad">{error}</p>}
+    </div>
+  );
+}
+
+/** The full-arch case the restoration is part of; editors link it to the open case of its arch, or unlink it. */
+function CaseLine({ r, patientId, data }: { r: Restoration; patientId: string; data: ChartData }) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const linked = r.case_id ? (data.cases ?? []).find((c) => c.id === r.case_id) ?? null : null;
+  const arch = r.teeth.length > 0 ? jawOf(r.teeth[0]) : null;
+  const open = !linked && arch ? (data.cases ?? []).find((c) => c.arch === arch && !c.closed_at) ?? null : null;
+  if (!linked && !(data.editable && open)) return null;
+  function link(caseId: string) {
+    setError(null);
+    start(async () => {
+      const result = await setCaseRestoration({ patientId, restorationId: r.id, caseId });
+      if (result.error) setError(result.error);
+    });
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {linked && <span>{`Part of: ${caseTitle(linked)}`}</span>}
+      {data.editable && linked && (
+        <button type="button" className="btn-secondary btn" disabled={pending} onClick={() => link('')}>Unlink from case</button>
+      )}
+      {data.editable && open && (
+        <button type="button" className="btn-secondary btn" disabled={pending} onClick={() => link(open.id)}>Link to case</button>
+      )}
+      {error && <p role="alert" className="w-full text-bad">{error}</p>}
     </div>
   );
 }

@@ -3,6 +3,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { ChartData } from '@/lib/inventory/types';
 
 vi.mock('./chart-actions', () => ({ setToothStatus: vi.fn() }));
+vi.mock('./case-actions', () => ({
+  createCase: vi.fn(), updateCase: vi.fn(), setCaseSites: vi.fn(), setCaseRestoration: vi.fn(), recordCaseStage: vi.fn(),
+  clearCaseStage: vi.fn(), closeCase: vi.fn(), reopenCase: vi.fn(),
+}));
 vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), deleteGraft: vi.fn(), saveImplantGeometry: vi.fn() }));
 vi.mock('./restoration-actions', () => ({
   addRestoration: vi.fn(), updateRestoration: vi.fn(), voidRestoration: vi.fn(),
@@ -141,6 +145,26 @@ describe('ChartPanel', () => {
       render(<ChartPanel patientId="pt" data={data(true)} initialTooth={null} initialView="arch" />);
       expect(screen.getByRole('button', { name: 'Full arch', pressed: true })).toBeInTheDocument();
       expect(screen.getByRole('img', { name: 'Full-arch chart' })).toBeInTheDocument();
+    });
+
+    it('Full arch offers full-arch cases to editors only; Teeth does not', () => {
+      const { unmount } = render(<ChartPanel patientId="pt" data={data(true)} initialTooth={null} initialView="arch" />);
+      expect(screen.getByRole('button', { name: 'Start upper case' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Start lower case' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Teeth' }));
+      expect(screen.queryByRole('button', { name: 'Start upper case' })).toBeNull();
+      unmount();
+      render(<ChartPanel patientId="pt" data={data(false)} initialTooth={null} initialView="arch" />);
+      expect(screen.queryByRole('button', { name: 'Start upper case' })).toBeNull();
+    });
+
+    it('a case is captioned on the drawing', () => {
+      const withCase = { ...data(true), cases: [{
+        id: 'c1', arch: 'lower', configuration: 'all_on_6', name: '', notes: '', closed_at: null, close_reason: null,
+        updated_at: 'x', stages: [],
+      }] } as unknown as ChartData;
+      render(<ChartPanel patientId="pt" data={withCase} initialTooth={null} initialView="arch" />);
+      expect(screen.getByTestId('case-caption-lower')).toHaveTextContent('Lower arch · All-on-6 · Planned');
     });
 
     it('switch keeps selection', () => {

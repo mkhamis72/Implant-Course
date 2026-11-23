@@ -10,7 +10,11 @@ type Props = {
   selected: readonly number[];
   /** `tab` asks the tooth panel to open that implant tab (a bridge opens its restoration). */
   onSelect: (fdi: number, additive: boolean, tab?: 'restoration') => void;
+  /** A caption per arch with a full-arch case: its title and status, then its stage progress. */
+  cases?: readonly ArchCaption[];
 };
+
+export type ArchCaption = { arch: 'upper' | 'lower'; title: string; progress: string };
 
 // Vertical layout, top to bottom: upper implant zone (HEAD_Y), upper bridge row, upper numbers,
 // lower numbers, lower bridge row, lower implant zone.
@@ -152,10 +156,22 @@ function Implant({ imp, selected, onSelect }: { imp: ArchImplant; selected: bool
   );
 }
 
-export function FullArch({ model, selected, onSelect }: Props) {
+/** The case line printed above the upper arch or below the lower one. */
+function Caption({ caption }: { caption: ArchCaption | undefined }) {
+  if (!caption) return null;
+  return (
+    <p data-testid={`case-caption-${caption.arch}`} className="flex max-w-4xl flex-wrap items-baseline gap-x-3 text-sm">
+      <span className="font-semibold text-ink">{caption.title}</span>
+      <span className="text-muted">{caption.progress}</span>
+    </p>
+  );
+}
+
+export function FullArch({ model, selected, onSelect, cases = [] }: Props) {
   const bridgeOf = new Map(model.bridges.flatMap((b) => b.teeth.map((t) => [t, b] as const)));
   return (
     <div className="space-y-2">
+      <Caption caption={cases.find((c) => c.arch === 'upper')} />
       <svg
         viewBox={`${ARCH_VIEWBOX.x} ${ARCH_VIEWBOX.y} ${ARCH_VIEWBOX.width} ${ARCH_VIEWBOX.height}`}
         className="h-auto w-full max-w-4xl select-none"
@@ -188,6 +204,7 @@ export function FullArch({ model, selected, onSelect }: Props) {
           <Implant key={imp.siteId} imp={imp} selected={selected.includes(imp.tooth)} onSelect={onSelect} />
         ))}
       </svg>
+      <Caption caption={cases.find((c) => c.arch === 'lower')} />
       <p className="text-sm text-muted">Schematic drawing — not a substitute for CBCT or 3D planning.</p>
     </div>
   );

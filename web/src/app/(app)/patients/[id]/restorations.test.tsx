@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, cleanup } from '@testing-library/react';
 import type { ChartData, ImplantSite } from '@/lib/inventory/types';
 import type { Restoration } from '@/lib/restorations/restorations';
 import { todayIso } from '@/lib/dates';
@@ -8,7 +8,9 @@ vi.mock('./implant-actions', () => ({ fitComponent: vi.fn(), placeImplant: vi.fn
 vi.mock('./restoration-actions', () => ({ addRestoration: vi.fn(), updateRestoration: vi.fn(), voidRestoration: vi.fn(),
   recordRestorationProblem: vi.fn(), updateRestorationProblem: vi.fn(), voidRestorationProblem: vi.fn(),
 }));
+vi.mock('./case-actions', () => ({ setCaseRestoration: vi.fn().mockResolvedValue({}) }));
 import { Restorations } from './restorations';
+import { setCaseRestoration } from './case-actions';
 import {
   addRestoration, recordRestorationProblem, updateRestoration, updateRestorationProblem, voidRestoration, voidRestorationProblem,
 } from './restoration-actions';
@@ -216,5 +218,36 @@ describe('<Restorations> in a clinic', () => {
     expect(card).not.toHaveTextContent(/Dr Delegate|Dr Supervisor|course/i);
     fireEvent.click(within(card).getByRole('button', { name: /Edit/ }));
     expect(screen.queryByRole('combobox', { name: /Delegate|Supervisor|Course/ })).toBeNull();
+  });
+});
+
+describe('<Restorations> in a full-arch case', () => {
+  const upperCase = {
+    id: 'c1', arch: 'upper', configuration: 'all_on_4', name: '', notes: '', closed_at: null, close_reason: null,
+    updated_at: '2026-01-10T10:00:00+00:00', stages: [],
+  };
+  const onUpper: Restoration = { ...temp, id: 'r16', teeth: [16], site_ids: ['s16'] };
+  const withCase = (r: Restoration, editable = true) => ({ ...data([r], editable), cases: [upperCase] }) as unknown as ChartData;
+
+  it('shows the case it is part of and offers Unlink', async () => {
+    render(<Restorations site={s16} patientId="pt" data={withCase({ ...onUpper, case_id: 'c1' })} />);
+    expect(screen.getByTestId('restoration')).toHaveTextContent('Part of: Upper arch · All-on-4');
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink from case' }));
+    await vi.waitFor(() => expect(setCaseRestoration).toHaveBeenCalledWith({ patientId: 'pt', restorationId: 'r16', caseId: '' }));
+  });
+
+  it('links to the open case of its arch', async () => {
+    render(<Restorations site={s16} patientId="pt" data={withCase(onUpper)} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Link to case' }));
+    await vi.waitFor(() => expect(setCaseRestoration).toHaveBeenCalledWith({ patientId: 'pt', restorationId: 'r16', caseId: 'c1' }));
+  });
+
+  it('viewers see the line but no control; no Link on another arch', () => {
+    render(<Restorations site={s16} patientId="pt" data={withCase({ ...onUpper, case_id: 'c1' }, false)} />);
+    expect(screen.getByText('Part of: Upper arch · All-on-4')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /case/ })).toBeNull();
+    cleanup();
+    render(<Restorations site={s36} patientId="pt" data={withCase(temp)} />);
+    expect(screen.queryByRole('button', { name: 'Link to case' })).toBeNull();
   });
 });
