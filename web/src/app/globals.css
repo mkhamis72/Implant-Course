@@ -290,7 +290,8 @@
     color: var(--color-ink);
   }
   .tab[aria-current="page"],
-  .tab[aria-selected="true"] {
+  .tab[aria-selected="true"],
+  .tab[aria-pressed="true"] {
     border-bottom-color: var(--color-accent);
     color: var(--color-accent-strong);
     font-weight: 600;
