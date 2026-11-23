@@ -17,6 +17,7 @@ import { statusTone, toothName, type Tone } from '@/lib/patients/tooth-panel';
 
 const TONE_BADGE: Record<Tone, string> = { ok: 'badge-ok', warn: 'badge-warn', bad: 'badge-bad', accent: 'badge-accent', off: '' };
 import { ImplantSection } from './implant-section';
+import { FullArchCasePanel, caseCaptions } from './full-arch-case';
 
 type Props = {
   patientId: string;
@@ -36,6 +37,7 @@ export function ChartPanel({ patientId, data, initialTooth, initialView = 'teeth
   const alerts = useMemo(() => openComplicationTeeth(data.sites), [data.sites]);
   const spans = useMemo(() => restorationSpans(data.restorations, data.sites), [data.restorations, data.sites]);
   const arch = useMemo(() => fullArchModel({ sites: data.sites, spans, badges, types }), [data.sites, spans, badges, types]);
+  const captions = useMemo(() => caseCaptions(data), [data]);
   const [view, setView] = useState<ChartView>(initialView);
   const [selected, setSelected] = useState<number[]>(initialTooth ? [initialTooth] : []);
   // A restoration bar or covered tooth opens the Restoration tab; `n` remounts the panel when the tooth was already open.
@@ -106,7 +108,7 @@ export function ChartPanel({ patientId, data, initialTooth, initialView = 'teeth
               <span>Left</span>
             </div>
             {view === 'arch' ? (
-              <FullArch model={arch} selected={selected} onSelect={onSelect} />
+              <FullArch model={arch} selected={selected} onSelect={onSelect} cases={captions} />
             ) : (
               <Odontogram statuses={statuses} badges={badges} types={types} alerts={alerts} spans={spans} openSpan={openSpan} selected={selected} onSelect={onSelect} />
             )}
@@ -114,6 +116,12 @@ export function ChartPanel({ patientId, data, initialTooth, initialView = 'teeth
         </div>
         {view === 'arch' ? <FullArchLegend /> : <Legend />}
       </div>
+      {view === 'arch' && (data.editable || data.cases.length > 0) && (
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <FullArchCasePanel patientId={patientId} data={data} arch="upper" />
+          <FullArchCasePanel patientId={patientId} data={data} arch="lower" />
+        </div>
+      )}
       <aside
         ref={panelRef}
         className="card scroll-mt-20 space-y-4"

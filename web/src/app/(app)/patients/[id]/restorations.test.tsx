@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, cleanup } from '@testing-library/react';
 import type { ChartData, ImplantSite } from '@/lib/inventory/types';
 import type { Restoration } from '@/lib/restorations/restorations';
 import { todayIso } from '@/lib/dates';
@@ -8,7 +8,9 @@ vi.mock('./implant-actions', () => ({ fitComponent: vi.fn(), placeImplant: vi.fn
 vi.mock('./restoration-actions', () => ({ addRestoration: vi.fn(), updateRestoration: vi.fn(), voidRestoration: vi.fn(),
   recordRestorationProblem: vi.fn(), updateRestorationProblem: vi.fn(), voidRestorationProblem: vi.fn(),
 }));
+vi.mock('./case-actions', () => ({ setCaseRestoration: vi.fn().mockResolvedValue({}) }));
 import { Restorations } from './restorations';
+import { setCaseRestoration } from './case-actions';
 import {
   addRestoration, recordRestorationProblem, updateRestoration, updateRestorationProblem, voidRestoration, voidRestorationProblem,
 } from './restoration-actions';
@@ -20,7 +22,7 @@ const s16 = { id: 's16', tooth: 16, state: 'placed', placed_on: '2026-01-10' } a
 const temp: Restoration = {
   id: 'r1', stage: 'temporary', type: 'single_crown', teeth: [36], fitted_on: '2026-01-12', retention: 'screw', material: 'pmma_acrylic',
   delegate_id: null, supervisor_id: null, course_id: null, notes: '', ended_on: null, end_kind: null, end_reason: null,
-  updated_at: '2026-01-12T10:00:00.5+00:00', site_ids: ['s36'], problems: [],
+  updated_at: '2026-01-12T10:00:00.5+00:00', case_id: null, site_ids: ['s36'], problems: [],
 };
 const final: Restoration = { ...temp, id: 'r2', stage: 'final', material: 'zirconia', fitted_on: '2026-04-01', updated_at: '2026-04-01T10:00:00+00:00' };
 
@@ -30,7 +32,7 @@ const data = (restorations: Restoration[], editable = true) =>
     delegates: [{ id: 'd1', label: 'Dr Delegate' }, { id: 'd2', label: 'Dr Second' }], supervisors: [{ id: 'v1', label: 'Dr Supervisor' }],
     enrollments: [{ course_id: 'c1', delegate_id: 'd1' }],
     courses: [{ id: 'c1', name: 'Autumn course', start_date: '2026-10-01', end_date: '2026-10-30' }],
-    restorations, today: '2026-10-21', me: 'u1', editable, canReceive: false, inventoryOn: true, teachingOn: true, doctors: [],
+    restorations, today: '2026-10-21', me: 'u1', editable, canReceive: false, inventoryOn: true, teachingOn: true, doctors: [], cases: [],
   }) as unknown as ChartData;
 
 beforeEach(() => {
@@ -216,5 +218,44 @@ describe('<Restorations> in a clinic', () => {
     expect(card).not.toHaveTextContent(/Dr Delegate|Dr Supervisor|course/i);
     fireEvent.click(within(card).getByRole('button', { name: /Edit/ }));
     expect(screen.queryByRole('combobox', { name: /Delegate|Supervisor|Course/ })).toBeNull();
+  });
+});
+
+describe('<Restorations> in a full-arch case', () => {
+  const upperCase = {
+    id: 'c1', arch: 'upper', configuration: 'all_on_4', name: '', notes: '', closed_at: null, close_reason: null,
+    updated_at: '2026-01-10T10:00:00+00:00', stages: [],
+  };
+  const onUpper: Restoration = { ...temp, id: 'r16', teeth: [16], site_ids: ['s16'] };
+  const withCase = (r: Restoration, editable = true) => ({ ...data([r], editable), cases: [upperCase] }) as unknown as ChartData;
+
+  it('shows the case it is part of and offers Unlink', async () => {
+    render(<Restorations site={s16} patientId="pt" data={withCase({ ...onUpper, case_id: 'c1' })} />);
+    expect(screen.getByTestId('restoration')).toHaveTextContent('Part of: Upper arch · All-on-4');
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink from case' }));
+    await vi.waitFor(() => expect(setCaseRestoration).toHaveBeenCalledWith({ patientId: 'pt', restorationId: 'r16', caseId: '' }));
+  });
+
+  it('links to the open case of its arch', async () => {
+    render(<Restorations site={s16} patientId="pt" data={withCase(onUpper)} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Link to case' }));
+    await vi.waitFor(() => expect(setCaseRestoration).toHaveBeenCalledWith({ patientId: 'pt', restorationId: 'r16', caseId: 'c1' }));
+  });
+
+  it('viewers see the line but no control; no Link on another arch', () => {
+    render(<Restorations site={s16} patientId="pt" data={withCase({ ...onUpper, case_id: 'c1' }, false)} />);
+    expect(screen.getByText('Part of: Upper arch · All-on-4')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /case/ })).toBeNull();
+    cleanup();
+    render(<Restorations site={s36} patientId="pt" data={withCase(temp)} />);
+    expect(screen.queryByRole('button', { name: 'Link to case' })).toBeNull();
+  });
+
+  it('only the newest restoration (the editable card) offers Link or Unlink', () => {
+    const older = { ...onUpper, id: 'r15', case_id: 'c1', fitted_on: '2026-01-11', ended_on: '2026-01-12', end_kind: 'replaced' as const };
+    const newer = { ...onUpper, case_id: 'c1' };
+    render(<Restorations site={s16} patientId="pt" data={{ ...withCase(newer), restorations: [older, newer] } as unknown as ChartData} />);
+    expect(screen.getAllByText('Part of: Upper arch · All-on-4')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Unlink from case' })).toHaveLength(1);
   });
 });

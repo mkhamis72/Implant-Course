@@ -64,6 +64,8 @@ export type Restoration = {
   end_kind: 'replaced' | 'remade' | null;
   end_reason: string | null;
   updated_at: string;
+  /** The full-arch case this restoration belongs to, if any (0142). */
+  case_id: string | null;
   site_ids: string[];
   problems: RestorationProblem[];
   /** Names for display (embedded when loaded; a course the reader can't see comes back null). */

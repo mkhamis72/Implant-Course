@@ -5,6 +5,7 @@ import type { ChartData, ImplantSite } from '@/lib/inventory/types';
 
 vi.mock('./surgery-actions', () => ({ saveSurgery: vi.fn(), saveGraft: vi.fn(), deleteGraft: vi.fn(), saveImplantGeometry: vi.fn() }));
 vi.mock('./restoration-actions', () => ({ addRestoration: vi.fn(), updateRestoration: vi.fn(), voidRestoration: vi.fn() }));
+vi.mock('./case-actions', () => ({ setCaseRestoration: vi.fn() }));
 vi.mock('./visit-actions', () => ({ recordVisit: vi.fn() }));
 vi.mock('./outcome-actions', () => ({ saveComplication: vi.fn(), voidComplication: vi.fn(), saveFailure: vi.fn() }));
 vi.mock('./xrays/actions', () => ({ saveRadiograph: vi.fn(), voidRadiograph: vi.fn() }));
@@ -26,7 +27,7 @@ const site = {
 const data = (editable: boolean) =>
   ({
     statuses: {}, sites: [site], visits: [], implants: [], componentProducts: [], lots: [], delegates: [], organizers: [], supervisors: [], restorations: [], courses: [], radiographs: [],
-    today: '2026-10-18', me: 'u1', editable, inventoryOn: true, teachingOn: true, doctors: [],
+    today: '2026-10-18', me: 'u1', editable, inventoryOn: true, teachingOn: true, doctors: [], cases: [],
   }) as unknown as ChartData;
 
 // The section owns the selected tab; this stands in for it.

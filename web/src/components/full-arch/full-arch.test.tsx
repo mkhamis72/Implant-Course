@@ -79,6 +79,23 @@ describe('<FullArch>', () => {
   });
 });
 
+describe('<FullArch> case captions', () => {
+  it('shows each arch case caption with its progress', () => {
+    render(<FullArch model={{ implants: [], bridges: [] }} selected={[]} onSelect={vi.fn()} cases={[
+      { arch: 'upper', title: 'Upper arch · All-on-4 · In treatment', progress: 'Scan ✓ · Lab — · Try-in — · Delivery —' },
+      { arch: 'lower', title: 'Lower arch · All-on-6 · Planned', progress: 'Scan — · Lab — · Try-in — · Delivery —' },
+    ]} />);
+    expect(screen.getByTestId('case-caption-upper')).toHaveTextContent('Upper arch · All-on-4 · In treatment');
+    expect(screen.getByTestId('case-caption-upper')).toHaveTextContent('Scan ✓ · Lab — · Try-in — · Delivery —');
+    expect(screen.getByTestId('case-caption-lower')).toHaveTextContent('Lower arch · All-on-6 · Planned');
+  });
+
+  it('no caption without cases', () => {
+    render(<FullArch model={{ implants: [], bridges: [] }} selected={[]} onSelect={vi.fn()} />);
+    expect(screen.queryByTestId('case-caption-upper')).toBeNull();
+  });
+});
+
 describe('<FullArchLegend>', () => {
   it('lists the drawing’s marks', () => {
     render(<FullArchLegend />);
