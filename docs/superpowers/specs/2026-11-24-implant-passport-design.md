@@ -58,7 +58,7 @@ A patient leaves the clinic with implants, components, screws and bridges that a
 - Clinic companies: same (no teaching fields shown; delegate names appear only where recorded).
 
 ## Owner answers after the builder check (2026-11-24)
-- **Arabic text in the record (Q1 = b):** embed an Arabic-capable font (Noto Naskh Arabic, OFL, bundled with the app — no outside fetch) alongside the Latin font, so Arabic names and free text print correctly (right-to-left runs inside the English layout). This also prepares the later Arabic passport.
+- **Arabic text in the record (Q1 = b):** embed an Arabic-capable font (IBM Plex Sans Arabic, OFL, bundled with the app — no outside fetch; Noto Naskh Arabic was planned, but react-pdf 4.9.0 drops GPOS mark offsets, and Noto Naskh Arabic draws letter dots as marks, so its dots printed beside the word; spike, Task 1) alongside the Latin font, so Arabic names and free text print correctly (right-to-left runs inside the English layout). This also prepares the later Arabic passport.
 - **Medical content is a clinic setting (Q2):** Admin → Settings → **Implant passport** with one choice: **Allergies and medications only** (default) / **Full medical summary** (allergies, medications, diabetes, smoker and the other recorded medical-history items) / **Nothing medical**. Stored in `public.passport_settings` (one row per company; no row = the default), written by admins through `set_passport_settings(p_medical text)`. Each generated passport records the level used (`patient_passports.medical_level`) and the PDF shows the section accordingly ("Medical alerts" with "None recorded" when empty; no section at all for Nothing medical).
 
 ## Settled calls (mine, incl. builder-check answers)
@@ -75,7 +75,7 @@ A patient leaves the clinic with implants, components, screws and bridges that a
 - Contact details (phone, email, address) are **not** printed (privacy; the request says "if authorized" — can be added later as an option).
 - Placed-by prints the doctor's name, else the delegate's name, else "Not recorded"; supervisors are not printed.
 - Lot numbers print only when the company's plan has Inventory.
-- A4 portrait; bundled fonts only (Latin + Noto Naskh Arabic), no external font fetch, CSP unchanged.
+- A4 portrait; bundled fonts only (static Noto Sans Regular/Bold + IBM Plex Sans Arabic Regular/Bold), no external font fetch, CSP unchanged.
 
 ## Left to the builder
 Exact typography and table layout, page-break rules, chart scale in the PDF, test fixtures.
