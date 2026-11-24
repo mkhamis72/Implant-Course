@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { ChartData } from '@/lib/inventory/types';
 
 vi.mock('./chart-actions', () => ({ setToothStatus: vi.fn() }));
@@ -127,8 +127,33 @@ describe('ChartPanel', () => {
       expect(screen.queryByRole('img', { name: 'Full-arch chart' })).toBeNull();
     });
 
+    it('Back and Forward move through the views, keeping other params', () => {
+      window.history.replaceState(null, '', '/patients/pt?tooth=36');
+      const push = vi.spyOn(window.history, 'pushState');
+      const { unmount } = render(<ChartPanel patientId="pt" data={data(true)} initialTooth={null} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Full arch' }));
+      expect(push).toHaveBeenLastCalledWith(null, '', expect.stringMatching(/tooth=36.*view=arch|view=arch.*tooth=36/));
+      fireEvent.click(screen.getByRole('button', { name: 'Teeth' }));
+      expect(push).toHaveBeenLastCalledWith(null, '', '/patients/pt?tooth=36');
+      // Back to Full arch, then to Teeth.
+      window.history.replaceState(null, '', '/patients/pt?tooth=36&view=arch');
+      act(() => { window.dispatchEvent(new PopStateEvent('popstate')); });
+      expect(screen.getByRole('button', { name: 'Full arch', pressed: true })).toBeInTheDocument();
+      window.history.replaceState(null, '', '/patients/pt?tooth=36');
+      act(() => { window.dispatchEvent(new PopStateEvent('popstate')); });
+      expect(screen.getByRole('button', { name: 'Teeth', pressed: true })).toBeInTheDocument();
+      unmount();
+      // The listener is gone after unmount.
+      const spy = vi.spyOn(window, 'removeEventListener');
+      render(<ChartPanel patientId="pt" data={data(true)} initialTooth={null} />).unmount();
+      expect(spy).toHaveBeenCalledWith('popstate', expect.any(Function));
+      spy.mockRestore();
+      push.mockRestore();
+      window.history.replaceState(null, '', '/');
+    });
+
     it('switches to Full arch', () => {
-      const replace = vi.spyOn(window.history, 'replaceState');
+      const replace = vi.spyOn(window.history, 'pushState');
       render(<ChartPanel patientId="pt" data={data(true)} initialTooth={null} />);
       fireEvent.click(screen.getByRole('button', { name: 'Full arch' }));
       expect(screen.getByRole('button', { name: 'Full arch', pressed: true })).toBeInTheDocument();

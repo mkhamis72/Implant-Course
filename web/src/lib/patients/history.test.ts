@@ -288,6 +288,18 @@ describe('describeChange: full-arch cases', () => {
   });
 });
 
+describe('describeChange: implant case membership', () => {
+  const base = { id: 1, at: '2026-11-24T10:00:00Z', actor: 'A', table_name: 'implant_sites', action: 'UPDATE' as const };
+  const s = { tooth: 15, state: 'placed', case_id: null };
+  it('labels an update that changes only the case link', () => {
+    expect(describeChange({ ...base, before: s, after: { ...s, case_id: 'c1' } })).toBe('Added to full-arch case: implant on tooth 15');
+    expect(describeChange({ ...base, before: { ...s, case_id: 'c1' }, after: s })).toBe('Removed from full-arch case: implant on tooth 15');
+  });
+  it('keeps other changes on their own label', () => {
+    expect(describeChange({ ...base, before: s, after: { ...s, case_id: 'c1', state: 'restored' } })).not.toMatch(/full-arch case/);
+  });
+});
+
 describe('restoration links', () => {
   it('hides restoration_sites rows and nothing else', () => {
     const base = { id: 1, at: '2026-10-21T10:00:00Z', actor: 'A', action: 'INSERT' as const, before: null, after: { site_id: 's1' } };
