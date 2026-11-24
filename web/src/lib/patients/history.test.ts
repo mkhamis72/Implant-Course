@@ -248,6 +248,17 @@ describe('describeChange: restorations', () => {
   });
 });
 
+describe('describeChange: implant passports', () => {
+  const base = { id: 1, at: '2026-11-24T10:00:00Z', actor: 'A' };
+  it('names the generated version', () => {
+    const p = { version: 2, medical_level: 'none', size_bytes: 1000 };
+    expect(describeChange({ ...base, table_name: 'patient_passports', action: 'INSERT', before: null, after: p }))
+      .toBe('Implant passport generated (version 2)');
+    expect(describeChange({ ...base, table_name: 'patient_passports', action: 'DELETE', before: p, after: null }))
+      .toBe('Implant passport deleted (version 2)');
+  });
+});
+
 describe('describeChange: full-arch cases', () => {
   const base = { id: 1, at: '2026-11-24T10:00:00Z', actor: 'A' };
   const c = { arch: 'upper', configuration: 'all_on_4', name: '', notes: '', closed_at: null, close_reason: null };
