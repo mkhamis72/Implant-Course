@@ -239,7 +239,7 @@ function implantFields(s: ImplantSite, lotsOn: boolean): Field[] {
 
 function restorationStatus(r: Restoration): string {
   if (isCurrent(r)) return L.statusCurrent;
-  return `${r.end_kind === 'remade' ? L.statusRemade : L.statusReplaced} on ${formatDate(r.ended_on!)}`;
+  return `${r.end_kind === 'remade' ? L.statusRemade : L.statusReplaced} ${L.on} ${formatDate(r.ended_on!)}`;
 }
 
 function restorationsSection(restorations: Restoration[], sites: ImplantSite[]): PassportModel['restorations'] {
@@ -272,7 +272,7 @@ function caseSection(c: FullArchCase, sites: ImplantSite[], restorations: Restor
   let finalBridge: string = NR;
   if (bridges.deliveredOn) finalBridge = formatDate(bridges.deliveredOn);
   else if (bridges.finals.length) {
-    finalBridge = `${formatDate(bridges.finals[0].fitted_on)} · ${L.covers} ${bridges.coveredTeeth.join(', ')} of ${bridges.neededTeeth.join(', ')}`;
+    finalBridge = `${formatDate(bridges.finals[0].fitted_on)} · ${L.covers} ${bridges.coveredTeeth.join(', ')} ${L.of} ${bridges.neededTeeth.join(', ')}`;
   }
   const stages = CASE_STAGES.map((stage) => {
     const row = c.stages.find((s) => s.stage === stage);

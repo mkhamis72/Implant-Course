@@ -23,6 +23,7 @@ export const PASSPORT_LABELS = {
   generatedOn: 'Generated on',
   page: 'Page',
   of: 'of',
+  on: 'on',
 
   // Patient.
   patientHeading: 'Patient',
