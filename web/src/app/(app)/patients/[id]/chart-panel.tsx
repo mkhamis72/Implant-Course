@@ -71,6 +71,7 @@ export function ChartPanel({ patientId, data, initialTooth, initialView = 'teeth
   }
 
   function switchView(next: ChartView) {
+    if (next === view) return;
     setView(next);
     // Keep the view on reload and when the link is shared, without a server round trip.
     const url = new URL(window.location.href);

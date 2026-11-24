@@ -144,12 +144,26 @@ describe('ChartPanel', () => {
       expect(screen.getByRole('button', { name: 'Teeth', pressed: true })).toBeInTheDocument();
       unmount();
       // The listener is gone after unmount.
+      const add = vi.spyOn(window, 'addEventListener');
       const spy = vi.spyOn(window, 'removeEventListener');
       render(<ChartPanel patientId="pt" data={data(true)} initialTooth={null} />).unmount();
-      expect(spy).toHaveBeenCalledWith('popstate', expect.any(Function));
+      const added = add.mock.calls.find((c) => c[0] === 'popstate')![1];
+      expect(spy).toHaveBeenCalledWith('popstate', added);
+      add.mockRestore();
       spy.mockRestore();
       push.mockRestore();
       window.history.replaceState(null, '', '/');
+    });
+
+    it('clicking the active view adds no history entry', () => {
+      const push = vi.spyOn(window.history, 'pushState');
+      render(<ChartPanel patientId="pt" data={data(true)} initialTooth={null} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Teeth' }));
+      expect(push).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Full arch' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Full arch' }));
+      expect(push).toHaveBeenCalledTimes(1);
+      push.mockRestore();
     });
 
     it('switches to Full arch', () => {
