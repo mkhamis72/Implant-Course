@@ -9,6 +9,7 @@ import {
 } from '@/app/(app)/patients/[id]/chart-data';
 import type { ImplantSite } from '@/lib/inventory/types';
 import { MEDICAL_LEVELS, type MedicalLevel } from './labels';
+import { printableLogo } from './versions';
 import type { PassportData, PassportMedicalHistory } from './model';
 
 /** Patient columns the passport prints: never phone, email or address. */
@@ -40,7 +41,7 @@ export async function loadPassportData(patientId: string): Promise<PassportData>
     supabase.from('restorations').select(RESTORATION_SELECT).eq('patient_id', patientId).is('voided_at', null),
     supabase.from('full_arch_cases').select(CASE_SELECT).eq('patient_id', patientId).order('created_at'),
     supabase.rpc('passport_settings_current'),
-    supabase.rpc('branding_logo_for', { p_company: companyId }).maybeSingle<{ bytes: string; content_type: string }>(),
+    supabase.rpc('branding_logo_for', { p_company: companyId }).maybeSingle<{ bytes: string }>(),
   ]);
   // The logo is optional: if it cannot be read the passport prints without it (as the app falls back to no logo).
   for (const r of [patient, history, sites, restorations, cases, level]) if (r.error) failed();
@@ -59,7 +60,8 @@ export async function loadPassportData(patientId: string): Promise<PassportData>
     cases: toCases(cases.data),
     branding: {
       name: branding.name,
-      logo: !logo.error && logo.data ? { bytes: decodeBytea(logo.data.bytes), contentType: logo.data.content_type } : null,
+      // PNG or JPEG only, by its bytes: a WebP logo is never handed to the renderer (the clinic name prints alone).
+      logo: printableLogo(!logo.error && logo.data ? decodeBytea(logo.data.bytes) : null),
     },
     features: me?.features ?? [],
     medicalLevel,

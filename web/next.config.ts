@@ -10,8 +10,9 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/statistics/export': ['./src/lib/research/export/analysis.R'],
     '/statistics/analysis.R': ['./src/lib/research/export/analysis.R'],
-    // The passport fonts are read at run time from the source tree (src/lib/passport/fonts.ts).
-    '/patients/**': ['./src/lib/passport/fonts/*.ttf'],
+    // The passport fonts are read at run time from the source tree (src/lib/passport/fonts.ts), only by the
+    // generate route (a glob: a literal '[id]' would be a character class).
+    '/patients/*/passport/generate': ['./src/lib/passport/fonts/*.ttf'],
   },
   // Signed consent scans (≤ 2 MB) go through a server action; as form data 2 MB is about 2.7 MB (Vercel allows 4.5 MB).
   experimental: {

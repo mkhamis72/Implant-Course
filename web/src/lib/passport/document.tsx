@@ -3,6 +3,7 @@
 // Labels and values are separate Text elements so neutral punctuation next to Arabic keeps its place (bidi).
 // Page breaks: a table row, a part and a card's title block never split; a heading always travels with the first
 // thing under it (see Flow).
+import 'server-only';
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { Fragment, type ComponentProps, type ReactNode } from 'react';
 import { PASSPORT_LABELS as L } from './labels';

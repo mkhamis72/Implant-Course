@@ -1,3 +1,4 @@
+import 'server-only';
 import { createElement, type ReactElement } from 'react';
 import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer';
 import { registerPassportFonts } from './fonts';

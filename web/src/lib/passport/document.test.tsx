@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
+vi.mock('server-only', () => ({}));
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { Font } from '@react-pdf/renderer';
 import { passportModel, type PassportData } from './model';
