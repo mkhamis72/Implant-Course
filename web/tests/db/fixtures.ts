@@ -184,6 +184,45 @@ export async function legacyFailure(c: Client, site: string, date: string, user:
   await actAs(c, user);
 }
 
+/**
+ * A component as fit_component_v2 (dropped in 0144) recorded it, for tests of the rows it left behind (a legacy
+ * `final_restoration` above all, which fit_component_v3 refuses): closes every current part on the implant that day,
+ * linked to the new row by replaced_by, and a final restoration marks the implant and tooth restored. No product or
+ * stock. Writes as postgres, then restores the caller's role and claims. `fittedOn` is a SQL date expression.
+ */
+export async function legacyFit(
+  c: Client, site: string, type: string,
+  opts: { fittedOn?: string; delegate?: string | null; organizer?: string | null; course?: string | null } = {},
+): Promise<string> {
+  const saved = (await c.query(
+    `select current_user as role, coalesce(current_setting('request.jwt.claims', true), '') as claims`)).rows[0];
+  await c.query('reset role');
+  const s = (await c.query(
+    `select gen_random_uuid() as id, (${opts.fittedOn ?? 'public.cairo_today()'})::date::text as on_date, company_id, patient_id, tooth
+     from public.implant_sites where id = $1`, [site])).rows[0];
+  const closed = (await c.query(
+    `update public.site_components set removed_on = $2 where site_id = $1 and removed_on is null returning id`,
+    [site, s.on_date])).rows.map((r) => r.id as string);
+  await c.query(
+    `insert into public.site_components (id, company_id, site_id, component_type, fitted_on, fitted_by_delegate_id,
+       fitted_by_organizer_id, notes, course_id)
+     values ($1, $2, $3, $4::public.component_type, $5, $6, $7, '', $8)`,
+    [s.id, s.company_id, site, type, s.on_date, opts.delegate ?? null, opts.organizer ?? null, opts.course ?? null],
+  );
+  if (closed.length) {
+    await c.query('update public.site_components set replaced_by = $1 where id = any($2::uuid[])', [s.id, closed]);
+  }
+  if (type === 'final_restoration') {
+    await c.query(`update public.implant_sites set state = 'restored' where id = $1`, [site]);
+    await c.query(`select app_private.set_tooth($1, $2::smallint, 'restored')`, [s.patient_id, s.tooth]);
+  }
+  if (saved.role !== 'postgres') {
+    await c.query(`select set_config('request.jwt.claims', $1, true)`, [saved.claims]);
+    await c.query(`set local role ${saved.role === 'anon' ? 'anon' : 'authenticated'}`);
+  }
+  return s.id as string;
+}
+
 /** A pending login for the email (as postgres), so an auth.users insert creates its membership (0088):
  *  without one, handle_new_user refuses the sign-up (0090). Academy and an active organizer by default. */
 export async function pendingLogin(

@@ -17,8 +17,8 @@ async function placed(c: Client) {
 
 async function fit(c: Client, site: string, type: string, product: string | null, lot: string | null, by: string) {
   const { rows } = await c.query(
-    `select public.fit_component_v2(p_site => $1, p_type => $2, p_fitted_on => current_date,
-       p_product => $3, p_lot => $4, p_by_delegate => $5, p_by_organizer => null, p_notes => '', p_course => null) as id`,
+    `select public.fit_component_v3(p_site => $1, p_type => $2, p_fitted_on => current_date,
+       p_product => $3, p_lot => $4, p_by_delegate => $5, p_by_organizer => null, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null) as id`,
     [site, type, product, lot, by],
   );
   return rows[0].id as string;
@@ -49,17 +49,6 @@ describe('components', () => {
     });
   });
 
-  it('a lab-made final restoration needs no product and marks the tooth restored', async () => {
-    await withTx(async (c) => {
-      const s = await placed(c);
-      await fit(c, s.site, 'final_restoration', null, null, s.delegate);
-      const site = await c.query('select state from public.implant_sites where id = $1', [s.site]);
-      expect(site.rows[0].state).toBe('restored');
-      const tooth = await c.query('select status from public.tooth_status where patient_id = $1 and tooth = 36', [s.patient]);
-      expect(tooth.rows[0].status).toBe('restored');
-    });
-  });
-
   it('refuses mismatched products, a product without a batch, and nobody fitting it', async () => {
     await withTx(async (c) => {
       const s = await placed(c);
@@ -69,7 +58,7 @@ describe('components', () => {
       await refused(c, () => fit(c, s.site, 'ti_base', tb, null, s.delegate), /Choose the stock batch used/);
       await refused(
         c,
-        () => c.query("select public.fit_component_v2(p_site => $1, p_type => 'cover_screw', p_fitted_on => current_date, p_product => null, p_lot => null, p_by_delegate => null, p_by_organizer => null, p_notes => '', p_course => null)", [s.site]),
+        () => c.query("select public.fit_component_v3(p_site => $1, p_type => 'cover_screw', p_fitted_on => current_date, p_product => null, p_lot => null, p_by_delegate => null, p_by_organizer => null, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null)", [s.site]),
         /Choose who fitted the component/,
       );
     });

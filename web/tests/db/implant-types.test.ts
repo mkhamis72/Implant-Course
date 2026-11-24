@@ -2,8 +2,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
-import { withTx, actAs, asPostgres } from './helpers';
-import { book, enroll, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, place, receive } from './fixtures';
+import { withTx, actAs, actAsBound, asPostgres } from './helpers';
+import {
+  book, enroll, insertSelfAuthUser, makeChair, makeCourse, makeDelegate, makePatient, makeProduct, makeSession, pendingLogin,
+  place, receive,
+} from './fixtures';
 
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
 const users = inject('testUsers');
@@ -333,6 +336,60 @@ describe('implant types (0139–0140)', () => {
     });
   });
 
+  it('direction without angle is refused (0144)', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedFromBooking(c);
+      await geometry(c, site, 'conventional', 10, 'mesial');
+      const before = await siteRow(c, site);
+      await refused(c, () => geometry(c, site, 'conventional', null, 'distal'), /Give the angle as well as the direction\./);
+      await refused(c, () => geometry(c, site, 'zygomatic', null, 'buccal', 'zygoma'),
+        /Give the angle as well as the direction\./);
+      const after = await siteRow(c, site);
+      expect([after.implant_type, Number(after.angulation_deg), after.angulation_direction])
+        .toEqual([before.implant_type, 10, 'mesial']);
+    });
+  });
+
+  it('angle and direction save, and so do neither or an angle alone (0144)', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedFromBooking(c);
+      await geometry(c, site, 'conventional', 15, 'palatal_lingual');
+      let row = await siteRow(c, site);
+      expect([row.implant_type, Number(row.angulation_deg), row.angulation_direction])
+        .toEqual(['conventional', 15, 'palatal_lingual']);
+      await geometry(c, site, 'conventional', 5);
+      row = await siteRow(c, site);
+      expect([Number(row.angulation_deg), row.angulation_direction]).toEqual([5, null]);
+      await geometry(c, site, 'conventional', null, '  ');
+      row = await siteRow(c, site);
+      expect([row.angulation_deg, row.angulation_direction]).toEqual([null, null]);
+    });
+  });
+
+  it('company isolation for geometry: another company\'s implant is refused and unchanged (0144)', async () => {
+    await withTx(async (c) => {
+      const { site } = await placedFromBooking(c);
+      await geometry(c, site, 'tilted', 30, 'distal');
+      await asPostgres(c);
+      const before = await siteRow(c, site);
+
+      await c.query("select set_config('request.jwt.claims', '', true)");
+      const tag = Math.random().toString(36).slice(2, 8);
+      const companyB = (await one<{ id: string }>(c,
+        'insert into public.companies (slug, name) values ($1, $2) returning id', [`zz-geo-${tag}`, 'Zz Geo B'])).id;
+      const email = `zz-geo-${tag}-admin@example.com`;
+      await pendingLogin(c, email, { company: companyB, role: 'admin', fullName: 'Zz Geo admin' });
+      const adminB = await insertSelfAuthUser(c, { email, companyId: companyB });
+      await actAsBound(c, adminB, companyB);
+
+      await refused(c, () => geometry(c, site, 'zygomatic', 45, 'buccal', 'zygoma'),
+        /Only a placed implant has a type and angle\./);
+      await asPostgres(c);
+      const after = await siteRow(c, site);
+      expect(after).toEqual(before);
+    });
+  });
+
   it('anchorage only for zygomatic or pterygoid', async () => {
     await withTx(async (c) => {
       const { site } = await placedFromBooking(c);
@@ -376,16 +433,40 @@ describe('implant types (0139–0140)', () => {
   });
 });
 
-describe('planned product key (0141)', () => {
-  it('implant_sites has one key to products, so an unhinted products(*) embed is not ambiguous', async () => {
+describe('planned product key (0141 dropped it, 0144 adds it back)', () => {
+  it('implant_sites_planned_product_id_fkey exists and refuses a product of another company', async () => {
     await withTx(async (c) => {
       await asPostgres(c);
       const { rows } = await c.query(`select conname from pg_constraint
-        where contype = 'f' and conrelid = 'public.implant_sites'::regclass and confrelid = 'public.products'::regclass`);
-      expect(rows.map((r) => r.conname)).toEqual(['implant_sites_product_id_fkey']);
+        where contype = 'f' and conrelid = 'public.implant_sites'::regclass and confrelid = 'public.products'::regclass
+        order by conname`);
+      expect(rows.map((r) => r.conname)).toEqual(['implant_sites_planned_product_id_fkey', 'implant_sites_product_id_fkey']);
       const idx = await one(c, `select count(*)::int as n from pg_indexes
         where schemaname = 'public' and indexname = 'implant_sites_planned_product_id_idx'`);
       expect(idx.n).toBe(1);
+
+      const { site } = await placedFromBooking(c);
+      await asPostgres(c);
+      const tag = Math.random().toString(36).slice(2, 8);
+      const companyB = (await one<{ id: string }>(c,
+        'insert into public.companies (slug, name) values ($1, $2) returning id', [`zz-key-${tag}`, 'Zz Key B'])).id;
+      const otherProduct = (await one<{ id: string }>(c, `insert into public.products
+        (company_id, type, brand, system, diameter_mm, length_mm) values ($1, 'implant', 'Zz Key Other', 'T1', 4.0, 10)
+        returning id`, [companyB])).id;
+      await refused(c, () => c.query('update public.implant_sites set planned_product_id = $2 where id = $1', [site, otherProduct]),
+        /implant_sites_planned_product_id_fkey/);
+    });
+  });
+});
+
+describe('old component function dropped (0144)', () => {
+  it('fit_component_v2 and clear_wrong_closer_links no longer exist', async () => {
+    await withTx(async (c) => {
+      await asPostgres(c);
+      const r = await one<{ v2: string | null; clear: string | null }>(c, `select
+        to_regprocedure('public.fit_component_v2(uuid, public.component_type, date, uuid, uuid, uuid, uuid, text, uuid)')::text as v2,
+        to_regprocedure('app_private.clear_wrong_closer_links()')::text as clear`);
+      expect(r).toEqual({ v2: null, clear: null });
     });
   });
 });

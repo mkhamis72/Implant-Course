@@ -163,8 +163,8 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
 }
 
 /**
- * Each site's planned product, read by its own query: planned_product_id has no foreign key for now (0141), so
- * PostgREST can't embed it, and a second key to products would make older unhinted `products(*)` embeds ambiguous.
+ * Each site's planned product, read by its own query (planned_product_id had no foreign key in 0141–0143; 0144 added
+ * it back, so embeds of products from implant_sites must name their key).
  */
 export async function withPlannedProducts(
   supabase: Pick<Awaited<ReturnType<typeof createClient>>, 'from'>, sites: ImplantSite[],

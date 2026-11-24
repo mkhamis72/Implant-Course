@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
-import { enroll, makeCourse, makeDelegate, makePatient, makeProduct, place, receive, setPerms } from './fixtures';
+import { enroll, legacyFit, makeCourse, makeDelegate, makePatient, makeProduct, place, receive, setPerms } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -152,9 +152,7 @@ describe('restored state belongs to restorations', () => {
   it('voiding a fitted final_restoration component leaves the state to restorations', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
-      const fit = async (site: string) => (await c.query(
-        `select public.fit_component_v2(p_site => $1, p_type => 'final_restoration', p_fitted_on => public.cairo_today(),
-           p_product => null, p_lot => null, p_by_delegate => $2, p_by_organizer => null, p_notes => '', p_course => null) as id`, [site, s.delegate])).rows[0].id as string;
+      const fit = (site: string) => legacyFit(c, site, 'final_restoration', { delegate: s.delegate });
 
       // With a current final restoration the implant stays restored.
       const kept = await s.placeAt(36);
