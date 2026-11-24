@@ -57,7 +57,7 @@ export function sortSite(site: ImplantSite): ImplantSite {
   };
 }
 
-const CASE_SELECT = `
+export const CASE_SELECT = `
   id, arch, configuration, name, notes, closed_at, close_reason, updated_at,
   stages:full_arch_stages(stage, done_on, lab, passive_fit, occlusion, notes)
 `;
@@ -80,13 +80,13 @@ export const RESTORATION_SELECT = `
   course:courses(name)
 `;
 
-type RestorationRow = Omit<Restoration, 'site_ids' | 'problems'> & {
+export type RestorationRow = Omit<Restoration, 'site_ids' | 'problems'> & {
   sites: { site_id: string }[];
   problems: (RestorationProblem & { voided_at: string | null })[];
 };
 
 /** Site ids flattened; voided problems left out, newest first. */
-function toRestoration({ sites, problems, ...r }: RestorationRow): Restoration {
+export function toRestoration({ sites, problems, ...r }: RestorationRow): Restoration {
   return {
     ...r,
     site_ids: sites.map((s) => s.site_id),
