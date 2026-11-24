@@ -146,6 +146,10 @@ export function describeChange(e: HistoryEntry, { teaching = true }: { teaching?
         const corrected = changedFields(e.before, e.after, FAILURE_FIELD_LABELS);
         if (corrected.length) return `Implant on tooth ${tooth}: failure details corrected: ${corrected.join(', ')}`;
       }
+      const siteKeys = changedKeys(e);
+      if (siteKeys.length === 1 && siteKeys[0] === 'case_id') {
+        return e.after?.case_id ? `Added to full-arch case: implant on tooth ${tooth}` : `Removed from full-arch case: implant on tooth ${tooth}`;
+      }
       if (e.before.state === e.after?.state) {
         const corrected = changedFields(e.before, e.after, visible(SITE_FIELD_LABELS));
         if (!changedFields(e.before, e.after, visible(PLACEMENT_FIELD_LABELS)).length) {

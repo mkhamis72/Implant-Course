@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
-import { makeDelegate, makePatient, makeProduct, place, receive } from './fixtures';
+import { legacyFit, makeDelegate, makePatient, makeProduct, place, receive } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -20,13 +20,9 @@ async function setup(c: Client) {
   return { patient, delegate, site };
 }
 
+/** The rows convert_final_restorations converts were written by the old fit_component_v2 (dropped in 0144). */
 async function fit(c: Client, site: string, type: string, daysBack: number, by: string) {
-  const { rows } = await c.query(
-    `select public.fit_component_v2(p_site => $1, p_type => $2::public.component_type,
-       p_fitted_on => public.cairo_today() - $3::int, p_by_delegate => $4, p_product => null, p_lot => null, p_by_organizer => null, p_notes => '', p_course => null) as id`,
-    [site, type, daysBack, by],
-  );
-  return rows[0].id as string;
+  return legacyFit(c, site, type, { fittedOn: `public.cairo_today() - ${Number(daysBack)}`, delegate: by });
 }
 
 async function convert(c: Client): Promise<number> {

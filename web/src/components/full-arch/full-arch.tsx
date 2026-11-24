@@ -169,11 +169,23 @@ function Caption({ caption }: { caption: ArchCaption | undefined }) {
 
 export function FullArch({ model, selected, onSelect, cases = [] }: Props) {
   const bridgeOf = new Map(model.bridges.flatMap((b) => b.teeth.map((t) => [t, b] as const)));
+  // An arch with no implants and no bridges loses its implant zone; both empty keeps the full layout.
+  const used = (jaw: 'upper' | 'lower') =>
+    model.implants.some((i) => i.jaw === jaw) || model.bridges.some((b) => BOX.get(b.teeth[0])?.jaw === jaw);
+  const upper = used('upper');
+  const lower = used('lower');
+  const view: { x: number; y: number; width: number; height: number } = { ...ARCH_VIEWBOX };
+  if (upper !== lower) {
+    const top = upper ? view.y : HEAD_Y.upper - 24;
+    const bottom = lower ? view.y + view.height : HEAD_Y.lower + 24;
+    view.y = top;
+    view.height = bottom - top;
+  }
   return (
     <div className="space-y-2">
       <Caption caption={cases.find((c) => c.arch === 'upper')} />
       <svg
-        viewBox={`${ARCH_VIEWBOX.x} ${ARCH_VIEWBOX.y} ${ARCH_VIEWBOX.width} ${ARCH_VIEWBOX.height}`}
+        viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
         className="h-auto w-full max-w-4xl select-none"
         role="group"
         aria-label="Implants and bridges"

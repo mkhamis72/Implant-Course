@@ -1,7 +1,7 @@
 import type { Client } from 'pg';
 import { describe, it, expect, inject } from 'vitest';
 import { withTx, actAs, asPostgres } from './helpers';
-import { makeDelegate, makePatient, makeProduct, onHand, place, receive } from './fixtures';
+import { legacyFit, makeDelegate, makePatient, makeProduct, onHand, place, receive } from './fixtures';
 
 const ACADEMY_ID = 'a7c0de00-0000-4000-8000-000000000001';
 const users = inject('testUsers');
@@ -133,13 +133,8 @@ async function fit3(c: Client, site: string, type: string, a: Fit = {}): Promise
   return r.id;
 }
 
-async function fit2(c: Client, site: string, type: string): Promise<string> {
-  const r = await one<{ id: string }>(c,
-    `select public.fit_component_v2(p_site => $1, p_type => $2::public.component_type, p_fitted_on => public.cairo_today(),
-       p_product => null, p_lot => null, p_by_delegate => null, p_by_organizer => $3, p_notes => '', p_course => null) as id`,
-    [site, type, users.organizer]);
-  return r.id;
-}
+/** A row as the old fit_component_v2 (dropped in 0144) recorded it. */
+const fit2 = (c: Client, site: string, type: string) => legacyFit(c, site, type, { organizer: users.organizer });
 
 const undo = (c: Client, id: string) => c.query(`select public.void_component($1, 'Entered by mistake')`, [id]);
 
@@ -258,7 +253,7 @@ describe('components by role (0135)', () => {
     });
   });
 
-  it('void of a v2 fitting reopens the previous row of the same role group', async () => {
+  it('void of a row the old v2 left reopens the row it closed', async () => {
     await withTx(async (c) => {
       const s = await twoSites(c);
       const healing = await fit2(c, s.site, 'healing_abutment');
@@ -310,15 +305,6 @@ describe('components by role (0135)', () => {
     });
   });
 
-  it('v2 still fits a component', async () => {
-    await withTx(async (c) => {
-      const s = await twoSites(c);
-      const id = await fit2(c, s.site, 'cover_screw');
-      expect(await currentAt(c, s.site)).toEqual([id]);
-      const next = await fit2(c, s.site, 'healing_abutment');
-      expect(await row(c, id)).toMatchObject({ current: false, replaced_by: next });
-    });
-  });
 });
 
 describe('components by role: fixes (0136)', () => {
@@ -401,22 +387,7 @@ describe('components by role: fixes (0136)', () => {
 });
 
 describe('components by role: undo hardening (0137)', () => {
-  it('backfill drops a link whose closer was dated differently', async () => {
-    await withTx(async (c) => {
-      const s = await twoSites(c);
-      const wrong = await fit2(c, s.site, 'cover_screw');
-      const closer = await fit2(c, s.site, 'healing_abutment');
-      const right = await fit2(c, s.other, 'cover_screw');
-      const rightCloser = await fit2(c, s.other, 'healing_abutment');
-      await asPostgres(c);
-      // As the 0136 backfill could leave it: linked to a row whose date is not the day the row was closed.
-      await c.query(`update public.site_components set fitted_on = fitted_on - 3 where id = $1`, [closer]);
-      await c.query('select app_private.clear_wrong_closer_links()');
-      expect(await row(c, wrong)).toMatchObject({ current: false, replaced_by: null });
-      expect(await row(c, right)).toMatchObject({ current: false, replaced_by: rightCloser });
-    });
-  });
-
+  // The 0137 backfill test (clear_wrong_closer_links) went with the function in 0144: it ran once, in 0137.
   it('undoing an abutment refuses while a newer screw holds its place', async () => {
     await withTx(async (c) => {
       const s = await twoSites(c);

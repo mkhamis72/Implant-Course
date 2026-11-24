@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Odontogram } from '@/components/odontogram/odontogram';
 import { Legend } from '@/components/odontogram/legend';
 import { FullArch } from '@/components/full-arch/full-arch';
@@ -71,13 +71,21 @@ export function ChartPanel({ patientId, data, initialTooth, initialView = 'teeth
   }
 
   function switchView(next: ChartView) {
+    if (next === view) return;
     setView(next);
     // Keep the view on reload and when the link is shared, without a server round trip.
     const url = new URL(window.location.href);
     if (next === 'arch') url.searchParams.set('view', 'arch');
     else url.searchParams.delete('view');
-    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    // A new history entry, so Back and Forward step between the views.
+    window.history.pushState(null, '', url.pathname + url.search + url.hash);
   }
+
+  useEffect(() => {
+    const onPop = () => setView(new URLSearchParams(window.location.search).get('view') === 'arch' ? 'arch' : 'teeth');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   function apply(status: ManualState) {
     startTransition(async () => {

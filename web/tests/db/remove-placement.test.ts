@@ -41,8 +41,8 @@ describe('removing an implant entered by mistake', () => {
     await withTx(async (c) => {
       const w = await world(c);
       await c.query(
-        `select public.fit_component_v2(p_site => $1, p_type => 'cover_screw', p_fitted_on => current_date,
-           p_product => $2, p_lot => $3, p_by_delegate => $4, p_by_organizer => null, p_notes => '', p_course => null)`,
+        `select public.fit_component_v3(p_site => $1, p_type => 'cover_screw', p_fitted_on => current_date,
+           p_product => $2, p_lot => $3, p_by_delegate => $4, p_by_organizer => null, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null)`,
         [w.site, w.cover, w.coverLot, w.delegate],
       );
       // A batch correction leaves a use, its reversal and a new use on another batch.
@@ -123,8 +123,8 @@ describe('deleting a duplicate patient with implants', () => {
     await withTx(async (c) => {
       const w = await world(c);
       await c.query(
-        `select public.fit_component_v2(p_site => $1, p_type => 'cover_screw', p_fitted_on => current_date,
-           p_product => $2, p_lot => $3, p_by_delegate => $4, p_by_organizer => null, p_notes => '', p_course => null)`,
+        `select public.fit_component_v3(p_site => $1, p_type => 'cover_screw', p_fitted_on => current_date,
+           p_product => $2, p_lot => $3, p_by_delegate => $4, p_by_organizer => null, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null)`,
         [w.site, w.cover, w.coverLot, w.delegate],
       );
       expect([await onHand(c, w.lot), await onHand(c, w.coverLot)]).toEqual([4, 2]);

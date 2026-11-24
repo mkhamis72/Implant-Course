@@ -62,8 +62,8 @@ const updateRestoration = async (c: Client, id: string, delegate: string | null,
 
 const fit = (c: Client, site: string, delegate: string | null, course: string | null) =>
   c.query(
-    `select public.fit_component_v2(p_site => $1, p_type => 'healing_abutment', p_fitted_on => public.cairo_today(),
-       p_product => null, p_lot => null, p_by_delegate => $2, p_by_organizer => $3, p_notes => '', p_course => $4) as id`,
+    `select public.fit_component_v3(p_site => $1, p_type => 'healing_abutment', p_fitted_on => public.cairo_today(),
+       p_product => null, p_lot => null, p_by_delegate => $2, p_by_organizer => $3, p_notes => '', p_course => $4, p_torque => null, p_holds_component => null, p_holds_restoration => null) as id`,
     [site, delegate, delegate ? null : users.organizer, course],
   ).then((r) => r.rows[0].id as string);
 
@@ -129,7 +129,7 @@ describe('restorations enrollment (0081)', () => {
   });
 });
 
-describe('fit_component_v2 (0081)', () => {
+describe('fit_component_v3: course and enrolled delegate (0081)', () => {
   it('stores the course and refuses a delegate outside it', async () => {
     await withTx(async (c) => {
       const s = await setup(c);

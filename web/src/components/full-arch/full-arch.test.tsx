@@ -32,6 +32,20 @@ describe('<FullArch>', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it('drops the implant zone of an arch with no implants and no bridges', () => {
+    const height = (m: { implants: ArchImplant[]; bridges: ArchBridge[] }) => {
+      const { container, unmount } = render(<FullArch model={m} selected={[]} onSelect={vi.fn()} />);
+      const vb = container.querySelector('svg')!.getAttribute('viewBox')!.split(' ').map(Number);
+      unmount();
+      return vb[3];
+    };
+    const both = height({ implants: IMPLANTS, bridges: [] });
+    expect(height({ implants: [], bridges: [] })).toBe(both);
+    expect(height({ implants: IMPLANTS.filter((i) => i.jaw === 'upper'), bridges: [] })).toBeLessThan(both);
+    expect(height({ implants: IMPLANTS.filter((i) => i.jaw === 'lower'), bridges: [] })).toBeLessThan(both);
+    expect(height({ implants: IMPLANTS.filter((i) => i.jaw === 'upper'), bridges: [] })).toBeGreaterThan(0);
+  });
+
   it('implants are buttons named by description', () => {
     render(<FullArch model={{ implants: IMPLANTS, bridges: [] }} selected={[]} onSelect={vi.fn()} />);
     expect(screen.getAllByRole('button')).toHaveLength(4);

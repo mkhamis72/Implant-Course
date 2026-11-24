@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
-import { makeDelegate, makePatient, makeProduct, onHand, place, receive } from './fixtures';
+import { legacyFit, makeDelegate, makePatient, makeProduct, onHand, place, receive } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -62,7 +62,7 @@ describe('correcting the batch used', () => {
       const haRight = await receive(c, ha, 1, 'HA-R');
       const comp = (
         await c.query(
-          "select public.fit_component_v2(p_site => $1, p_type => 'healing_abutment', p_fitted_on => current_date, p_product => $2, p_lot => $3, p_by_delegate => $4, p_by_organizer => null, p_notes => '', p_course => null) as id",
+          "select public.fit_component_v3(p_site => $1, p_type => 'healing_abutment', p_fitted_on => current_date, p_product => $2, p_lot => $3, p_by_delegate => $4, p_by_organizer => null, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null) as id",
           [s.site, ha, haWrong, s.delegate],
         )
       ).rows[0].id;
@@ -109,12 +109,12 @@ describe('undoing a component', () => {
       const fit = async (type: string, product: string | null, lot: string | null) =>
         (
           await c.query(
-            "select public.fit_component_v2(p_site => $1, p_type => $2, p_fitted_on => current_date, p_product => $3, p_lot => $4, p_by_delegate => $5, p_by_organizer => null, p_notes => '', p_course => null) as id",
+            "select public.fit_component_v3(p_site => $1, p_type => $2, p_fitted_on => current_date, p_product => $3, p_lot => $4, p_by_delegate => $5, p_by_organizer => null, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null) as id",
             [s.site, type, product, lot, s.delegate],
           )
         ).rows[0].id as string;
       const haId = await fit('healing_abutment', ha, haLot);
-      const crown = await fit('final_restoration', null, null);
+      const crown = await legacyFit(c, s.site, 'final_restoration', { delegate: s.delegate, fittedOn: 'current_date' });
       await refused(c, () => c.query("select public.void_component($1, 'Not current')", [haId]), /Only the current component/);
       await c.query("select public.void_component($1, 'Crown not fitted yet')", [crown]);
       const site = await c.query('select state from public.implant_sites where id = $1', [s.site]);

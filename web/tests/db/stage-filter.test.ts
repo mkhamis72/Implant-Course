@@ -1,7 +1,7 @@
 import { describe, it, expect, inject } from 'vitest';
 import type { Client } from 'pg';
 import { withTx, actAs, asPostgres } from './helpers';
-import { makeDelegate, makePatient, makeProduct, place, receive } from './fixtures';
+import { legacyFit, makeDelegate, makePatient, makeProduct, place, receive } from './fixtures';
 
 const users = inject('testUsers');
 
@@ -13,11 +13,15 @@ async function setup(c: Client) {
   const placeOn = (patient: string, tooth: number) =>
     place(c, { patient, tooth, product: implant, lot, delegate, supervisor: users.organizer });
   const fit = async (site: string, type: string) => {
-    const product = type === 'final_restoration' ? null : await makeProduct(c, type);
-    const fitLot = product ? await receive(c, product, 1, `${type}-lot`) : null;
+    if (type === 'final_restoration') {
+      await legacyFit(c, site, type, { delegate, fittedOn: 'current_date' });
+      return;
+    }
+    const product = await makeProduct(c, type);
+    const fitLot = await receive(c, product, 1, `${type}-lot`);
     await c.query(
-      `select public.fit_component_v2(p_site => $1, p_type => $2, p_fitted_on => current_date,
-         p_product => $3, p_lot => $4, p_by_delegate => $5, p_by_organizer => null, p_notes => '', p_course => null)`,
+      `select public.fit_component_v3(p_site => $1, p_type => $2, p_fitted_on => current_date,
+         p_product => $3, p_lot => $4, p_by_delegate => $5, p_by_organizer => null, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null)`,
       [site, type, product, fitLot, delegate],
     );
   };
