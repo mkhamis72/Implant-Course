@@ -130,7 +130,7 @@ describe('GET /statistics/export', () => {
     expect((await GET(req('format=csv&brand=Oxy'))).status).toBe(200);
     expect(order[0]).toBe('assign_research_codes');
     expect(rpc.mock.calls[0][1]).toMatchObject({ p_brand: 'Oxy', p_course: null });
-    expect(order.filter((n) => n.startsWith('research_export_'))).toHaveLength(9);
+    expect(order.filter((n) => n.startsWith('research_export_'))).toHaveLength(11);
     expect(order.indexOf('research_export_consent')).toBeGreaterThan(order.indexOf('assign_research_codes'));
     expect(most).toBe(1);
   });
@@ -189,6 +189,81 @@ describe('GET /statistics/export', () => {
     }
     const log = rpc.mock.calls.find((c) => c[0] === 'log_research_export');
     expect(log?.[1].p_row_counts.patients).toBe(3);
+  });
+
+  // A completed All-on-4 case: the reader's sites / bridges carry raw row ids that must never reach the files.
+  const SITE = (n: number) => `aaaaaaa${n}-bbbb-4ccc-8ddd-eeeeeeeeeeee`;
+  const BRIDGE = 'ffffffff-1111-4222-8333-444444444444';
+  const implants = [{ implant_code: 'I-AAA222', patient_code: 'P-AAA222', placed_on: '2025-01-01', tooth: 16 }, { implant_code: 'I-BBB333', patient_code: 'P-AAA222', placed_on: '2025-01-01', tooth: 13 }];
+  const rehab = [{ implant_code: 'I-AAA222', implant_type: 'tilted', angulation_deg: 30, angulation_direction: 'distal', anchorage: null, case_code: 'A-CAS234', case_configuration: 'all_on_4' }];
+  const fullArch = (over: Record<string, unknown> = {}) => [{
+    case_code: 'A-CAS234', patient_code: 'P-AAA222', arch: 'upper', configuration: 'all_on_4', first_placed_on: '2025-01-01', closed_on: null,
+    scan_on: '2025-05-01', lab_design_on: null, try_in_on: null, implants_placed: 4, implants_failed: 0, bridge_problems: 0,
+    sites: [16, 14, 24, 26].map((tooth, i) => ({ id: SITE(i), tooth, state: 'placed' })),
+    bridges: [{ id: BRIDGE, type: 'full_arch', stage: 'final', fitted_on: '2025-07-01', ended_on: null, site_ids: [0, 1, 2, 3].map(SITE) }],
+    ...over,
+  }];
+  const rehabHandler = (cases = fullArch()) => async (name: string) =>
+    name === 'outcomes_version' ? { data: 'v1', error: null }
+      : name === 'research_export_implants' ? { data: implants, error: null }
+        : name === 'research_export_implant_rehab' ? { data: rehab, error: null }
+          : name === 'research_export_full_arch_cases' ? { data: cases, error: null }
+            : { data: name.startsWith('research_export_') ? [] : null, error: null };
+
+  it('merges implant type, geometry and case into implants and writes a full_arch_cases sheet without the raw ids', async () => {
+    handler.mockImplementation(rehabHandler());
+    const res = await GET(req('format=xlsx'));
+    expect(res.status).toBe(200);
+    const rehabCall = rpc.mock.calls.find((c) => c[0] === 'research_export_implant_rehab');
+    expect(rehabCall?.[1]).toMatchObject({ p_course: null, p_brand: null });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await res.arrayBuffer());
+    const rows = (name: string) => {
+      const ws = wb.getWorksheet(name)!;
+      const header = (ws.getRow(1).values as unknown[]).slice(1) as string[];
+      return ws.getSheetValues().slice(2).map((r) => Object.fromEntries(header.map((h, i) => [h, (r as unknown[])[i + 1] ?? null])));
+    };
+    expect(rows('implants')).toEqual([
+      expect.objectContaining({ implant_code: 'I-AAA222', implant_type: 'tilted', angulation_deg: 30, angulation_direction: 'distal', anchorage: null, case_code: 'A-CAS234', case_configuration: 'all_on_4' }),
+      expect.objectContaining({ implant_code: 'I-BBB333', implant_type: null, case_code: null }),
+    ]);
+    expect(rows('full_arch_cases')).toEqual([expect.objectContaining({
+      case_code: 'A-CAS234', patient_code: 'P-AAA222', configuration: 'all_on_4', status: 'completed', final_bridge_on: '2025-07-01', scan_on: '2025-05-01', implants_placed: 4,
+    })]);
+    for (const ws of wb.worksheets.filter((w) => w.name !== 'data_dictionary')) {
+      ws.eachRow((r) => {
+        for (const v of (r.values as unknown[]).slice(1)) {
+          expect(String(v ?? ''), ws.name).not.toMatch(UUID_ANY);
+          if (ws.name !== 'about') expect(['sites', 'bridges'], ws.name).not.toContain(v);
+        }
+      });
+    }
+    expect(rpc.mock.calls.find((c) => c[0] === 'log_research_export')?.[1].p_row_counts).toMatchObject({ implants: 2, full_arch_cases: 1 });
+  });
+
+  it('writes full_arch_cases.csv without sites, bridges or any raw id', async () => {
+    handler.mockImplementation(rehabHandler());
+    const files = unzipSync(new Uint8Array(await (await GET(req('format=csv'))).arrayBuffer()));
+    const csv = strFromU8(files['full_arch_cases.csv']);
+    expect(csv.split('\r\n')[0].replace(/^﻿/, '')).toBe('case_code,patient_code,arch,configuration,status,first_placed_on,final_bridge_on,closed_on,scan_on,lab_design_on,try_in_on,implants_placed,implants_failed,bridge_problems');
+    expect(csv).toContain('A-CAS234');
+    for (const [name, bytes] of Object.entries(files)) {
+      if (name === 'data_dictionary.csv' || name === 'analysis.R') continue;
+      expect(strFromU8(bytes), name).not.toMatch(UUID_ANY);
+      expect(strFromU8(bytes), name).not.toMatch(/\bsites\b|\bbridges\b|site_ids/);
+    }
+  });
+
+  it('is 500 and logs nothing when the full-arch reader returns a column outside the dictionary', async () => {
+    handler.mockImplementation(rehabHandler(fullArch({ notes: 'free text' })));
+    expect((await GET(req('format=xlsx'))).status).toBe(500);
+    expect(rpc.mock.calls.some((c) => c[0] === 'log_research_export')).toBe(false);
+  });
+
+  it('is 500 and logs nothing when the implant rehab reader fails', async () => {
+    handler.mockImplementation(async (name: string) => (name === 'research_export_implant_rehab' ? { data: null, error: { message: 'x' } } : { data: name === 'outcomes_version' ? 'v1' : [], error: null }));
+    expect((await GET(req('format=csv'))).status).toBe(500);
+    expect(rpc.mock.calls.some((c) => c[0] === 'log_research_export')).toBe(false);
   });
 
   it('is 500 and logs nothing when the consent reader fails', async () => {

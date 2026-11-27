@@ -43,6 +43,29 @@ export function caseOutcome(row: FullArchCaseRow): { status: CaseStatus; finalBr
   return { status: caseStatus(c, sites, restorations), finalBridgeOn, monthsToBridge };
 }
 
+const jsonArray = (v: unknown): unknown[] => {
+  const parsed = typeof v === 'string' ? JSON.parse(v) : v;
+  return Array.isArray(parsed) ? parsed : [];
+};
+
+/**
+ * research_export_full_arch_cases rows → the full_arch_cases export rows: status and final_bridge_on from the case
+ * rule (caseOutcome; the case code stands in for the case id, it only has to agree within the row), and sites /
+ * bridges, which carry raw row ids, dropped. Every other column passes through, so the allowlist still sees it.
+ */
+export function fullArchExportRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  return rows.map(({ sites, bridges, ...row }) => {
+    const { status, finalBridgeOn } = caseOutcome({
+      ...(row as unknown as FullArchCaseRow),
+      case_id: String(row.case_code),
+      closed_at: (row.closed_on as string | null) ?? null,
+      sites: jsonArray(sites) as FullArchCaseRow['sites'],
+      bridges: jsonArray(bridges) as FullArchCaseRow['bridges'],
+    });
+    return { ...row, status, final_bridge_on: finalBridgeOn };
+  });
+}
+
 export type CaseColumn = {
   configuration: Configuration;
   cases: number;

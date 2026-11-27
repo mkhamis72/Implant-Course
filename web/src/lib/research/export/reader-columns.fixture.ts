@@ -1,4 +1,4 @@
-// The return columns of the eight research_export_* readers, copied from supabase/migrations/0070_research_export.sql
+// The return columns of the nine research_export_* table readers, copied from supabase/migrations/0070_research_export.sql
 // (create function ... returns table (...)). When a reader gains a column, add it here and to DICTIONARY.
 // visits: latest in 0077_export_recession.sql.
 export const READER_COLUMNS: Record<string, string[]> = {
@@ -22,4 +22,13 @@ export const READER_COLUMNS: Record<string, string[]> = {
     'material', 'delegate_code', 'supervisor_code', 'ended_on', 'end_kind'],
   restoration_problems: ['restoration_code', 'patient_code', 'noticed_on', 'type', 'action'],
   grafts: ['implant_code', 'patient_code', 'procedure', 'timing', 'performed_on', 'material', 'membrane'],
+  // 0146_statistics_full_arch.sql. sites and bridges carry raw row ids: dropped before the file is built.
+  full_arch_cases: ['case_code', 'patient_code', 'arch', 'configuration', 'first_placed_on', 'closed_on', 'scan_on',
+    'lab_design_on', 'try_in_on', 'implants_placed', 'implants_failed', 'bridge_problems', 'sites', 'bridges'],
+};
+
+// Readers merged into a table by its study code (0146_statistics_full_arch.sql): implant_rehab into implants.
+export const MERGE_READER_COLUMNS = {
+  implant_rehab: ['implant_code', 'implant_type', 'angulation_deg', 'angulation_direction', 'anchorage', 'case_code',
+    'case_configuration'],
 };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { caseOutcome, summariseCases, type FullArchCaseRow } from './full-arch';
+import { caseOutcome, fullArchExportRows, summariseCases, type FullArchCaseRow } from './full-arch';
 import type { GroupableRow } from './groups';
 import type { RehabVars } from './rehab';
 
@@ -108,5 +108,36 @@ describe('summariseCases', () => {
     expect(cols[1].survival12?.n).toBe(1);
     expect(cols[1].survival12?.surv).toBe(0);
     expect(cols[2].survival12).toBeNull();
+  });
+});
+
+describe('fullArchExportRows', () => {
+  const exported = (over: Record<string, unknown> = {}) => ({
+    case_code: 'A-ABC234', patient_code: 'P-ABC234', arch: 'upper', configuration: 'all_on_4', first_placed_on: '2025-01-01',
+    closed_on: null, scan_on: '2025-05-01', lab_design_on: null, try_in_on: null, implants_placed: 4, implants_failed: 0,
+    bridge_problems: 1, sites: kase().sites, bridges: [final()], ...over,
+  });
+
+  it('adds status and final_bridge_on from the case rule and drops sites and bridges', () => {
+    const [row] = fullArchExportRows([exported()]);
+    expect(row).toEqual({
+      case_code: 'A-ABC234', patient_code: 'P-ABC234', arch: 'upper', configuration: 'all_on_4', status: 'completed',
+      first_placed_on: '2025-01-01', final_bridge_on: '2025-07-01', closed_on: null, scan_on: '2025-05-01',
+      lab_design_on: null, try_in_on: null, implants_placed: 4, implants_failed: 0, bridge_problems: 1,
+    });
+    expect(row).not.toHaveProperty('sites');
+    expect(row).not.toHaveProperty('bridges');
+  });
+
+  it('a closed case is closed; no bridge = in treatment, no final bridge date', () => {
+    expect(fullArchExportRows([exported({ closed_on: '2025-08-01' })])[0].status).toBe('closed');
+    const open = fullArchExportRows([exported({ bridges: [] })])[0];
+    expect(open.status).toBe('in_treatment');
+    expect(open.final_bridge_on).toBeNull();
+  });
+
+  it('reads jsonb that arrives as text or null', () => {
+    const row = fullArchExportRows([exported({ sites: JSON.stringify(kase().sites), bridges: null })])[0];
+    expect(row.status).toBe('in_treatment');
   });
 });

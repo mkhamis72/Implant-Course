@@ -5,7 +5,10 @@ import { canView } from '@/lib/auth/permissions';
 import { teachingOn } from '@/lib/modules/modules';
 import { todayIso } from '@/lib/dates';
 import { ALL_COURSES, RESEARCH_FILTER_KEYS, rpcArgs, type ResearchFilters } from '@/lib/research/view';
-import { TABLE_NAMES, assertAllowlisted, exportOrder, type ExportTables } from '@/lib/research/export/dictionary';
+import {
+  MERGED_COLUMNS, TABLE_NAMES, assertAllowlisted, exportOrder, mergeColumns, type ExportTables,
+} from '@/lib/research/export/dictionary';
+import { fullArchExportRows } from '@/lib/research/full-arch';
 import type { ExportMeta, StudyAbout } from '@/lib/research/export/assemble';
 import { exportFileName } from '@/lib/research/export/assemble';
 import { fetchAll } from '@/lib/research/export/fetch-all';
@@ -70,6 +73,12 @@ export async function GET(req: NextRequest) {
     console.error('Research export failed', consent.error.message);
     return new NextResponse('Could not build the export', { status: 500 });
   }
+  // Implant type, geometry and full-arch case of the same implants (0146), merged into the implants table by study code.
+  const rehab = await fetchAll(supabase, 'research_export_implant_rehab', args, ['implant_code']);
+  if (rehab.error) {
+    console.error('Research export failed', rehab.error.message);
+    return new NextResponse('Could not build the export', { status: 500 });
+  }
   // The files name the course and delegate filters by study code; raw ids go only into the export log.
   const codeOf = async (entity: 'course' | 'delegate', id: string | null) =>
     id ? supabase.rpc('research_code', { p_entity: entity, p_id: id }) : { data: null, error: null };
@@ -84,13 +93,23 @@ export async function GET(req: NextRequest) {
 
   const tables = Object.fromEntries(TABLE_NAMES.map((t, i) => [t, results[i]])) as ExportTables;
   tables.patients = mergeConsent(tables.patients, consent.data);
-  assertAllowlisted(tables);
+  tables.implants = mergeColumns(tables.implants, rehab.data, 'implant_code', MERGED_COLUMNS.implants ?? []);
+  // Status and final-bridge date come from the case rule; the reader's sites / bridges (raw row ids) are dropped here,
+  // before the allowlist check, and never reach the files.
+  tables.full_arch_cases = fullArchExportRows(tables.full_arch_cases);
   const rowCounts = Object.fromEntries(TABLE_NAMES.map((t) => [t, tables[t].length])) as ExportMeta['rowCounts'];
   const logged = Object.fromEntries(RESEARCH_FILTER_KEYS.map((k) => [k, args[`p_${k}` as keyof typeof args] ?? null]));
   const shown = { ...logged, course: (courseCode.data as string | null) ?? null, delegate: (delegateCode.data as string | null) ?? null };
   const meta: ExportMeta = { exportedAt: new Date().toISOString(), filters: shown, version: String(version.data ?? ''), rowCounts, consent: consentCounts(tables.patients), study, teaching };
 
-  const body = format === 'xlsx' ? await buildXlsx(tables, meta) : buildZip(tables, meta);
+  let body: Uint8Array;
+  try {
+    assertAllowlisted(tables);
+    body = format === 'xlsx' ? await buildXlsx(tables, meta) : buildZip(tables, meta);
+  } catch (e) {
+    console.error('Research export failed', e instanceof Error ? e.message : 'build error');
+    return new NextResponse('Could not build the export', { status: 500 });
+  }
 
   const { error } = await supabase.rpc('log_research_export', { p_format: format, p_filters: { ...logged, study: studyId }, p_row_counts: rowCounts });
   if (error) return new NextResponse('Could not record the export', { status: 500 });
