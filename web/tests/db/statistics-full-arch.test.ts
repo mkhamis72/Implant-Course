@@ -287,3 +287,22 @@ describe('gates', () => {
     });
   });
 });
+
+describe('delete_patient', () => {
+  it("clears the patient's full-arch case study codes", async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      await rows(c, 'research_export_full_arch_cases', { brand: s.brand });
+      const codes = async () => (await c.query(
+        `select entity_id from app_private.research_codes where entity = 'full_arch_case' and entity_id = any($1::uuid[])`,
+        [[s.allOn4, s.plannedCase, s.otherCase]])).rows.map((r) => r.entity_id as string);
+      await asPostgres(c);
+      expect((await codes()).sort()).toEqual([s.allOn4, s.otherCase].sort());
+      await actAs(c, users.organizer);
+      await c.query('select public.delete_patient($1)', [s.p]);
+      await asPostgres(c);
+      // P's case code is gone; Q's stays.
+      expect(await codes()).toEqual([s.otherCase]);
+    });
+  });
+});

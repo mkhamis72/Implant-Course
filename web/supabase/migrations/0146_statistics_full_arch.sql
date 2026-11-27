@@ -7,7 +7,7 @@
 --     (src/lib/full-arch/cases.ts) needs to derive its status: every site of the case and its live restorations.
 --   * full_arch_planned_cases: the company's open cases with no placed implant (unfiltered), for the Full arch note.
 --   * research_export_implant_rehab / research_export_full_arch_cases: the export's coded versions.
---   * Study codes: entity full_arch_case, prefix A-.
+--   * Study codes: entity full_arch_case, prefix A-; delete_patient clears them with the patient's other codes.
 -- Every reader is security invoker, takes the six research filters, starts from implant_outcomes_detail (0069) and
 -- returns nothing without View on Research and on Patients. No free text is read (entry point, trajectory, case
 -- name / notes, close reason, stage lab / occlusion / notes).
@@ -93,6 +93,45 @@ begin
   select rc.code into v_code from app_private.research_codes rc
   where rc.company_id = v_company and rc.entity = p_entity and rc.entity_id = p_id;
   return v_code;
+end $$;
+
+-- 0099's delete_patient, also clearing the patient's full-arch case codes (its cases cascade away with it).
+-- Same signature, so the grants and the owner (tenant_definer) stay.
+create or replace function public.delete_patient(p_patient uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  perform app_private.require_perm('patients', 'edit');
+  perform 1 from public.patients where id = p_patient for update;
+  if not found then
+    perform app_private.fail('Patient not found.');
+  end if;
+  -- Lock order: sites, then batches.
+  perform 1 from public.implant_sites where patient_id = p_patient order by id for update;
+  perform 1 from public.stock_lots l
+  where l.id in (select m.stock_lot_id from public.stock_movements m
+                 where m.patient_id = p_patient
+                    or m.implant_site_id in (select s.id from public.implant_sites s where s.patient_id = p_patient)
+                    or m.site_component_id in (
+                      select sc.id from public.site_components sc
+                      join public.implant_sites s on s.id = sc.site_id where s.patient_id = p_patient))
+  order by l.id
+  for update;
+
+  perform set_config('app.ledger_purge', 'on', true);
+  delete from public.stock_movements m
+  where m.patient_id = p_patient
+     or m.implant_site_id in (select s.id from public.implant_sites s where s.patient_id = p_patient)
+     or m.site_component_id in (
+       select sc.id from public.site_components sc
+       join public.implant_sites s on s.id = sc.site_id where s.patient_id = p_patient);
+  perform set_config('app.ledger_purge', 'off', true);
+  delete from app_private.research_codes
+  where (entity = 'patient' and entity_id = p_patient)
+     or (entity = 'implant' and entity_id in (select s.id from public.implant_sites s where s.patient_id = p_patient))
+     or (entity = 'restoration' and entity_id in (select r.id from public.restorations r where r.patient_id = p_patient))
+     or (entity = 'full_arch_case' and entity_id in (select fc.id from public.full_arch_cases fc where fc.patient_id = p_patient));
+  delete from public.surgery_slots where patient_id = p_patient;
+  delete from public.patients where id = p_patient;
 end $$;
 
 -- ── 2. Implant level ─────────────────────────────────────────────────────────────────────────────────
