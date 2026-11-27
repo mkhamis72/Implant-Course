@@ -38,15 +38,21 @@ export const CASE_STATUS_LABELS: Record<CaseStatus, string> = {
 const BRIDGE_TYPES: readonly Restoration['type'][] = ['bridge', 'full_arch', 'overdenture'];
 
 /** Loaded restorations leave voided ones out already, but a voided one never counts. */
-const isVoided = (r: Restoration) => !!(r as { voided_at?: string | null }).voided_at;
+const isVoided = (r: { voided_at?: string | null }) => !!r.voided_at;
 
-const byLatestFitted = (a: Restoration, b: Restoration) => b.fitted_on.localeCompare(a.fitted_on);
+/** What the completion rule reads: the chart's full rows and the Statistics reader's slimmer ones both fit. */
+export type CaseSite = Pick<ImplantSite, 'id' | 'tooth' | 'state' | 'case_id'>;
+export type CaseRestoration = Pick<Restoration, 'id' | 'case_id' | 'type' | 'stage' | 'fitted_on' | 'ended_on' | 'site_ids'> & {
+  voided_at?: string | null;
+};
+
+const byLatestFitted = (a: CaseRestoration, b: CaseRestoration) => b.fitted_on.localeCompare(a.fitted_on);
 
 export type CaseBridges = {
   /** The latest linked temporary bridge, even if a final has since replaced it. */
-  temporary: Restoration | null;
+  temporary: CaseRestoration | null;
   /** The current (not ended) final bridges linked to the case, latest fitted first. */
-  finals: Restoration[];
+  finals: CaseRestoration[];
   /** The finals cover every placed or restored implant of the case (failed ones aren't needed; none placed = never). */
   complete: boolean;
   /** The latest fitted date among the finals, once complete. */
@@ -63,7 +69,7 @@ const archIndex = (tooth: number) => {
 };
 
 export function caseBridges(
-  c: FullArchCase, sites: readonly ImplantSite[], restorations: readonly Restoration[],
+  c: Pick<FullArchCase, 'id'>, sites: readonly CaseSite[], restorations: readonly CaseRestoration[],
 ): CaseBridges {
   const bridges = restorations.filter((r) => r.case_id === c.id && BRIDGE_TYPES.includes(r.type) && !isVoided(r));
   const temporary = bridges.filter((r) => r.stage === 'temporary').sort(byLatestFitted)[0] ?? null;
@@ -82,7 +88,9 @@ export function caseBridges(
   };
 }
 
-export function caseStatus(c: FullArchCase, sites: readonly ImplantSite[], restorations: readonly Restoration[]): CaseStatus {
+export function caseStatus(
+  c: Pick<FullArchCase, 'id' | 'closed_at'>, sites: readonly CaseSite[], restorations: readonly CaseRestoration[],
+): CaseStatus {
   if (c.closed_at) return 'closed';
   if (caseBridges(c, sites, restorations).complete) return 'completed';
   if (sites.some((s) => s.case_id === c.id && ['placed', 'restored', 'failed'].includes(s.state))) return 'in_treatment';
