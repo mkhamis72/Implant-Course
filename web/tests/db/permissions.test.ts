@@ -227,7 +227,7 @@ describe('permissions: area matrix', () => {
       expect(await audited('courses', course)).toBe(0);
       expect(await audited('user_permissions', users.target)).toBe(0);
       const { rows } = await c.query('select distinct table_name from public.audit_log');
-      const patientTables = ['patients', 'medical_history', 'tooth_status', 'visit_notes', 'implant_sites', 'site_components', 'implant_followups', 'implant_surgery', 'implant_grafts', 'implant_complications', 'restorations', 'restoration_sites', 'restoration_problems', 'radiographs', 'radiograph_bone_levels', 'full_arch_cases', 'full_arch_stages'];
+      const patientTables = ['patients', 'medical_history', 'tooth_status', 'visit_notes', 'implant_sites', 'site_components', 'implant_followups', 'implant_surgery', 'implant_grafts', 'implant_complications', 'restorations', 'restoration_sites', 'restoration_problems', 'radiographs', 'radiograph_bone_levels', 'full_arch_cases', 'full_arch_stages', 'patient_passports'];
       expect(rows.map((r) => r.table_name).filter((t) => !patientTables.includes(t))).toEqual([]);
 
       await actAs(c, users.admin);
@@ -295,6 +295,8 @@ describe('permissions: guard rails', () => {
         'set_catalog_items', 'set_products_active',
         // Catalogue follow-ups (0132): one Save, all or nothing; admin-only.
         'save_catalogue',
+        // Implant passport (0145): the company's medical-content setting; admin-only, no area.
+        'set_passport_settings',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });
@@ -333,7 +335,9 @@ describe('permissions: guard rails', () => {
         // Modules release 3 (0114): the doctors list, kept by admins and read by staff, like supervisors.
         'doctors',
         // Catalogue library (0128): global, read-only to company users.
-        'catalog_items']);
+        'catalog_items',
+        // Implant passport (0145): the PDF bytes, closed to every role, read only through patient_passport_file.
+        'patient_passport_files']);
       expect(rows.map((r) => r.relname).filter((n) => !shared.has(n)).sort()).toEqual([]);
     });
   });

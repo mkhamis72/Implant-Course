@@ -139,6 +139,11 @@ async function seedCompany(c: Client, key: 'A' | 'B'): Promise<Company> {
   r.patient_consents = await one(c, `insert into public.patient_consents
       (patient_id, version_id, language, signed_on, treatment, research, teaching_images, follow_up, file_id)
     values ($1, $2, 'en', ${today}, true, true, true, true, $3) returning id`, [r.patients, r.consent_form_versions, r.stored_files]);
+  r.patient_passports = await one(c, `insert into public.patient_passports (patient_id, version, size_bytes, sha256, medical_level)
+    values ($1, 1, 5, repeat('a', 64), 'none') returning id`, [r.patients]);
+  await c.query(`insert into public.patient_passport_files (passport_id, bytes) values ($1, '\\x255044462d')`, [r.patient_passports]);
+  r.passport_downloads = await one(c, 'insert into public.passport_downloads (passport_id) values ($1) returning id', [r.patient_passports]);
+  await c.query(`insert into public.passport_settings (medical) values ('full') on conflict do nothing`);
   await c.query(`insert into public.visit_notes (patient_id, text) values ($1, $2)`, [r.patients, `${marker} note`]);
   r.studies = await one(c, `insert into public.studies (title) values ($1) returning id`, [`${marker} Study`]);
   await c.query('insert into public.study_courses (study_id, course_id) values ($1, $2)', [r.studies, r.courses]);
@@ -327,7 +332,7 @@ const UUID_ARG: Record<string, string> = {
   p_placing_delegate: 'delegates', p_assisting_delegate: 'delegates', p_by_delegate: 'delegates', p_chair: 'chairs',
   p_checklist: 'checklists', p_complication: 'implant_complications', p_component: 'site_components',
   p_exclude: 'surgery_slots', p_file: 'stored_files', p_followup: 'implant_followups', p_graft: 'implant_grafts',
-  p_item: 'checklist_items', p_lecturer: 'lecturers', p_lot: 'stock_lots', p_new_lot: 'stock_lots',
+  p_item: 'checklist_items', p_lecturer: 'lecturers', p_passport: 'patient_passports', p_lot: 'stock_lots', p_new_lot: 'stock_lots',
   p_product: 'products', p_new_product: 'products', p_problem: 'restoration_problems', p_restoration: 'restorations',
   p_session: 'sessions', p_site: 'implant_sites', p_slot: 'surgery_slots', p_study: 'studies',
   p_supervisor: 'supervisors', p_talk: 'talks', p_template: 'checklist_templates', p_version: 'consent_form_versions',
@@ -343,6 +348,7 @@ const TEXT_ARG: Record<string, string | null> = {
   p_material: 'zirconia', p_retention: 'screw', p_procedure: 'gbr', p_timing: 'simultaneous', p_membrane: 'none',
   p_language: 'en', p_purpose: 'baseline', p_attendance: 'attended', p_visit_key: 'month_6', p_check_type: '6-month',
   p_action: 'none', p_content_type: 'application/pdf', p_link: 'https://example.com/zz', p_label: 'Zz probe v9',
+  p_medical_level: 'allergies_medications', p_medical: 'allergies_medications',
   p_technique: null, p_override_reason: '', p_brand: null, p_system: null, p_graft: '', p_notes: '', p_note: '',
 };
 const TYPE_ARG: Record<string, Record<string, string>> = {

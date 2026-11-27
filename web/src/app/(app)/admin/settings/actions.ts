@@ -10,6 +10,7 @@ import { failed, type FormState } from '@/lib/patients/form-state';
 import { userMessage } from '@/lib/db-errors';
 import { brandingSchema } from '@/lib/branding/schema';
 import { encodeBytea, logoProblem, sniffLogo } from '@/lib/branding/image';
+import { MEDICAL_LEVELS } from '@/lib/passport/labels';
 
 export async function updateSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireAdmin();
@@ -76,4 +77,17 @@ export async function brandingAction(_prev: FormState, formData: FormData): Prom
   if (intent === 'remove') return removeLogo();
   if (intent === 'reset') return resetBranding();
   return { error: 'Unknown action.' };
+}
+
+/** Admin → Settings → Implant passport: the medical content every new passport prints (set_passport_settings). */
+export async function savePassportSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireAdmin();
+  const medical = formData.get('medical');
+  if (typeof medical !== 'string' || !(MEDICAL_LEVELS as readonly string[]).includes(medical)) {
+    return { error: 'Choose what medical content the passport prints.' };
+  }
+  const { error } = await (await createClient()).rpc('set_passport_settings', { p_medical: medical });
+  if (error) return { error: userMessage(error) ?? 'Could not save the passport settings.' };
+  revalidatePath('/admin/settings');
+  return { ok: 'Passport settings saved.' };
 }

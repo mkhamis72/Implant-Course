@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@mkhamis72/self-auth": "file:vendor/mkhamis72-self-auth-0.2.3.tgz",
+    "@react-pdf/renderer": "4.9.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "@types/qrcode": "^1.5.6",
@@ -59,6 +60,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "bcryptjs": "^3.0.3",
     "dotenv": "^18.0.5",
+    "esbuild": "0.28.2",
     "eslint": "^9",
     "eslint-config-next": "15.5.28",
     "jsdom": "^29.1.1",
@@ -72,6 +74,8 @@
     "yaml": "^2.9.1"
   },
   "overrides": {
-    "postcss": "^8.5.29"
+    "postcss": "^8.5.29",
+    "@react-pdf/textkit": "7.0.1",
+    "@react-pdf/layout": "5.2.0"
   }
 }

@@ -6,7 +6,9 @@ import { withTx } from './helpers';
  * read the whole table. A (company_id, x) link counts as indexed when an index starts with x. Who-did-it columns
  * (created_by, voided_by …) are left out: they point at profiles, which are almost never deleted.
  */
-const WHO_COLUMNS = ['created_by', 'voided_by', 'recorded_by', 'uploaded_by', 'done_by', 'actor_id', 'author_id'];
+const WHO_COLUMNS = ['created_by', 'voided_by', 'recorded_by', 'uploaded_by', 'done_by', 'actor_id', 'author_id',
+  // Implant passport (0145): who generated a passport, who downloaded it.
+  'generated_by', 'downloaded_by'];
 
 describe('foreign key indexes', () => {
   it('every foreign key in public and app_private has an index on its main column', async () => {

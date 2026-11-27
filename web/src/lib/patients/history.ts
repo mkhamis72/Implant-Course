@@ -261,6 +261,12 @@ export function describeChange(e: HistoryEntry, { teaching = true }: { teaching?
       ].filter(Boolean);
       return `Full-arch stage recorded: ${label} on ${formatDate(String(row?.done_on))}${details.length ? ` (${details.join(', ')})` : ''}`;
     }
+    case 'patient_passports': {
+      const row = e.after ?? e.before;
+      if (e.action === 'INSERT') return `Implant passport generated (version ${row?.version})`;
+      if (e.action === 'DELETE') return `Implant passport deleted (version ${row?.version})`;
+      return `Implant passport updated (version ${row?.version})`;
+    }
     case 'radiographs': {
       const row = e.after ?? e.before;
       if (e.after?.voided_at && !e.before?.voided_at) return `X-ray removed from the record (${e.after.voided_reason})`;
