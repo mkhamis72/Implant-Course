@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compareGroups, groupRows, groupSummary, isCompareKey, needsGroupVars, needsRehabVars, thinWarning, zygVsTiltedLeftOut, type GroupVars } from './groups';
+import { compareGroups, groupRows, groupSummary, isCompareKey, needsGroupVars, needsRehabVars, thinWarning, zygVsTiltedLeftOut, zygVsTiltedLeftOutNote, type GroupVars } from './groups';
 import type { RehabVars } from './rehab';
 import type { DetailRow } from './view';
 
@@ -163,5 +163,12 @@ describe('rehab comparisons', () => {
     const r2 = [row('z', { site_id: 'z' })];
     expect(labels(groupRows(r2, [], 'zyg_vs_tilted', [rv('z', { implant_type: 'zygomatic' })]))).toEqual(['Zygomatic:1']);
     expect(labels(groupRows(rows, [], 'brand', rehab))).toEqual(['Oxy · PSK:5']);
+  });
+});
+
+describe('zygVsTiltedLeftOutNote', () => {
+  it('is singular for one implant and plural otherwise', () => {
+    expect(zygVsTiltedLeftOutNote(1)).toBe('1 implant that is neither zygomatic nor tilted in an All-on-4 case is left out.');
+    expect(zygVsTiltedLeftOutNote(3)).toBe('3 implants that are neither zygomatic nor tilted in an All-on-4 case are left out.');
   });
 });

@@ -7,6 +7,11 @@ import { rpcArgs, type ResearchFilters } from '@/lib/research/view';
 
 export type FullArchCase = FullArchCaseRow & ReturnType<typeof caseOutcome>;
 
+/** First placement (none last), then case id: fetchAll pages by case_id, which replaces the reader's own order. */
+const byFirstPlaced = (a: FullArchCaseRow, b: FullArchCaseRow) =>
+  a.first_placed_on === b.first_placed_on ? (a.case_id < b.case_id ? -1 : a.case_id > b.case_id ? 1 : 0)
+    : a.first_placed_on === null ? 1 : b.first_placed_on === null ? -1 : a.first_placed_on < b.first_placed_on ? -1 : 1;
+
 const distinct = (values: (string | null)[]) => [...new Set(values.filter((v): v is string => Boolean(v)))].sort();
 
 /**
@@ -32,7 +37,7 @@ export async function loadFullArch(filters: ResearchFilters): Promise<{
   const options = base ? base.data : implants.data;
   return {
     columns: summariseCases(cases.data, implants.data, rehab.data.map(toRehabVars)),
-    cases: cases.data.map((r) => ({ ...r, ...caseOutcome(r) })),
+    cases: [...cases.data].sort(byFirstPlaced).map((r) => ({ ...r, ...caseOutcome(r) })),
     planned: Number(planned.data ?? 0),
     brands: distinct([...options.map((r) => r.brand), filters.brand]),
     systems: distinct([...options.filter((r) => !filters.brand || r.brand === filters.brand).map((r) => r.system), filters.system]),

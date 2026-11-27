@@ -134,6 +134,59 @@ begin
   delete from public.patients where id = p_patient;
 end $$;
 
+-- 0094's assign_research_codes, also drawing the codes of the full-arch cases the exported implants are in, so the
+-- export draws every code in one sorted insert before its readers run. Same signature, so the grants and the owner
+-- (tenant_definer) stay.
+create or replace function public.assign_research_codes(p_course uuid, p_from date, p_to date, p_delegate uuid,
+  p_brand text, p_system text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_company uuid := app.current_company_id();
+begin
+  perform app_private.require_perm('research', 'view');
+  if not public.can('patients', 'view') then
+    perform app_private.fail('Research export needs View on Patients');
+  end if;
+  loop
+    begin
+      with o as (
+        select * from public.implant_outcomes_detail(p_course, p_from, p_to, p_delegate, p_brand, p_system)
+      ), r as (
+        select distinct x.id, x.patient_id, x.delegate_id, x.supervisor_id
+        from public.restorations x
+        join public.restoration_sites rs on rs.restoration_id = x.id
+        where rs.site_id in (select o.site_id from o) and x.voided_at is null
+      ), wanted (entity, entity_id) as (
+        select 'implant', o.site_id from o
+        union select 'patient', o.patient_id from o
+        union select 'course', o.course_id from o
+        union select 'delegate', s.placing_delegate_id from public.implant_sites s where s.id in (select o.site_id from o)
+        union select 'supervisor', s.supervisor_id from public.implant_sites s where s.id in (select o.site_id from o)
+        union select 'full_arch_case', s.case_id from public.implant_sites s
+              where s.id in (select o.site_id from o) and s.case_id is not null
+        union select 'restoration', r.id from r
+        union select 'patient', r.patient_id from r
+        union select 'delegate', r.delegate_id from r
+        union select 'supervisor', r.supervisor_id from r
+        union select 'course', p_course
+        union select 'delegate', p_delegate
+      )
+      insert into app_private.research_codes (company_id, entity, entity_id, code)
+      select v_company, w.entity, w.entity_id, app_private.research_code_draw(w.entity)
+      from wanted w
+      where w.entity_id is not null
+        and app_private.is_company_row(w.entity, w.entity_id)
+        and not exists (select 1 from app_private.research_codes rc
+                        where rc.company_id = v_company and rc.entity = w.entity and rc.entity_id = w.entity_id)
+      order by w.entity, w.entity_id
+      on conflict (company_id, entity, entity_id) do nothing;
+      exit;
+    exception when unique_violation then
+      -- A drawn code belongs to another entity: draw them all again.
+    end;
+  end loop;
+end $$;
+
 -- ── 2. Implant level ─────────────────────────────────────────────────────────────────────────────────
 -- The implants of implant_outcomes_detail with their type, geometry and current case (null when in none). An
 -- implant moved from a closed case to a newer one has the newer case_id, so it counts there only.

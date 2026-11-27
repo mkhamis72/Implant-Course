@@ -70,7 +70,9 @@ function zygVsTiltedLabel(r: RehabVars | undefined): string | null {
 }
 
 /** The note under the Zygomatic vs tilted table. */
-export const zygVsTiltedLeftOutNote = (n: number) => `${n} implants that are neither zygomatic nor tilted in an All-on-4 case are left out.`;
+export const zygVsTiltedLeftOutNote = (n: number) => n === 1
+  ? '1 implant that is neither zygomatic nor tilted in an All-on-4 case is left out.'
+  : `${n} implants that are neither zygomatic nor tilted in an All-on-4 case are left out.`;
 
 /** How many implants the Zygomatic vs tilted comparison leaves out (neither group). */
 export function zygVsTiltedLeftOut(rows: GroupableRow[], rehab: RehabVars[]): number {

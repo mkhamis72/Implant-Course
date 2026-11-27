@@ -18,6 +18,8 @@ import { NoPatientsNote } from '../research-view';
 import { loadFullArch } from './data';
 
 const THIN_CASES = 30;
+/** The case columns' warning counts cases only (implant failures are another unit). */
+const thinCasesWarning = (n: number) => `⚠ Not enough data — interpret with caution (${n} case${n === 1 ? '' : 's'})`;
 const ofN = (k: number, n: number) => (n === 0 ? '—' : `${k} of ${n}`);
 const one = (n: number) => n.toFixed(1);
 
@@ -91,7 +93,7 @@ export default async function FullArchPage({ searchParams }: { searchParams: Pag
       <FilterForm filters={filters} courses={courseList} delegates={delegateList} teaching={teaching} brands={brands} systems={systems} />
       <section className="card space-y-3">
         <h2>Case types side by side</h2>
-        {thin.map((c) => <Warning key={c.configuration}>{`${CONFIGURATION_LABELS[c.configuration]}: ${thinWarning(c.cases, c.implantsFailed)}`}</Warning>)}
+        {thin.map((c) => <Warning key={c.configuration}>{`${CONFIGURATION_LABELS[c.configuration]}: ${thinCasesWarning(c.cases)}`}</Warning>)}
         {planned > 0 && <Note>{`${planned} planned case${planned === 1 ? '' : 's'} without a placed implant ${planned === 1 ? 'is' : 'are'} not included.`}</Note>}
         <div className="overflow-x-auto">
           <table className="table" aria-label="Case types side by side">

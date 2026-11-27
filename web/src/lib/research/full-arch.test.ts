@@ -48,6 +48,14 @@ describe('caseOutcome', () => {
     expect(caseOutcome(done({ closed_at: '2025-08-01T00:00:00Z' })).status).toBe('closed');
     expect(caseOutcome(kase({ sites: [{ id: 's1', tooth: 16, state: 'planned' }] })).status).toBe('planned');
   });
+
+  it('a completed case later closed (e.g. for a redo) keeps its final-bridge date and months', () => {
+    const o = caseOutcome(done({ closed_at: '2025-08-01T00:00:00Z' }));
+    expect(o.status).toBe('closed');
+    expect(o.complete).toBe(true);
+    expect(o.finalBridgeOn).toBe('2025-07-01');
+    expect(o.monthsToBridge).toBeCloseTo(181 / 30.4375, 6);
+  });
 });
 
 const impl = (site_id: string, over: Partial<GroupableRow> = {}): GroupableRow => ({
@@ -91,6 +99,16 @@ describe('summariseCases', () => {
     expect(a4.monthsToBridge.min).toBeCloseTo(Math.min(...months), 6);
     expect(a4.monthsToBridge.max).toBeCloseTo(Math.max(...months), 6);
     expect(a4.monthsToBridge.median).toBeCloseTo((months[0] + months[1]) / 2, 6);
+  });
+
+  it('completed-then-closed counts as completed with its months; closed before completion is closed-incomplete', () => {
+    const [a4] = summariseCases([
+      done({ closed_at: '2025-08-01T00:00:00Z' }),
+      kase({ closed_at: '2025-05-01T00:00:00Z' }),
+    ], [], []);
+    expect(a4.completed).toBe(1);
+    expect(a4.closedIncomplete).toBe(1);
+    expect(a4.monthsToBridge.median).toBeCloseTo(181 / 30.4375, 6);
   });
 
   it('median of an odd count is the middle value', () => {

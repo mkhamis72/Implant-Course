@@ -288,6 +288,22 @@ describe('gates', () => {
   });
 });
 
+describe('assign_research_codes', () => {
+  it("draws the export's full-arch case codes up front, before any reader runs", async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      await c.query('select public.assign_research_codes($1, $2::date, $3::date, $4, $5, $6)', args({ brand: s.brand }));
+      await asPostgres(c);
+      const { rows: r } = await c.query(
+        `select entity_id, code from app_private.research_codes where entity = 'full_arch_case' and entity_id = any($1::uuid[])`,
+        [[s.allOn4, s.plannedCase, s.oldCase, s.otherCase]]);
+      // Only the cases an exported implant is in now: not the planned case, not the emptied closed case.
+      expect(r.map((x) => x.entity_id as string).sort()).toEqual([s.allOn4, s.otherCase].sort());
+      for (const x of r) expect(x.code).toMatch(CASE_CODE);
+    });
+  });
+});
+
 describe('delete_patient', () => {
   it("clears the patient's full-arch case study codes", async () => {
     await withTx(async (c) => {

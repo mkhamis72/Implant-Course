@@ -94,20 +94,24 @@ export async function GET(req: NextRequest) {
   const tables = Object.fromEntries(TABLE_NAMES.map((t, i) => [t, results[i]])) as ExportTables;
   tables.patients = mergeConsent(tables.patients, consent.data);
   tables.implants = mergeColumns(tables.implants, rehab.data, 'implant_code', MERGED_COLUMNS.implants ?? []);
-  // Status and final-bridge date come from the case rule; the reader's sites / bridges (raw row ids) are dropped here,
-  // before the allowlist check, and never reach the files.
-  tables.full_arch_cases = fullArchExportRows(tables.full_arch_cases);
-  const rowCounts = Object.fromEntries(TABLE_NAMES.map((t) => [t, tables[t].length])) as ExportMeta['rowCounts'];
   const logged = Object.fromEntries(RESEARCH_FILTER_KEYS.map((k) => [k, args[`p_${k}` as keyof typeof args] ?? null]));
   const shown = { ...logged, course: (courseCode.data as string | null) ?? null, delegate: (delegateCode.data as string | null) ?? null };
-  const meta: ExportMeta = { exportedAt: new Date().toISOString(), filters: shown, version: String(version.data ?? ''), rowCounts, consent: consentCounts(tables.patients), study, teaching };
 
   let body: Uint8Array;
+  let rowCounts: ExportMeta['rowCounts'];
+  // Until the case rule has run, a failure is logged as a fixed string: a parse error can quote the reader's raw row ids.
+  let caseRuleDone = false;
   try {
+    // Status and final-bridge date come from the case rule; the reader's sites / bridges (raw row ids) are dropped
+    // here, before the allowlist check, and never reach the files.
+    tables.full_arch_cases = fullArchExportRows(tables.full_arch_cases);
+    rowCounts = Object.fromEntries(TABLE_NAMES.map((t) => [t, tables[t].length])) as ExportMeta['rowCounts'];
+    caseRuleDone = true;
+    const meta: ExportMeta = { exportedAt: new Date().toISOString(), filters: shown, version: String(version.data ?? ''), rowCounts, consent: consentCounts(tables.patients), study, teaching };
     assertAllowlisted(tables);
     body = format === 'xlsx' ? await buildXlsx(tables, meta) : buildZip(tables, meta);
   } catch (e) {
-    console.error('Research export failed', e instanceof Error ? e.message : 'build error');
+    console.error('Research export failed', !caseRuleDone ? 'full-arch case rows could not be read' : e instanceof Error ? e.message : 'build error');
     return new NextResponse('Could not build the export', { status: 500 });
   }
 

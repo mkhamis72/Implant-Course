@@ -76,7 +76,9 @@ describe('Full arch page', () => {
 
   it('warns under 30 cases but still shows the numbers, and only names columns with cases', async () => {
     await page();
-    expect(screen.getByText(/All-on-4: ⚠ Not enough data/)).toBeInTheDocument();
+    // Counted in cases only: the column has 12 cases and 2 implant failures, which are not cases.
+    expect(screen.getByText('All-on-4: ⚠ Not enough data — interpret with caution (12 cases)')).toBeInTheDocument();
+    expect(screen.queryByText(/All-on-4: ⚠.*failure/)).toBeNull();
     expect(screen.queryByText(/All-on-6: ⚠/)).toBeNull();
   });
 

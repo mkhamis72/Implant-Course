@@ -260,6 +260,20 @@ describe('GET /statistics/export', () => {
     expect(rpc.mock.calls.some((c) => c[0] === 'log_research_export')).toBe(false);
   });
 
+  it('is 500 for malformed case jsonb and logs a fixed message, never the parse error or a row id', async () => {
+    const malformed = `[{"id":"${SITE(0)}","tooth":16} x]`;
+    handler.mockImplementation(rehabHandler(fullArch({ sites: malformed })));
+    const logs = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect((await GET(req('format=xlsx'))).status).toBe(500);
+      expect(logs).toHaveBeenCalled();
+      for (const call of logs.mock.calls) expect(call.map(String).join(' ')).not.toMatch(UUID_ANY);
+      expect(rpc.mock.calls.some((c) => c[0] === 'log_research_export')).toBe(false);
+    } finally {
+      logs.mockRestore();
+    }
+  });
+
   it('is 500 and logs nothing when the implant rehab reader fails', async () => {
     handler.mockImplementation(async (name: string) => (name === 'research_export_implant_rehab' ? { data: null, error: { message: 'x' } } : { data: name === 'outcomes_version' ? 'v1' : [], error: null }));
     expect((await GET(req('format=csv'))).status).toBe(500);

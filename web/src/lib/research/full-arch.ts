@@ -32,15 +32,21 @@ export type FullArchCaseRow = {
   bridges: { id: string; type: CaseRestoration['type']; stage: CaseRestoration['stage']; fitted_on: string; ended_on: string | null; site_ids: string[] }[];
 };
 
-export function caseOutcome(row: FullArchCaseRow): { status: CaseStatus; finalBridgeOn: string | null; monthsToBridge: number | null } {
+/**
+ * status is the chart's (closed wins); complete says the final bridge covers every live implant, closed or not, and
+ * finalBridgeOn / monthsToBridge are filled whenever it is (a finished case closed to start a redo still reached it).
+ */
+export function caseOutcome(row: FullArchCaseRow): {
+  status: CaseStatus; complete: boolean; finalBridgeOn: string | null; monthsToBridge: number | null;
+} {
   const c = { id: row.case_id, closed_at: row.closed_at };
   const sites: CaseSite[] = row.sites.map((s) => ({ ...s, case_id: row.case_id }));
   const restorations: CaseRestoration[] = row.bridges.map((b) => ({ ...b, case_id: row.case_id }));
-  const finalBridgeOn = caseBridges(c, sites, restorations).deliveredOn;
+  const { complete, deliveredOn: finalBridgeOn } = caseBridges(c, sites, restorations);
   const monthsToBridge = finalBridgeOn && row.first_placed_on
     ? daysBetween(row.first_placed_on, finalBridgeOn) / DAYS_PER_MONTH
     : null;
-  return { status: caseStatus(c, sites, restorations), finalBridgeOn, monthsToBridge };
+  return { status: caseStatus(c, sites, restorations), complete, finalBridgeOn, monthsToBridge };
 }
 
 const jsonArray = (v: unknown): unknown[] => {
@@ -91,19 +97,23 @@ function median(values: number[]): number | null {
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
-/** One column per configuration (All-on-4, All-on-6, All-on-X, Other); a configuration with no case stays, all zeros. */
+/**
+ * One column per configuration (All-on-4, All-on-6, All-on-X, Other); a configuration with no case stays, all zeros.
+ * A case reached the final bridge when it is complete, even if it was closed afterwards; closed-incomplete is closed and
+ * never complete.
+ */
 export function summariseCases(cases: FullArchCaseRow[], implants: GroupableRow[], rehab: RehabVars[]): CaseColumn[] {
   const configOf = new Map(rehab.map((r) => [r.site_id, r.case_configuration]));
   return CONFIGURATIONS.map((configuration) => {
     const mine = cases.filter((c) => c.configuration === configuration);
     const outcomes = mine.map(caseOutcome);
-    const months = outcomes.filter((o) => o.status === 'completed' && o.monthsToBridge !== null).map((o) => o.monthsToBridge as number);
+    const months = outcomes.filter((o) => o.complete && o.monthsToBridge !== null).map((o) => o.monthsToBridge as number);
     const rows = implants.filter((i) => configOf.get(i.site_id) === configuration);
     return {
       configuration,
       cases: mine.length,
-      completed: outcomes.filter((o) => o.status === 'completed').length,
-      closedIncomplete: outcomes.filter((o) => o.status === 'closed').length,
+      completed: outcomes.filter((o) => o.complete).length,
+      closedIncomplete: outcomes.filter((o) => o.status === 'closed' && !o.complete).length,
       monthsToBridge: {
         median: median(months),
         min: months.length ? Math.min(...months) : null,
