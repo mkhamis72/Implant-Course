@@ -11,8 +11,14 @@ const nextConfig: NextConfig = {
     '/statistics/export': ['./src/lib/research/export/analysis.R'],
     '/statistics/analysis.R': ['./src/lib/research/export/analysis.R'],
     // The passport fonts are read at run time from the source tree (src/lib/passport/fonts.ts), only by the
-    // generate route (a glob: a literal '[id]' would be a character class).
-    '/patients/*/passport/generate': ['./src/lib/passport/fonts/*.ttf'],
+    // generate route (a glob: a literal '[id]' would be a character class). pdfkit also loads its built-in
+    // Helvetica with a run-time require('./standard-fonts/…') that tracing misses: without these files the route
+    // fails on Vercel (2026-11-27) while working locally, where node_modules is whole. Both pdfkit copies.
+    '/patients/*/passport/generate': [
+      './src/lib/passport/fonts/*.ttf',
+      './node_modules/pdfkit/js/standard-fonts/**/*',
+      './node_modules/@react-pdf/font/node_modules/pdfkit/js/standard-fonts/**/*',
+    ],
   },
   // Signed consent scans (≤ 2 MB) go through a server action; as form data 2 MB is about 2.7 MB (Vercel allows 4.5 MB).
   experimental: {
