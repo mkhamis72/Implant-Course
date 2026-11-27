@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { ComparePanel } from './compare-panel';
-import { CLUSTER_NOTE, LOADING_BIAS_NOTE, NO_FAILURES_NOTE, OPERATOR_NOTE, groupRows, type GroupVars } from '@/lib/research/groups';
+import { CLUSTER_NOTE, LOADING_BIAS_NOTE, NO_FAILURES_NOTE, OPERATOR_NOTE, groupRows, zygVsTiltedLeftOut, type GroupVars } from '@/lib/research/groups';
+import type { RehabVars } from '@/lib/research/rehab';
 import type { DetailRow, ResearchFilters } from '@/lib/research/view';
 
 const base: ResearchFilters = { course: 'c1', from: '', to: '', delegate: '', brand: '', system: '' };
@@ -96,5 +97,26 @@ describe('<ComparePanel>', () => {
     expect(hidden).toEqual([['course', 'c1']]);
     expect(screen.getByRole('combobox', { name: 'Compare by' })).toHaveValue('');
     expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it('offers the full-arch comparisons', () => {
+    render(<ComparePanel compare={null} groups={[]} filters={base} />);
+    for (const name of ['Implant type', 'Full-arch case type', 'Zygomatic vs tilted (All-on-4)']) {
+      expect(screen.getByRole('option', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('shows the two groups and the left-out note for zygomatic vs tilted', () => {
+    const rehab: RehabVars[] = rows.map((r, i) => ({
+      site_id: r.site_id, implant_type: i < 15 ? 'zygomatic' : i < 30 ? 'tilted' : 'conventional', angulation_deg: null,
+      angulation_direction: null, anchorage: null, case_id: null, case_configuration: i < 15 ? null : 'all_on_4',
+    }));
+    const left = zygVsTiltedLeftOut(rows, rehab);
+    expect(left).toBe(13);
+    render(<ComparePanel compare="zyg_vs_tilted" groups={groupRows(rows, [], 'zyg_vs_tilted', rehab)} filters={{ ...base, compare: 'zyg_vs_tilted' }} leftOut={left} />);
+    const p = screen.getByRole('region', { name: 'Compare groups' });
+    expect(within(p).getByText('Zygomatic')).toBeInTheDocument();
+    expect(within(p).getByText('Tilted in All-on-4')).toBeInTheDocument();
+    expect(within(p).getByText('13 implants that are neither zygomatic nor tilted in an All-on-4 case are left out.')).toBeInTheDocument();
   });
 });

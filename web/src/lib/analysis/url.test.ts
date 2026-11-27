@@ -19,6 +19,13 @@ describe('Explore URL state', () => {
     expect(parseExplore(toParams(exploreQuery(trend, {})))).toEqual(trend)
   })
 
+  it('accepts the full-arch factors and filters, and old links without them still parse', () => {
+    const s = parseExplore({ f: 'implant_type', o: 'failed', x_case_type: 'all_on_4,bogus', x_angulation: '30..' })
+    expect(s.config.factor).toBe('implant_type')
+    expect(s.config.filters).toEqual([{ key: 'case_type', values: ['all_on_4'] }, { key: 'angulation', min: 30 }])
+    expect(parseExplore({ f: 'smoking', o: 'failed', w: 'm12' }).config.factor).toBe('smoking')
+  })
+
   it('starts empty', () => {
     expect(parseExplore({})).toEqual({ config: { factor: null, outcome: '', window: 'm12', filters: [] }, view: null })
   })

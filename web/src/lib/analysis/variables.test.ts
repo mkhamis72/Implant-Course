@@ -17,6 +17,7 @@ describe('variable registry', () => {
     expect(factorChoices().map((v) => v.key).sort()).toEqual([
       'age', 'age_band', 'sex', 'smoking', 'diabetes', 'periodontitis', 'bruxism', 'previous_failure', 'brand', 'system', 'platform',
       'diameter', 'length', 'jaw', 'region', 'tooth', 'technique', 'bone_type', 'torque', 'isq_placement', 'placement_timing',
+      'implant_type', 'angulation', 'tilt_direction', 'anchorage', 'case_type',
       'grafting', 'membrane', 'sinus', 'phenotype', 'keratinized', 'flap', 'healing', 'delegate', 'supervisor', 'course',
     ].sort())
     expect(outcomeChoices().map((v) => v.key).sort()).toEqual([
@@ -54,6 +55,22 @@ describe('variable registry', () => {
     expect(sortsByLabel(variable('smoking')!)).toBe(false)
     expect(variable('bone_change')).toMatchObject({ source: 'radiograph', measure: 'bone_change', kind: 'continuous', unit: 'mm' })
     expect(variable('survival')!.kind).toBe('survival')
+  })
+})
+
+describe('full-arch factors', () => {
+  const get = (key: string, over: Partial<ImplantRow> = {}) => variable(key)!.get(implantRow(over))
+  it('reads the rehab columns, null when absent', () => {
+    expect(get('implant_type')).toBeNull()
+    expect(get('implant_type', { implant_type: 'zygomatic' })).toBe('zygomatic')
+    expect(get('angulation', { angulation_deg: 30 })).toBe(30)
+    expect(get('tilt_direction', { angulation_direction: 'distal' })).toBe('distal')
+    expect(get('anchorage', { anchorage: 'zygoma' })).toBe('zygoma')
+    expect(get('case_type', { case_configuration: 'all_on_4' })).toBe('all_on_4')
+  })
+  it('declares kind, unit and group', () => {
+    expect(variable('angulation')).toMatchObject({ kind: 'continuous', unit: '°', group: 'Full arch' })
+    expect(variable('implant_type')).toMatchObject({ kind: 'categorical', group: 'Full arch' })
   })
 })
 

@@ -2,11 +2,12 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { complications, crownSummary, formatPct, icoiBreakdown, kaplanMeier, kmEstimate, MILESTONE_DAYS, survivalAt, type CrownRow } from '@/lib/research/summary';
 import { THIN_AT_RISK } from '@/lib/research/stats';
-import { CLUSTER_NOTE, groupRows, isCompareKey, thinWarning, unknownDateNote, type GroupVars } from '@/lib/research/groups';
+import { CLUSTER_NOTE, groupRows, isCompareKey, thinWarning, unknownDateNote, zygVsTiltedLeftOut, type GroupVars } from '@/lib/research/groups';
 import { GRADE_LABELS, drilldownHref, type DetailRow, type ResearchFilters } from '@/lib/research/view';
 import { curveStyle } from '@/lib/research/curve-style';
 import { consentWarning, type ConsentCounts } from '@/lib/research/consent';
 import { SurvivalChart, type Curve } from './survival-chart';
+import type { RehabVars } from '@/lib/research/rehab';
 import { CiText, ComparePanel, Note, Warning } from './compare-panel';
 import { DAYS_PER_MONTH } from '@/lib/dates';
 
@@ -67,12 +68,14 @@ const GRADE_BAR: Record<(typeof GRADE_ORDER)[number], string> = {
   I: 'bg-ok', II: 'bg-accent', III: 'bg-warn', IV: 'bg-bad', not_assessable: 'bg-off', not_graded: 'bg-line-strong',
 };
 
-export function ResearchView({ rows, crowns, filters, groups = [], consent, noProduct }: {
+export function ResearchView({ rows, crowns, filters, groups = [], rehab = [], consent, noProduct }: {
   rows: DetailRow[];
   crowns: CrownRow[];
   filters: ResearchFilters;
   /** implant_outcomes_groups rows, when the comparison needs them. */
   groups?: GroupVars[];
+  /** implant_rehab_vars rows, when the comparison needs them. */
+  rehab?: RehabVars[];
   /** Research consent of the patients in the filter (research_consent_counts). */
   consent?: ConsentCounts;
   /** Implants with no product in the set before the brand / type filter. */
@@ -85,7 +88,7 @@ export function ResearchView({ rows, crowns, filters, groups = [], consent, noPr
   const km = kaplanMeier(rows);
   const endMonth = monthsOf(rows);
   const compare = isCompareKey(filters.compare) ? filters.compare : null;
-  const grouped = compare ? groupRows(rows, groups, compare) : [];
+  const grouped = compare ? groupRows(rows, groups, compare, rehab) : [];
   // Loading is a table only (survivor bias): no group curves.
   const byGroup = compare !== null && compare !== 'loading' && grouped.length > 0;
   const missingConsent = consent ? consentWarning(consent) : null;
@@ -140,7 +143,7 @@ export function ResearchView({ rows, crowns, filters, groups = [], consent, noPr
         <Note>{CLUSTER_NOTE}</Note>
       </section>
 
-      <ComparePanel compare={compare} groups={grouped} filters={filters} />
+      <ComparePanel compare={compare} groups={grouped} filters={filters} leftOut={compare === 'zyg_vs_tilted' ? zygVsTiltedLeftOut(rows, rehab) : 0} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section aria-label="ICOI success" className="card space-y-3">

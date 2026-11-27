@@ -2,6 +2,7 @@
 // detail rows. A case's status and final-bridge date come from the same rule the patient chart uses (caseStatus /
 // caseBridges in src/lib/full-arch/cases.ts).
 import { DAYS_PER_MONTH } from '@/lib/dates';
+import { daysBetween } from '@/lib/analysis/timepoints';
 import {
   CONFIGURATIONS, caseBridges, caseStatus,
   type Arch, type CaseRestoration, type CaseSite, type CaseStatus, type Configuration,
@@ -31,15 +32,13 @@ export type FullArchCaseRow = {
   bridges: { id: string; type: CaseRestoration['type']; stage: CaseRestoration['stage']; fitted_on: string; ended_on: string | null; site_ids: string[] }[];
 };
 
-const dayNumber = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86_400_000;
-
 export function caseOutcome(row: FullArchCaseRow): { status: CaseStatus; finalBridgeOn: string | null; monthsToBridge: number | null } {
   const c = { id: row.case_id, closed_at: row.closed_at };
   const sites: CaseSite[] = row.sites.map((s) => ({ ...s, case_id: row.case_id }));
   const restorations: CaseRestoration[] = row.bridges.map((b) => ({ ...b, case_id: row.case_id }));
   const finalBridgeOn = caseBridges(c, sites, restorations).deliveredOn;
   const monthsToBridge = finalBridgeOn && row.first_placed_on
-    ? (dayNumber(finalBridgeOn) - dayNumber(row.first_placed_on)) / DAYS_PER_MONTH
+    ? daysBetween(row.first_placed_on, finalBridgeOn) / DAYS_PER_MONTH
     : null;
   return { status: caseStatus(c, sites, restorations), finalBridgeOn, monthsToBridge };
 }

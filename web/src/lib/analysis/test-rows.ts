@@ -9,7 +9,8 @@ export const implantRow = (over: Partial<ImplantRow> = {}): ImplantRow => ({
   placement_timing: 'delayed', grafting_performed: 'no', membrane_used: 'no', sinus_procedure: 'no',
   soft_tissue_phenotype: 'thick', keratinized_mucosa_mm: 3, flap: 'crestal', healing: 'submerged', event: false, event_on: null,
   event_time_unknown: false, follow_up_days: 400, latest_grade: 'I', biological_complications: 0, mechanical_complications: 0,
-  restoration_problems: 0, final_restoration_on: null, ...over,
+  restoration_problems: 0, final_restoration_on: null,
+  implant_type: null, angulation_deg: null, angulation_direction: null, anchorage: null, case_configuration: null, ...over,
 })
 
 export const visitRow = (over: Partial<VisitRow> = {}): VisitRow => ({
