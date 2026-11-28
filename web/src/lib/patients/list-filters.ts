@@ -1,4 +1,4 @@
-/** Patients list: the course and supervisor filters (search_patients, 0098). */
+/** Patients list: the course and supervisor filters (0098; search_patients_v3, 0147). */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

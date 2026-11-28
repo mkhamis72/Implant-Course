@@ -21,14 +21,3 @@ describe('booking override reason', () => {
     });
   });
 });
-
-describe('patient search', () => {
-  it('returns one row more than the 50 shown, so the page can say there are more', async () => {
-    await withTx(async (c) => {
-      await actAs(c, users.organizer);
-      for (let i = 0; i < 55; i++) await makePatient(c, `Zz Limit Probe ${i}`);
-      const { rows } = await c.query("select count(*)::int as n from public.search_patients('Zz Limit Probe', false)");
-      expect(rows[0].n).toBe(51);
-    });
-  });
-});

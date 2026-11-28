@@ -129,7 +129,7 @@ export const PASSPORT_LABELS = {
 
 export type PassportLabel = keyof typeof PASSPORT_LABELS;
 
-/** The medical content a passport prints (passport_settings.medical, patient_passports.medical_level; 0145). */
+/** The medical content a passport prints (passport_settings.medical, passport_generations.medical_level; 0145, 0150). */
 export const MEDICAL_LEVELS = ['allergies_medications', 'full', 'none'] as const;
 export type MedicalLevel = (typeof MEDICAL_LEVELS)[number];
 export const MEDICAL_LEVEL_LABELS: Record<MedicalLevel, string> = {

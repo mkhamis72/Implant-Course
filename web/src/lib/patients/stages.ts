@@ -1,6 +1,6 @@
 /**
  * What the patient list can filter by: the chart states 'missing' and 'extracted' (public.tooth_status)
- * and the implant stages of public.implant_stage. Any ticked value matches (search_patients, 0041).
+ * and the implant stages of public.implant_stage. Any ticked value matches (patient_list_matches, 0041).
  * The 'prosthetic' implant stage still exists in SQL but isn't offered.
  */
 export const PATIENT_FILTERS = ['missing', 'extracted', 'planned', 'cover_screw', 'healing_abutment', 'restored', 'failed'] as const;

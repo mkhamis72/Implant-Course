@@ -16,10 +16,8 @@ describe('recordsChangedSince', () => {
     ])).toBe(true);
   });
 
-  it('ignores the passports themselves, their downloads and the setting (or the latest would always be stale)', () => {
+  it('ignores the generations themselves and the setting (or the latest would always be stale)', () => {
     expect(recordsChangedSince(generated, [
-      { table_name: 'patient_passports', at: '2026-11-24T09:00:00.5+00:00' },
-      { table_name: 'passport_downloads', at: '2026-11-24T10:00:00+00:00' },
       { table_name: 'passport_settings', at: '2026-11-24T11:00:00+00:00' },
       { table_name: 'passport_generations', at: '2026-11-24T12:00:00+00:00' },
     ])).toBe(false);

@@ -155,10 +155,10 @@ describe('check_assignee (0090)', () => {
   });
 });
 
-describe('fit_component_v3: fitted by organizer (0090)', () => {
+describe('fit_component_v4: fitted by organizer (0090)', () => {
   const fit = (c: Client, site: string, organizer: string) => c.query(
-    `select public.fit_component_v3(p_site => $1, p_type => 'cover_screw', p_fitted_on => current_date,
-       p_product => null, p_lot => null, p_by_delegate => null, p_by_organizer => $2, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null) as id`,
+    `select public.fit_component_v4(p_site => $1, p_type => 'cover_screw', p_fitted_on => current_date,
+       p_product => null, p_lot => null, p_by_delegate => null, p_by_organizer => $2, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null, p_screw_size => null) as id`,
     [site, organizer]);
 
   it("accepts an active staff member of the implant's company only, and the row takes that company", async () => {

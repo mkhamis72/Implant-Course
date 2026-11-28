@@ -33,7 +33,7 @@ test('filters patients by implant stage and shows the matching teeth', async ({ 
     expect(error).toBeNull();
     const product = await seedProduct(api, { type: component, brand: tag });
     const lot = await receiveStock(api, product, 1, null, null);
-    const fit = await api.rpc('fit_component_v3', {
+    const fit = await api.rpc('fit_component_v4', { p_screw_size: null,
       p_site: site, p_type: component, p_fitted_on: today, p_product: product, p_lot: lot, p_by_delegate: delegate,
       p_by_organizer: null, p_notes: '', p_course: null, p_torque: null, p_holds_component: null, p_holds_restoration: null,
     });
@@ -115,16 +115,16 @@ test('filters patients by course and by supervisor from the dropdowns', async ({
   await login(page, TEST_USERS.organizer.email);
   await page.goto('/patients');
   await page.getByLabel('Search patients').fill(tag);
-  await page.getByRole('combobox', { name: 'Course' }).selectOption({ label: courseA });
+  await page.getByRole('combobox', { name: 'Course', exact: true }).selectOption({ label: courseA });
   await page.getByRole('button', { name: 'Search' }).click();
   await expect(page).toHaveURL(new RegExp(`course=${courseAId}`));
   const rows = page.getByRole('row').filter({ hasText: tag });
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText(`${tag} In A`);
-  await expect(page.getByRole('combobox', { name: 'Course' })).toHaveValue(courseAId);
+  await expect(page.getByRole('combobox', { name: 'Course', exact: true })).toHaveValue(courseAId);
 
-  await page.getByRole('combobox', { name: 'Course' }).selectOption('');
-  await page.getByRole('combobox', { name: 'Supervisor' }).selectOption(me);
+  await page.getByRole('combobox', { name: 'Course', exact: true }).selectOption('');
+  await page.getByRole('combobox', { name: 'Supervisor', exact: true }).selectOption(me);
   await page.getByRole('button', { name: 'Search' }).click();
   await expect(page).toHaveURL(new RegExp(`supervisor=${me}`));
   await expect(rows).toHaveCount(2);

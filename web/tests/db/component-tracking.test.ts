@@ -126,9 +126,9 @@ async function twoSites(c: Client) {
 
 async function fit3(c: Client, site: string, type: string, a: Fit = {}): Promise<string> {
   const r = await one<{ id: string }>(c,
-    `select public.fit_component_v3(p_site => $1, p_type => $2::public.component_type, p_fitted_on => public.cairo_today(),
+    `select public.fit_component_v4(p_site => $1, p_type => $2::public.component_type, p_fitted_on => public.cairo_today(),
        p_product => $3, p_lot => $4, p_by_delegate => null, p_by_organizer => $5, p_notes => '', p_course => null,
-       p_torque => $6, p_holds_component => $7, p_holds_restoration => $8) as id`,
+       p_torque => $6, p_holds_component => $7, p_holds_restoration => $8, p_screw_size => null) as id`,
     [site, type, a.product ?? null, a.lot ?? null, users.organizer, a.torque ?? null, a.holds ?? null, a.holdsRestoration ?? null]);
   return r.id;
 }

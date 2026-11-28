@@ -78,18 +78,15 @@ describe('fit_component_v4: screw size (0149)', () => {
     });
   });
 
-  it('fits with no size, and v3 still works', async () => {
+  it('fits with no size; fit_component_v3 is gone (0152)', async () => {
     await withTx(async (c) => {
       const s = await setup(c);
       const abutment = await abutmentOn(c, s.site);
       const { id } = await fit4(c, s.site, 'abutment_screw', null, abutment);
       expect(await one(c, 'select screw_size_id from public.site_components where id = $1', [id]))
         .toEqual({ screw_size_id: null });
-      const v3 = await one<{ id: string }>(c,
-        `select public.fit_component_v3(p_site => $1, p_type => 'healing_abutment', p_fitted_on => public.cairo_today(),
-           p_product => null, p_lot => null, p_by_delegate => null, p_by_organizer => $2, p_notes => '', p_course => null,
-           p_torque => null, p_holds_component => null, p_holds_restoration => null) as id`, [s.site, users.organizer]);
-      expect(v3.id).toBeTruthy();
+      expect(await one(c, "select count(*)::int as n from pg_proc where proname like 'fit_component%'"))
+        .toEqual({ n: 1 });
     });
   });
   it('refuses a screw size of another company', async () => {

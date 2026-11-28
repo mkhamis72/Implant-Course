@@ -4,7 +4,7 @@ import { sniffLogo } from '@/lib/branding/image';
  * Audit rows about the passports themselves: generating one is not a change to the patient's records, so they never
  * mark a passport (otherwise the newest would always be). The old stored-passport tables (0145) are no longer written and are kept for one release.
  */
-const PASSPORT_TABLES = new Set(['patient_passports', 'passport_downloads', 'passport_settings', 'passport_generations']);
+const PASSPORT_TABLES = new Set(['passport_settings', 'passport_generations']);
 
 /**
  * "Records changed since this version": any audit row of the patient's records (patient_history's rows) newer than

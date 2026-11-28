@@ -186,7 +186,7 @@ export async function legacyFailure(c: Client, site: string, date: string, user:
 
 /**
  * A component as fit_component_v2 (dropped in 0144) recorded it, for tests of the rows it left behind (a legacy
- * `final_restoration` above all, which fit_component_v3 refuses): closes every current part on the implant that day,
+ * `final_restoration` above all, which fit_component_v4 refuses): closes every current part on the implant that day,
  * linked to the new row by replaced_by, and a final restoration marks the implant and tooth restored. No product or
  * stock. Writes as postgres, then restores the caller's role and claims. `fittedOn` is a SQL date expression.
  */
