@@ -10,7 +10,7 @@ import { getBranding } from '@/lib/branding/get';
 import { describeLabelled } from '@/lib/analysis/choices';
 import { runAnalysis } from '@/lib/analysis/run';
 import { windowLabel } from '@/lib/analysis/timepoints';
-import { parseExplore } from '@/lib/analysis/url';
+import { needsRehab, parseExplore } from '@/lib/analysis/url';
 import { variable } from '@/lib/analysis/variables';
 import { PrintButton } from '../../../schedule/pull-list/print-button';
 import { NoPatientsNote } from '../../research-view';
@@ -43,7 +43,7 @@ export default async function ExplorePrintPage({ searchParams }: { searchParams:
   const fv = state.config.factor ? variable(state.config.factor) : undefined;
 
   const today = todayIso();
-  const [{ data, labels }, branding] = await Promise.all([loadExplore(filters), getBranding()]);
+  const [{ data, labels }, branding] = await Promise.all([loadExplore(filters, needsRehab(state.config)), getBranding()]);
   const result = runAnalysis(data, state.config, today, labels);
   const view = state.view && result.views.includes(state.view) ? state.view : result.views[0];
   const altView = raw.alt === '1' ? result.views.find((v) => v !== view && CHART_VIEWS.has(v)) ?? null : null;

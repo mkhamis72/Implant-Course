@@ -11,7 +11,7 @@ import { applyFilters } from '@/lib/analysis/filters';
 import { observe } from '@/lib/analysis/observations';
 import { runAnalysis } from '@/lib/analysis/run';
 import { windowLabel } from '@/lib/analysis/timepoints';
-import { parseExplore } from '@/lib/analysis/url';
+import { needsRehab, parseExplore } from '@/lib/analysis/url';
 import { variable } from '@/lib/analysis/variables';
 import { loadExplore } from '../data';
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 
   let loaded;
   try {
-    loaded = await loadExplore(filters);
+    loaded = await loadExplore(filters, needsRehab(state.config));
   } catch (e) {
     return failed(e instanceof Error ? e.message : String(e));
   }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { applyFilters } from '@/lib/analysis/filters';
 import { describeLabelled, type LevelLabels } from '@/lib/analysis/choices';
 import { trajectories } from '@/lib/analysis/observations';
@@ -9,7 +10,7 @@ import { runAnalysis, type AnalysisConfig } from '@/lib/analysis/run';
 import { windowLabel, type TimepointKey } from '@/lib/analysis/timepoints';
 import { toSavedConfig, type SavedConfig } from '@/lib/analysis/saved';
 import { RESEARCH_FILTER_KEYS } from '@/lib/research/view';
-import { exploreQuery, parseExplore, type ExploreState } from '@/lib/analysis/url';
+import { exploreQuery, needsRehab, parseExplore, type ExploreState } from '@/lib/analysis/url';
 import Link from 'next/link';
 import { CONFIDENTIALITY_NOTE } from '@/lib/research/export/assemble';
 import { variable } from '@/lib/analysis/variables';
@@ -25,7 +26,7 @@ const MAX_TRAJECTORIES = 200;
 
 export type SavedProps = { items: SavedRow[]; canEdit: boolean; userId: string; isAdmin: boolean; courses: Record<string, string> };
 
-export function ExploreWorkspace({ data, labels, today, initial, base, patients, saved, teaching = true }: {
+export function ExploreWorkspace({ data, labels, today, initial, base, patients, saved, teaching = true, withRehab = true }: {
   data: AnalysisData;
   labels: LevelLabels;
   today: string;
@@ -35,11 +36,14 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients,
   saved?: SavedProps;
   /** False in a clinic: no course, delegate or supervisor variables. */
   teaching?: boolean;
+  /** Whether `data` carries the implant type / full-arch case variables (loaded only when the URL's analysis uses one). */
+  withRehab?: boolean;
 }) {
   const [state, setState] = useState<ExploreState>(initial);
   const [alt, setAlt] = useState(false);
   const [palette, setPalette] = useState<Palette>(DEFAULT_PALETTE);
   useEffect(() => { loadPalette().then(setPalette).catch(() => {}); }, []);
+  const router = useRouter();
 
   const update = (next: ExploreState) => {
     setState(next);
@@ -52,9 +56,15 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients,
   };
 
   const { config } = state;
+  // A Full arch variable chosen here: its rows were not loaded, so load the page again with the analysis in the URL
+  // (the workspace is keyed on it and remounts with the rows).
+  const rehabPending = needsRehab(config) && !withRehab;
+  useEffect(() => {
+    if (rehabPending) router.replace(exploreQuery(state, base), { scroll: false });
+  }, [rehabPending, router, state, base]);
   const fv = config.factor ? variable(config.factor) : undefined;
   const ov = config.outcome ? variable(config.outcome) : undefined;
-  const result = useMemo(() => (ov ? runAnalysis(data, config, today, labels) : null), [data, config, today, labels, ov]);
+  const result = useMemo(() => (ov && !rehabPending ? runAnalysis(data, config, today, labels) : null), [data, config, today, labels, ov, rehabPending]);
   const view = result ? (state.view && result.views.includes(state.view) ? state.view : result.views[0]) : null;
 
   const traj = useMemo(() => {
@@ -89,6 +99,7 @@ export function ExploreWorkspace({ data, labels, today, initial, base, patients,
       {carried.map(([k, v]) => <input key={k} type="hidden" form="research-filters" name={k} value={v} />)}
       <QuestionCard config={config} onChange={setConfig} teaching={teaching} />
       <FilterChips teaching={teaching} filters={config.filters} rows={data.implants} labels={labels} onChange={(filters) => setConfig({ filters })} />
+      {rehabPending && <p className="text-sm text-muted" role="status">Loading the full-arch data…</p>}
       {result && ov && view && (
         <>
           <p className="text-sm text-muted" aria-label="Current analysis">

@@ -83,6 +83,15 @@ test('Statistics: zygomatic vs tilted, the Full arch tab and the full_arch_cases
     await expect(adminPage.getByRole('combobox', { name: 'Compare by' })).toHaveValue('case_type');
     await expect(adminPage.getByRole('combobox', { name: 'Compare by' }).locator('option:checked')).toHaveText('Full-arch case type');
 
+    // Explore loads the implant types only for a Full arch variable: picking one in the browser reloads the page with them.
+    await adminPage.goto(`/statistics/explore?${q}`);
+    await adminPage.getByRole('combobox', { name: 'Outcome' }).selectOption('failed');
+    await adminPage.getByRole('combobox', { name: 'Compare by' }).selectOption('implant_type');
+    await expect(adminPage).toHaveURL(/f=implant_type/);
+    const byGroup = adminPage.getByRole('table', { name: 'Statistics by group' });
+    await expect(byGroup.getByRole('cell', { name: /^Tilted/ })).toBeVisible();
+    await expect(byGroup.getByRole('cell', { name: /^Zygomatic/ })).toBeVisible();
+
     // Export: a full_arch_cases sheet with the case's A- code; the implants carry type and case.
     await adminPage.goto(`/statistics?${q}`);
     await adminPage.getByRole('form', { name: 'Export' }).getByLabel(/Excel/).check();
