@@ -8,6 +8,11 @@ export function idParam(value: string): string {
   return UUID.test(v) ? v : '';
 }
 
+/** An is-not flag from the URL (stage_not, course_not, supervisor_not, 0147): true only for 1; a repeated value uses the first. */
+export function parseNot(value: string | string[] | undefined): boolean {
+  return (Array.isArray(value) ? value[0] : value) === '1';
+}
+
 export type SupervisorRow = { id: string; full_name: string; active: boolean };
 
 /** Active supervisors first, then inactive ones (past implants still name them), each group by name. */

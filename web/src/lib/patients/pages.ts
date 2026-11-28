@@ -1,4 +1,4 @@
-/** Patients list in pages (search_patients_v2 / search_patients_count, 0124). */
+/** Patients list in pages (search_patients_v3 / search_patients_count_v2, 0147). */
 export const PAGE_SIZE = 50;
 
 /** The page asked for in the URL; anything but a whole number of 1 or more means page 1. */
@@ -30,7 +30,10 @@ export function pageList(current: number, last: number): (number | '…')[] {
   return out;
 }
 
-export type ListFilters = { q: string; archived: string; stages: string[]; course: string; supervisor: string };
+export type ListFilters = { q: string; archived: string; stages: string[]; course: string; supervisor: string;
+  /** is-not flags (0147): stage_not, course_not, supervisor_not */
+  stagesNot: boolean; courseNot: boolean; supervisorNot: boolean;
+};
 
 /** The Patients list URL for a page, keeping every filter (stage repeated). */
 export function pageHref(f: ListFilters, page: number): string {
@@ -40,6 +43,9 @@ export function pageHref(f: ListFilters, page: number): string {
   for (const s of f.stages) sp.append('stage', s);
   if (f.course) sp.set('course', f.course);
   if (f.supervisor) sp.set('supervisor', f.supervisor);
+  if (f.stagesNot) sp.set('stage_not', '1');
+  if (f.courseNot) sp.set('course_not', '1');
+  if (f.supervisorNot) sp.set('supervisor_not', '1');
   if (page > 1) sp.set('page', String(page));
   const qs = sp.toString();
   return qs ? `/patients?${qs}` : '/patients';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { idParam, supervisorChoices } from './list-filters';
+import { idParam, parseNot, supervisorChoices } from './list-filters';
 
 describe('idParam', () => {
   it('keeps an id and drops anything else (a bad link must not break the search)', () => {
@@ -23,5 +23,16 @@ describe('supervisorChoices', () => {
       { id: '1', label: 'Zed' },
       { id: '2', label: 'Amr (inactive)' },
     ]);
+  });
+});
+
+describe('parseNot', () => {
+  it('is true only for 1, taking the first of a repeated value', () => {
+    expect(parseNot('1')).toBe(true);
+    expect(parseNot(undefined)).toBe(false);
+    expect(parseNot('0')).toBe(false);
+    expect(parseNot('yes')).toBe(false);
+    expect(parseNot(['1', '0'])).toBe(true);
+    expect(parseNot(['0', '1'])).toBe(false);
   });
 });

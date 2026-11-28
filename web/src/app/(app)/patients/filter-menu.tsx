@@ -38,3 +38,18 @@ export function FilterMenu({
     </div>
   );
 }
+
+/**
+ * The "is / is not" switch beside a filter (0147): name stage_not, course_not or supervisor_not, value 1 = is not.
+ * Remounted on the URL's value (React 19 resets a form's selects after each submit).
+ */
+export function NotSelect({ name, label, value }: { name: string; label: string; value: boolean }) {
+  return (
+    <label className="block w-24">
+      <select className="input" name={name} defaultValue={value ? '1' : ''} key={name + (value ? '-not' : '-is')} aria-label={label}>
+        <option value="">is</option>
+        <option value="1">is not</option>
+      </select>
+    </label>
+  );
+}

@@ -6,9 +6,9 @@ import { ageOn } from '@/lib/patients/age';
 import type { Patient } from '@/lib/patients/types';
 import { PATIENT_FILTERS, PATIENT_FILTER_LABELS, SCAN_FILTERS, TOOTH_FILTERS, parseStages, teethByPatient, toothBoundFilters, type StageSite } from '@/lib/patients/stages';
 import { firstParam, type PageSearchParams } from '@/lib/search-params';
-import { idParam, supervisorChoices, type SupervisorRow } from '@/lib/patients/list-filters';
+import { idParam, parseNot, supervisorChoices, type SupervisorRow } from '@/lib/patients/list-filters';
 import { DeletePatient } from './delete-patient';
-import { FilterMenu } from './filter-menu';
+import { FilterMenu, NotSelect } from './filter-menu';
 import { TeachingFilters } from './teaching-filters';
 import { teachingOn } from '@/lib/modules/modules';
 import { PAGE_SIZE, lastPage, pageSummary, parsePage } from '@/lib/patients/pages';
@@ -25,14 +25,18 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
   const teaching = teachingOn(profile.features);
   const course = teaching ? idParam(firstParam(sp.course)) : '';
   const supervisor = teaching ? idParam(firstParam(sp.supervisor)) : '';
+  const stagesNot = parseNot(sp.stage_not);
+  const courseNot = parseNot(sp.course_not);
+  const supervisorNot = parseNot(sp.supervisor_not);
   const supabase = await createClient();
   const none = Promise.resolve({ data: [], error: null });
-  const filter = { q, include_archived: archived === '1', stages, course: course || null, supervisor: supervisor || null };
-  const pageOf = (n: number) => supabase.rpc('search_patients_v2', { ...filter, p_offset: (n - 1) * PAGE_SIZE, p_limit: PAGE_SIZE });
+  const filter = { q, include_archived: archived === '1', stages, course: course || null, supervisor: supervisor || null,
+    stages_not: stagesNot, course_not: courseNot, supervisor_not: supervisorNot };
+  const pageOf = (n: number) => supabase.rpc('search_patients_v3', { ...filter, p_offset: (n - 1) * PAGE_SIZE, p_limit: PAGE_SIZE });
   let page = parsePage(sp.page);
   const [first, counted, courseRows, supervisorRows] = await Promise.all([
     pageOf(page),
-    supabase.rpc('search_patients_count', filter),
+    supabase.rpc('search_patients_count_v2', filter),
     // course_options() needs View on Patients, like this page (the courses table needs Courses or Schedule).
     teaching ? supabase.rpc('course_options') : none,
     // Inactive supervisors too: past implants and bookings still name them.
@@ -51,7 +55,8 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
   const courses = (courseRows.data ?? []) as { id: string; name: string }[];
   const supervisors = supervisorChoices((supervisorRows.data ?? []) as SupervisorRow[]);
   const patients = (search.data ?? []) as Patient[];
-  const teethStages = toothBoundFilters(stages);
+  // An is-not filter has no teeth to show: the patients listed match none of the ticked options.
+  const teethStages = stagesNot ? [] : toothBoundFilters(stages);
   let teeth: Record<string, string> = {};
   if (teethStages.length && patients.length) {
     const ids = patients.map((p) => p.id);
@@ -90,7 +95,8 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
           <input type="checkbox" name="archived" value="1" defaultChecked={archived === '1'} />
           Include archived
         </label>
-        <TeachingFilters teachingOn={teaching} courses={courses} supervisors={supervisors} course={course} supervisor={supervisor} />
+        <TeachingFilters teachingOn={teaching} courses={courses} supervisors={supervisors} course={course} supervisor={supervisor} courseNot={courseNot} supervisorNot={supervisorNot} />
+        <NotSelect name="stage_not" label="Teeth, implants and scan filter mode" value={stagesNot} />
         <FilterMenu label="Teeth and implants" name="stage" options={PATIENT_FILTERS} labels={PATIENT_FILTER_LABELS} checked={stages} />
         <FilterMenu label="Scan / impression" name="stage" options={SCAN_FILTERS} labels={PATIENT_FILTER_LABELS} checked={stages} align="end" />
         <button className="btn-secondary btn">Search</button>
@@ -132,7 +138,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
                 ))}
               </tbody>
             </table>
-            <Pager page={page} last={last} filters={{ q, archived: archived === '1' ? '1' : '', stages, course, supervisor }} />
+            <Pager page={page} last={last} filters={{ q, archived: archived === '1' ? '1' : '', stages, course, supervisor, stagesNot, courseNot, supervisorNot }} />
           </>
         )}
       </div>
