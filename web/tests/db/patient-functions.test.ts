@@ -14,11 +14,11 @@ async function add(c: Client, full_name: string, extra: { phone?: string; file_n
 }
 
 async function search(c: Client, q: string, includeArchived = false): Promise<string[]> {
-  const { rows } = await c.query('select full_name from public.search_patients($1, $2)', [q, includeArchived]);
+  const { rows } = await c.query('select full_name from public.patient_list_matches($1, $2, array[]::text[], null, null) order by full_name', [q, includeArchived]);
   return rows.map((r) => r.full_name);
 }
 
-describe('search_patients', () => {
+describe('patient_list_matches (the list search)', () => {
   it('finds by name, file number and phone digits', async () => {
     await withTx(async (c) => {
       await actAs(c, users.organizer);

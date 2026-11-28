@@ -139,10 +139,6 @@ async function seedCompany(c: Client, key: 'A' | 'B'): Promise<Company> {
   r.patient_consents = await one(c, `insert into public.patient_consents
       (patient_id, version_id, language, signed_on, treatment, research, teaching_images, follow_up, file_id)
     values ($1, $2, 'en', ${today}, true, true, true, true, $3) returning id`, [r.patients, r.consent_form_versions, r.stored_files]);
-  r.patient_passports = await one(c, `insert into public.patient_passports (patient_id, version, size_bytes, sha256, medical_level)
-    values ($1, 1, 5, repeat('a', 64), 'none') returning id`, [r.patients]);
-  await c.query(`insert into public.patient_passport_files (passport_id, bytes) values ($1, '\\x255044462d')`, [r.patient_passports]);
-  r.passport_downloads = await one(c, 'insert into public.passport_downloads (passport_id) values ($1) returning id', [r.patient_passports]);
   await c.query(`insert into public.passport_settings (medical) values ('full') on conflict do nothing`);
   r.passport_generations = await one(c, `insert into public.passport_generations (patient_id, medical_level)
     values ($1, 'none') returning id`, [r.patients]);
@@ -335,7 +331,7 @@ const UUID_ARG: Record<string, string> = {
   p_placing_delegate: 'delegates', p_assisting_delegate: 'delegates', p_by_delegate: 'delegates', p_chair: 'chairs',
   p_checklist: 'checklists', p_complication: 'implant_complications', p_component: 'site_components',
   p_exclude: 'surgery_slots', p_file: 'stored_files', p_followup: 'implant_followups', p_graft: 'implant_grafts',
-  p_item: 'checklist_items', p_lecturer: 'lecturers', p_passport: 'patient_passports', p_lot: 'stock_lots', p_new_lot: 'stock_lots',
+  p_item: 'checklist_items', p_lecturer: 'lecturers', p_lot: 'stock_lots', p_new_lot: 'stock_lots',
   p_product: 'products', p_new_product: 'products', p_problem: 'restoration_problems', p_restoration: 'restorations',
   p_session: 'sessions', p_site: 'implant_sites', p_slot: 'surgery_slots', p_study: 'studies',
   p_supervisor: 'supervisors', p_talk: 'talks', p_template: 'checklist_templates', p_version: 'consent_form_versions',

@@ -5,7 +5,7 @@ import { withTx, actAs, asPostgres, asCompany } from './helpers';
 const users = inject('testUsers');
 
 // Patients list in pages (0124): search_patients_v2 returns one page (by name, then id) and
-// search_patients_count the number of matches, both with the 0098 filter.
+// patient_list_matches the matches (search_patients_count, 0124, was dropped in 0152), both with the 0098 filter.
 type Args = { q?: string; archived?: boolean; stages?: string[]; course?: string | null; supervisor?: string | null };
 
 async function page(c: Client, a: Args, offset: number, limit: number): Promise<string[]> {
@@ -19,8 +19,8 @@ async function page(c: Client, a: Args, offset: number, limit: number): Promise<
 
 async function count(c: Client, a: Args): Promise<number> {
   const { rows } = await c.query(
-    `select public.search_patients_count(q => $1, include_archived => $2, stages => $3, course => $4,
-       supervisor => $5)::int as n`,
+    `select count(*)::int as n from public.patient_list_matches(q => $1, include_archived => $2, stages => $3, course => $4,
+       supervisor => $5)`,
     [a.q ?? '', a.archived ?? false, a.stages ?? [], a.course ?? null, a.supervisor ?? null],
   );
   return rows[0].n;
@@ -114,12 +114,11 @@ describe('patient list pages (0124)', () => {
            has_function_privilege('anon', p.oid, 'execute') as anon,
            has_function_privilege('authenticated', p.oid, 'execute') as auth
          from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-         where n.nspname = 'public' and p.proname in ('patient_list_matches', 'search_patients_v2', 'search_patients_count')
+         where n.nspname = 'public' and p.proname in ('patient_list_matches', 'search_patients_v2')
          order by p.proname`,
       );
       expect(rows).toEqual([
         { proname: 'patient_list_matches', prosecdef: false, pronargdefaults: 0, anon: false, auth: true },
-        { proname: 'search_patients_count', prosecdef: false, pronargdefaults: 0, anon: false, auth: true },
         { proname: 'search_patients_v2', prosecdef: false, pronargdefaults: 0, anon: false, auth: true },
       ]);
     });

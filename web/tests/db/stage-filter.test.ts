@@ -20,8 +20,8 @@ async function setup(c: Client) {
     const product = await makeProduct(c, type);
     const fitLot = await receive(c, product, 1, `${type}-lot`);
     await c.query(
-      `select public.fit_component_v3(p_site => $1, p_type => $2, p_fitted_on => current_date,
-         p_product => $3, p_lot => $4, p_by_delegate => $5, p_by_organizer => null, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null)`,
+      `select public.fit_component_v4(p_site => $1, p_type => $2, p_fitted_on => current_date,
+         p_product => $3, p_lot => $4, p_by_delegate => $5, p_by_organizer => null, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null, p_screw_size => null)`,
       [site, type, product, fitLot, delegate],
     );
   };
@@ -29,7 +29,7 @@ async function setup(c: Client) {
 }
 
 async function search(c: Client, q: string, stages: string[]): Promise<string[]> {
-  const { rows } = await c.query('select full_name from public.search_patients(q => $1, stages => $2)', [q, stages]);
+  const { rows } = await c.query('select full_name from public.patient_list_matches(q => $1, include_archived => false, stages => $2, course => null, supervisor => null) order by full_name', [q, stages]);
   return rows.map((r) => r.full_name);
 }
 
@@ -119,7 +119,7 @@ describe('implant stage filter', () => {
     await withTx(async (c) => {
       await actAs(c, users.organizer);
       await makePatient(c, 'Zz Stage Plain');
-      const { rows } = await c.query('select full_name from public.search_patients($1, $2)', ['Zz Stage Plain', false]);
+      const { rows } = await c.query('select full_name from public.patient_list_matches($1, $2, array[]::text[], null, null) order by full_name', ['Zz Stage Plain', false]);
       expect(rows.map((r) => r.full_name)).toEqual(['Zz Stage Plain']);
     });
   });

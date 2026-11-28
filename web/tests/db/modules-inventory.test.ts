@@ -105,8 +105,8 @@ describe('modules: inventory optional (0111)', () => {
       place(c, { patient: w.patient, tooth, product: w.product, lot: lot as string, delegate: w.delegate, supervisor: users.organizer });
 
     const fit = async (c: Client, site: string, product: string | null, lot: string | null) =>
-      one(c, `select public.fit_component_v3(p_site => $1, p_type => 'healing_abutment', p_fitted_on => public.cairo_today(),
-                p_product => $2, p_lot => $3, p_by_delegate => null, p_by_organizer => $4, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null)`,
+      one(c, `select public.fit_component_v4(p_site => $1, p_type => 'healing_abutment', p_fitted_on => public.cairo_today(),
+                p_product => $2, p_lot => $3, p_by_delegate => null, p_by_organizer => $4, p_notes => '', p_course => null, p_torque => null, p_holds_component => null, p_holds_restoration => null, p_screw_size => null)`,
       [site, product, lot, users.admin]) as Promise<string>;
 
     const correct = (c: Client, site: string, lot: string | null, component: string | null, product: string | null, reason = 'lot found') =>

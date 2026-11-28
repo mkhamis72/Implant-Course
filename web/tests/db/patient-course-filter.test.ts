@@ -38,7 +38,7 @@ async function world(c: Client) {
 
 async function search(c: Client, args: { q?: string; stages?: string[]; course?: string | null; supervisor?: string | null }) {
   const { rows } = await c.query(
-    'select full_name from public.search_patients(q => $1, stages => $2, course => $3, supervisor => $4)',
+    'select full_name from public.patient_list_matches(q => $1, include_archived => false, stages => $2, course => $3, supervisor => $4) order by full_name',
     [args.q ?? 'Zz Filter', args.stages ?? [], args.course ?? null, args.supervisor ?? null],
   );
   return rows.map((r) => r.full_name as string);
@@ -72,13 +72,10 @@ describe('patient list: course and supervisor filters', () => {
     });
   });
 
-  it('keeps the earlier calls working (three arguments, positional)', async () => {
+  it('the old list searches are gone (0152): only the paged ones and the booking picker remain', async () => {
     await withTx(async (c) => {
-      await world(c);
-      const { rows } = await c.query('select full_name from public.search_patients($1, $2, $3)', ['Zz Filter Neither', false, []]);
-      expect(rows.map((r) => r.full_name)).toEqual(['Zz Filter Neither']);
-      const fns = await c.query("select count(*)::int as n from pg_proc where proname = 'search_patients'");
-      expect(fns.rows[0].n).toBe(1);
+      const { rows } = await c.query("select proname from pg_proc where pronamespace = 'public'::regnamespace and proname like 'search_patients%' order by proname");
+      expect(rows.map((r) => r.proname)).toEqual(['search_patients_count_v2', 'search_patients_v2', 'search_patients_v3']);
     });
   });
 });

@@ -250,13 +250,6 @@ describe('describeChange: restorations', () => {
 
 describe('describeChange: implant passports', () => {
   const base = { id: 1, at: '2026-11-24T10:00:00Z', actor: 'A' };
-  it('names the generated version', () => {
-    const p = { version: 2, medical_level: 'none', size_bytes: 1000 };
-    expect(describeChange({ ...base, table_name: 'patient_passports', action: 'INSERT', before: null, after: p }))
-      .toBe('Implant passport generated (version 2)');
-    expect(describeChange({ ...base, table_name: 'patient_passports', action: 'DELETE', before: p, after: null }))
-      .toBe('Implant passport deleted (version 2)');
-  });
   it('a browser-built passport (0150): its medical content', () => {
     expect(describeChange({ ...base, table_name: 'passport_generations', action: 'INSERT', before: null, after: { medical_level: 'full' } }))
       .toBe('Implant passport generated (Full medical summary)');
