@@ -257,6 +257,10 @@ describe('describeChange: implant passports', () => {
     expect(describeChange({ ...base, table_name: 'patient_passports', action: 'DELETE', before: p, after: null }))
       .toBe('Implant passport deleted (version 2)');
   });
+  it('a browser-built passport (0150): its medical content', () => {
+    expect(describeChange({ ...base, table_name: 'passport_generations', action: 'INSERT', before: null, after: { medical_level: 'full' } }))
+      .toBe('Implant passport generated (Full medical summary)');
+  });
 });
 
 describe('describeChange: full-arch cases', () => {

@@ -15,7 +15,7 @@ describe('middleware matcher', () => {
     expect(re.test(path)).toBe(true);
   });
 
-  it.each(['/file.svg', '/_next/static/chunk.js', '/_next/image', '/favicon.ico'])('skips %s', (path) => {
+  it.each(['/file.svg', '/_next/static/chunk.js', '/_next/image', '/favicon.ico', '/passport-fonts/NotoSans-Regular.ttf'])('skips %s', (path) => {
     expect(re.test(path)).toBe(false);
   });
 });

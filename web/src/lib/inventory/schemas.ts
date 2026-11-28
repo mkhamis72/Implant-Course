@@ -173,6 +173,7 @@ export const componentSchema = z
     torque: componentTorque,
     holdsComponentId: optionalUuid,
     holdsRestorationId: optionalUuid,
+    screwSizeId: optionalUuid,
     notes: text(1000),
   })
   .refine((c) => c.byDelegateId !== null || c.byOrganizerId !== null, { message: 'Choose who fitted the component.' })

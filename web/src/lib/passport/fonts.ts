@@ -1,8 +1,4 @@
-import path from 'node:path';
 import { Font } from '@react-pdf/renderer';
-
-// Bundled with the server (next.config.ts outputFileTracingIncludes); never fetched at render time.
-const FONT_DIR = path.join(process.cwd(), 'src', 'lib', 'passport', 'fonts');
 
 export const PASSPORT_FONT = 'Passport';
 export const PASSPORT_ARABIC_FONT = 'PassportArabic';
@@ -18,18 +14,24 @@ const FILES = [
   { fontWeight: 700, latin: 'NotoSans-Bold.ttf', arabic: 'IBMPlexSansArabic-Bold.ttf' },
 ] as const;
 
+/** The fonts are served by this site from public/passport-fonts/ (the middleware skips that folder). */
+const byUrl = (file: string) => `/passport-fonts/${file}`;
+
 let registered = false;
 
-/** Registers the passport fonts once per process. */
-export function registerPassportFonts(): void {
+/**
+ * Registers the passport fonts once. In the browser they are fetched from this site (`/passport-fonts/…`, allowed by
+ * the CSP's 'self'); the unit tests pass the same files' paths on disk.
+ */
+export function registerPassportFonts(src: (file: string) => string = byUrl): void {
   if (registered) return;
   Font.register({
     family: PASSPORT_FONT,
-    fonts: FILES.map((f) => ({ src: path.join(FONT_DIR, f.latin), fontWeight: f.fontWeight })),
+    fonts: FILES.map((f) => ({ src: src(f.latin), fontWeight: f.fontWeight })),
   });
   Font.register({
     family: PASSPORT_ARABIC_FONT,
-    fonts: FILES.map((f) => ({ src: path.join(FONT_DIR, f.arabic), fontWeight: f.fontWeight })),
+    fonts: FILES.map((f) => ({ src: src(f.arabic), fontWeight: f.fontWeight })),
   });
   // Words are never split with hyphens (names, reference codes).
   Font.registerHyphenationCallback((word) => [word]);

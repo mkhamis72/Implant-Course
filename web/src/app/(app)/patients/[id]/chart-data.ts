@@ -10,6 +10,7 @@ import { fetchAll } from '@/lib/catalog/fetch-all';
 import type { ChartData, ImplantSite, LotOnHand, Product } from '@/lib/inventory/types';
 import type { ToothState } from '@/lib/patients/types';
 import type { VisitRow } from '@/lib/visits/visits';
+import type { ScrewSize } from '@/lib/admin/screw-sizes';
 import type { Enrollment } from '@/lib/inventory/enrolled';
 import type { Radiograph } from '@/lib/radiographs/radiographs';
 import { CASE_STAGES, type FullArchCase } from '@/lib/full-arch/cases';
@@ -28,6 +29,7 @@ export const SITE_SELECT = `
   components:site_components(
     id, component_type, fitted_on, removed_on, notes, voided_at, voided_reason, stock_lot_id, course_id, created_at,
     torque_ncm, holds_component_id, holds_restoration_id, replaced_by,
+    screw_size:screw_sizes(label, driver_interface, driver_size, driver_ref, torque_ncm),
     product:products(*), lot:stock_lots(lot_no),
     fitted_by_delegate:delegates(full_name),
     fitted_by_organizer:profiles!site_components_fitted_by_organizer_id_fkey(full_name, email)
@@ -108,7 +110,7 @@ function allRows<T>(page: Parameters<typeof fetchAll<T>>[0]): Promise<{ data: T[
 export async function loadChartData(patientId: string): Promise<ChartData> {
   const supabase = await createClient();
   const me = await getCurrentProfile();
-  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors, cases] = await Promise.all([
+  const [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors, cases, screwSizes] = await Promise.all([
     supabase.from('tooth_status').select('tooth, status').eq('patient_id', patientId),
     supabase.from('implant_sites').select(SITE_SELECT).eq('patient_id', patientId).order('created_at'),
     // PostgREST caps a response at 1000 rows: page through products and stocked batches.
@@ -126,8 +128,9 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     supabase.from('doctors').select('id, name, user_id, active').eq('active', true).order('name'),
     // Closed cases too: they keep their record; newest first.
     supabase.from('full_arch_cases').select(CASE_SELECT).eq('patient_id', patientId).order('created_at', { ascending: false }),
+    supabase.from('screw_sizes').select('*').eq('active', true).order('label'),
   ]);
-  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors, cases]) {
+  for (const r of [statuses, sites, products, lots, delegates, organizers, supervisors, visits, restorations, courses, radiographs, enrollments, doctors, cases, screwSizes]) {
     if (r.error) throw new Error('Could not load the chart');
   }
   const siteList = await withPlannedProducts(supabase, ((sites.data ?? []) as unknown as ImplantSite[]).map(sortSite));
@@ -159,6 +162,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     doctors: (doctors.data ?? []) as ChartData['doctors'],
     spares,
     cases: toCases(cases.data),
+    screwSizes: (screwSizes.data ?? []) as ScrewSize[],
   };
 }
 

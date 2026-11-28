@@ -48,6 +48,7 @@ function CurrentParts({ site, restorations }: { site: ImplantSite; restorations:
             return (
               <li key={c.id} data-testid="current-part">
                 <span className="font-medium text-ink">{partLabel(c)}</span>
+                {c.screw_size && <span> · Size {c.screw_size.label}</span>}
                 {c.product && <span className="text-muted"> · {productLabel(c.product)}</span>}
                 {c.torque_ncm !== null && <span> · Torque: {c.torque_ncm} Ncm</span>}
                 {holder && <span> · {componentRole(c.component_type) === 'cap' ? 'on' : 'holds'} {holder}</span>}

@@ -6,6 +6,7 @@ import type { Attendance, VisitFindings, VisitRow } from '@/lib/visits/visits';
 import type { CourseOption, Restoration } from '@/lib/restorations/restorations';
 import type { Radiograph } from '@/lib/radiographs/radiographs';
 import type { FullArchCase } from '@/lib/full-arch/cases';
+import type { ScrewSize } from '@/lib/admin/screw-sizes';
 import type { Enrollment } from './enrolled';
 
 export const PRODUCT_TYPES = [
@@ -152,6 +153,8 @@ export type SiteComponent = {
   holds_restoration_id: string | null;
   /** The component that took this one's place. */
   replaced_by: string | null;
+  /** The screw size fitted (0149), embedded from screw_sizes; null when none was recorded. */
+  screw_size: Pick<ScrewSize, 'label' | 'driver_interface' | 'driver_size' | 'driver_ref' | 'torque_ncm'> | null;
   /** When it was recorded: orders parts fitted on the same day. */
   created_at?: string;
 };
@@ -262,4 +265,6 @@ export type ChartData = {
   doctors: { id: string; name: string; user_id: string | null; active: boolean }[];
   /** Spare implants of each planned site's booking for its tooth, by site id (0125): offered when placing. */
   spares?: Record<string, Product[]>;
+  /** Active screw sizes (Admin → Screw sizes, 0149): offered in the Component form for a screw. */
+  screwSizes?: ScrewSize[];
 };

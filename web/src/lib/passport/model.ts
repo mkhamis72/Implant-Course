@@ -38,10 +38,11 @@ export type PassportData = {
   /** Voided ones already left out. */
   restorations: Restoration[];
   cases: FullArchCase[];
-  branding: { name: string; logo: { bytes: Uint8Array; contentType: string } | null };
+  /** logo: a PNG or JPEG data URL (printableLogo), so the model travels as JSON. */
+  branding: { name: string; logo: string | null };
   /** The company's plan (Profile.features): lot numbers print only with Inventory. */
   features: Feature[];
-  /** passport_settings_current() at generation time; stored with the passport. */
+  /** passport_settings_current() at generation time (read when the passport is drawn, not kept). */
   medicalLevel: MedicalLevel;
 };
 
@@ -149,7 +150,35 @@ function medicalSection(h: PassportMedicalHistory | null, level: MedicalLevel): 
   return section(anything ? fields : []);
 }
 
+const isScrewRole = (c: SiteComponent) => {
+  const role = componentRole(c.component_type);
+  return role === 'abutment_screw' || role === 'prosthetic_screw';
+};
+
+/** A screw's fields: screwdriver and recommended torque from the product when it has them, else from the size. */
+function screwFields(c: SiteComponent, lotsOn: boolean): Field[] {
+  const p = c.product;
+  const z = c.screw_size;
+  const productDriver = !!p && [p.driver_interface, p.driver_size, p.driver_ref].some((v) => v && v.trim());
+  const driver = productDriver
+    ? driverOf(p)
+    : z ? text([z.driver_interface, z.driver_size, z.driver_ref].filter((v) => v && v.trim()).join(' · ')) : NR;
+  const torque = p?.torque_ncm != null ? p.torque_ncm : z?.torque_ncm;
+  const fields: Field[] = [
+    { label: L.product, value: p ? productLabel(p) : NR },
+    { label: L.refCode, value: text(p?.ref_code) },
+    { label: L.screwSize, value: text(z?.label) },
+    { label: L.driver, value: driver },
+    { label: L.recommendedTorque, value: ncm(torque) },
+    { label: L.actualTorque, value: ncm(c.torque_ncm) },
+    { label: L.fittedOn, value: date(c.fitted_on) },
+  ];
+  if (lotsOn) fields.push({ label: L.lot, value: text(c.lot?.lot_no) });
+  return fields;
+}
+
 function partFields(c: SiteComponent, lotsOn: boolean): Field[] {
+  if (isScrewRole(c)) return screwFields(c, lotsOn);
   const p = c.product;
   const fields: Field[] = [
     { label: L.product, value: p ? productLabel(p) : NR },
@@ -266,7 +295,7 @@ function restorationsSection(restorations: Restoration[], sites: ImplantSite[]):
   return { heading: L.restorationsHeading, items, empty: items.length ? null : L.noneRecorded };
 }
 
-function caseSection(c: FullArchCase, sites: ImplantSite[], restorations: Restoration[]): CaseDetail {
+function caseSection(c: FullArchCase, sites: ImplantSite[], restorations: Restoration[], lotsOn: boolean): CaseDetail {
   const caseSites = sites.filter((s) => s.case_id === c.id).sort((a, b) => archIndex(a.tooth) - archIndex(b.tooth));
   const bridges = caseBridges(c, sites, restorations);
   let finalBridge: string = NR;
@@ -286,14 +315,7 @@ function caseSection(c: FullArchCase, sites: ImplantSite[], restorations: Restor
     .filter((x) => !x.voided_at && x.removed_on === null && componentRole(x.component_type) === 'prosthetic_screw')
     .map((x) => ({
       name: `${s.tooth} · ${COMPONENT_LABELS[x.component_type]}`,
-      fields: [
-        { label: L.product, value: x.product ? productLabel(x.product) : NR },
-        { label: L.refCode, value: text(x.product?.ref_code) },
-        { label: L.driver, value: driverOf(x.product) },
-        { label: L.recommendedTorque, value: ncm(x.product?.torque_ncm) },
-        { label: L.actualTorque, value: ncm(x.torque_ncm) },
-        { label: L.fittedOn, value: date(x.fitted_on) },
-      ],
+      fields: screwFields(x, lotsOn),
     })));
   return {
     title: caseTitle(c),
@@ -316,8 +338,9 @@ function caseSection(c: FullArchCase, sites: ImplantSite[], restorations: Restor
 /**
  * The printable passport: every section, in print order, with "Not recorded" / "None recorded" filled in.
  * `generatedAt` is the generation time (a timestamp, printed as its Cairo date; a plain date is kept).
+ * `generationNo` is the count of passports generated for the patient, so far including this one (the "-3" in P00123-3).
  */
-export function passportModel(data: PassportData, generatedAt: string, version: number): PassportModel {
+export function passportModel(data: PassportData, generatedAt: string, generationNo: number): PassportModel {
   const lotsOn = featureOn(data.features, 'inventory');
   // Cancelled plans are not part of the record the patient carries.
   const sites = data.sites
@@ -339,7 +362,7 @@ export function passportModel(data: PassportData, generatedAt: string, version: 
       clinicName: data.branding.name,
       logo: data.branding.logo,
       title: L.title,
-      number: passportNumber(patient.file_no, version),
+      number: passportNumber(patient.file_no, generationNo),
       generatedOn: formatDate(cairoDate(generatedAt)),
     },
     patient: { heading: L.patientHeading, fields: patientFields },
@@ -393,7 +416,7 @@ export function passportModel(data: PassportData, generatedAt: string, version: 
     restorations: restorationsSection(restorations, sites),
     fullArch: {
       heading: L.fullArchHeading,
-      cases: cases.map((c) => caseSection(c, sites, restorations)),
+      cases: cases.map((c) => caseSection(c, sites, restorations, lotsOn)),
       empty: cases.length ? null : L.noneRecorded,
     },
     footer: { note: L.footer },

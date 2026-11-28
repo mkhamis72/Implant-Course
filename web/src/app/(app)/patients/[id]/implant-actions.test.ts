@@ -115,14 +115,14 @@ describe('correctPlacement in a clinic', () => {
 });
 
 describe('fitComponent', () => {
-  it('calls fit_component_v3 with the torque and what the screw holds', async () => {
+  it('calls fit_component_v4 with the torque, what the screw holds and its size', async () => {
     const r = await fitComponent({
       siteId: uuid(7), patientId: uuid(1), componentType: 'prosthetic_screw', fittedOn: '2026-01-10', productId: '', lotId: '',
-      byDelegateId: '', byOrganizerId: uuid(4), courseId: '', torque: '15', holdsComponentId: null, holdsRestorationId: uuid(9), notes: '',
+      byDelegateId: '', byOrganizerId: uuid(4), courseId: '', torque: '15', holdsComponentId: null, holdsRestorationId: uuid(9), notes: '', screwSizeId: uuid(8),
     });
     expect(r).toEqual({});
-    expect(rpc).toHaveBeenCalledWith('fit_component_v3', expect.objectContaining({
-      p_site: uuid(7), p_type: 'prosthetic_screw', p_torque: 15, p_holds_component: null, p_holds_restoration: uuid(9),
+    expect(rpc).toHaveBeenCalledWith('fit_component_v4', expect.objectContaining({
+      p_site: uuid(7), p_type: 'prosthetic_screw', p_torque: 15, p_holds_component: null, p_holds_restoration: uuid(9), p_screw_size: uuid(8),
     }));
   });
 });

@@ -48,7 +48,7 @@ describe('pageList', () => {
 });
 
 describe('pageHref', () => {
-  const filters = { q: 'ali & co', archived: '1', stages: ['missing', 'placed'], course: 'c1', supervisor: 's1' };
+  const filters = { q: 'ali & co', archived: '1', stages: ['missing', 'placed'], course: 'c1', supervisor: 's1', stagesNot: false, courseNot: false, supervisorNot: false };
 
   it('keeps every filter, including repeated stages, and the page', () => {
     const url = new URL(pageHref(filters, 3), 'http://x');
@@ -61,9 +61,18 @@ describe('pageHref', () => {
     expect(url.searchParams.get('page')).toBe('3');
   });
 
+  it('keeps the is-not flags on every page and omits them when off', () => {
+    const on = new URL(pageHref({ ...filters, stagesNot: true, courseNot: true, supervisorNot: true }, 2), 'http://x');
+    expect(on.searchParams.get('stage_not')).toBe('1');
+    expect(on.searchParams.get('course_not')).toBe('1');
+    expect(on.searchParams.get('supervisor_not')).toBe('1');
+    const off = new URL(pageHref(filters, 2), 'http://x');
+    expect(off.searchParams.has('stage_not') || off.searchParams.has('course_not') || off.searchParams.has('supervisor_not')).toBe(false);
+  });
+
   it('leaves out empty filters and page 1', () => {
-    expect(pageHref({ q: '', archived: '', stages: [], course: '', supervisor: '' }, 1)).toBe('/patients');
-    expect(pageHref({ q: 'x', archived: '', stages: [], course: '', supervisor: '' }, 2)).toBe('/patients?q=x&page=2');
+    expect(pageHref({ q: '', archived: '', stages: [], course: '', supervisor: '', stagesNot: false, courseNot: false, supervisorNot: false }, 1)).toBe('/patients');
+    expect(pageHref({ q: 'x', archived: '', stages: [], course: '', supervisor: '', stagesNot: false, courseNot: false, supervisorNot: false }, 2)).toBe('/patients?q=x&page=2');
   });
 });
 

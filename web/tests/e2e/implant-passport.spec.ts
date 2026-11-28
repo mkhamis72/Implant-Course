@@ -1,3 +1,4 @@
+import { readFile, writeFile } from 'node:fs/promises';
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import { TEST_USERS } from '../support/test-users';
 import { login } from './helpers';
@@ -10,21 +11,28 @@ async function signedIn(browser: Browser, email: string): Promise<Page> {
   return page;
 }
 
-const versions = (page: Page) => page.getByTestId('passport-version');
+const generations = (page: Page) => page.getByTestId('passport-generation');
 
-async function generate(page: Page, version: number) {
-  await page.getByRole('button', { name: 'Generate new passport' }).click();
-  await expect(page.getByText(`Passport version ${version} generated.`)).toBeVisible({ timeout: 30_000 });
-  // Server-derived: the refreshed list shows the stored version on top.
-  await expect(versions(page)).toHaveCount(version);
+/** Clicks Generate: the PDF is built in the browser and downloaded; returns its bytes and suggested name. */
+async function generate(page: Page): Promise<{ bytes: Buffer; name: string }> {
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 60_000 }),
+    page.getByRole('button', { name: 'Generate passport' }).click(),
+  ]);
+  const path = await download.path();
+  return { bytes: await readFile(path), name: download.suggestedFilename() };
 }
 
-test('implant passport: generate, download, versions, View-only and the medical setting', async ({ page, browser }) => {
-  test.setTimeout(120_000);
+const cairoToday = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+
+test('implant passport: a View-only user builds it in the browser; the log and the medical setting', async ({ page, browser }) => {
+  test.setTimeout(150_000);
   const admin = await apiAs(TEST_USERS.admin.email);
   try {
     await login(page, TEST_USERS.organizer.email);
-    const patientId = await createPatientViaUi(page, { full_name: uniqueName('Passport') });
+    // An Arabic name: shaped by the browser-side layout (checked visually in the task report).
+    const patientId = await createPatientViaUi(page, { full_name: `${uniqueName('Passport')} حسن علي` });
     const fileNo = (await page.getByTestId('patient-header').getByText(/^File /).textContent())!.replace(/^File /, '').trim();
 
     // The patient's tabs lead to the passport page.
@@ -32,65 +40,51 @@ test('implant passport: generate, download, versions, View-only and the medical 
     await expect(page).toHaveURL(`/patients/${patientId}/passport`);
     await expect(page.getByText('No passport generated yet.')).toBeVisible();
 
-    await generate(page, 1);
-    const first = versions(page).first();
-    await expect(first).toContainText(`${fileNo}-1`);
-    await expect(first).toContainText('Test Organizer');
-    await expect(first).toContainText('Allergies and medications only');
-    await expect(first).toContainText('Not downloaded yet');
-
-    // Download: the stored PDF as an attachment.
-    const link = first.getByRole('link', { name: `Download passport ${fileNo}-1` });
-    const [download] = await Promise.all([page.waitForEvent('download'), link.click()]);
-    expect(download.suggestedFilename()).toBe(`Implant passport ${fileNo}-1.pdf`);
-    const res = await page.request.get((await link.getAttribute('href'))!);
-    expect(res.status()).toBe(200);
-    expect(res.headers()['content-type']).toBe('application/pdf');
-    expect(res.headers()['cache-control']).toContain('no-store');
-    expect((await res.body()).subarray(0, 5).toString('latin1')).toBe('%PDF-');
-    await page.reload();
-    await expect(versions(page).first()).toContainText('Downloaded 2 times, last by Test Organizer');
-
-    await generate(page, 2);
-    await expect(versions(page).first()).toContainText(`${fileNo}-2`);
-    await expect(versions(page).nth(1)).toContainText(`${fileNo}-1`);
-
-    // View on Patients: download, no Generate.
+    // View on Patients is enough to generate.
     const viewer = await signedIn(browser, TEST_USERS.viewer.email);
+    const errors: string[] = [];
+    viewer.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     await viewer.goto(`/patients/${patientId}/passport`);
-    await expect(versions(viewer)).toHaveCount(2);
-    await expect(viewer.getByRole('link', { name: `Download passport ${fileNo}-2` })).toBeVisible();
-    await expect(viewer.getByRole('button', { name: 'Generate new passport' })).toHaveCount(0);
-    // …and the generate route refuses a View-only user as well.
-    const refused = await viewer.evaluate(async (url) => (await fetch(url, { method: 'POST' })).status,
-      `/patients/${patientId}/passport/generate`);
-    expect(refused).toBe(403);
-    await viewer.context().close();
+    const first = await generate(viewer);
+    expect(first.bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(first.name).toBe(`Implant passport ${fileNo} ${cairoToday()}.pdf`);
+    // Kept for a visual check when asked (PASSPORT_PDF_OUT=<file>).
+    if (process.env.PASSPORT_PDF_OUT) await writeFile(process.env.PASSPORT_PDF_OUT, first.bytes);
+    // Server-derived: the refreshed list shows the one generation.
+    await expect(generations(viewer)).toHaveCount(1);
+    await expect(generations(viewer).first()).toContainText('Test Viewer');
+    await expect(generations(viewer).first()).toContainText('Allergies and medications only');
+    await expect(viewer.getByRole('button', { name: 'Generate passport' })).toBeEnabled();
+    expect(errors.filter((e) => /Content Security Policy|Refused/i.test(e))).toEqual([]);
 
-    // The admin chooses Nothing medical: the next version is made with it, the stored ones keep theirs.
+    // A cross-site request for the data is refused.
+    const crossSite = await viewer.request.get(`/patients/${patientId}/passport/data`, { headers: { 'sec-fetch-site': 'cross-site' } });
+    expect(crossSite.status()).toBe(403);
+
+    // The admin chooses Nothing medical: the next passport is made with it, the log keeps the older one's.
     const adminPage = await signedIn(browser, TEST_USERS.admin.email);
     await adminPage.goto('/admin/settings');
     const medical = adminPage.getByRole('radiogroup', { name: 'Medical content' });
     await medical.getByRole('radio', { name: 'Nothing medical' }).check();
     await adminPage.getByRole('button', { name: 'Save passport settings' }).click();
     await expect(adminPage.getByText('Passport settings saved.')).toBeVisible();
-    await adminPage.reload();
-    await expect(adminPage.getByRole('radiogroup', { name: 'Medical content' }).getByRole('radio', { name: 'Nothing medical' })).toBeChecked();
     await adminPage.context().close();
 
-    await page.reload();
-    await generate(page, 3);
-    await expect(versions(page).first()).toContainText(`${fileNo}-3`);
-    await expect(versions(page).first()).toContainText('Nothing medical');
-    await expect(versions(page).nth(1)).toContainText('Allergies and medications only');
+    await viewer.reload();
+    const second = await generate(viewer);
+    expect(second.bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    await expect(generations(viewer)).toHaveCount(2);
+    await expect(generations(viewer).first()).toContainText('Nothing medical');
+    await expect(generations(viewer).nth(1)).toContainText('Allergies and medications only');
 
-    // A change to the record marks the latest version stale.
-    await expect(page.getByText('Records changed since this version')).toHaveCount(0);
+    // A change to the record marks the latest passport.
+    await expect(viewer.getByText('Records changed since this version')).toHaveCount(0);
     const api = await apiAs(TEST_USERS.organizer.email);
     const { error } = await api.from('patients').update({ dob: '1970-01-15' }).eq('id', patientId);
     expect(error).toBeNull();
-    await page.reload();
-    await expect(versions(page).first()).toContainText('Records changed since this version');
+    await viewer.reload();
+    await expect(generations(viewer).first()).toContainText('Records changed since this version');
+    await viewer.context().close();
   } finally {
     // The company default for the other specs.
     const { error } = await admin.rpc('set_passport_settings', { p_medical: 'allergies_medications' });

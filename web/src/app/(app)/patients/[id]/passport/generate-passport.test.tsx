@@ -1,44 +1,42 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const refresh = vi.fn();
+const { refresh, downloadPassport } = vi.hoisted(() => ({ refresh: vi.fn(), downloadPassport: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
+vi.mock('@/lib/passport/client', () => ({
+  downloadPassport, PASSPORT_FAILED: 'Could not generate the passport. Please try again.',
+}));
 import { GeneratePassport } from './generate-passport';
 
-const fetchMock = vi.fn();
-beforeEach(() => {
-  vi.clearAllMocks();
-  vi.stubGlobal('fetch', fetchMock);
-});
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => vi.clearAllMocks());
 
 describe('GeneratePassport', () => {
-  it('posts to the generate route, is disabled while it runs, then refreshes the list', async () => {
-    let answer!: (r: Response) => void;
-    fetchMock.mockReturnValue(new Promise<Response>((r) => { answer = r; }));
+  it('shows "Preparing…" while the passport is built, then re-enables and refreshes the list', async () => {
+    let done!: () => void;
+    downloadPassport.mockReturnValue(new Promise<void>((r) => { done = r; }));
     render(<GeneratePassport patientId="pat-1" />);
-    await userEvent.click(screen.getByRole('button', { name: 'Generate new passport' }));
-    expect(fetchMock).toHaveBeenCalledWith('/patients/pat-1/passport/generate', { method: 'POST' });
-    expect(screen.getByRole('button', { name: 'Generating…' })).toBeDisabled();
-    answer(Response.json({ ok: true, version: 2 }));
-    expect(await screen.findByText('Passport version 2 generated.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Generate passport' }));
+    expect(downloadPassport).toHaveBeenCalledWith('pat-1');
+    expect(screen.getByRole('button', { name: 'Preparing…' })).toBeDisabled();
+    done();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Generate passport' })).toBeEnabled());
     expect(refresh).toHaveBeenCalled();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Generate new passport' })).toBeEnabled());
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it("shows the route's message on a refusal and does not refresh", async () => {
-    fetchMock.mockResolvedValue(Response.json({ error: 'The passport is too large to store.' }, { status: 400 }));
+  it('shows the error in an alert and re-enables the button', async () => {
+    downloadPassport.mockRejectedValue(new Error('Patient not found.'));
     render(<GeneratePassport patientId="pat-1" />);
-    await userEvent.click(screen.getByRole('button', { name: 'Generate new passport' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('The passport is too large to store.');
-    expect(refresh).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Generate passport' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Patient not found.');
+    expect(screen.getByRole('button', { name: 'Generate passport' })).toBeEnabled();
   });
 
-  it('a network failure or an unreadable answer shows the generic message', async () => {
-    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+  it('a failure without a message (a chunk that did not load) gives the generic message', async () => {
+    downloadPassport.mockRejectedValue('boom');
     render(<GeneratePassport patientId="pat-1" />);
-    await userEvent.click(screen.getByRole('button', { name: 'Generate new passport' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Generate passport' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not generate the passport. Please try again.');
   });
 });

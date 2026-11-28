@@ -30,8 +30,9 @@ const failed = (): never => {
  * Everything one patient's passport prints, read with the signed-in user's own client (RLS: the caller's company and
  * Patients view). The selects and shaping are the chart's (chart-data.ts), so the passport shows what the chart shows.
  * A patient's implants, restorations and cases stay far below PostgREST's 1000-row cap, as on the chart.
+ * Null when the patient is not found (or not readable).
  */
-export async function loadPassportData(patientId: string): Promise<PassportData> {
+export async function loadPassportData(patientId: string): Promise<PassportData | null> {
   const supabase = await createClient();
   const [me, branding, { companyId }] = await Promise.all([getCurrentProfile(), getBranding(), currentTenant()]);
   const [patient, history, sites, restorations, cases, level, logo] = await Promise.all([
@@ -45,7 +46,7 @@ export async function loadPassportData(patientId: string): Promise<PassportData>
   ]);
   // The logo is optional: if it cannot be read the passport prints without it (as the app falls back to no logo).
   for (const r of [patient, history, sites, restorations, cases, level]) if (r.error) failed();
-  if (!patient.data) failed();
+  if (!patient.data) return null;
 
   const siteList = await withPlannedProducts(supabase, ((sites.data ?? []) as unknown as ImplantSite[]).map(sortSite));
   const medicalLevel = (MEDICAL_LEVELS as readonly string[]).includes(level.data as string)

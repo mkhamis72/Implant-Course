@@ -93,9 +93,9 @@ export function CatalogueForm({ group }: { group: CatalogGroup }) {
         const liveOn = brandRows.filter((r) => !r.retired && isOn(r)).length;
         return (
           <section key={brand.brand} className="card space-y-3">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <TickBox label={brand.brand} tick={tickOf(shownRows)} onToggle={() => toggleAll(shownRows)} />
-              <h2 className="grow text-base font-semibold">{brand.brand}</h2>
+              <h2 className="min-w-0 grow break-words text-base font-semibold">{brand.brand}</h2>
               <span className="text-sm text-muted">{liveOn} of {brand.total} on</span>
               {!q && (
                 <button type="button" className="btn-secondary btn" aria-expanded={expanded}
@@ -110,15 +110,15 @@ export function CatalogueForm({ group }: { group: CatalogGroup }) {
               const shownSysRows = rowsOf(system.platforms);
               return (
                 <div key={system.system} className="space-y-2 border-t border-line pt-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <TickBox label={system.system || 'No system'} tick={tickOf(shownSysRows)} onToggle={() => toggleAll(shownSysRows)} />
-                    <h3 className="grow font-medium">{system.system || 'No system'}</h3>
+                    <h3 className="min-w-0 grow break-words font-medium">{system.system || 'No system'}</h3>
                     <span className="text-sm text-muted">{sysRows.filter((r) => !r.retired && isOn(r)).length} of {full.total} on</span>
                   </div>
                   {system.platforms.map((platform) => {
                     const platRows = platform.types.flatMap((t) => t.rows);
                     return (
-                    <div key={platform.platform} className="space-y-1 pl-8">
+                    <div key={platform.platform} className="space-y-1 pl-3 sm:pl-8">
                       {platform.platform && (
                         <div className="flex items-center gap-2">
                           <TickBox label={platform.platform} tick={tickOf(platRows)} onToggle={() => toggleAll(platRows)} />
@@ -130,11 +130,11 @@ export function CatalogueForm({ group }: { group: CatalogGroup }) {
                           <legend className="text-xs uppercase text-muted">{PRODUCT_TYPE_LABELS[t.type]}</legend>
                           {t.rows.map((r) => (
                             <div key={r.itemId} className="flex flex-wrap items-center gap-2 py-1">
-                              <label className="flex items-center gap-2">
+                              <label className="flex min-w-0 items-center gap-2">
                                 <input type="checkbox" className="size-5 shrink-0" checked={isOn(r)}
                                   disabled={r.retired && !isOn(r)}
                                   onChange={() => setItems((m) => ({ ...m, [r.itemId]: !isOn(r) }))} />
-                                <span>{r.label}</span> <span className="text-sm text-muted">{r.refCode}</span>
+                                <span className="min-w-0 break-words">{r.label} <span className="text-sm text-muted">{r.refCode}</span></span>
                               </label>
                               {r.retired && <span className="badge badge-warn">No longer in the catalogue</span>}
                             </div>

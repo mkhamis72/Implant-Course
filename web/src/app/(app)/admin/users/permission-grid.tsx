@@ -22,7 +22,7 @@ export function PermissionGrid({ userId, permissions, features }: { userId: stri
       <div key={JSON.stringify(permissions)} className="space-y-1">
         {AREAS.filter((a) => areaOn(features, a)).map((area) => (
           <fieldset key={area} className="flex flex-wrap items-center gap-x-3 text-sm">
-            <legend className="float-left w-24 font-medium">{AREA_LABELS[area]}</legend>
+            <legend className="w-full font-medium sm:float-left sm:w-24">{AREA_LABELS[area]}</legend>
             {LEVELS.map((l) => (
               <label key={l.value} className="flex items-center gap-1">
                 <input type="radio" name={`perm_${area}`} value={l.value} defaultChecked={(permissions[area] ?? 'none') === l.value} />
