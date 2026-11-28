@@ -8,6 +8,7 @@ export function adminNavItems(features: readonly Feature[]): { href: string; lab
     { href: '/admin/chairs', label: 'Chairs' },
     { href: '/admin/doctors', label: 'Doctors' },
     { href: '/admin/catalogue', label: 'Catalogue' },
+    { href: '/admin/screw-sizes', label: 'Screw sizes' },
     ...(teachingOn(features)
       ? [
           { href: '/admin/supervisors', label: 'Supervisors' },

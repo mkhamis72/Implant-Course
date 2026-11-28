@@ -297,6 +297,8 @@ describe('permissions: guard rails', () => {
         'save_catalogue',
         // Implant passport (0145): the company's medical-content setting; admin-only, no area.
         'set_passport_settings',
+        // Screw sizes (0148): admin-only writers, no area.
+        'save_screw_size', 'set_screw_size_active',
       ]);
       expect(rows.map((r) => r.proname).filter((n) => !allow.has(n)).sort()).toEqual([]);
     });

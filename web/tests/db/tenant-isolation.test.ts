@@ -144,6 +144,7 @@ async function seedCompany(c: Client, key: 'A' | 'B'): Promise<Company> {
   await c.query(`insert into public.patient_passport_files (passport_id, bytes) values ($1, '\\x255044462d')`, [r.patient_passports]);
   r.passport_downloads = await one(c, 'insert into public.passport_downloads (passport_id) values ($1) returning id', [r.patient_passports]);
   await c.query(`insert into public.passport_settings (medical) values ('full') on conflict do nothing`);
+  await c.query(`insert into public.screw_sizes (brand, system, kind, label) values ('Zz Brand', 'Zz System', 'abutment_screw', 'M1.6')`);
   await c.query(`insert into public.visit_notes (patient_id, text) values ($1, $2)`, [r.patients, `${marker} note`]);
   r.studies = await one(c, `insert into public.studies (title) values ($1) returning id`, [`${marker} Study`]);
   await c.query('insert into public.study_courses (study_id, course_id) values ($1, $2)', [r.studies, r.courses]);
