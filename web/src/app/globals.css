@@ -361,6 +361,10 @@
     content: attr(data-label);
     color: var(--color-muted);
   }
+  /* Every child sits in the value column (below the label), unless it is deliberately full width. */
+  .table td[data-label] > :not(.col-span-full) {
+    grid-column: 2;
+  }
   .table td:not([data-label]) {
     grid-template-columns: 1fr;
   }

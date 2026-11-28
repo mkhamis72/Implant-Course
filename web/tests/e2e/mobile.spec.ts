@@ -112,6 +112,21 @@ test('admin pages fit the phone screen, with a long email and the Change email p
       const wide = await page.evaluate(() =>
         [...document.querySelectorAll('.card')].filter((c) => c.scrollWidth > c.clientWidth + 1).map((c) => (c.textContent ?? '').slice(0, 40)));
       expect(wide, `${page.url()} has cards that scroll sideways`).toEqual([]);
+      // Stacked table cells: a child outside the label column's value column (and not deliberately full width) is squeezed into it.
+      const squeezed = await page.evaluate(() => {
+        const out: string[] = [];
+        for (const td of document.querySelectorAll('.table td[data-label]')) {
+          const left = td.getBoundingClientRect().left;
+          for (const child of td.children) {
+            const r = child.getBoundingClientRect();
+            const cs = getComputedStyle(child);
+            if (r.width === 0 || r.height === 0 || (cs.gridColumnStart === '1' && cs.gridColumnEnd === '-1')) continue;
+            if (r.left < left + 100) out.push(`${td.getAttribute('data-label')}: ${(child.textContent ?? '').slice(0, 30)}`);
+          }
+        }
+        return out;
+      });
+      expect(squeezed, `${page.url()} has cell content in the label column`).toEqual([]);
     };
     await page.goto('/admin/users');
     const row = page.getByTestId(`user-row-${email}`);
@@ -128,9 +143,13 @@ test('admin pages fit the phone screen, with a long email and the Change email p
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       await expectNoSideways(page);
       await cardsFit();
-      
     }
   } finally {
     await (await nodeAuth()).admin.deleteUser(ACADEMY_COMPANY_ID, userId).catch(() => {});
+    await withPg(async (pg) => {
+      await pg.query('delete from public.company_members where user_id = $1', [userId]).catch(() => {});
+      await pg.query('delete from public.profiles where user_id = $1', [userId]).catch(() => {});
+      await pg.query('delete from app_private.pending_logins where email = $1', [email]).catch(() => {});
+    });
   }
 });
