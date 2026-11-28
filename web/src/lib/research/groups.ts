@@ -5,9 +5,12 @@ import { TECHNIQUE_LABELS } from '@/lib/inventory/types';
 import { logRank, thinData } from './stats';
 import { MILESTONE_DAYS, kmEstimate, type ImplantRow } from './summary';
 import { DAYS_PER_MONTH } from '@/lib/dates';
+import { IMPLANT_TYPES, IMPLANT_TYPE_LABELS } from '@/lib/inventory/types';
+import { CONFIGURATIONS, CONFIGURATION_LABELS } from '@/lib/full-arch/cases';
+import type { RehabVars } from './rehab';
 
 
-export const COMPARE_KEYS = ['brand', 'technique', 'loading', 'smoking', 'diabetes', 'periodontitis', 'bone_type'] as const;
+export const COMPARE_KEYS = ['brand', 'technique', 'loading', 'smoking', 'diabetes', 'periodontitis', 'bone_type', 'implant_type', 'case_type', 'zyg_vs_tilted'] as const;
 export type CompareKey = (typeof COMPARE_KEYS)[number];
 
 export const COMPARE_LABELS: Record<CompareKey, string> = {
@@ -18,6 +21,9 @@ export const COMPARE_LABELS: Record<CompareKey, string> = {
   diabetes: 'Diabetes',
   periodontitis: 'Periodontitis history',
   bone_type: 'Bone type',
+  implant_type: 'Implant type',
+  case_type: 'Full-arch case type',
+  zyg_vs_tilted: 'Zygomatic vs tilted (All-on-4)',
 };
 
 export function isCompareKey(v: string | undefined): v is CompareKey {
@@ -26,7 +32,12 @@ export function isCompareKey(v: string | undefined): v is CompareKey {
 
 /** Comparisons that need implant_outcomes_groups (brand and loading come from the detail rows). */
 export function needsGroupVars(key: CompareKey | null): boolean {
-  return key !== null && key !== 'brand' && key !== 'loading';
+  return key !== null && key !== 'brand' && key !== 'loading' && !needsRehabVars(key);
+}
+
+/** Comparisons that need implant_rehab_vars (implant type and the implant's full-arch case). */
+export function needsRehabVars(key: CompareKey | null): boolean {
+  return key === 'implant_type' || key === 'case_type' || key === 'zyg_vs_tilted';
 }
 
 /** One row of implant_outcomes_groups (0071); null = not recorded. */
@@ -49,6 +60,26 @@ export type GroupableRow = ImplantRow & {
 
 export type Group<R> = { label: string; rows: R[]; notAssessed: boolean };
 
+const ZYG = 'Zygomatic';
+const TILTED_AO4 = 'Tilted in All-on-4';
+/** The zygomatic-vs-tilted label of an implant, or null when it belongs to neither group. */
+function zygVsTiltedLabel(r: RehabVars | undefined): string | null {
+  if (r?.implant_type === 'zygomatic') return ZYG;
+  if (r?.implant_type === 'tilted' && r.case_configuration === 'all_on_4') return TILTED_AO4;
+  return null;
+}
+
+/** The note under the Zygomatic vs tilted table. */
+export const zygVsTiltedLeftOutNote = (n: number) => n === 1
+  ? '1 implant that is neither zygomatic nor tilted in an All-on-4 case is left out.'
+  : `${n} implants that are neither zygomatic nor tilted in an All-on-4 case are left out.`;
+
+/** How many implants the Zygomatic vs tilted comparison leaves out (neither group). */
+export function zygVsTiltedLeftOut(rows: GroupableRow[], rehab: RehabVars[]): number {
+  const vars = new Map(rehab.map((g) => [g.site_id, g]));
+  return rows.filter((r) => zygVsTiltedLabel(vars.get(r.site_id)) === null).length;
+}
+
 const YES_NO: [string, string][] = [['no', 'No'], ['yes', 'Yes']];
 const BY_VARIABLE: Record<'technique' | 'smoking' | 'diabetes' | 'periodontitis' | 'bone_type', { field: keyof GroupVars; values: [string, string][] }> = {
   technique: { field: 'technique', values: Object.entries(TECHNIQUE_LABELS) },
@@ -63,8 +94,9 @@ const BY_VARIABLE: Record<'technique' | 'smoking' | 'diabetes' | 'periodontitis'
  * product for brand) is its own last group with `notAssessed`: shown, but never in the test. Brand groups are
  * `brand · line` when every implant has the same brand. Loading follows the part-3 rule; "Not loaded" is a group.
  */
-export function groupRows<R extends GroupableRow>(rows: R[], groups: GroupVars[], key: CompareKey): Group<R>[] {
+export function groupRows<R extends GroupableRow>(rows: R[], groups: GroupVars[], key: CompareKey, rehab: RehabVars[] = []): Group<R>[] {
   const vars = new Map(groups.map((g) => [g.site_id, g]));
+  const rehabOf = new Map(rehab.map((g) => [g.site_id, g]));
   let order: string[];
   let labelOf: (r: R) => string | null;
   let missing = 'Not assessed';
@@ -77,6 +109,19 @@ export function groupRows<R extends GroupableRow>(rows: R[], groups: GroupVars[]
   } else if (key === 'loading') {
     labelOf = (r) => (r.loaded_on ? LOADING_LABELS[loadingFrom(r.placed_on, r.loaded_on)] : 'Not loaded');
     order = [...Object.values(LOADING_LABELS), 'Not loaded'];
+  } else if (key === 'implant_type') {
+    labelOf = (r) => { const t = rehabOf.get(r.site_id)?.implant_type; return t ? IMPLANT_TYPE_LABELS[t] : null; };
+    order = IMPLANT_TYPES.map((t) => IMPLANT_TYPE_LABELS[t]);
+    missing = 'Not recorded';
+  } else if (key === 'case_type') {
+    const NONE = 'Not in a case';
+    labelOf = (r) => { const c = rehabOf.get(r.site_id)?.case_configuration; return c ? CONFIGURATION_LABELS[c] : NONE; };
+    order = [...CONFIGURATIONS.map((c) => CONFIGURATION_LABELS[c]), NONE];
+  } else if (key === 'zyg_vs_tilted') {
+    const kept = rows.filter((r) => zygVsTiltedLabel(rehabOf.get(r.site_id)) !== null);
+    return [ZYG, TILTED_AO4]
+      .map((label) => ({ label, rows: kept.filter((r) => zygVsTiltedLabel(rehabOf.get(r.site_id)) === label), notAssessed: false }))
+      .filter((g) => g.rows.length > 0);
   } else {
     const { field, values } = BY_VARIABLE[key];
     const labels = new Map(values);

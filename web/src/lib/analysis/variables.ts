@@ -2,12 +2,15 @@
 // to a reader means adding one entry here. Kinds drive the chart and test choice (choose.ts).
 
 import { FLAP_LABELS, HEALING_LABELS, PHENOTYPE_LABELS, PLACEMENT_TIMING_LABELS, YES_NO_LABELS } from '@/lib/implants/surgery'
-import { TECHNIQUE_LABELS } from '@/lib/inventory/types'
+import {
+  ANCHORAGE_LABELS, ANGULATION_DIRECTION_LABELS, IMPLANT_TYPE_LABELS, TECHNIQUE_LABELS,
+} from '@/lib/inventory/types'
+import { CONFIGURATION_LABELS } from '@/lib/full-arch/cases'
 import { BONE_TYPES } from '@/lib/inventory/schemas'
 import type { ImplantRow, Measure } from './rows'
 
 export type Kind = 'categorical' | 'binary' | 'ordinal' | 'continuous' | 'count' | 'survival' | 'longitudinal'
-export type Group = 'Patient' | 'Implant' | 'Site' | 'Surgical' | 'People' | 'Outcome'
+export type Group = 'Patient' | 'Implant' | 'Site' | 'Surgical' | 'Full arch' | 'People' | 'Outcome'
 export type Level = { value: string; label: string }
 
 export type Variable = {
@@ -90,6 +93,16 @@ export const VARIABLES: Variable[] = [
   factor({ key: 'keratinized', label: 'Keratinized mucosa', group: 'Surgical', kind: 'continuous', unit: 'mm', get: (r) => r.keratinized_mucosa_mm }),
   factor({ key: 'flap', label: 'Flap', group: 'Surgical', kind: 'categorical', levels: fromLabels(FLAP_LABELS), get: (r) => r.flap }),
   factor({ key: 'healing', label: 'Healing', group: 'Surgical', kind: 'categorical', levels: fromLabels(HEALING_LABELS), get: (r) => r.healing }),
+
+  factor({ key: 'implant_type', label: 'Implant type', group: 'Full arch', kind: 'categorical', levels: fromLabels(IMPLANT_TYPE_LABELS),
+    get: (r) => r.implant_type }),
+  factor({ key: 'angulation', label: 'Implant angulation', group: 'Full arch', kind: 'continuous', unit: '°', get: (r) => r.angulation_deg }),
+  factor({ key: 'tilt_direction', label: 'Tilt direction', group: 'Full arch', kind: 'categorical', levels: fromLabels(ANGULATION_DIRECTION_LABELS),
+    get: (r) => r.angulation_direction }),
+  factor({ key: 'anchorage', label: 'Anchorage', group: 'Full arch', kind: 'categorical', levels: fromLabels(ANCHORAGE_LABELS),
+    get: (r) => r.anchorage }),
+  factor({ key: 'case_type', label: 'Full-arch case type', group: 'Full arch', kind: 'categorical', levels: fromLabels(CONFIGURATION_LABELS),
+    get: (r) => r.case_configuration }),
 
   factor({ key: 'delegate', label: 'Placing delegate', group: 'People', kind: 'categorical', dynamicLevels: true, get: (r) => r.placing_delegate_id }),
   factor({ key: 'supervisor', label: 'Supervisor', group: 'People', kind: 'categorical', dynamicLevels: true, get: (r) => r.supervisor_id }),

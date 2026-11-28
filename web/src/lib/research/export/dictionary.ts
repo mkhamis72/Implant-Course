@@ -1,4 +1,7 @@
-import { TECHNIQUE_LABELS, OUTCOME_LABELS } from '@/lib/inventory/types';
+import {
+  ANCHORAGE_LABELS, ANGULATION_DIRECTION_LABELS, IMPLANT_TYPE_LABELS, OUTCOME_LABELS, TECHNIQUE_LABELS,
+} from '@/lib/inventory/types';
+import { ARCH_LABELS, CASE_STATUS_LABELS, CONFIGURATION_LABELS } from '@/lib/full-arch/cases';
 import {
   FLAP_LABELS, GRAFT_MATERIAL_LABELS, GRAFT_PROCEDURE_LABELS, GRAFT_TIMING_LABELS, HEALING_LABELS, MEMBRANE_LABELS,
   PHENOTYPE_LABELS, PLACEMENT_TIMING_LABELS, TORQUE_TYPE_LABELS, YES_NO_LABELS,
@@ -17,6 +20,7 @@ import { RESEARCH_CONSENT_LABELS } from '@/lib/research/consent';
 
 export const TABLE_NAMES = [
   'implants', 'patients', 'visits', 'radiographs', 'complications', 'restorations', 'restoration_problems', 'grafts',
+  'full_arch_cases',
 ] as const;
 export type TableName = (typeof TABLE_NAMES)[number];
 
@@ -111,6 +115,13 @@ const IMPLANT_DICTIONARY: Record<string, DictionaryEntry> = {
   biological_complications: num('Biological complications', 'complications', CALC, outcome('count of non-voided biological complications.')),
   mechanical_complications: num('Mechanical complications', 'complications', CALC, outcome('count of non-voided mechanical complications.')),
   version: { label: 'Outcome rule version', kind: 'code', source: CALC, notes: `Identifies the rules used for every calculated column; currently ${OUTCOMES}.` },
+  // Merged from research_export_implant_rehab by implant_code (MERGED_COLUMNS).
+  implant_type: coded('Implant type', labels(IMPLANT_TYPE_LABELS), IMPLANT, 'Set from the product\'s implant kind at placement; tilted is recorded by the clinician. Empty on older records.'),
+  angulation_deg: num('Implant angulation', '°', IMPLANT, 'Recorded angle, 0 to 60. Empty when not recorded.'),
+  angulation_direction: coded('Angulation direction', labels(ANGULATION_DIRECTION_LABELS), IMPLANT, 'For conventional and tilted implants, where the implant head tilts. Empty when not recorded.'),
+  anchorage: coded('Anchorage', labels(ANCHORAGE_LABELS), IMPLANT, 'For zygomatic and pterygoid implants. Empty when not recorded. The entry point and trajectory are free text and are not exported.'),
+  case_code: code('Full-arch case study code', 'Full-arch case', `${STUDY_CODE} Prefix A-. The implant's current case (see the full_arch_cases table); empty when the implant is in no case.`),
+  case_configuration: coded('Full-arch case type', labels(CONFIGURATION_LABELS), 'Full-arch case', 'The configuration of the implant\'s current case. Empty when the implant is in no case.'),
 };
 
 const PATIENTS_DICTIONARY: Record<string, DictionaryEntry> = {
@@ -232,6 +243,26 @@ const GRAFTS_DICTIONARY: Record<string, DictionaryEntry> = {
   membrane: coded('Membrane', labels(MEMBRANE_LABELS), GRAFT),
 };
 
+const CASE = 'Full-arch case';
+const CASE_CALC = 'Calculated from the case\'s implants and bridges';
+const STAGE = (stage: string) => date(`${stage} date`, 'Full-arch case stage', 'The latest date the stage was recorded as done. Empty when not recorded. Lab, occlusion and notes are not exported.');
+const FULL_ARCH_CASES_DICTIONARY: Record<string, DictionaryEntry> = {
+  case_code: code('Full-arch case study code', CASE, `${STUDY_CODE} Prefix A-. One row per case with at least one exported implant.`),
+  patient_code: code('Patient study code', CASE, `${STUDY_CODE} Prefix P-.`),
+  arch: coded('Arch', labels(ARCH_LABELS), CASE),
+  configuration: coded('Case type', labels(CONFIGURATION_LABELS), CASE),
+  status: coded('Case status', labels(CASE_STATUS_LABELS), CASE_CALC, 'Closed when the case was closed; completed when current final bridges cover every placed or restored implant of the case (failed implants are not needed); in treatment once an implant is placed; otherwise planned. The case name, notes and close reason are free text and are not exported.'),
+  first_placed_on: date('First placement date', CASE_CALC, 'The earliest placement date among the case\'s implants.'),
+  final_bridge_on: date('Final bridge date', CASE_CALC, 'The fitting date of the latest current final bridge, once the final bridges cover the case. Empty until then.'),
+  closed_on: date('Date the case was closed', CASE, 'Cairo date. Empty while the case is open.'),
+  scan_on: STAGE('Scan / impression'),
+  lab_design_on: STAGE('Lab and design approval'),
+  try_in_on: STAGE('Try-in'),
+  implants_placed: num('Implants placed', 'implants', CASE_CALC, 'Implants of the case that are placed, restored or failed, whatever the export filters.'),
+  implants_failed: num('Implants failed', 'implants', CASE_CALC, 'Implants of the case recorded as failed.'),
+  bridge_problems: num('Bridge problems', 'problems', CASE_CALC, 'Non-voided problems on the case\'s non-voided restorations.'),
+};
+
 /** The data dictionary and the column allowlist of the research export: a reader column without an entry here is refused. */
 export const DICTIONARY: Record<TableName, Record<string, DictionaryEntry>> = {
   implants: IMPLANT_DICTIONARY,
@@ -242,6 +273,7 @@ export const DICTIONARY: Record<TableName, Record<string, DictionaryEntry>> = {
   restorations: RESTORATIONS_DICTIONARY,
   restoration_problems: RESTORATION_PROBLEMS_DICTIONARY,
   grafts: GRAFTS_DICTIONARY,
+  full_arch_cases: FULL_ARCH_CASES_DICTIONARY,
 };
 
 /** Columns that name a course, delegate or supervisor: a clinic has none of them, so its export leaves them out. */
@@ -258,18 +290,47 @@ export function dictionaryFor(teaching: boolean): Record<TableName, Record<strin
   )])) as Record<TableName, Record<string, DictionaryEntry>>;
 }
 
-/** Columns added to a table from another reader (research_export_consent), merged by patient_code: not reader columns. */
-export const MERGED_COLUMNS: Partial<Record<TableName, string[]>> = { patients: ['research_consent'] };
+/**
+ * Columns added to a table from another reader, merged by the table's study code: research_consent from
+ * research_export_consent by patient_code, the implant type, geometry and case from research_export_implant_rehab
+ * (0146) by implant_code. Not reader columns.
+ */
+export const MERGED_COLUMNS: Partial<Record<TableName, string[]>> = {
+  patients: ['research_consent'],
+  implants: ['implant_type', 'angulation_deg', 'angulation_direction', 'anchorage', 'case_code', 'case_configuration'],
+};
+
+/** Columns computed in TS from the reader's rows (fullArchExportRows, src/lib/research/full-arch.ts): not reader columns. */
+export const DERIVED_COLUMNS: Partial<Record<TableName, string[]>> = { full_arch_cases: ['status', 'final_bridge_on'] };
+
+/** Reader columns that only feed DERIVED_COLUMNS and carry raw row ids: removed before the allowlist check, never written. */
+export const DROPPED_COLUMNS: Partial<Record<TableName, string[]>> = { full_arch_cases: ['sites', 'bridges'] };
+
+/** The columns of a table's own reader that go into the file (dictionary order; merged and derived ones left out). */
+export function readerColumns(table: TableName): string[] {
+  const added = [...(MERGED_COLUMNS[table] ?? []), ...(DERIVED_COLUMNS[table] ?? [])];
+  return Object.keys(DICTIONARY[table]).filter((c) => !added.includes(c));
+}
+
+/** Adds `columns` from `extra` to each row, matched on `key`; null when `extra` has no row for it. Other columns of `extra` are ignored. */
+export function mergeColumns(
+  rows: Record<string, unknown>[], extra: Record<string, unknown>[], key: string, columns: string[],
+): Record<string, unknown>[] {
+  const byKey = new Map(extra.map((r) => [r[key], r]));
+  return rows.map((row) => {
+    const match = byKey.get(row[key]);
+    return { ...row, ...Object.fromEntries(columns.map((c) => [c, match?.[c] ?? null])) };
+  });
+}
 
 const DATE_FIRST: Partial<Record<TableName, string>> = {
   implants: 'placed_on', visits: 'date', radiographs: 'taken_on', complications: 'noticed_on',
-  restorations: 'fitted_on', restoration_problems: 'noticed_on', grafts: 'performed_on',
+  restorations: 'fitted_on', restoration_problems: 'noticed_on', grafts: 'performed_on', full_arch_cases: 'first_placed_on',
 };
 
 /** The paging order of a table's reader: its date column first (so files read chronologically), then every other reader column, so the order is total. */
 export function exportOrder(table: TableName): string[] {
-  const merged = MERGED_COLUMNS[table] ?? [];
-  const cols = Object.keys(DICTIONARY[table]).filter((c) => !merged.includes(c));
+  const cols = readerColumns(table);
   const first = DATE_FIRST[table];
   return first ? [first, ...cols.filter((c) => c !== first)] : cols;
 }

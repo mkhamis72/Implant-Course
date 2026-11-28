@@ -6,6 +6,7 @@ export function statisticsTabs(role: Profile['role'], teaching: boolean): { href
     { href: '/statistics', label: 'Results' },
     { href: '/statistics/explore', label: 'Explore' },
     ...(teaching ? [{ href: '/statistics/courses', label: 'Courses' }] : []),
+    { href: '/statistics/full-arch', label: 'Full arch' },
     { href: '/statistics/studies', label: 'Studies' },
     ...(role === 'admin' ? [{ href: '/statistics/exports', label: 'Recent exports' }] : []),
   ];

@@ -46,6 +46,12 @@ export type ImplantRow = {
   mechanical_complications: number
   restoration_problems: number
   final_restoration_on: string | null
+  // Merged from implant_rehab_vars (0146); null when absent.
+  implant_type: string | null
+  angulation_deg: number | null
+  angulation_direction: string | null
+  anchorage: string | null
+  case_configuration: string | null
 }
 
 export type VisitRow = {

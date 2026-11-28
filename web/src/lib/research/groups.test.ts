@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { compareGroups, groupRows, groupSummary, isCompareKey, thinWarning, type GroupVars } from './groups';
+import { compareGroups, groupRows, groupSummary, isCompareKey, needsGroupVars, needsRehabVars, thinWarning, zygVsTiltedLeftOut, zygVsTiltedLeftOutNote, type GroupVars } from './groups';
+import type { RehabVars } from './rehab';
 import type { DetailRow } from './view';
 
 const row = (id: string, over: Partial<DetailRow> = {}): DetailRow => ({
@@ -118,5 +119,56 @@ describe('thinWarning', () => {
   it('uses the owner copy', () => {
     expect(thinWarning(12, 1)).toBe('⚠ Not enough data — interpret with caution (n = 12, 1 failure)');
     expect(thinWarning(3, 0)).toBe('⚠ Not enough data — interpret with caution (n = 3, 0 failures)');
+  });
+});
+
+describe('rehab comparisons', () => {
+  const rv = (id: string, over: Partial<RehabVars> = {}): RehabVars => ({
+    site_id: id, implant_type: null, angulation_deg: null, angulation_direction: null, anchorage: null,
+    case_id: null, case_configuration: null, ...over,
+  });
+  const rows = [row('a'), row('b'), row('c'), row('d'), row('e')];
+  const rehab = [
+    rv('a', { implant_type: 'zygomatic', case_id: 'k1', case_configuration: 'all_on_4' }),
+    rv('b', { implant_type: 'conventional' }),
+    rv('c', { implant_type: 'tilted', case_id: 'k1', case_configuration: 'all_on_4' }),
+    rv('d', { implant_type: 'tilted', case_id: 'k2', case_configuration: 'all_on_6' }),
+    // e has no rehab row at all
+  ];
+
+  it('needsRehabVars is true only for the new comparisons', () => {
+    expect(needsRehabVars('implant_type')).toBe(true);
+    expect(needsRehabVars('case_type')).toBe(true);
+    expect(needsRehabVars('zyg_vs_tilted')).toBe(true);
+    expect(needsRehabVars('smoking')).toBe(false);
+    expect(needsRehabVars(null)).toBe(false);
+    expect(needsGroupVars('implant_type')).toBe(false);
+  });
+
+  it('groups by implant type in a fixed order with Not recorded last', () => {
+    expect(labels(groupRows(rows, [], 'implant_type', rehab))).toEqual(
+      ['Conventional:1', 'Tilted:2', 'Zygomatic:1', 'Not recorded:1*']);
+  });
+
+  it('groups by case type with Not in a case as a real group', () => {
+    expect(labels(groupRows(rows, [], 'case_type', rehab))).toEqual(['All-on-4:2', 'All-on-6:1', 'Not in a case:2']);
+  });
+
+  it('zyg_vs_tilted keeps only Zygomatic and Tilted in All-on-4, and counts the rest', () => {
+    expect(labels(groupRows(rows, [], 'zyg_vs_tilted', rehab))).toEqual(['Zygomatic:1', 'Tilted in All-on-4:1']);
+    expect(zygVsTiltedLeftOut(rows, rehab)).toBe(3);
+  });
+
+  it('zygomatic counts outside any case; existing keys ignore rehab', () => {
+    const r2 = [row('z', { site_id: 'z' })];
+    expect(labels(groupRows(r2, [], 'zyg_vs_tilted', [rv('z', { implant_type: 'zygomatic' })]))).toEqual(['Zygomatic:1']);
+    expect(labels(groupRows(rows, [], 'brand', rehab))).toEqual(['Oxy · PSK:5']);
+  });
+});
+
+describe('zygVsTiltedLeftOutNote', () => {
+  it('is singular for one implant and plural otherwise', () => {
+    expect(zygVsTiltedLeftOutNote(1)).toBe('1 implant that is neither zygomatic nor tilted in an All-on-4 case is left out.');
+    expect(zygVsTiltedLeftOutNote(3)).toBe('3 implants that are neither zygomatic nor tilted in an All-on-4 case are left out.');
   });
 });

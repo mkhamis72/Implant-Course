@@ -5,7 +5,7 @@ import { canView } from '@/lib/auth/permissions';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
 import { ALL_COURSES, RESEARCH_FILTER_KEYS, defaultCourse, effectiveSystem } from '@/lib/research/view';
 import { todayIso } from '@/lib/dates';
-import { isCompareKey, needsGroupVars } from '@/lib/research/groups';
+import { isCompareKey, needsGroupVars, needsRehabVars } from '@/lib/research/groups';
 import { loadResearch } from './data';
 import { FilterForm } from './filter-form';
 import { ExportForm } from './export-panel';
@@ -18,6 +18,7 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
   const { compare: compareParam, ...params } = await readParams(searchParams, ...RESEARCH_FILTER_KEYS, 'compare');
   const compare = isCompareKey(compareParam) ? compareParam : null;
   const withGroups = needsGroupVars(compare);
+  const withRehab = needsRehabVars(compare);
   const header = (version: string | null) => (
     <div className="page-header">
       <div>
@@ -50,7 +51,7 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
     ? { ...params, course: params.course || defaultCourse(courseRows, todayIso()) }
     : { ...params, course: ALL_COURSES, delegate: '' };
   const [first, delegates, studies] = await Promise.all([
-    loadResearch(requested, withGroups),
+    loadResearch(requested, withGroups, withRehab),
     supabase.from('delegates').select('id, full_name').order('full_name'),
     supabase.from('studies').select('id, title').order('title'),
   ]);
@@ -60,7 +61,7 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
   // A line that isn't one of the selected brand's is dropped (and the figures reloaded without it).
   const system = effectiveSystem(requested.brand, requested.system, first.base);
   const filters = { ...requested, system, compare: compare ?? '' };
-  const { version, rows, base, crowns, groups, consent } = system === requested.system ? first : await loadResearch(filters, withGroups);
+  const { version, rows, base, crowns, groups, rehab, consent } = system === requested.system ? first : await loadResearch(filters, withGroups, withRehab);
 
   // Delegates the user can't list (no Delegates view) still appear when they placed an implant in range.
   const delegateNames = new Map<string, string>();
@@ -82,7 +83,7 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
         brands={brands}
         systems={systems}
       />
-      <ResearchView rows={rows} crowns={crowns} filters={filters} groups={groups} consent={consent} noProduct={base.filter((r) => r.product_id === null).length} />
+      <ResearchView rows={rows} crowns={crowns} filters={filters} groups={groups} rehab={rehab} consent={consent} noProduct={base.filter((r) => r.product_id === null).length} />
       <ExportForm filters={filters} studies={studyList} teaching={teaching} />
     </div>
   );

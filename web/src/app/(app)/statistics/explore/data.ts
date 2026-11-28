@@ -2,6 +2,7 @@ import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { fetchAll } from '@/lib/research/export/fetch-all';
 import { rpcArgs, type ResearchFilters } from '@/lib/research/view';
+import { toRehabVars } from '@/lib/research/rehab';
 import type { LevelLabels } from '@/lib/analysis/choices';
 import type { AnalysisData, ImplantRow, RadiographRow, VisitRow } from '@/lib/analysis/rows';
 
@@ -22,14 +23,27 @@ const XRAY_NUMBERS: (keyof RadiographRow)[] = ['mesial_mm', 'distal_mm', 'bone_c
 export async function loadAnalysisRows(filters: ResearchFilters): Promise<AnalysisData> {
   const supabase = await createClient();
   const args = rpcArgs(filters);
-  const [implants, visits, radiographs] = await Promise.all([
+  const [implants, visits, radiographs, rehab] = await Promise.all([
     fetchAll<ImplantRow>(supabase, 'analysis_implants', args, ['site_id']),
     fetchAll<VisitRow>(supabase, 'analysis_visits', args, ['visit_id']),
     fetchAll<RadiographRow>(supabase, 'analysis_radiographs', args, ['site_id', 'radiograph_id']),
+    fetchAll<Record<string, unknown>>(supabase, 'implant_rehab_vars', args, ['site_id']),
   ]);
-  if (implants.error || visits.error || radiographs.error) throw new Error('Could not load the clinical data');
+  if (implants.error || visits.error || radiographs.error || rehab.error) throw new Error('Could not load the clinical data');
+  const rehabBySite = new Map((rehab.data ?? []).map((r) => [String(r.site_id), toRehabVars(r)]));
+  const merged = (implants.data ?? []).map((r) => {
+    const v = rehabBySite.get(r.site_id);
+    return {
+      ...r,
+      implant_type: v?.implant_type ?? null,
+      angulation_deg: v?.angulation_deg ?? null,
+      angulation_direction: v?.angulation_direction ?? null,
+      anchorage: v?.anchorage ?? null,
+      case_configuration: v?.case_configuration ?? null,
+    };
+  });
   return {
-    implants: numbers(implants.data ?? [], IMPLANT_NUMBERS),
+    implants: numbers(merged, IMPLANT_NUMBERS),
     visits: numbers(visits.data ?? [], VISIT_NUMBERS),
     radiographs: numbers(radiographs.data ?? [], XRAY_NUMBERS),
   };

@@ -2,7 +2,7 @@ import { formatPct, type kmEstimate } from '@/lib/research/summary';
 import { formatP, THIN_AT_RISK } from '@/lib/research/stats';
 import {
   CLUSTER_NOTE, COMPARE_KEYS, COMPARE_LABELS, LOADING_BIAS_NOTE, NO_FAILURES_NOTE, OPERATOR_NOTE, compareGroups,
-  groupSummary, thinWarning, unknownDateNote, type CompareKey, type Group,
+  groupSummary, thinWarning, unknownDateNote, zygVsTiltedLeftOutNote, type CompareKey, type Group,
 } from '@/lib/research/groups';
 import { RESEARCH_FILTER_KEYS, type DetailRow, type ResearchFilters } from '@/lib/research/view';
 
@@ -110,10 +110,12 @@ function LogRank({ groups }: { groups: Group<DetailRow>[] }) {
 }
 
 /** "Compare by": a GET form (the filters ride along as hidden fields), then the group table and the test. */
-export function ComparePanel({ compare, groups, filters }: {
+export function ComparePanel({ compare, groups, filters, leftOut = 0 }: {
   compare: CompareKey | null;
   groups: Group<DetailRow>[];
   filters: ResearchFilters;
+  /** Zygomatic vs tilted: implants in neither group. */
+  leftOut?: number;
 }) {
   return (
     <section aria-label="Compare groups" className="card space-y-3">
@@ -135,6 +137,7 @@ export function ComparePanel({ compare, groups, filters }: {
         <>
           <GroupTable compare={compare} groups={groups} tested={compare !== 'loading'} />
           {compare === 'loading' ? <Warning>{LOADING_BIAS_NOTE}</Warning> : <LogRank groups={groups} />}
+          {compare === 'zyg_vs_tilted' && leftOut > 0 && <Note>{zygVsTiltedLeftOutNote(leftOut)}</Note>}
           <Note>{CLUSTER_NOTE}</Note>
           <Note>{OPERATOR_NOTE}</Note>
         </>
