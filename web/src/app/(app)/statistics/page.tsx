@@ -10,6 +10,7 @@ import { loadResearch } from './data';
 import { FilterForm } from './filter-form';
 import { ExportForm } from './export-panel';
 import { NoPatientsNote, ResearchView } from './research-view';
+import { allRows } from '@/lib/catalog/fetch-all';
 
 const distinct = (values: (string | null)[]) => [...new Set(values.filter((v): v is string => Boolean(v)))].sort();
 
@@ -52,7 +53,7 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
     : { ...params, course: ALL_COURSES, delegate: '' };
   const [first, delegates, studies] = await Promise.all([
     loadResearch(requested, withGroups, withRehab),
-    supabase.from('delegates').select('id, full_name').order('full_name'),
+    allRows((from, to) => supabase.from('delegates').select('id, full_name').order('full_name').order('id').range(from, to)),
     supabase.from('studies').select('id, title').order('title'),
   ]);
   if (studies.error) throw new Error('Could not load the studies');

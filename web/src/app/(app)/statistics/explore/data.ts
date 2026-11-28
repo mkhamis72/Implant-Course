@@ -5,6 +5,7 @@ import { rpcArgs, type ResearchFilters } from '@/lib/research/view';
 import { toRehabVars } from '@/lib/research/rehab';
 import type { LevelLabels } from '@/lib/analysis/choices';
 import type { AnalysisData, ImplantRow, RadiographRow, VisitRow } from '@/lib/analysis/rows';
+import { allRows } from '@/lib/catalog/fetch-all';
 
 // PostgREST returns Postgres numeric as strings; the engine expects numbers (null stays null).
 function numbers<T extends Record<string, unknown>>(rows: T[], keys: (keyof T)[]): T[] {
@@ -56,7 +57,7 @@ export async function loadExplore(filters: ResearchFilters): Promise<{ data: Ana
     loadAnalysisRows(filters),
     // Placing delegates' names for users who can't list delegates (as on Results).
     fetchAll<{ placing_delegate_id: string | null; placing_delegate: string | null }>(supabase, 'implant_outcomes_detail', rpcArgs(filters), ['site_id']),
-    supabase.from('delegates').select('id, full_name'),
+    allRows((from, to) => supabase.from('delegates').select('id, full_name').order('id').range(from, to)),
     supabase.from('supervisors').select('id, full_name'),
     supabase.rpc('course_options'),
   ]);

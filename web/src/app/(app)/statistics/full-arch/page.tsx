@@ -16,6 +16,7 @@ import { FilterForm } from '../filter-form';
 import { CiText, Note, Warning } from '../compare-panel';
 import { NoPatientsNote } from '../research-view';
 import { loadFullArch } from './data';
+import { allRows } from '@/lib/catalog/fetch-all';
 
 const THIN_CASES = 30;
 /** The case columns' warning counts cases only (implant failures are another unit). */
@@ -74,7 +75,7 @@ export default async function FullArchPage({ searchParams }: { searchParams: Pag
   const supabase = await createClient();
   const [courses, delegates, data] = await Promise.all([
     supabase.rpc('course_options'),
-    supabase.from('delegates').select('id, full_name').order('full_name'),
+    allRows((from, to) => supabase.from('delegates').select('id, full_name').order('full_name').order('id').range(from, to)),
     loadFullArch(filters),
   ]);
   if (courses.error) throw new Error('Could not load the courses');

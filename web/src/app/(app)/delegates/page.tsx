@@ -4,15 +4,19 @@ import { requirePermission } from '@/lib/auth/session';
 import { canEdit } from '@/lib/auth/permissions';
 import { DelegateForm, type DelegateRow } from './delegate-form';
 import { createDelegate } from './actions';
+import { allRows } from '@/lib/catalog/fetch-all';
 
 export default async function DelegatesPage() {
   const profile = await requirePermission('delegates');
   const supabase = await createClient();
-  const { data, error } = await supabase
+  // Every delegate: PostgREST caps a response at 1000 rows.
+  const { data, error } = await allRows((from, to) => supabase
     .from('delegates')
     .select('id, full_name, phone, email, licence_no, notes, active')
     .order('active', { ascending: false })
-    .order('full_name');
+    .order('full_name')
+    .order('id')
+    .range(from, to));
   if (error) throw new Error('Could not load delegates');
   const delegates = (data ?? []) as DelegateRow[];
   return (

@@ -6,7 +6,7 @@ import { canEdit } from '@/lib/auth/permissions';
 import { featureOn, teachingOn } from '@/lib/modules/modules';
 import { todayIso } from '@/lib/dates';
 import { productLabel } from '@/lib/inventory/labels';
-import { fetchAll } from '@/lib/catalog/fetch-all';
+import { allRows } from '@/lib/catalog/fetch-all';
 import type { ChartData, ImplantSite, LotOnHand, Product } from '@/lib/inventory/types';
 import type { ToothState } from '@/lib/patients/types';
 import type { VisitRow } from '@/lib/visits/visits';
@@ -99,13 +99,6 @@ export function toRestoration({ sites, problems, ...r }: RestorationRow): Restor
   };
 }
 
-/** Every row of a paged read, in the `{ data, error }` shape of a single one. */
-function allRows<T>(page: Parameters<typeof fetchAll<T>>[0]): Promise<{ data: T[] | null; error: { message: string } | null }> {
-  return fetchAll(page).then(
-    (data) => ({ data, error: null }),
-    (e: unknown) => ({ data: null, error: { message: e instanceof Error ? e.message : String(e) } }),
-  );
-}
 
 export async function loadChartData(patientId: string): Promise<ChartData> {
   const supabase = await createClient();
@@ -116,7 +109,7 @@ export async function loadChartData(patientId: string): Promise<ChartData> {
     // PostgREST caps a response at 1000 rows: page through products and stocked batches.
     allRows((from, to) => supabase.from('products').select('*').eq('active', true).order('id').range(from, to)),
     allRows((from, to) => supabase.from('stock_on_hand').select('*').gt('on_hand', 0).order('stock_lot_id').range(from, to)),
-    supabase.from('delegates').select('id, full_name').eq('active', true).order('full_name'),
+    allRows((from, to) => supabase.from('delegates').select('id, full_name').eq('active', true).order('full_name').order('id').range(from, to)),
     staffOptions(supabase),
     supabase.from('supervisors').select('id, full_name').eq('active', true).order('full_name'),
     supabase.rpc('implant_visits', { p_patient: patientId }),

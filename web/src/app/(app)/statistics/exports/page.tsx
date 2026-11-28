@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requireAdmin } from '@/lib/auth/session';
 import { teachingOn } from '@/lib/modules/modules';
 import { ExportLog, type ExportLogRow } from '../export-panel';
+import { allRows } from '@/lib/catalog/fetch-all';
 
 /** Admins only: who exported what (research_exports). */
 export default async function RecentExportsPage() {
@@ -11,7 +12,7 @@ export default async function RecentExportsPage() {
   const [{ data: log, error: logError }, courses, delegates, studies] = await Promise.all([
     supabase.from('research_exports').select('id, exported_by, exported_at, format, filters, row_counts').order('exported_at', { ascending: false }).limit(20),
     teaching ? supabase.rpc('course_options') : { data: [], error: null },
-    teaching ? supabase.from('delegates').select('id, full_name') : { data: [], error: null },
+    teaching ? allRows((from, to) => supabase.from('delegates').select('id, full_name').order('id').range(from, to)) : { data: [], error: null },
     supabase.from('studies').select('id, title'),
   ]);
   if (courses.error || delegates.error || studies.error) throw new Error('Could not load the export names');
