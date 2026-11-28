@@ -44,7 +44,7 @@ Owner's picks in **bold**.
 - Passport rendering: server builds the passport *model* (as today) and returns it as JSON; the browser only draws it with the existing `document.tsx` / `chart.tsx` (my call: keeps all data rules on the server, reuses the tested document). Rejected: browser reads the tables itself (would duplicate the medical whitelist in the client).
 
 ## Decisions
-- **Releases (my call):** one feature PR with migration 0147, additive only. A later clean-up PR (0148) drops what the previous version needed: `patient_passport_files`, `patient_passports`, `passport_downloads` (this deletes the stored PDFs), `save_patient_passport`, `patient_passport_file`, the 0124 search functions and `fit_component_v3`; `patient_history` stops listing `patient_passports` and lists `passport_generations`.
+- **Releases (my call):** one feature PR with migrations 0147–0150, additive only. A later clean-up PR drops what the previous version needed: `patient_passport_files`, `patient_passports`, `passport_downloads` (this deletes the stored PDFs), `save_patient_passport`, `patient_passport_file`, `search_patients` (0098) and `fit_component_v3` (`search_patients_v2` stays for the booking picker); `patient_history` stops listing `patient_passports` and lists `passport_generations`.
 - **SQL (my call):** `patient_list_matches_v2` / `search_patients_v3` / `search_patients_count_v2` (0124 bodies plus three boolean params); `screw_sizes` with `save_screw_size` / `set_screw_size_active` (admin; a used size can only be switched off); `implant_components.screw_size_id` (nullable FK) set through `fit_component_v4(…, p_screw_size)`, which refuses a size of another kind or company or on a non-screw part; `passport_generations` (patient, generated_by, generated_at, medical_level) written by `log_passport_generation` (require Patients View). Usual conventions: definer functions with `require_perm`, invoker readers, explicit revoke/grant, company policies, audit trigger on `screw_sizes` and `passport_generations`.
 - **Who reads screw sizes (my call):** staff with Patients View (the form) or admins (the page). It is company data, not part of the shared catalogue library.
 - **Passport data route (my call):** `GET /patients/[id]/passport/data`, same-origin check, Patients View; returns the passport model (logo as a data URL) with `no-store`, and logs the generation. The log means "passport data handed out"; a failed download in the browser still leaves the row.
@@ -52,7 +52,7 @@ Owner's picks in **bold**.
 - **Security policy (my call, checked by a spike first):** if react-pdf needs WebAssembly in the browser, add `'wasm-unsafe-eval'` to `script-src` (allows the page's own WebAssembly only, no remote code). Downloads work with `<a download>` on a `blob:` URL under the current policy.
 
 ## Constraints
-- Migrations 0147+ only; backward-compatible; don't add overloads with defaulted parameters (new `_vN` names instead).
+- Migrations 0147–0150 only; backward-compatible; don't add overloads with defaulted parameters (new `_vN` names instead).
 - `tests/db/permissions.test.ts` and `tests/db/module-guards.test.ts` stay green; new tables in the tenant isolation tests.
 - Data tables keep `className="table"` with `data-label`; design tokens only.
 - Dates in Cairo (`todayIso`, `formatDate`).
