@@ -472,6 +472,25 @@ describe('<ComponentForm> screws, torque and specs', () => {
     }));
   });
 
+  it('shows a Size select only for screws, the screwdriver line, and sends the size', async () => {
+    const { fitComponent } = await import('./implant-actions');
+    vi.mocked(fitComponent).mockResolvedValue({});
+    const sz = (id: string, kind: string, label: string) => ({ id, brand: 'Oxy', system: 'PSK', kind, label, driver_interface: 'Hex', driver_size: '1.25', driver_ref: '', torque_ncm: 20, active: true });
+    const withSizes = { ...screwData, screwSizes: [sz('z1', 'abutment_screw', 'M1.6 x 7'), sz('z2', 'prosthetic_screw', 'M1.4 x 5')] } as unknown as ChartData;
+    render(<ComponentForm patientId="pt" site={site} data={withSizes} onDone={() => {}} />);
+    expect(screen.queryByRole('combobox', { name: /^Size/ })).not.toBeInTheDocument();
+    choose('Component', 'abutment_screw');
+    const size = screen.getByRole('combobox', { name: /^Size/ });
+    expect(within(size).getAllByRole('option').map((o) => o.textContent)).toEqual(['Not recorded', 'M1.6 x 7']);
+    fireEvent.change(size, { target: { value: 'z1' } });
+    expect(screen.getByText('Screwdriver Hex 1.25 · Recommended torque 20 Ncm')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: /^Holds/ }), { target: { value: 'component:mua' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save component' }));
+    await vi.waitFor(() => expect(vi.mocked(fitComponent).mock.calls.at(-1)?.[0]).toMatchObject({ screwSizeId: 'z1' }));
+    choose('Component', 'prosthetic_screw');
+    expect(screen.getByRole('combobox', { name: /^Size/ })).toHaveValue('');
+  });
+
   it('shows the chosen product specs', () => {
     render(<ComponentForm patientId="pt" site={site} data={screwData} onDone={() => {}} />);
     choose('Component', 'prosthetic_screw');

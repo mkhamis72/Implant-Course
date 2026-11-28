@@ -19,7 +19,7 @@ export const product = (o: Partial<Product> = {}): Product => ({
 export const comp = (o: Partial<SiteComponent> = {}): SiteComponent => ({
   id: 'c', component_type: 'healing_abutment', fitted_on: '2026-10-01', removed_on: null, notes: '', product: null,
   lot: null, fitted_by_delegate: null, fitted_by_organizer: null, course_id: null, voided_at: null, voided_reason: '',
-  torque_ncm: null, holds_component_id: null, holds_restoration_id: null, replaced_by: null, stock_lot_id: null, ...o,
+  torque_ncm: null, holds_component_id: null, holds_restoration_id: null, replaced_by: null, screw_size: null, stock_lot_id: null, ...o,
 });
 
 export const site = (o: Partial<ImplantSite> = {}): ImplantSite => ({

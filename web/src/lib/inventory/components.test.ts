@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { acceptsProduct, activeSite, badgesFor, componentRole, currentComponent, currentComponents, lastFollowup, partLabel, transferComponents, undoableComponents } from './components';
+import { acceptsProduct, activeSite, badgesFor, componentRole, currentComponent, currentComponents, lastFollowup, partLabel, sizesFor, transferComponents, undoableComponents } from './components';
+import type { ScrewSize } from '@/lib/admin/screw-sizes';
 import { COMPONENT_ROLE_LABELS, type ImplantSite, type SiteComponent } from './types';
 
 const comp = (type: SiteComponent['component_type'], removed_on: string | null): SiteComponent => ({
   id: type, component_type: type, fitted_on: '2026-01-01', removed_on, notes: '', product: null, lot: null, course_id: null,
   fitted_by_delegate: null, fitted_by_organizer: null, voided_at: null, voided_reason: '', stock_lot_id: null,
-  torque_ncm: null, holds_component_id: null, holds_restoration_id: null, replaced_by: null,
+  torque_ncm: null, holds_component_id: null, holds_restoration_id: null, replaced_by: null, screw_size: null,
 });
 
 const site = (tooth: number, state: ImplantSite['state'], components: SiteComponent[] = []): ImplantSite => ({
@@ -124,5 +125,26 @@ describe('parts for the panel and corrections', () => {
     expect(options.map((c) => c.id)).toEqual(['final_restoration']);
     expect(latest?.id).toBe('final_restoration');
     expect(partLabel(options[0])).toBe('Final restoration — 01 Jan 2026');
+  });
+});
+
+describe('sizesFor', () => {
+  const size = (id: string, kind: 'abutment_screw' | 'prosthetic_screw', brand = 'Oxy', system = 'PSK'): ScrewSize =>
+    ({ id, brand, system, kind, label: id, driver_interface: '', driver_size: '', driver_ref: '', torque_ncm: null, active: true });
+  const all = [size('a1', 'abutment_screw'), size('p1', 'prosthetic_screw'), size('a2', 'abutment_screw', 'Other', 'X'), size('a3', 'abutment_screw', 'Oxy', 'MD')];
+  const ids = (l: ScrewSize[]) => l.map((s) => s.id);
+
+  it('keeps the kind and the implant system', () => {
+    expect(ids(sizesFor(all, 'abutment_screw', { brand: 'Oxy', system: 'PSK' }))).toEqual(['a1']);
+    expect(ids(sizesFor(all, 'prosthetic_screw', { brand: 'Oxy', system: 'PSK' }))).toEqual(['p1']);
+  });
+  it('lists every size of the kind when the implant is unknown', () => {
+    expect(ids(sizesFor(all, 'abutment_screw', null))).toEqual(['a1', 'a2', 'a3']);
+  });
+  it('a temporary cylinder screw uses prosthetic sizes', () => {
+    expect(ids(sizesFor(all, 'temporary_cylinder_screw', null))).toEqual(['p1']);
+  });
+  it('is empty for a part that is not a screw', () => {
+    expect(sizesFor(all, 'healing_abutment', null)).toEqual([]);
   });
 });

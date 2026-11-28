@@ -6,7 +6,8 @@ import { PlacedByChoice, type PlacedBy } from '@/components/placed-by-choice';
 import { availableLots } from '@/lib/inventory/lots';
 import { withRecorded } from '@/lib/inventory/with-recorded';
 import { lotLabel, productLabel } from '@/lib/inventory/labels';
-import { acceptsProduct, componentRole, currentComponents, partLabel } from '@/lib/inventory/components';
+import { acceptsProduct, componentRole, currentComponents, partLabel, sizesFor } from '@/lib/inventory/components';
+import { screwDriverLine } from '@/lib/admin/screw-sizes';
 import { delegatesForCourse, keepIfEnrolled } from '@/lib/inventory/enrolled';
 import { componentTorque } from '@/lib/inventory/schemas';
 import { specsLine } from '@/lib/inventory/specs';
@@ -461,13 +462,13 @@ function holdsOptions(site: ImplantSite, data: ChartData, type: ComponentType): 
 export function ComponentForm({ patientId, site, data, onDone }: { patientId: string; site: ImplantSite; data: ChartData; onDone: () => void }) {
   const [v, setV] = useState({
     componentType: 'healing_abutment' as ComponentType, productId: '', lotId: '', fittedOn: data.today,
-    byDelegateId: '', byOrganizerId: data.me, courseId: site.course_id ?? '', notes: '', torque: '', holds: '',
+    byDelegateId: '', byOrganizerId: data.me, courseId: site.course_id ?? '', notes: '', torque: '', holds: '', screwSizeId: '',
   });
   const set = (key: keyof typeof v) => (value: string) =>
     setV((cur) => ({
       ...cur,
       [key]: value,
-      ...(key === 'componentType' ? { productId: '', lotId: '', holds: '' } : {}),
+      ...(key === 'componentType' ? { productId: '', lotId: '', holds: '', screwSizeId: '' } : {}),
       ...(key === 'productId' ? { lotId: '' } : {}),
       ...(key === 'fittedOn' ? { lotId: keepIfUsable(data, cur.productId, cur.lotId, value) } : {}),
       ...(key === 'courseId' ? { byDelegateId: keepIfEnrolled(data.enrollments, value, cur.byDelegateId) } : {}),
@@ -480,6 +481,9 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
   const role = componentRole(v.componentType);
   const isScrew = role === 'abutment_screw' || role === 'prosthetic_screw';
   const isCap = role === 'cap';
+  const implant = site.product ?? site.planned_product ?? null;
+  const sizes = sizesFor(data.screwSizes ?? [], v.componentType, implant);
+  const size = sizes.find((s) => s.id === v.screwSizeId) ?? null;
   // The torque is checked here too, so a wrong value is named before anything is sent.
   const { error, pending, submit } = useSubmit(async (input) => {
     const torque = componentTorque.safeParse(input.torque);
@@ -495,6 +499,7 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
         lotId: data.inventoryOn ? v.lotId : null,
         holdsComponentId: (isScrew || isCap) && holdsKind === 'component' ? holdsId : null,
         holdsRestorationId: isScrew && holdsKind === 'restoration' ? holdsId : null,
+        screwSizeId: isScrew && size ? size.id : null,
       });
     }}>
       <Field label="Component">
@@ -523,6 +528,17 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
             </select>
           </Field>
           {holds.length === 0 && <p className="text-sm text-warn">Nothing on this implant for the screw to hold: record the abutment{role === 'prosthetic_screw' ? ' or the restoration' : ''} first.</p>}
+        </>
+      )}
+      {isScrew && (
+        <>
+          <Field label="Size">
+            <select className="input" value={v.screwSizeId} onChange={(e) => set('screwSizeId')(e.target.value)}>
+              <option value="">Not recorded</option>
+              {sizes.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </Field>
+          {size && <p className="text-sm text-muted" data-testid="size-driver">{screwDriverLine(size) || 'No screwdriver recorded for this size.'}</p>}
         </>
       )}
       {isCap && (

@@ -1,3 +1,4 @@
+import type { ScrewSize } from '@/lib/admin/screw-sizes';
 import { formatDate } from '@/lib/format';
 import { COMPONENT_BADGES, COMPONENT_LABELS, type ComponentRole, type ComponentType, type ImplantSite, type ProductType, type SiteComponent } from './types';
 
@@ -70,6 +71,13 @@ export function undoableComponents(site: ImplantSite): { options: SiteComponent[
     null,
   );
   return { options, latest };
+}
+
+/** The screw sizes to offer for a part: only screws take one; the kind follows the role, and an implant narrows them to its system. */
+export function sizesFor(sizes: ScrewSize[], type: ComponentType, implant: { brand: string; system: string } | null): ScrewSize[] {
+  const kind = componentRole(type);
+  if (kind !== 'abutment_screw' && kind !== 'prosthetic_screw') return [];
+  return sizes.filter((s) => s.kind === kind && (!implant || (s.brand === implant.brand && s.system === implant.system)));
 }
 
 export function activeSite(sites: readonly ImplantSite[], tooth: number): ImplantSite | null {
