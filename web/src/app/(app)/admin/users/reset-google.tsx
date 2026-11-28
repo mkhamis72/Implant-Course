@@ -30,10 +30,10 @@ export function ResetGoogle({ userId, email, available }: { userId: string; emai
     );
   }
   return (
-    <form action={action} className="max-w-sm space-y-2 rounded bg-warn-soft p-3 text-sm">
+    <form action={action} className="w-full max-w-sm space-y-2 rounded bg-warn-soft p-3 text-sm">
       <input type="hidden" name="user_id" value={userId} />
       <p>Their link to a Google account is removed. The next Google account they sign in with is remembered instead.</p>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button className="btn btn-danger py-1" disabled={pending}>Reset Google sign-in</button>
         <button type="button" className="btn-secondary btn py-1" onClick={() => setOpen(false)}>Cancel</button>
       </div>

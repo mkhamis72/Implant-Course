@@ -1,8 +1,12 @@
 // Runs in the "phone" project only (see playwright.config.ts).
 import { test, expect, type Page } from '@playwright/test';
-import { TEST_USERS } from '../support/test-users';
+import { TEST_USERS, TEST_PASSWORD } from '../support/test-users';
 import { login } from './helpers';
 import { createPatientViaUi, uniqueName } from './patients';
+import { ensureTenantUser, setProfile } from '../../scripts/users';
+import { nodeAuth } from '../../scripts/self-auth-node';
+import { ACADEMY_COMPANY_ID } from '../../src/lib/tenant/types';
+import { withPg } from './companies';
 import { apiAs, seedDelegate, seedImplantStock, placeImplant } from './api';
 
 // The narrowest common phone width, stricter than the Pixel 7 default.
@@ -92,4 +96,41 @@ test('Explore fits the phone screen without sideways scrolling', async ({ page }
   await expect(page.getByRole('img', { name: /Stacked bars of Implant failure by Placing delegate/ })).toBeVisible();
   await expect(page.getByRole('table', { name: 'Statistics by group' })).toBeVisible();
   await expectNoSideways(page);
+});
+
+test('admin pages fit the phone screen, with a long email and the Change email panel open', async ({ page }) => {
+  test.setTimeout(180_000);
+  const email = `icm-phone-admin-${Date.now()}-a-very-long-address@example.com`; // 40+ characters
+  let userId = '';
+  await withPg(async (pg) => {
+    userId = await ensureTenantUser({ email, password: TEST_PASSWORD, pending: { pg } });
+    await setProfile(pg, userId, { full_name: 'E2E Phone Long Email', role: 'organizer', active: true });
+  });
+  try {
+    await login(page, TEST_USERS.admin.email);
+    const cardsFit = async () => {
+      const wide = await page.evaluate(() =>
+        [...document.querySelectorAll('.card')].filter((c) => c.scrollWidth > c.clientWidth + 1).map((c) => (c.textContent ?? '').slice(0, 40)));
+      expect(wide, `${page.url()} has cards that scroll sideways`).toEqual([]);
+    };
+    await page.goto('/admin/users');
+    const row = page.getByTestId(`user-row-${email}`);
+    await expect(row).toBeVisible();
+    await row.getByRole('button', { name: `Change email of ${email}` }).click();
+    await row.locator('summary', { hasText: 'Permissions' }).click();
+    await expect(row.getByLabel('New email')).toBeVisible();
+    await expectNoSideways(page);
+    await cardsFit();
+
+    for (const path of ['/admin/settings', '/admin/settings/consent', '/admin/chairs', '/admin/doctors', '/admin/catalogue',
+      '/admin/screw-sizes', '/admin/supervisors', '/admin/lecturers']) {
+      await page.goto(path);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await expectNoSideways(page);
+      await cardsFit();
+      
+    }
+  } finally {
+    await (await nodeAuth()).admin.deleteUser(ACADEMY_COMPANY_ID, userId).catch(() => {});
+  }
 });

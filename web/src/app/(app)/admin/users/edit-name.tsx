@@ -34,7 +34,7 @@ export function EditName({ userId, name, isSelf }: { userId: string; name: strin
         <span className="label">Name</span>
         <input key={state.attempt ?? 0} className="input py-1" name="full_name" defaultValue={state.error ? state.typed : name} maxLength={120} required />
       </label>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button className="btn py-1" disabled={pending}>Save name</button>
         <button type="button" className="btn-secondary btn py-1" onClick={() => setEditing(false)}>Cancel</button>
       </div>

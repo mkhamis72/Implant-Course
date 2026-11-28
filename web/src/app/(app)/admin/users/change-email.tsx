@@ -28,7 +28,7 @@ export function ChangeEmail({ userId, email }: { userId: string; email: string }
     );
   }
   return (
-    <form action={action} className="max-w-sm space-y-2 rounded bg-warn-soft p-3 text-sm">
+    <form action={action} className="w-full max-w-sm space-y-2 rounded bg-warn-soft p-3 text-sm">
       <input type="hidden" name="user_id" value={userId} />
       <label className="block">
         <span className="label">New email</span>
@@ -38,7 +38,7 @@ export function ChangeEmail({ userId, email }: { userId: string; email: string }
         They will be signed out everywhere and must sign in with the new address. A notice goes to the new address (and to {email}{' '}
         if they have signed in before).
       </p>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button className="btn py-1" disabled={pending}>Change email</button>
         <button type="button" className="btn-secondary btn py-1" onClick={() => setOpen(false)}>Cancel</button>
       </div>

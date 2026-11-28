@@ -48,18 +48,22 @@ export function UserRow({ user, isSelf, account, emailOn, features }: { user: Us
 
   return (
     <tr data-testid={`user-row-${user.email}`} className="border-t border-line align-top">
-      <td data-label="Name" className="py-2 pr-4">
+      <td data-label="Name" className="min-w-0 sm:py-2 sm:pr-4">
         <EditName userId={user.user_id} name={user.full_name} isSelf={isSelf} />
       </td>
-      <td data-label="Email" className="py-2 pr-4">
-        <div>{user.email}</div>
-        {!isSelf && <ChangeEmail userId={user.user_id} email={user.email} />}
+      <td data-label="Email" className="min-w-0 sm:py-2 sm:pr-4">
+        <div className="break-all">{user.email}</div>
+        {!isSelf && (
+          <div className="col-span-full">
+            <ChangeEmail userId={user.user_id} email={user.email} />
+          </div>
+        )}
       </td>
-      <td data-label="Role" className="py-2 pr-4">
+      <td data-label="Role" className="min-w-0 sm:py-2 sm:pr-4">
         {isSelf || user.role === 'delegate' ? (
           <span>{labels[user.role]}</span>
         ) : (
-          <form action={roleAction} className="flex gap-2">
+          <form action={roleAction} className="flex flex-wrap gap-2">
             <input type="hidden" name="user_id" value={user.user_id} />
             <select className="input py-1" name="role" defaultValue={user.role} aria-label="Role">
               <option value="organizer">{labels.organizer}</option>
@@ -71,13 +75,13 @@ export function UserRow({ user, isSelf, account, emailOn, features }: { user: Us
           </form>
         )}
       </td>
-      <td data-label="Status" className="py-2 pr-4">
+      <td data-label="Status" className="min-w-0 sm:py-2 sm:pr-4">
         <div>{user.active ? 'Active' : 'Inactive'}</div>
         <div className="text-sm text-muted">Last sign-in: {lastSignInText(account.lastSignIn)}</div>
         {user.mfa_setup_required && <span className="badge badge-warn">2FA set-up pending</span>}
         {account.hasGoogle && <span className="badge">Google</span>}
       </td>
-      <td data-label="Actions" className="py-2">
+      <td data-label="Actions" className="min-w-0 sm:py-2">
         {!isSelf && (
           <form action={activeAction}>
             <input type="hidden" name="user_id" value={user.user_id} />
@@ -88,7 +92,7 @@ export function UserRow({ user, isSelf, account, emailOn, features }: { user: Us
           </form>
         )}
         {!isSelf && (
-          <div className="mt-2 space-y-2">
+          <div className="col-span-full mt-2 space-y-2">
             <ResetPassword userId={user.user_id} label={`Reset password for ${user.email}`} />
             {/* While set-up is still required, a reset that half-failed can be retried. */}
             <ResetTwoFactor userId={user.user_id} email={user.email} available={account.hasFactor || user.mfa_setup_required} />
@@ -112,14 +116,14 @@ export function UserRow({ user, isSelf, account, emailOn, features }: { user: Us
           </div>
         )}
         {user.role === 'organizer' && !isSelf && (
-          <details className="mt-2">
+          <details className="col-span-full mt-2">
             <summary className="cursor-pointer text-sm text-accent">Permissions</summary>
             <PermissionGrid userId={user.user_id} permissions={user.permissions} features={features} />
           </details>
         )}
         <UserHistory entries={account.history} />
         {message && (
-          <p role={isError ? 'alert' : undefined} className={`mt-1 text-sm ${isError ? 'text-bad' : 'text-ok'}`}>
+          <p role={isError ? 'alert' : undefined} className={`col-span-full mt-1 text-sm ${isError ? 'text-bad' : 'text-ok'}`}>
             {message}
           </p>
         )}

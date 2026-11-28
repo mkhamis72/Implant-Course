@@ -70,7 +70,7 @@ export function BrandingForm({ branding }: { branding: Branding }) {
         </label>
         <ColorField name="brand_color" label="Brand colour" value={brand} onChange={setBrand} fallback={DEFAULT_ACCENT} problem={brandProblem} />
         <ColorField name="nav_color" label="Navigation colour" value={nav} onChange={setNav} fallback={WHITE} problem={navProblem} />
-        <div aria-hidden="true" className="flex items-center gap-3 rounded-md border border-line p-3 text-sm"
+        <div aria-hidden="true" className="flex flex-wrap items-center gap-3 rounded-md border border-line p-3 text-sm"
           style={{ background: navHex && navText ? navHex : WHITE, color: navText ?? INK }}>
           <span className="font-semibold">Preview</span>
           <span className="rounded px-2 py-1 text-white" style={{ background: previewAccent }}>Button</span>

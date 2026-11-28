@@ -30,13 +30,13 @@ export function ResetTwoFactor({ userId, email, available }: { userId: string; e
     );
   }
   return (
-    <form action={action} className="max-w-sm space-y-2 rounded bg-warn-soft p-3 text-sm">
+    <form action={action} className="w-full max-w-sm space-y-2 rounded bg-warn-soft p-3 text-sm">
       <input type="hidden" name="user_id" value={userId} />
       <p>
         Their authenticator is removed and they will be signed out everywhere. At their next sign-in they must set up two-factor
         authentication again before they can use the app.
       </p>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button className="btn btn-danger py-1" disabled={pending}>Reset 2FA</button>
         <button type="button" className="btn-secondary btn py-1" onClick={() => setOpen(false)}>Cancel</button>
       </div>
