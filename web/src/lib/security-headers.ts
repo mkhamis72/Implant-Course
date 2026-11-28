@@ -3,6 +3,9 @@ export type Header = { key: string; value: string };
 /**
  * The CSP allows only this site and the company's Supabase project; inline scripts/styles are needed by
  * Next.js, eval only by the dev runtime. Set per request by the middleware (the project depends on the host).
+ * The Implant Passport is drawn in the browser by react-pdf, whose layout engine (yoga) is WebAssembly embedded as a
+ * data: URL and fetched: 'wasm-unsafe-eval' lets the page compile its own WebAssembly (no eval of JavaScript, no
+ * remote code) and connect-src data: lets it fetch that embedded module.
  */
 export function contentSecurityPolicy(supabaseUrl: string, dev: boolean): string {
   const supabase = new URL(supabaseUrl);
@@ -10,11 +13,11 @@ export function contentSecurityPolicy(supabaseUrl: string, dev: boolean): string
   const liveDev = dev ? ' http://localhost:8400' : '';
   return [
     "default-src 'self'",
-    `connect-src 'self' ${supabase.origin} ${supabase.protocol === 'http:' ? 'ws' : 'wss'}://${supabase.host}${liveDev}`,
+    `connect-src 'self' ${supabase.origin} ${supabase.protocol === 'http:' ? 'ws' : 'wss'}://${supabase.host} data:${liveDev}`,
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ''}${liveDev}`,
+    `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${dev ? " 'unsafe-eval'" : ''}${liveDev}`,
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",

@@ -10,6 +10,7 @@ import { RADIOGRAPH_PURPOSE_LABELS, RADIOGRAPH_TYPE_LABELS, boneLevelLabel, type
 import { ARCH_LABELS, CASE_STAGE_LABELS, CONFIGURATION_LABELS, type Arch, type CaseStage, type Configuration } from '@/lib/full-arch/cases';
 import { visitResult, type Attendance } from '@/lib/visits/visits';
 import { formatDate } from '@/lib/format';
+import { MEDICAL_LEVEL_LABELS, type MedicalLevel } from '@/lib/passport/labels';
 import { STATE_LABELS, type HistoryEntry, type ToothState } from './types';
 
 const FAILURE_FIELD_LABELS: Record<string, string> = { failed_on: 'failure date', failure_type: 'failure type', failure_reason: 'failure reason', failure_notes: 'failure notes' };
@@ -266,6 +267,13 @@ export function describeChange(e: HistoryEntry, { teaching = true }: { teaching?
       if (e.action === 'INSERT') return `Implant passport generated (version ${row?.version})`;
       if (e.action === 'DELETE') return `Implant passport deleted (version ${row?.version})`;
       return `Implant passport updated (version ${row?.version})`;
+    }
+    case 'passport_generations': {
+      // Built in the browser (0150): nothing stored but this row.
+      const row = e.after ?? e.before;
+      const level = MEDICAL_LEVEL_LABELS[row?.medical_level as MedicalLevel] ?? String(row?.medical_level);
+      if (e.action === 'INSERT') return `Implant passport generated (${level})`;
+      return e.action === 'DELETE' ? 'Implant passport generation removed' : 'Implant passport generation updated';
     }
     case 'radiographs': {
       const row = e.after ?? e.before;

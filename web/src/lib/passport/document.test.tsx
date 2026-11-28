@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
+import path from 'node:path';
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
-import { Font } from '@react-pdf/renderer';
-import { passportModel, type PassportData } from './model';
+import { Font, renderToBuffer, type DocumentProps } from '@react-pdf/renderer';
+import { passportModel, type PassportData, type PassportModel } from './model';
 import { PASSPORT_LABELS as L, type MedicalLevel } from './labels';
 import { PassportDocument } from './document';
-import { renderPassport } from './render';
 import { registerPassportFonts, PASSPORT_ARABIC_FONT } from './fonts';
 import { chartView } from './chart';
 import { ARCH_VIEWBOX, HEAD_Y } from '@/components/full-arch/model';
@@ -14,6 +14,9 @@ import { ARABIC_LAB, ARABIC_NAME, emptyPassportData, history, largePassportData,
 
 const GENERATED = '2026-11-24T09:00:00Z';
 const model = (d: PassportData, version = 3) => passportModel(d, GENERATED, version);
+/** The PDF bytes, as the browser's pdf(…).toBlob() makes them. */
+const renderPassport = (m: PassportModel) =>
+  renderToBuffer(<PassportDocument model={m} /> as unknown as ReactElement<DocumentProps>);
 
 /**
  * Every string the document tree prints, in order, without laying out a PDF: function components are called,
@@ -110,8 +113,17 @@ describe('chartView: the chart is cut to what is drawn', () => {
   });
 });
 
+describe('the model as JSON (sent to the browser by the data route)', () => {
+  it('survives a JSON round trip unchanged, logo included', () => {
+    const m = model(largePassportData());
+    expect(typeof m.header.logo).toBe('string');
+    expect(JSON.parse(JSON.stringify(m))).toEqual(m);
+  });
+});
+
 describe('renderPassport: the PDF', () => {
-  beforeAll(() => registerPassportFonts());
+  // The browser registers them by URL (/passport-fonts/…); here the same files from disk.
+  beforeAll(() => registerPassportFonts((file) => path.join(process.cwd(), 'public', 'passport-fonts', file)));
 
   it('returns PDF bytes for a patient with nothing recorded, on one page', async () => {
     const pdf = await renderPassport(model(emptyPassportData(), 1));

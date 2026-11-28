@@ -80,13 +80,13 @@ describe('labels', () => {
     expect([L.medicalLevelAllergiesMedications, L.medicalLevelFull, L.medicalLevelNone])
       .toEqual(['Allergies and medications only', 'Full medical summary', 'Nothing medical']);
     expect(passportNumber('P00123', 3)).toBe('P00123-3');
-    expect(passportFileName('P00123', 3)).toBe('Implant passport P00123-3.pdf');
+    expect(passportFileName('P00123', '2026-11-28')).toBe('Implant passport P00123 2026-11-28.pdf');
   });
 });
 
 describe('passportModel: header, patient, footer', () => {
   it('prints the clinic, title, passport number and the Cairo generation date', () => {
-    const logo = { bytes: new Uint8Array([1, 2]), contentType: 'image/png' };
+    const logo = 'data:image/png;base64,AQI=';
     const m = passportModel(data({ branding: { name: 'Kaleidoscope', logo } }), '2026-11-23T22:30:00Z', 3);
     expect(m.header.clinicName).toBe('Kaleidoscope');
     expect(m.header.logo).toBe(logo);

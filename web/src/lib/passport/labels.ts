@@ -144,7 +144,7 @@ export function passportNumber(fileNo: string, version: number): string {
   return `${fileNo}-${version}`;
 }
 
-/** Exact copy: `Implant passport <file_no>-<version>.pdf`. */
-export function passportFileName(fileNo: string, version: number): string {
-  return `Implant passport ${passportNumber(fileNo, version)}.pdf`;
+/** Exact copy: `Implant passport <file_no> <YYYY-MM-DD>.pdf` (the Cairo date it was generated, todayIso()). */
+export function passportFileName(fileNo: string, date: string): string {
+  return `Implant passport ${fileNo} ${date}.pdf`;
 }

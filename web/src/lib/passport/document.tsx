@@ -3,7 +3,7 @@
 // Labels and values are separate Text elements so neutral punctuation next to Arabic keeps its place (bidi).
 // Page breaks: a table row, a part and a card's title block never split; a heading always travels with the first
 // thing under it (see Flow).
-import 'server-only';
+// Drawn in the user's browser (src/lib/passport/client.ts), from the model the data route sends as JSON.
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { Fragment, type ComponentProps, type ReactNode } from 'react';
 import { PASSPORT_LABELS as L } from './labels';
@@ -142,9 +142,8 @@ class Flow {
 }
 
 function Header({ header }: { header: PassportModel['header'] }) {
-  const logo = header.logo && (header.logo.contentType === 'image/png' || header.logo.contentType === 'image/jpeg')
-    ? { data: Buffer.from(header.logo.bytes), format: header.logo.contentType === 'image/png' ? 'png' as const : 'jpg' as const }
-    : null;
+  // A PNG or JPEG data URL (printableLogo): react-pdf decodes it itself, no Buffer needed in the browser.
+  const logo = header.logo && /^data:image\/(png|jpeg);base64,/.test(header.logo) ? header.logo : null;
   return (
     <View style={s.header} fixed>
       <View style={s.brand}>

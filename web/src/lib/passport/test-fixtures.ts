@@ -180,7 +180,7 @@ export function largePassportData(o: Partial<PassportData> = {}): PassportData {
     sites,
     restorations,
     cases,
-    branding: { name: 'Kaleidoscope Dental Academy', logo: { bytes: logoPng(), contentType: 'image/png' } },
+    branding: { name: 'Kaleidoscope Dental Academy', logo: `data:image/png;base64,${Buffer.from(logoPng()).toString('base64')}` },
     features: ['inventory', 'statistics', 'teaching'],
     medicalLevel: 'full',
     ...o,

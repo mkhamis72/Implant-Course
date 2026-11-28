@@ -1,32 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import path from 'node:path';
 import nextConfig from '../next.config';
 
-const require = createRequire(import.meta.url);
-const glob: (p: string, o: object, cb: (e: Error | null, f: string[]) => void) => void = require('next/dist/compiled/glob');
-const web = path.resolve(__dirname, '..');
-const files = (pattern: string) =>
-  new Promise<string[]>((resolve, reject) =>
-    glob(pattern, { cwd: web, nodir: true, dot: true }, (e, f) => (e ? reject(e) : resolve(f.map((x) => path.resolve(web, x))))));
+type Webpack = (config: { resolve: { alias: Record<string, string> } }, ctx: { isServer: boolean }) => {
+  resolve: { alias: Record<string, string> };
+};
+const webpack = nextConfig.webpack as unknown as Webpack;
 
-// Files the passport generate route reads at run time that file tracing cannot see: without them it fails only on
-// Vercel (2026-11-27: pdfkit's standard-fonts/Helvetica.cjs missing), never locally.
-describe('next.config outputFileTracingIncludes for the passport generate route', () => {
-  const includes = nextConfig.outputFileTracingIncludes?.['/patients/*/passport/generate'] ?? [];
-
-  it('ships pdfkit\'s standard fonts for every pdfkit copy in node_modules', async () => {
-    const included = new Set((await Promise.all(includes.map(files))).flat());
-    const copies = ['node_modules/pdfkit', 'node_modules/@react-pdf/font/node_modules/pdfkit']
-      .map((p) => path.resolve(web, p, 'js/standard-fonts/Helvetica.cjs'))
-      .filter(existsSync);
-    expect(copies.length).toBeGreaterThan(0);
-    for (const file of copies) expect(included).toContain(file);
+describe('next.config', () => {
+  it('traces analysis.R into the routes that read it, and nothing for the passport (drawn in the browser)', () => {
+    expect(Object.keys(nextConfig.outputFileTracingIncludes ?? {})).toEqual(['/statistics/export', '/statistics/analysis.R']);
   });
 
-  it('ships the bundled passport fonts', async () => {
-    const included = (await Promise.all(includes.map(files))).flat();
-    expect(included.some((f) => f.endsWith('IBMPlexSansArabic-Regular.ttf'))).toBe(true);
+  // Two pdfkit copies are installed; in the browser bundle both must be @react-pdf/font's, or the passport fails
+  // with 'Standard font "Helvetica" is not registered'.
+  it("points the browser bundle's pdfkit at @react-pdf/font's copy, which exists", () => {
+    const client = webpack({ resolve: { alias: {} } }, { isServer: false });
+    expect(client.resolve.alias['pdfkit$']).toMatch(/@react-pdf[\\/]font[\\/]node_modules[\\/]pdfkit[\\/]js[\\/]pdfkit\.browser\.mjs$/);
+    expect(existsSync(client.resolve.alias['pdfkit$'])).toBe(true);
+  });
+
+  it('leaves the server bundle alone', () => {
+    expect(webpack({ resolve: { alias: {} } }, { isServer: true }).resolve.alias).toEqual({});
   });
 });

@@ -227,7 +227,7 @@ describe('permissions: area matrix', () => {
       expect(await audited('courses', course)).toBe(0);
       expect(await audited('user_permissions', users.target)).toBe(0);
       const { rows } = await c.query('select distinct table_name from public.audit_log');
-      const patientTables = ['patients', 'medical_history', 'tooth_status', 'visit_notes', 'implant_sites', 'site_components', 'implant_followups', 'implant_surgery', 'implant_grafts', 'implant_complications', 'restorations', 'restoration_sites', 'restoration_problems', 'radiographs', 'radiograph_bone_levels', 'full_arch_cases', 'full_arch_stages', 'patient_passports'];
+      const patientTables = ['patients', 'medical_history', 'tooth_status', 'visit_notes', 'implant_sites', 'site_components', 'implant_followups', 'implant_surgery', 'implant_grafts', 'implant_complications', 'restorations', 'restoration_sites', 'restoration_problems', 'radiographs', 'radiograph_bone_levels', 'full_arch_cases', 'full_arch_stages', 'patient_passports', 'passport_generations'];
       expect(rows.map((r) => r.table_name).filter((t) => !patientTables.includes(t))).toEqual([]);
 
       await actAs(c, users.admin);

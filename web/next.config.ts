@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 import { staticSecurityHeaders } from './src/lib/security-headers';
 
@@ -10,15 +11,16 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/statistics/export': ['./src/lib/research/export/analysis.R'],
     '/statistics/analysis.R': ['./src/lib/research/export/analysis.R'],
-    // The passport fonts are read at run time from the source tree (src/lib/passport/fonts.ts), only by the
-    // generate route (a glob: a literal '[id]' would be a character class). pdfkit also loads its built-in
-    // Helvetica with a run-time require('./standard-fonts/…') that tracing misses: without these files the route
-    // fails on Vercel (2026-11-27) while working locally, where node_modules is whole. Both pdfkit copies.
-    '/patients/*/passport/generate': [
-      './src/lib/passport/fonts/*.ttf',
-      './node_modules/pdfkit/js/standard-fonts/**/*',
-      './node_modules/@react-pdf/font/node_modules/pdfkit/js/standard-fonts/**/*',
-    ],
+  },
+  // The Implant Passport is drawn in the browser (src/lib/passport/client.ts). Two pdfkit copies are installed:
+  // @react-pdf/renderer's and @react-pdf/font's own. In the browser bundle @react-pdf/font registers the standard
+  // fonts (Helvetica…) on its copy, so the renderer's copy throws 'Standard font "Helvetica" is not registered':
+  // the browser bundle uses @react-pdf/font's copy for both. The server bundle is left alone.
+  webpack(config, { isServer }) {
+    if (!isServer) {
+      config.resolve.alias['pdfkit$'] = path.resolve('node_modules/@react-pdf/font/node_modules/pdfkit/js/pdfkit.browser.mjs');
+    }
+    return config;
   },
   // Signed consent scans (≤ 2 MB) go through a server action; as form data 2 MB is about 2.7 MB (Vercel allows 4.5 MB).
   experimental: {

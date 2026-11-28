@@ -38,7 +38,8 @@ export type PassportData = {
   /** Voided ones already left out. */
   restorations: Restoration[];
   cases: FullArchCase[];
-  branding: { name: string; logo: { bytes: Uint8Array; contentType: string } | null };
+  /** logo: a PNG or JPEG data URL (printableLogo), so the model travels as JSON. */
+  branding: { name: string; logo: string | null };
   /** The company's plan (Profile.features): lot numbers print only with Inventory. */
   features: Feature[];
   /** passport_settings_current() at generation time; stored with the passport. */
