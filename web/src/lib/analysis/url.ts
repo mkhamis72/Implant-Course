@@ -63,3 +63,9 @@ export function exploreQuery(state: ExploreState, base: Record<string, string>):
   }
   return `?${q.toString()}`
 }
+
+/** Does the analysis use an implant type / full-arch variable (implant_rehab_vars, 0146), as factor, outcome or filter? */
+export function needsRehab(config: AnalysisConfig): boolean {
+  const keys = [config.factor, config.outcome, ...config.filters.map((f) => f.key)]
+  return keys.some((k) => !!k && variable(k)?.group === 'Full arch')
+}

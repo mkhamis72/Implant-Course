@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { exploreQuery, parseExplore, type ExploreState } from './url'
+import { exploreQuery, needsRehab, parseExplore, type ExploreState } from './url'
 
 const toParams = (query: string) => Object.fromEntries(new URLSearchParams(query.slice(1)))
 
@@ -57,5 +57,23 @@ describe('a saved analysis that names a course variable, in a clinic', () => {
   })
   it('keeps them for a course organizer', () => {
     expect(parseExplore(params).config.factor).toBe('course')
+  })
+})
+
+describe('needsRehab', () => {
+  const config = (over: Partial<ExploreState['config']>): ExploreState['config'] =>
+    ({ factor: null, outcome: 'bone_change', window: 'all', filters: [], ...over })
+
+  it('is false when no Full arch variable is used', () => {
+    expect(needsRehab(config({ factor: 'smoking', filters: [{ key: 'torque', min: 30 }] }))).toBe(false)
+  })
+
+  it('is true for a Full arch factor', () => {
+    expect(needsRehab(config({ factor: 'implant_type' }))).toBe(true)
+    expect(needsRehab(config({ factor: 'case_type' }))).toBe(true)
+  })
+
+  it('is true for a filter on a Full arch variable', () => {
+    expect(needsRehab(config({ filters: [{ key: 'anchorage', values: ['zygoma'] }] }))).toBe(true)
   })
 })

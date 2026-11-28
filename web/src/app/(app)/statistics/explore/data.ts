@@ -20,18 +20,18 @@ const IMPLANT_NUMBERS: (keyof ImplantRow)[] = ['hba1c', 'diameter_mm', 'length_m
 const VISIT_NUMBERS: (keyof VisitRow)[] = ['probing_max', 'isq', 'recession_facial_mm', 'recession_mesial_mm', 'recession_distal_mm'];
 const XRAY_NUMBERS: (keyof RadiographRow)[] = ['mesial_mm', 'distal_mm', 'bone_change_mm'];
 
-/** The Explore readers (0078) with the six research filters. */
-export async function loadAnalysisRows(filters: ResearchFilters): Promise<AnalysisData> {
+/** The Explore readers (0078) with the six research filters; implant_rehab_vars (0146) only `withRehab` (a Full arch variable in use). */
+export async function loadAnalysisRows(filters: ResearchFilters, withRehab = false): Promise<AnalysisData> {
   const supabase = await createClient();
   const args = rpcArgs(filters);
   const [implants, visits, radiographs, rehab] = await Promise.all([
     fetchAll<ImplantRow>(supabase, 'analysis_implants', args, ['site_id']),
     fetchAll<VisitRow>(supabase, 'analysis_visits', args, ['visit_id']),
     fetchAll<RadiographRow>(supabase, 'analysis_radiographs', args, ['site_id', 'radiograph_id']),
-    fetchAll<Record<string, unknown>>(supabase, 'implant_rehab_vars', args, ['site_id']),
+    withRehab ? fetchAll<Record<string, unknown>>(supabase, 'implant_rehab_vars', args, ['site_id']) : Promise.resolve(null),
   ]);
-  if (implants.error || visits.error || radiographs.error || rehab.error) throw new Error('Could not load the clinical data');
-  const rehabBySite = new Map((rehab.data ?? []).map((r) => [String(r.site_id), toRehabVars(r)]));
+  if (implants.error || visits.error || radiographs.error || rehab?.error) throw new Error('Could not load the clinical data');
+  const rehabBySite = new Map((rehab?.data ?? []).map((r) => [String(r.site_id), toRehabVars(r)]));
   const merged = (implants.data ?? []).map((r) => {
     const v = rehabBySite.get(r.site_id);
     return {
@@ -51,10 +51,10 @@ export async function loadAnalysisRows(filters: ResearchFilters): Promise<Analys
 }
 
 /** The Explore rows and the names behind data-driven levels. */
-export async function loadExplore(filters: ResearchFilters): Promise<{ data: AnalysisData; labels: LevelLabels }> {
+export async function loadExplore(filters: ResearchFilters, withRehab = false): Promise<{ data: AnalysisData; labels: LevelLabels }> {
   const supabase = await createClient();
   const [data, detail, delegates, supervisors, courses] = await Promise.all([
-    loadAnalysisRows(filters),
+    loadAnalysisRows(filters, withRehab),
     // Placing delegates' names for users who can't list delegates (as on Results).
     fetchAll<{ placing_delegate_id: string | null; placing_delegate: string | null }>(supabase, 'implant_outcomes_detail', rpcArgs(filters), ['site_id']),
     allRows((from, to) => supabase.from('delegates').select('id, full_name').order('id').range(from, to)),

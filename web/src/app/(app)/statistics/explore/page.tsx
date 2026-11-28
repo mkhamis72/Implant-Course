@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { readParams, type PageSearchParams } from '@/lib/search-params';
 import { ALL_COURSES, RESEARCH_FILTER_KEYS } from '@/lib/research/view';
 import { todayIso } from '@/lib/dates';
-import { parseExplore } from '@/lib/analysis/url';
+import { needsRehab, parseExplore } from '@/lib/analysis/url';
 import { FilterForm } from '../filter-form';
 import { NoPatientsNote } from '../research-view';
 import { loadExplore } from './data';
@@ -39,9 +39,11 @@ export default async function ExplorePage({ searchParams }: { searchParams: Page
       .map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]),
   ) as Record<string, string | undefined>;
 
+  const initial = parseExplore(exploreParams, teaching);
+  const withRehab = needsRehab(initial.config);
   const supabase = await createClient();
   const [{ data, labels }, saved] = await Promise.all([
-    loadExplore(filters),
+    loadExplore(filters, withRehab),
     supabase.from('saved_analyses')
       .select('id, title, config, course_id, created_by, created_at, creator:profiles!saved_analyses_created_by_fkey(full_name)')
       .order('created_at', { ascending: false }),
@@ -59,7 +61,7 @@ export default async function ExplorePage({ searchParams }: { searchParams: Page
         teaching={teaching}
         brands={distinct([...data.implants.map((r) => r.brand), filters.brand])}
         systems={distinct([...data.implants.filter((r) => !filters.brand || r.brand === filters.brand).map((r) => r.system), filters.system])} />
-      <ExploreWorkspace key={JSON.stringify([filters, exploreParams])} data={data} labels={labels} today={todayIso()} initial={parseExplore(exploreParams, teaching)} teaching={teaching}
+      <ExploreWorkspace key={JSON.stringify([filters, exploreParams])} data={data} labels={labels} today={todayIso()} initial={initial} withRehab={withRehab} teaching={teaching}
         base={filters} patients={patients}
         saved={{ items: (saved.data ?? []) as unknown as SavedRow[], canEdit: canEdit(profile, 'research'), userId: profile.user_id,
           isAdmin: profile.role === 'admin', courses: labels.course ?? {} }} />

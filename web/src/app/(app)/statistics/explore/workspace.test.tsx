@@ -4,6 +4,8 @@ import type { AnalysisData } from '@/lib/analysis/rows'
 import { implantRow, radiographRow } from '@/lib/analysis/test-rows'
 import type { ExploreState } from '@/lib/analysis/url'
 
+const routerReplace = vi.fn()
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: routerReplace }) }))
 vi.mock('./actions', () => ({ saveAnalysis: vi.fn(), deleteAnalysis: vi.fn() }))
 vi.mock('./explore-chart-loader', () => ({
   ExploreChartLoader: ({ summary }: { summary: string }) => <div data-testid="chart">{summary}</div>,
@@ -35,9 +37,27 @@ function renderWith(initial: ExploreState = empty) {
 const choose = (name: string, value: string) => fireEvent.change(screen.getByRole('combobox', { name }), { target: { value } })
 const lastUrl = () => String(replaceState.mock.calls.at(-1)?.[2] ?? '')
 
-beforeEach(() => replaceState.mockClear())
+beforeEach(() => { replaceState.mockClear(); routerReplace.mockClear() })
 
 describe('ExploreWorkspace', () => {
+  it('loads the page again when a Full arch variable is chosen and its rows were not loaded', () => {
+    render(<ExploreWorkspace data={data} labels={{}} today={TODAY} initial={empty} base={{ course: 'all' }} patients={patients} withRehab={false} />)
+    choose('Outcome', 'bone_change')
+    expect(routerReplace).not.toHaveBeenCalled()
+    choose('Compare by', 'implant_type')
+    expect(routerReplace).toHaveBeenCalledWith(expect.stringContaining('f=implant_type'), { scroll: false })
+    expect(screen.getByRole('status')).toHaveTextContent('Loading the full-arch data')
+    expect(screen.queryByRole('region', { name: 'Key numbers' })).not.toBeInTheDocument()
+  })
+
+  it('analyses a Full arch variable in place when its rows are loaded', () => {
+    renderWith()
+    choose('Outcome', 'bone_change')
+    choose('Compare by', 'implant_type')
+    expect(routerReplace).not.toHaveBeenCalled()
+    expect(screen.getByRole('region', { name: 'Key numbers' })).toBeInTheDocument()
+  })
+
   it('starts with the question and example questions, and an example fills the URL', () => {
     renderWith()
     expect(screen.getByRole('heading', { name: 'What would you like to understand?' })).toBeInTheDocument()
