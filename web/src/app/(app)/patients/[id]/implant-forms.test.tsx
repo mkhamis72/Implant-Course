@@ -491,6 +491,12 @@ describe('<ComponentForm> screws, torque and specs', () => {
     expect(screen.getByRole('combobox', { name: /^Size/ })).toHaveValue('');
   });
 
+  it('says so when a screw has no sizes recorded for the system', () => {
+    render(<ComponentForm patientId="pt" site={site} data={screwData} onDone={() => {}} />);
+    choose('Component', 'abutment_screw');
+    expect(screen.getByText('No sizes recorded for this system (Admin → Screw sizes).')).toBeInTheDocument();
+  });
+
   it('shows the chosen product specs', () => {
     render(<ComponentForm patientId="pt" site={site} data={screwData} onDone={() => {}} />);
     choose('Component', 'prosthetic_screw');

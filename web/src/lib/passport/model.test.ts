@@ -76,7 +76,6 @@ describe('labels', () => {
       "This passport summarises the clinic's records on the date shown. It is not a manufacturer warranty or guarantee. Values not recorded are shown as 'Not recorded'.",
     );
     expect(L.staleNote).toBe('Records changed since this version');
-    expect(L.tooLarge).toBe('The passport is too large to store.');
     expect([L.medicalLevelAllergiesMedications, L.medicalLevelFull, L.medicalLevelNone])
       .toEqual(['Allergies and medications only', 'Full medical summary', 'Nothing medical']);
     expect(passportNumber('P00123', 3)).toBe('P00123-3');

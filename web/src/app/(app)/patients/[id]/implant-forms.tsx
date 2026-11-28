@@ -538,6 +538,7 @@ export function ComponentForm({ patientId, site, data, onDone }: { patientId: st
               {sizes.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </Field>
+          {sizes.length === 0 && <p className="text-sm text-muted" data-testid="no-sizes">No sizes recorded for this system (Admin → Screw sizes).</p>}
           {size && <p className="text-sm text-muted" data-testid="size-driver">{screwDriverLine(size) || 'No screwdriver recorded for this size.'}</p>}
         </>
       )}

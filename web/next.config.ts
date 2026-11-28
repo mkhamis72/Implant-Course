@@ -16,9 +16,10 @@ const nextConfig: NextConfig = {
   // @react-pdf/renderer's and @react-pdf/font's own. In the browser bundle @react-pdf/font registers the standard
   // fonts (Helvetica…) on its copy, so the renderer's copy throws 'Standard font "Helvetica" is not registered':
   // the browser bundle uses @react-pdf/font's copy for both. The server bundle is left alone.
+  // If a future npm dedupe removes that nested copy, this path no longer exists and the build fails loudly (on purpose).
   webpack(config, { isServer }) {
     if (!isServer) {
-      config.resolve.alias['pdfkit$'] = path.resolve('node_modules/@react-pdf/font/node_modules/pdfkit/js/pdfkit.browser.mjs');
+      config.resolve.alias['pdfkit$'] = path.join(__dirname, 'node_modules/@react-pdf/font/node_modules/pdfkit/js/pdfkit.browser.mjs');
     }
     return config;
   },

@@ -92,4 +92,34 @@ describe('fit_component_v4: screw size (0149)', () => {
       expect(v3.id).toBeTruthy();
     });
   });
+  it('refuses a screw size of another company', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const abutment = await abutmentOn(c, s.site);
+      await asPostgres(c);
+      const other = (await one<{ id: string }>(c, "insert into public.companies (slug, name) values ('zz-ss-other', 'Zz Screw Other') returning id")).id;
+      const foreign = (await one<{ id: string }>(c,
+        "insert into public.screw_sizes (company_id, brand, system, kind, label) values ($1, 'Zz Other', 'Zz Other', 'abutment_screw', 'M9') returning id", [other])).id;
+      await actAs(c, users.organizer);
+      await refused(c, () => fit4(c, s.site, 'abutment_screw', foreign, abutment), /Choose an active screw size\./);
+    });
+  });
+
+  it('accepts a prosthetic size on a temporary cylinder screw', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const abutment = await abutmentOn(c, s.site);
+      const { id } = await fit4(c, s.site, 'temporary_cylinder_screw', s.pros, abutment);
+      expect(await one(c, 'select screw_size_id from public.site_components where id = $1', [id]))
+        .toEqual({ screw_size_id: s.pros });
+    });
+  });
+
+  it('refuses an abutment size on a temporary cylinder screw', async () => {
+    await withTx(async (c) => {
+      const s = await setup(c);
+      const abutment = await abutmentOn(c, s.site);
+      await refused(c, () => fit4(c, s.site, 'temporary_cylinder_screw', s.abut, abutment), /This size is for another kind of screw\./);
+    });
+  });
 });

@@ -12,7 +12,6 @@ export const PASSPORT_LABELS = {
   footer:
     "This passport summarises the clinic's records on the date shown. It is not a manufacturer warranty or guarantee. Values not recorded are shown as 'Not recorded'.",
   staleNote: 'Records changed since this version',
-  tooLarge: 'The passport is too large to store.',
   // Exact copy: Admin → Settings → Implant passport (medical content).
   medicalLevelAllergiesMedications: 'Allergies and medications only',
   medicalLevelFull: 'Full medical summary',
@@ -139,9 +138,9 @@ export const MEDICAL_LEVEL_LABELS: Record<MedicalLevel, string> = {
   none: PASSPORT_LABELS.medicalLevelNone,
 };
 
-/** "P00123-3": the patient's file number and the passport's version (exact copy). */
-export function passportNumber(fileNo: string, version: number): string {
-  return `${fileNo}-${version}`;
+/** "P00123-3": the patient's file number and how many passports have been generated for them (exact copy). */
+export function passportNumber(fileNo: string, generationNo: number): string {
+  return `${fileNo}-${generationNo}`;
 }
 
 /** Exact copy: `Implant passport <file_no> <YYYY-MM-DD>.pdf` (the Cairo date it was generated, todayIso()). */

@@ -42,7 +42,7 @@ export type PassportData = {
   branding: { name: string; logo: string | null };
   /** The company's plan (Profile.features): lot numbers print only with Inventory. */
   features: Feature[];
-  /** passport_settings_current() at generation time; stored with the passport. */
+  /** passport_settings_current() at generation time (read when the passport is drawn, not kept). */
   medicalLevel: MedicalLevel;
 };
 
@@ -338,8 +338,9 @@ function caseSection(c: FullArchCase, sites: ImplantSite[], restorations: Restor
 /**
  * The printable passport: every section, in print order, with "Not recorded" / "None recorded" filled in.
  * `generatedAt` is the generation time (a timestamp, printed as its Cairo date; a plain date is kept).
+ * `generationNo` is the count of passports generated for the patient, so far including this one (the "-3" in P00123-3).
  */
-export function passportModel(data: PassportData, generatedAt: string, version: number): PassportModel {
+export function passportModel(data: PassportData, generatedAt: string, generationNo: number): PassportModel {
   const lotsOn = featureOn(data.features, 'inventory');
   // Cancelled plans are not part of the record the patient carries.
   const sites = data.sites
@@ -361,7 +362,7 @@ export function passportModel(data: PassportData, generatedAt: string, version: 
       clinicName: data.branding.name,
       logo: data.branding.logo,
       title: L.title,
-      number: passportNumber(patient.file_no, version),
+      number: passportNumber(patient.file_no, generationNo),
       generatedOn: formatDate(cairoDate(generatedAt)),
     },
     patient: { heading: L.patientHeading, fields: patientFields },

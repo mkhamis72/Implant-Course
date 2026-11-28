@@ -96,9 +96,14 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
           Include archived
         </label>
         <TeachingFilters teachingOn={teaching} courses={courses} supervisors={supervisors} course={course} supervisor={supervisor} courseNot={courseNot} supervisorNot={supervisorNot} />
-        <NotSelect name="stage_not" label="Teeth, implants and scan filter mode" value={stagesNot} />
-        <FilterMenu label="Teeth and implants" name="stage" options={PATIENT_FILTERS} labels={PATIENT_FILTER_LABELS} checked={stages} />
-        <FilterMenu label="Scan / impression" name="stage" options={SCAN_FILTERS} labels={PATIENT_FILTER_LABELS} checked={stages} align="end" />
+        <div>
+          <span className="label">Teeth / scan</span>
+          <div className="flex flex-wrap items-center gap-1">
+            <NotSelect name="stage_not" label="Teeth, implants and scan filter mode" value={stagesNot} />
+            <FilterMenu label="Teeth and implants" name="stage" options={PATIENT_FILTERS} labels={PATIENT_FILTER_LABELS} checked={stages} />
+            <FilterMenu label="Scan / impression" name="stage" options={SCAN_FILTERS} labels={PATIENT_FILTER_LABELS} checked={stages} align="end" />
+          </div>
+        </div>
         <button className="btn-secondary btn">Search</button>
       </form>
       <div className="card overflow-x-auto">
