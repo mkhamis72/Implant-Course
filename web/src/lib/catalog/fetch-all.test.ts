@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fetchAll } from './fetch-all';
+import { allRows, fetchAll } from './fetch-all';
 
 const pager = (rows: number[], calls: [number, number][] = []) => async (from: number, to: number) => {
   calls.push([from, to]);
@@ -21,5 +21,17 @@ describe('fetchAll', () => {
 
   it('throws on an error', async () => {
     await expect(fetchAll(async () => ({ data: null, error: { message: 'boom' } }), 1000)).rejects.toThrow('boom');
+  });
+});
+
+describe('allRows', () => {
+  it('returns every row past the API row limit as { data, error: null }', async () => {
+    const rows = Array.from({ length: 1018 }, (_, i) => i);
+    expect(await allRows(pager(rows))).toEqual({ data: rows, error: null });
+  });
+
+  it('turns a failed page into { data: null, error } instead of throwing', async () => {
+    expect(await allRows(async () => ({ data: null, error: { message: 'boom' } })))
+      .toEqual({ data: null, error: { message: 'boom' } });
   });
 });

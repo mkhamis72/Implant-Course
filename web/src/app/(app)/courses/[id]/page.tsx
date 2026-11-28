@@ -14,6 +14,7 @@ import { deleteCourse, unenrollDelegate, updateCourse } from '../actions';
 import { ConfirmDelete } from '@/components/confirm-delete';
 import { SessionForm } from './session-form';
 import { EnrollForm } from './enrollment';
+import { allRows } from '@/lib/catalog/fetch-all';
 
 export default async function CoursePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,7 +27,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
     supabase.from('courses').select('*').eq('id', id).maybeSingle(),
     supabase.from('sessions').select('*, checklists(id, items:checklist_items(done_at))').eq('course_id', id).order('date').order('start_time'),
     supabase.from('enrollments').select('id, delegate:delegates(id, full_name)').eq('course_id', id),
-    supabase.from('delegates').select('id, full_name').eq('active', true).order('full_name'),
+    allRows((from, to) => supabase.from('delegates').select('id, full_name').eq('active', true).order('full_name').order('id').range(from, to)),
     staffOptions(supabase),
   ]);
   if (!course) notFound();

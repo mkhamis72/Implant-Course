@@ -1,5 +1,6 @@
 // PostgREST caps every response at max_rows (1000), silently (as src/lib/research/export/fetch-all.ts does for
-// readers). The catalogue library grows with every catalogue loaded, so Admin → Catalogue pages through its tables.
+// readers). The catalogue library grows with every catalogue loaded, so Admin → Catalogue pages through its tables;
+// delegates lists page through it too (a delegate is added for every course seat).
 type Page<T> = { data: T[] | null; error: { message: string } | null };
 
 /** Every row, reading `page(from, to)` until a short page comes back. The query must have a total order. */
@@ -11,4 +12,12 @@ export async function fetchAll<T>(page: (from: number, to: number) => PromiseLik
     out.push(...(data ?? []));
     if ((data ?? []).length < size) return out;
   }
+}
+
+/** Every row of a paged read, in the `{ data, error }` shape of a single one (so callers keep their error checks). */
+export function allRows<T>(page: (from: number, to: number) => PromiseLike<Page<T>>): Promise<Page<T>> {
+  return fetchAll(page).then(
+    (data) => ({ data, error: null }),
+    (e: unknown) => ({ data: null, error: { message: e instanceof Error ? e.message : String(e) } }),
+  );
 }
