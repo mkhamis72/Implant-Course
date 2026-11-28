@@ -64,7 +64,7 @@ const data = (o: Partial<PassportData> = {}): PassportData => ({
 });
 
 const value = (fields: Field[] | undefined, label: string) => fields?.find((f) => f.label === label)?.value;
-const labels = (fields: Field[] | undefined) => (fields ?? []).map((f) => f.label);
+const labelsOf = (fields: Field[] | undefined) => (fields ?? []).map((f) => f.label);
 
 describe('labels', () => {
   it('holds the exact copy of the plan', () => {
@@ -102,7 +102,7 @@ describe('passportModel: header, patient, footer', () => {
     expect(value(none.patient.fields, L.name)).toBe('Sara Ali');
     expect(value(none.patient.fields, L.fileNo)).toBe('P00123');
     expect(value(none.patient.fields, L.dob)).toBe(NR);
-    expect(labels(none.patient.fields)).not.toContain(L.sex);
+    expect(labelsOf(none.patient.fields)).not.toContain(L.sex);
     const full = passportModel(data({ patient: { id: 'pt', file_no: 'P1', full_name: 'X', dob: '1980-05-02', sex: 'female' } }), '2026-11-24', 1);
     expect(value(full.patient.fields, L.dob)).toBe('02 May 1980');
     expect(value(full.patient.fields, L.sex)).toBe('Female');
@@ -184,8 +184,8 @@ describe('passportModel: medical section per level (Review Focus 5)', () => {
 
   it('full with no diabetes or smoking leaves out HbA1c and cigarettes', () => {
     const m = passportModel(data({ medicalHistory: history({ diabetes_status: 'no', smoking: 'never' }), medicalLevel: 'full' }), '2026-11-24', 1);
-    expect(labels(m.medical?.fields)).not.toContain(L.hba1c);
-    expect(labels(m.medical?.fields)).not.toContain(L.cigarettesPerDay);
+    expect(labelsOf(m.medical?.fields)).not.toContain(L.hba1c);
+    expect(labelsOf(m.medical?.fields)).not.toContain(L.cigarettesPerDay);
   });
 
   it('nothing medical: no section at all', () => {
@@ -212,7 +212,7 @@ describe('passportModel: lot numbers follow the plan (Review Focus 5)', () => {
 
   it('prints no lot anywhere with Inventory off', () => {
     const m = passportModel(data({ sites: [s], features: ['teaching'] }), '2026-11-24', 1);
-    expect(labels(m.implants[0].fields)).not.toContain(L.lot);
+    expect(labelsOf(m.implants[0].fields)).not.toContain(L.lot);
     expect(JSON.stringify(m)).not.toContain('LOT-');
   });
 });
@@ -241,9 +241,9 @@ describe('passportModel: implants', () => {
     }), '2026-11-24', 1);
     expect(m.implantsTable.rows[0].cells).toEqual(['36', 'Zygomatic', 'Oxy PSK-MDK · PSK Micro', 'Ø4.2 × 45 mm', 'Conical', L.notPlaced, 'Planned']);
     const f = m.implants[0].fields;
-    expect(labels(f)).not.toContain(L.placedBy);
-    expect(labels(f)).not.toContain(L.insertionTorque);
-    expect(labels(f)).not.toContain(L.planned);
+    expect(labelsOf(f)).not.toContain(L.placedBy);
+    expect(labelsOf(f)).not.toContain(L.insertionTorque);
+    expect(labelsOf(f)).not.toContain(L.planned);
     expect(m.implants[0].components).toBeNull();
   });
 
@@ -252,7 +252,7 @@ describe('passportModel: implants', () => {
     const differs = passportModel(data({ sites: [site({ planned_product: plan, planned_product_id: 'p-plan' })] }), '2026-11-24', 1);
     expect(value(differs.implants[0].fields, L.planned)).toBe('Oxy PSK-MDK · PSK Micro Ø3.5 × 11.5 mm');
     const same = passportModel(data({ sites: [site({ planned_product: product(), planned_product_id: 'p-impl' })] }), '2026-11-24', 1);
-    expect(labels(same.implants[0].fields)).not.toContain(L.planned);
+    expect(labelsOf(same.implants[0].fields)).not.toContain(L.planned);
   });
 
   it('detail fields of a placed implant, Not recorded when empty', () => {
@@ -270,7 +270,7 @@ describe('passportModel: implants', () => {
     expect(value(f, L.grafts)).toBe(L.noneRecorded);
     expect(value(f, L.status)).toBe('Placed');
     // Anchorage, entry point and trajectory are recorded only for zygomatic and pterygoid implants.
-    expect(labels(f)).not.toContain(L.anchorage);
+    expect(labelsOf(f)).not.toContain(L.anchorage);
   });
 
   it('detail fields with everything recorded', () => {
@@ -346,7 +346,33 @@ describe('passportModel: components and screws', () => {
     expect(value(part.fields, L.fittedOn)).toBe('01 Oct 2026');
     const ps = c.current[1].parts[0];
     expect(value(ps.fields, L.driver)).toBe(NR);
-    expect(value(ps.fields, L.material)).toBe(NR);
+    expect(value(ps.fields, L.screwSize)).toBe(NR);
+  });
+
+  const size = { label: 'M1.4 × 5', driver_interface: 'Torx', driver_size: 'T6', driver_ref: 'TX-6', torque_ncm: 20 };
+
+  it('an abutment screw prints the screw field list in order, with product driver over the size', () => {
+    const drv = product({ type: 'abutment_screw', diameter_mm: null, length_mm: null, ref_code: 'AS-1', driver_interface: 'Hex', torque_ncm: 25 });
+    const m = passportModel(data({ sites: [site({ components: [comp({ component_type: 'abutment_screw', product: drv, screw_size: size, torque_ncm: 24, fitted_on: '2026-10-01' })] })] }), '2026-11-24', 1);
+    const f = m.implants[0].components!.current[0].parts[0].fields;
+    expect(labelsOf(f)).toEqual([L.product, L.refCode, L.screwSize, L.driver, L.recommendedTorque, L.actualTorque, L.fittedOn, L.lot]);
+    expect(value(f, L.screwSize)).toBe('M1.4 × 5');
+    expect(value(f, L.driver)).toBe('Hex');
+    expect(value(f, L.recommendedTorque)).toBe('25 Ncm');
+  });
+
+  it('a prosthetic screw without a product prints the size screwdriver and torque; Lot follows when Inventory is on', () => {
+    const m = passportModel(data({ sites: [site({ components: [comp({ component_type: 'prosthetic_screw', screw_size: size })] })] }), '2026-11-24', 1);
+    const f = m.implants[0].components!.current[0].parts[0].fields;
+    expect(value(f, L.product)).toBe(NR);
+    expect(value(f, L.driver)).toBe('Torx · T6 · TX-6');
+    expect(value(f, L.recommendedTorque)).toBe('20 Ncm');
+  });
+
+  it('an abutment keeps its full list', () => {
+    const m = passportModel(data({ sites: [s] }), '2026-11-24', 1);
+    const f = m.implants[0].components!.current[0].parts[0].fields;
+    expect(labelsOf(f)).toEqual([L.product, L.refCode, L.connection, L.gingivalHeight, L.componentAngle, L.material, L.driver, L.recommendedTorque, L.actualTorque, L.fittedOn, L.lot]);
   });
 
   it('a part fitted without a product prints Not recorded for its specs', () => {
@@ -432,6 +458,7 @@ describe('passportModel: overview', () => {
   });
 });
 
+
 describe('passportModel: full-arch cases', () => {
   const four = [15, 12, 22, 25].map((tooth) => site({
     id: `s${tooth}`, tooth, case_id: 'k1',
@@ -467,6 +494,8 @@ describe('passportModel: full-arch cases', () => {
     ]);
     expect(c.screws.map((p) => p.name)).toEqual(['15 · Prosthetic screw', '12 · Prosthetic screw', '22 · Prosthetic screw', '25 · Prosthetic screw']);
     expect(value(c.screws[0].fields, L.refCode)).toBe('PS-15');
+    expect(labelsOf(c.screws[0].fields)).toEqual([L.product, L.refCode, L.screwSize, L.driver, L.recommendedTorque, L.actualTorque, L.fittedOn, L.lot]);
+    expect(value(c.screws[0].fields, L.screwSize)).toBe(NR);
     expect(value(c.screws[0].fields, L.driver)).toBe('Hex');
     expect(value(c.screws[0].fields, L.actualTorque)).toBe('15 Ncm');
     expect(c.screwsEmpty).toBeNull();

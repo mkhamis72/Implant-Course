@@ -93,6 +93,7 @@ export const PASSPORT_LABELS = {
   gingivalHeight: 'Gingival height',
   componentAngle: 'Angle',
   material: 'Material',
+  screwSize: 'Size',
   driver: 'Screwdriver',
   recommendedTorque: 'Recommended torque',
   actualTorque: 'Actual torque',
